@@ -97,6 +97,12 @@ dependencies {
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.hilt.android.testing)
     kspTest(libs.hilt.compiler)
+    // Stateless Compose screen tests run under Robolectric here instead of on a device/emulator —
+    // see DashboardScreenTest/LessonScreenTest. Tests needing real device behavior (Keystore,
+    // Espresso system back) stay in androidTest.
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.junit)
 
     // Instrumented tests
     androidTestImplementation(platform(libs.androidx.compose.bom))

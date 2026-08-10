@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.core.data
 
 import com.crazyfluff.shellfstudy.core.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
+import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
@@ -22,10 +23,15 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import retrofit2.HttpException
 import java.io.IOException
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** WaniKani SRS stages 5-6 are "Guru" and "Guru II" — Guru or higher is what counts toward leveling up. */
+private const val GURU_SRS_STAGE = 5
 
 @Singleton
 class WaniKaniRepository @Inject constructor(
@@ -176,6 +182,32 @@ class WaniKaniRepository @Inject constructor(
     suspend fun fetchLessonsCompletedToday(): ApiResult<Int> = safeApiCall {
         val startOfDay = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toString()
         api.getAssignments(startedAfter = startOfDay).totalCount
+    }
+
+    /**
+     * How many of the current level's kanji are at Guru or higher, out of the total — WaniKani
+     * requires 90% of a level's kanji at Guru+ before the user can level up. This counts whatever
+     * kanji assignments the API has already created for the user at this level, which is a good
+     * approximation but not necessarily every kanji defined for the level (mirrors the existing
+     * tolerance for imprecise-but-good-enough stats elsewhere in this repository).
+     */
+    suspend fun fetchLevelUpProgress(level: Int): ApiResult<LevelUpProgress> = safeApiCall {
+        val assignments = api.getAssignments(levels = listOf(level), subjectTypes = listOf("kanji"))
+            .data
+            .filterNot { it.data.hidden }
+        LevelUpProgress(
+            kanjiGuruedOrHigher = assignments.count { it.data.srsStage >= GURU_SRS_STAGE },
+            kanjiTotal = assignments.size
+        )
+    }
+
+    /** Days since the current (not-yet-passed) level was unlocked, or null if none is found. */
+    suspend fun fetchDaysOnCurrentLevel(): ApiResult<Int?> = safeApiCall {
+        val current = api.getLevelProgressions().data
+            .filter { it.data.passedAt == null }
+            .maxByOrNull { it.data.level }
+        val startedAtRaw = current?.data?.startedAt ?: current?.data?.unlockedAt
+        startedAtRaw?.let { (ChronoUnit.DAYS.between(Instant.parse(it), Instant.now()) + 1).toInt() }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

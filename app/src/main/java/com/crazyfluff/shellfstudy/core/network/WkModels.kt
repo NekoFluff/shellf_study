@@ -98,6 +98,17 @@ data class StartAssignmentRequest(val assignment: StartAssignmentBody = StartAss
 @Serializable
 data class StartAssignmentBody(@SerialName("started_at") val startedAt: String? = null)
 
+@Serializable
+data class LevelProgressionData(
+    val level: Int,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("unlocked_at") val unlockedAt: String? = null,
+    @SerialName("started_at") val startedAt: String? = null,
+    @SerialName("passed_at") val passedAt: String? = null,
+    @SerialName("completed_at") val completedAt: String? = null,
+    @SerialName("abandoned_at") val abandonedAt: String? = null
+)
+
 /** Subject "object" type as returned in AssignmentData.subjectType / WkResourceItem.objectType. */
 enum class SubjectType {
     RADICAL, KANJI, VOCABULARY;

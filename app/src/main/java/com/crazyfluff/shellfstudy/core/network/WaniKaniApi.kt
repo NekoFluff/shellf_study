@@ -21,8 +21,13 @@ interface WaniKaniApi {
         @Query("immediately_available_for_review") immediatelyAvailableForReview: Boolean? = null,
         @Query("immediately_available_for_lessons") immediatelyAvailableForLessons: Boolean? = null,
         @Query("started_after") startedAfter: String? = null,
-        @Query("ids") ids: List<Long>? = null
+        @Query("ids") ids: List<Long>? = null,
+        @Query("levels") levels: List<Int>? = null,
+        @Query("subject_types") subjectTypes: List<String>? = null
     ): WkCollectionResponse<AssignmentData>
+
+    @GET("level_progressions")
+    suspend fun getLevelProgressions(): WkCollectionResponse<LevelProgressionData>
 
     @GET("subjects")
     suspend fun getSubjects(@Query("ids") ids: List<Long>): WkCollectionResponse<SubjectData>

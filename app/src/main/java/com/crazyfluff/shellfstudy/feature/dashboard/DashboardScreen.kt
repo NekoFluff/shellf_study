@@ -9,12 +9,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,9 +40,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.feature.search.SubjectSearchOverlay
@@ -52,13 +55,13 @@ object DashboardScreenTestTags {
     const val ERROR_TEXT = "dashboard_error_text"
     const val LESSON_COUNT = "dashboard_lesson_count"
     const val REVIEW_COUNT = "dashboard_review_count"
-    const val START_REVIEW_BUTTON = "dashboard_start_review_button"
     const val LOG_OUT_BUTTON = "dashboard_log_out_button"
     const val RETRY_BUTTON = "dashboard_retry_button"
     const val SEARCH_BUTTON = "dashboard_search_button"
     const val OVERFLOW_MENU = "dashboard_overflow_menu"
     const val SETTINGS_BUTTON = "dashboard_settings_button"
     const val LESSONS_TODAY_PROGRESS = "dashboard_lessons_today_progress"
+    const val GURU_PROGRESS = "dashboard_guru_progress"
 }
 
 @Composable
@@ -180,9 +183,36 @@ fun DashboardScreen(
                             style = MaterialTheme.typography.headlineMedium
                         )
                         Text(
-                            text = "Level ${uiState.level}",
+                            text = buildString {
+                                append("Level ${uiState.level}")
+                                uiState.daysOnCurrentLevel?.let { append(" · Day $it") }
+                            },
                             style = MaterialTheme.typography.bodyLarge
                         )
+
+                        if (uiState.kanjiTotalForLevelUp > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val guruProgress =
+                                (uiState.kanjiGuruedForLevelUp.toFloat() / uiState.kanjiTotalForLevelUp)
+                                    .coerceIn(0f, 1f)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(DashboardScreenTestTags.GURU_PROGRESS)
+                            ) {
+                                Text(
+                                    text = "${uiState.kanjiGuruedForLevelUp} / ${uiState.kanjiTotalForLevelUp} kanji guru'd",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                LinearProgressIndicator(
+                                    progress = { guruProgress },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = SrsStageColors.Guru
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(24.dp))
 
                         Row(
@@ -194,12 +224,18 @@ fun DashboardScreen(
                                 count = uiState.lessonCount,
                                 color = MaterialTheme.colorScheme.tertiary,
                                 onClick = onStartLesson,
+                                badge = {
+                                    LessonsTodayBadge(
+                                        completed = uiState.lessonsCompletedToday,
+                                        goal = uiState.dailyLessonGoal
+                                    )
+                                },
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag(DashboardScreenTestTags.LESSON_COUNT)
                             )
                             SummaryCard(
-                                label = "Reviews",
+                                label = if (uiState.hasActiveReviewSession) "Resume Session" else "Reviews",
                                 count = uiState.reviewCount,
                                 color = MaterialTheme.colorScheme.secondary,
                                 onClick = onStartReview,
@@ -207,40 +243,6 @@ fun DashboardScreen(
                                     .weight(1f)
                                     .testTag(DashboardScreenTestTags.REVIEW_COUNT)
                             )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        val dailyGoal = uiState.dailyLessonGoal.coerceAtLeast(1)
-                        val lessonsTodayProgress =
-                            (uiState.lessonsCompletedToday.toFloat() / dailyGoal).coerceIn(0f, 1f)
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag(DashboardScreenTestTags.LESSONS_TODAY_PROGRESS)
-                        ) {
-                            Text(
-                                text = "${uiState.lessonsCompletedToday} / ${uiState.dailyLessonGoal} lessons today",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            LinearProgressIndicator(
-                                progress = { lessonsTodayProgress },
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.tertiary
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        Button(
-                            onClick = onStartReview,
-                            enabled = uiState.hasActiveReviewSession || uiState.reviewCount > 0,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag(DashboardScreenTestTags.START_REVIEW_BUTTON)
-                        ) {
-                            Text(if (uiState.hasActiveReviewSession) "Resume Session" else "Start reviews")
                         }
                     }
                 }
@@ -263,7 +265,8 @@ private fun SummaryCard(
     count: Int,
     color: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    badge: (@Composable () -> Unit)? = null
 ) {
     Card(
         onClick = onClick,
@@ -288,7 +291,34 @@ private fun SummaryCard(
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
             )
+            if (badge != null) {
+                Box(modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
+                    badge()
+                }
+            }
         }
+    }
+}
+
+/** Small ring showing progress toward the daily lesson goal, tucked in a card's corner. */
+@Composable
+private fun LessonsTodayBadge(completed: Int, goal: Int) {
+    val progress = (completed.toFloat() / goal.coerceAtLeast(1)).coerceIn(0f, 1f)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(36.dp)
+            .semantics { contentDescription = "$completed of $goal lessons done today" }
+            .testTag(DashboardScreenTestTags.LESSONS_TODAY_PROGRESS)
+    ) {
+        CircularProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxSize(),
+            strokeWidth = 3.dp,
+            color = Color.White,
+            trackColor = Color.White.copy(alpha = 0.3f)
+        )
+        Text(text = completed.toString(), style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -304,7 +334,10 @@ private fun DashboardScreenPreview() {
                 lessonCount = 5,
                 reviewCount = 23,
                 lessonsCompletedToday = 3,
-                dailyLessonGoal = 15
+                dailyLessonGoal = 15,
+                kanjiGuruedForLevelUp = 18,
+                kanjiTotalForLevelUp = 25,
+                daysOnCurrentLevel = 6
             ),
             onRefresh = {},
             onStartReview = {},

@@ -13,6 +13,12 @@ data class DashboardSummary(
     val reviewCount: Int
 )
 
+/** Progress toward WaniKani's level-up requirement: 90% of a level's kanji at Guru or higher. */
+data class LevelUpProgress(
+    val kanjiGuruedOrHigher: Int,
+    val kanjiTotal: Int
+)
+
 data class ReviewItem(
     val assignmentId: Long,
     val subjectId: Long,

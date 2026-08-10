@@ -48,11 +48,18 @@ navigation/          NavHost wiring the above screens together
   (`fakes/FakeDaos.kt`), a temp-file-backed real `DataStore`, and a no-op `FakeTokenCipher` (the
   real Keystore-backed cipher can't run on the host JVM). `Turbine` is used to assert `StateFlow`
   emissions in order.
-- **Instrumented tests** (`src/androidTest`): Compose UI tests
-  (`androidx.compose.ui.test.junit4`) drive each screen composable directly by state, and Espresso
-  (`Espresso.pressBack()`) is used for system-level interactions Compose has no native API for.
-  `AndroidKeystoreTokenCipherTest` runs on-device because the Android Keystore provider isn't
-  available under Robolectric/the host JVM.
+- **Compose screen tests**: driven by hand-built `UiState` + callback lambdas, same as any other
+  screen test — but where they *run* depends on whether they need real device behavior. Screens
+  with no device dependency (e.g. `DashboardScreenTest`, `LessonScreenTest`) live in `src/test` and
+  run under Robolectric on the JVM — no emulator, seconds instead of minutes. Pin these with
+  `@Config(sdk = [35])`: Robolectric 4.15.1 doesn't have shadows for this project's `targetSdk`
+  (37) yet. Use `@RunWith(AndroidJUnit4::class)` from `androidx.test.ext.junit` on these — it's the
+  same runner used for real instrumentation, so the test would work unchanged if moved back.
+- **Instrumented tests** (`src/androidTest`): reserved for what genuinely needs a device/emulator —
+  Espresso (`Espresso.pressBack()`) for system-level interactions Compose has no native API for, and
+  `AndroidKeystoreTokenCipherTest`, which needs the real Android Keystore provider (unavailable
+  under Robolectric/the host JVM). Default new screen UI tests to `src/test` per above; only fall
+  back to `src/androidTest` if the test exercises something Robolectric can't shadow.
 - Every screen has both: ViewModel/business-logic coverage (correct/incorrect grading, requeue
   behavior, error states) and UI coverage (rendering, button/text-field interaction).
 

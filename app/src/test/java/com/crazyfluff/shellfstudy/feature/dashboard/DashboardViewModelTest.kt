@@ -86,17 +86,28 @@ class DashboardViewModelTest {
         return ViewModelProvider(viewModelStore, factory)[DashboardViewModel::class.java]
     }
 
-    /** [lessonsTodayResponse] defaults to an empty assignments page (0 lessons completed today). */
+    /**
+     * [lessonsTodayResponse]/[levelUpResponse] default to an empty assignments page, and
+     * [levelProgressionsResponse] to an empty collection — all three nice-to-have stats default
+     * to their zero/null state when a test doesn't care about them.
+     */
     private fun dispatchByPath(
         userResponse: MockResponse,
         summaryResponse: MockResponse,
-        lessonsTodayResponse: MockResponse = jsonResponse(emptyAssignmentsJson())
+        lessonsTodayResponse: MockResponse = jsonResponse(emptyAssignmentsJson()),
+        levelUpResponse: MockResponse = jsonResponse(emptyAssignmentsJson()),
+        levelProgressionsResponse: MockResponse = jsonResponse(emptyLevelProgressionsJson())
     ) {
         server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse = when {
-                request.path.orEmpty().startsWith("/user") -> userResponse
-                request.path.orEmpty().startsWith("/summary") -> summaryResponse
-                else -> lessonsTodayResponse
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.path.orEmpty()
+                return when {
+                    path.startsWith("/user") -> userResponse
+                    path.startsWith("/summary") -> summaryResponse
+                    path.startsWith("/level_progressions") -> levelProgressionsResponse
+                    path.contains("levels=") -> levelUpResponse
+                    else -> lessonsTodayResponse
+                }
             }
         }
     }
@@ -179,6 +190,74 @@ class DashboardViewModelTest {
             assertThat(state.dailyLessonGoal).isEqualTo(5)
         }
     }
+
+    @Test
+    fun `loads level-up progress and days on current level`() = runTest {
+        dispatchByPath(
+            jsonResponse(userJson()),
+            jsonResponse(summaryJson()),
+            levelUpResponse = jsonResponse(levelUpAssignmentsJson()),
+            levelProgressionsResponse = jsonResponse(levelProgressionsJson())
+        )
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            assertThat(state.kanjiTotalForLevelUp).isEqualTo(2)
+            assertThat(state.kanjiGuruedForLevelUp).isEqualTo(1)
+            assertThat(state.daysOnCurrentLevel).isNotNull()
+        }
+    }
+
+    private fun levelUpAssignmentsJson() = """
+        {
+          "object": "collection",
+          "url": "https://api.wanikani.com/v2/assignments",
+          "total_count": 2,
+          "data": [
+            {
+              "id": 301, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/301",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "kanji",
+                "srs_stage": 5, "hidden": false
+              }
+            },
+            {
+              "id": 302, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/302",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 2, "subject_type": "kanji",
+                "srs_stage": 2, "hidden": false
+              }
+            }
+          ]
+        }
+    """.trimIndent()
+
+    private fun levelProgressionsJson() = """
+        {
+          "object": "collection",
+          "url": "https://api.wanikani.com/v2/level_progressions",
+          "total_count": 1,
+          "data": [
+            {
+              "id": 1, "object": "level_progression", "url": "https://api.wanikani.com/v2/level_progressions/1",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "level": 12,
+                "unlocked_at": "2026-01-01T00:00:00.000000Z", "started_at": "2026-01-01T00:00:00.000000Z"
+              }
+            }
+          ]
+        }
+    """.trimIndent()
+
+    private fun emptyLevelProgressionsJson() = """
+        {"object": "collection", "url": "https://api.wanikani.com/v2/level_progressions", "total_count": 0, "data": []}
+    """.trimIndent()
 
     private fun assignmentsPageJson(totalCount: Int) = """
         {

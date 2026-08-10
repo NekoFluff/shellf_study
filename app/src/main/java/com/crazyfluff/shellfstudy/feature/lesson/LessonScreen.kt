@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,13 +11,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -28,6 +37,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -47,6 +57,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
+import kotlinx.coroutines.flow.collect
 
 object LessonScreenTestTags {
     const val LOADING_INDICATOR = "lesson_loading_indicator"
@@ -55,6 +66,13 @@ object LessonScreenTestTags {
     const val BACK_BUTTON = "lesson_back_button"
     const val NO_LESSONS_TEXT = "lesson_no_lessons_text"
     const val NO_LESSONS_DONE_BUTTON = "lesson_no_lessons_done_button"
+    const val SELECT_ALL_CHIP = "lesson_select_all_chip"
+    const val SELECT_NONE_CHIP = "lesson_select_none_chip"
+    const val SELECT_FIRST_FIVE_CHIP = "lesson_select_first_five_chip"
+    const val SELECT_FIRST_TEN_CHIP = "lesson_select_first_ten_chip"
+    const val START_SELECTED_BUTTON = "lesson_start_selected_button"
+    fun lessonCheckboxTag(assignmentId: Long) = "lesson_checkbox_$assignmentId"
+    const val STUDY_PAGER = "lesson_study_pager"
     const val STUDY_CHARACTERS = "lesson_study_characters"
     const val STUDY_NEXT_BUTTON = "lesson_study_next_button"
     const val STUDY_PREVIOUS_BUTTON = "lesson_study_previous_button"
@@ -79,6 +97,12 @@ fun LessonRoute(
 
     LessonScreen(
         uiState = uiState,
+        onToggleLessonSelection = viewModel::toggleLessonSelection,
+        onSelectFirst = viewModel::selectFirst,
+        onSelectAll = viewModel::selectAll,
+        onSelectNone = viewModel::selectNone,
+        onStartSelectedLessons = viewModel::startSelectedLessons,
+        onStudyCardSwiped = viewModel::onStudyCardSwiped,
         onNextStudyCard = viewModel::nextStudyCard,
         onPreviousStudyCard = viewModel::previousStudyCard,
         onAnswerInputChange = viewModel::onAnswerInputChange,
@@ -95,6 +119,12 @@ fun LessonRoute(
 @Composable
 fun LessonScreen(
     uiState: LessonUiState,
+    onToggleLessonSelection: (Long) -> Unit = {},
+    onSelectFirst: (Int) -> Unit = {},
+    onSelectAll: () -> Unit = {},
+    onSelectNone: () -> Unit = {},
+    onStartSelectedLessons: () -> Unit = {},
+    onStudyCardSwiped: (Int) -> Unit = {},
     onNextStudyCard: () -> Unit,
     onPreviousStudyCard: () -> Unit,
     onAnswerInputChange: (String) -> Unit,
@@ -180,11 +210,23 @@ fun LessonScreen(
                     }
                 }
 
+                uiState.phase == LessonPhase.SELECT -> {
+                    LessonSelectionContent(
+                        uiState = uiState,
+                        onToggle = onToggleLessonSelection,
+                        onSelectFirst = onSelectFirst,
+                        onSelectAll = onSelectAll,
+                        onSelectNone = onSelectNone,
+                        onStart = onStartSelectedLessons
+                    )
+                }
+
                 uiState.phase == LessonPhase.STUDY -> {
                     LessonStudyContent(
                         uiState = uiState,
                         onNext = onNextStudyCard,
-                        onPrevious = onPreviousStudyCard
+                        onPrevious = onPreviousStudyCard,
+                        onSwiped = onStudyCardSwiped
                     )
                 }
 
@@ -206,11 +248,24 @@ fun LessonScreen(
 private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     uiState: LessonUiState,
     onNext: () -> Unit,
-    onPrevious: () -> Unit
+    onPrevious: () -> Unit,
+    onSwiped: (Int) -> Unit
 ) {
-    val item = uiState.studyItems.getOrNull(uiState.studyIndex) ?: return
-    val accentColor = subjectColor(item.subjectType)
+    val currentItem = uiState.studyItems.getOrNull(uiState.studyIndex) ?: return
     val isLastCard = uiState.studyIndex == uiState.studyItems.lastIndex
+    val accentColor = subjectColor(currentItem.subjectType)
+
+    val pagerState = rememberPagerState(initialPage = uiState.studyIndex) { uiState.studyItems.size }
+
+    LaunchedEffect(uiState.studyIndex) {
+        if (pagerState.currentPage != uiState.studyIndex) {
+            pagerState.animateScrollToPage(uiState.studyIndex)
+        }
+    }
+    LaunchedEffect(pagerState) {
+        androidx.compose.runtime.snapshotFlow { pagerState.currentPage }
+            .collect { page -> onSwiped(page) }
+    }
 
     LinearProgressIndicator(
         progress = { (uiState.studyIndex + 1).toFloat() / uiState.studyItems.size },
@@ -218,31 +273,40 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
         color = accentColor
     )
 
-    Column(
+    HorizontalPager(
+        state = pagerState,
         modifier = Modifier
             .weight(1f)
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = item.characters ?: item.meanings.firstOrNull() ?: "?",
-            style = MaterialTheme.typography.displayLarge,
-            color = accentColor,
-            modifier = Modifier.testTag(LessonScreenTestTags.STUDY_CHARACTERS)
-        )
-        Text(
-            text = "Level ${item.level} · ${subjectTypeLabel(item.subjectType)}",
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LessonDetailSection(title = "Meaning", primary = item.meanings.joinToString(", "), mnemonic = item.meaningMnemonic)
-
-        if (item.readings.isNotEmpty()) {
+            .testTag(LessonScreenTestTags.STUDY_PAGER)
+    ) { page ->
+        val item = uiState.studyItems[page]
+        val pageAccentColor = subjectColor(item.subjectType)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = item.characters ?: item.meanings.firstOrNull() ?: "?",
+                style = MaterialTheme.typography.displayLarge,
+                color = pageAccentColor,
+                modifier = Modifier.testTag(LessonScreenTestTags.STUDY_CHARACTERS)
+            )
+            Text(
+                text = "Level ${item.level} · ${subjectTypeLabel(item.subjectType)}",
+                style = MaterialTheme.typography.bodyMedium
+            )
             Spacer(modifier = Modifier.height(16.dp))
-            LessonDetailSection(title = "Reading", primary = item.readings.joinToString(", "), mnemonic = item.readingMnemonic)
+
+            LessonDetailSection(title = "Meaning", primary = item.meanings.joinToString(", "), mnemonic = item.meaningMnemonic)
+
+            if (item.readings.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                LessonDetailSection(title = "Reading", primary = item.readings.joinToString(", "), mnemonic = item.readingMnemonic)
+            }
         }
     }
 
@@ -262,6 +326,114 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 .testTag(if (isLastCard) LessonScreenTestTags.START_QUIZ_BUTTON else LessonScreenTestTags.STUDY_NEXT_BUTTON)
         ) { Text(if (isLastCard) "Start Quiz" else "Next") }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionContent(
+    uiState: LessonUiState,
+    onToggle: (Long) -> Unit,
+    onSelectFirst: (Int) -> Unit,
+    onSelectAll: () -> Unit,
+    onSelectNone: () -> Unit,
+    onStart: () -> Unit
+) {
+    val selectedCount = uiState.selectedAssignmentIds.size
+    val total = uiState.availableLessons.size
+
+    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
+        Text("Choose lessons to study", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("$selectedCount of $total selected", style = MaterialTheme.typography.bodyMedium)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (total > 5) {
+            AssistChip(
+                onClick = { onSelectFirst(5) },
+                label = { Text("First 5") },
+                modifier = Modifier.testTag(LessonScreenTestTags.SELECT_FIRST_FIVE_CHIP)
+            )
+        }
+        if (total > 10) {
+            AssistChip(
+                onClick = { onSelectFirst(10) },
+                label = { Text("First 10") },
+                modifier = Modifier.testTag(LessonScreenTestTags.SELECT_FIRST_TEN_CHIP)
+            )
+        }
+        AssistChip(
+            onClick = onSelectAll,
+            label = { Text("All") },
+            modifier = Modifier.testTag(LessonScreenTestTags.SELECT_ALL_CHIP)
+        )
+        AssistChip(
+            onClick = onSelectNone,
+            label = { Text("None") },
+            modifier = Modifier.testTag(LessonScreenTestTags.SELECT_NONE_CHIP)
+        )
+    }
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        uiState.availableLessons.groupBy { it.subjectType }.forEach { (type, itemsForType) ->
+            item {
+                Text(
+                    text = subjectTypeSectionLabel(type),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                )
+            }
+            items(itemsForType, key = { it.assignmentId }) { lessonItem ->
+                val checked = lessonItem.assignmentId in uiState.selectedAssignmentIds
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggle(lessonItem.assignmentId) }
+                        .testTag(LessonScreenTestTags.lessonCheckboxTag(lessonItem.assignmentId))
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = checked, onCheckedChange = { onToggle(lessonItem.assignmentId) })
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = lessonItem.characters ?: lessonItem.meanings.firstOrNull() ?: "?",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = subjectColor(type),
+                        modifier = Modifier.width(48.dp)
+                    )
+                    Column {
+                        Text(lessonItem.meanings.joinToString(", "), style = MaterialTheme.typography.bodyMedium)
+                        Text("Level ${lessonItem.level}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+    }
+
+    Button(
+        onClick = onStart,
+        enabled = selectedCount > 0,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+            .testTag(LessonScreenTestTags.START_SELECTED_BUTTON)
+    ) {
+        Text(if (selectedCount > 0) "Study $selectedCount selected" else "Select lessons to study")
+    }
+}
+
+private fun subjectTypeSectionLabel(type: SubjectType): String = when (type) {
+    SubjectType.RADICAL -> "Radicals"
+    SubjectType.KANJI -> "Kanji"
+    SubjectType.VOCABULARY -> "Vocabulary"
 }
 
 @Composable

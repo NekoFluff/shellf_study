@@ -4,13 +4,25 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
+/**
+ * Runs under Robolectric (JVM) — this screen is driven purely by state, no device features needed.
+ * Pinned to SDK 35: Robolectric 4.15.1 doesn't yet have shadows for this project's targetSdk (37).
+ */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class LessonScreenTest {
 
     @get:Rule
@@ -28,8 +40,26 @@ class LessonScreenTest {
         readingMnemonic = null
     )
 
+    private val secondRadicalItem = LessonItem(
+        assignmentId = 2,
+        subjectId = 2,
+        subjectType = SubjectType.RADICAL,
+        characters = "一",
+        level = 1,
+        meanings = listOf("Ground"),
+        readings = emptyList(),
+        meaningMnemonic = "A single horizontal line.",
+        readingMnemonic = null
+    )
+
     private fun setScreen(
         uiState: LessonUiState,
+        onToggleLessonSelection: (Long) -> Unit = {},
+        onSelectFirst: (Int) -> Unit = {},
+        onSelectAll: () -> Unit = {},
+        onSelectNone: () -> Unit = {},
+        onStartSelectedLessons: () -> Unit = {},
+        onStudyCardSwiped: (Int) -> Unit = {},
         onNextStudyCard: () -> Unit = {},
         onPreviousStudyCard: () -> Unit = {},
         onAnswerInputChange: (String) -> Unit = {},
@@ -43,6 +73,12 @@ class LessonScreenTest {
         composeTestRule.setContent {
             LessonScreen(
                 uiState = uiState,
+                onToggleLessonSelection = onToggleLessonSelection,
+                onSelectFirst = onSelectFirst,
+                onSelectAll = onSelectAll,
+                onSelectNone = onSelectNone,
+                onStartSelectedLessons = onStartSelectedLessons,
+                onStudyCardSwiped = onStudyCardSwiped,
                 onNextStudyCard = onNextStudyCard,
                 onPreviousStudyCard = onPreviousStudyCard,
                 onAnswerInputChange = onAnswerInputChange,
@@ -54,6 +90,89 @@ class LessonScreenTest {
                 onBack = onBack
             )
         }
+    }
+
+    @Test
+    fun selectPhase_showsSelectedCountAndTogglesOnCheckboxRowClick() {
+        var toggledId: Long? = null
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem, secondRadicalItem),
+                selectedAssignmentIds = setOf(1L)
+            ),
+            onToggleLessonSelection = { toggledId = it }
+        )
+
+        composeTestRule.onNodeWithText("1 of 2 selected").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.lessonCheckboxTag(2L)).performClick()
+        assert(toggledId == 2L)
+    }
+
+    @Test
+    fun selectPhase_selectAllAndSelectNoneChips_invokeCallbacks() {
+        var selectedAll = false
+        var selectedNone = false
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem, secondRadicalItem),
+                selectedAssignmentIds = setOf(1L)
+            ),
+            onSelectAll = { selectedAll = true },
+            onSelectNone = { selectedNone = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECT_ALL_CHIP).performClick()
+        assert(selectedAll)
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECT_NONE_CHIP).performClick()
+        assert(selectedNone)
+    }
+
+    @Test
+    fun selectPhase_startButton_disabledWhenNothingSelected_enabledOtherwise() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem),
+                selectedAssignmentIds = emptySet()
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.START_SELECTED_BUTTON).assertIsNotEnabled()
+    }
+
+    @Test
+    fun selectPhase_startButton_invokesCallback_whenSelectionNonEmpty() {
+        var started = false
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem),
+                selectedAssignmentIds = setOf(1L)
+            ),
+            onStartSelectedLessons = { started = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.START_SELECTED_BUTTON).performClick()
+        assert(started)
+    }
+
+    @Test
+    fun studyPhase_swipingPager_invokesOnStudyCardSwiped() {
+        var swipedToIndex: Int? = null
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.STUDY,
+                studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 0
+            ),
+            onStudyCardSwiped = { swipedToIndex = it }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_PAGER).performTouchInput { swipeLeft() }
+        composeTestRule.waitForIdle()
+        assert(swipedToIndex == 1)
     }
 
     @Test

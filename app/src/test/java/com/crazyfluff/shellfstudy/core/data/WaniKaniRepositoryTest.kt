@@ -125,6 +125,41 @@ class WaniKaniRepositoryTest {
     }
 
     @Test
+    fun `fetchLevelUpProgress counts guru-or-higher kanji out of the total`() = runTest {
+        server.enqueue(jsonResponse(LEVEL_UP_ASSIGNMENTS_JSON))
+
+        val result = repository.fetchLevelUpProgress(level = 12)
+
+        assertThat(result).isInstanceOf(ApiResult.Success::class.java)
+        val progress = (result as ApiResult.Success).data
+        assertThat(progress.kanjiTotal).isEqualTo(2)
+        assertThat(progress.kanjiGuruedOrHigher).isEqualTo(1)
+        val request = server.takeRequest()
+        assertThat(request.path).contains("levels")
+        assertThat(request.path).contains("subject_types")
+    }
+
+    @Test
+    fun `fetchDaysOnCurrentLevel computes days since the in-progress level was unlocked`() = runTest {
+        server.enqueue(jsonResponse(levelProgressionsJson(startedAt = "2026-01-01T00:00:00.000000Z")))
+
+        val result = repository.fetchDaysOnCurrentLevel()
+
+        assertThat(result).isInstanceOf(ApiResult.Success::class.java)
+        assertThat((result as ApiResult.Success).data).isNotNull()
+    }
+
+    @Test
+    fun `fetchDaysOnCurrentLevel returns null when every level has been passed`() = runTest {
+        server.enqueue(jsonResponse(ALL_LEVELS_PASSED_JSON))
+
+        val result = repository.fetchDaysOnCurrentLevel()
+
+        assertThat(result).isInstanceOf(ApiResult.Success::class.java)
+        assertThat((result as ApiResult.Success).data).isNull()
+    }
+
+    @Test
     fun `submitReview posts incorrect counts derived from grade`() = runTest {
         server.enqueue(jsonResponse(REVIEW_RESULT_JSON))
 
@@ -290,6 +325,100 @@ class WaniKaniRepositoryTest {
               "url": "https://api.wanikani.com/v2/assignments",
               "total_count": 4,
               "data": []
+            }
+        """.trimIndent()
+
+        val LEVEL_UP_ASSIGNMENTS_JSON = """
+            {
+              "object": "collection",
+              "url": "https://api.wanikani.com/v2/assignments",
+              "total_count": 2,
+              "data": [
+                {
+                  "id": 201,
+                  "object": "assignment",
+                  "url": "https://api.wanikani.com/v2/assignments/201",
+                  "data_updated_at": "2026-01-01T00:00:00.000000Z",
+                  "data": {
+                    "created_at": "2026-01-01T00:00:00.000000Z",
+                    "subject_id": 440,
+                    "subject_type": "kanji",
+                    "srs_stage": 5,
+                    "hidden": false
+                  }
+                },
+                {
+                  "id": 202,
+                  "object": "assignment",
+                  "url": "https://api.wanikani.com/v2/assignments/202",
+                  "data_updated_at": "2026-01-01T00:00:00.000000Z",
+                  "data": {
+                    "created_at": "2026-01-01T00:00:00.000000Z",
+                    "subject_id": 441,
+                    "subject_type": "kanji",
+                    "srs_stage": 3,
+                    "hidden": false
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+
+        fun levelProgressionsJson(startedAt: String) = """
+            {
+              "object": "collection",
+              "url": "https://api.wanikani.com/v2/level_progressions",
+              "total_count": 2,
+              "data": [
+                {
+                  "id": 1,
+                  "object": "level_progression",
+                  "url": "https://api.wanikani.com/v2/level_progressions/1",
+                  "data_updated_at": "2026-01-01T00:00:00.000000Z",
+                  "data": {
+                    "created_at": "2020-01-01T00:00:00.000000Z",
+                    "level": 11,
+                    "unlocked_at": "2020-01-01T00:00:00.000000Z",
+                    "started_at": "2020-01-01T00:00:00.000000Z",
+                    "passed_at": "2020-02-01T00:00:00.000000Z"
+                  }
+                },
+                {
+                  "id": 2,
+                  "object": "level_progression",
+                  "url": "https://api.wanikani.com/v2/level_progressions/2",
+                  "data_updated_at": "2026-01-01T00:00:00.000000Z",
+                  "data": {
+                    "created_at": "$startedAt",
+                    "level": 12,
+                    "unlocked_at": "$startedAt",
+                    "started_at": "$startedAt"
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val ALL_LEVELS_PASSED_JSON = """
+            {
+              "object": "collection",
+              "url": "https://api.wanikani.com/v2/level_progressions",
+              "total_count": 1,
+              "data": [
+                {
+                  "id": 1,
+                  "object": "level_progression",
+                  "url": "https://api.wanikani.com/v2/level_progressions/1",
+                  "data_updated_at": "2026-01-01T00:00:00.000000Z",
+                  "data": {
+                    "created_at": "2020-01-01T00:00:00.000000Z",
+                    "level": 11,
+                    "unlocked_at": "2020-01-01T00:00:00.000000Z",
+                    "started_at": "2020-01-01T00:00:00.000000Z",
+                    "passed_at": "2020-02-01T00:00:00.000000Z"
+                  }
+                }
+              ]
             }
         """.trimIndent()
 

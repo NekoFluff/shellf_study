@@ -16,10 +16,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** How many lessons are studied and then quizzed together in one batch, matching WaniKani's own default. */
-private const val LESSON_BATCH_SIZE = 5
+/** Default number of lessons pre-selected on the picker, matching WaniKani's own default batch size. */
+private const val DEFAULT_LESSON_SELECTION_SIZE = 5
 
-enum class LessonPhase { STUDY, QUIZ }
+enum class LessonPhase { SELECT, STUDY, QUIZ }
 enum class LessonQuestionType { MEANING, READING }
 
 data class LessonAnswerFeedback(val isCorrect: Boolean, val correctAnswer: String)
@@ -28,7 +28,9 @@ data class LessonUiState(
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
     val hasNoLessonsAvailable: Boolean = false,
-    val phase: LessonPhase = LessonPhase.STUDY,
+    val phase: LessonPhase = LessonPhase.SELECT,
+    val availableLessons: List<LessonItem> = emptyList(),
+    val selectedAssignmentIds: Set<Long> = emptySet(),
     val studyItems: List<LessonItem> = emptyList(),
     val studyIndex: Int = 0,
     val currentQuizItem: LessonItem? = null,
@@ -66,17 +68,63 @@ class LessonViewModel @Inject constructor(
             when (val result = waniKaniRepository.refreshLessonQueue()) {
                 is ApiResult.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
                 is ApiResult.Success -> {
-                    val items = waniKaniRepository.observeLessonQueue().first().take(LESSON_BATCH_SIZE)
+                    val items = waniKaniRepository.observeLessonQueue().first()
+                        .sortedWith(compareBy({ it.level }, { it.subjectType.ordinal }, { it.assignmentId }))
                     if (items.isEmpty()) {
                         _uiState.update { it.copy(isLoading = false, hasNoLessonsAvailable = true) }
                     } else {
+                        val defaultSelection = items.take(DEFAULT_LESSON_SELECTION_SIZE)
+                            .map { it.assignmentId }
+                            .toSet()
                         _uiState.update {
-                            it.copy(isLoading = false, phase = LessonPhase.STUDY, studyItems = items, studyIndex = 0)
+                            it.copy(
+                                isLoading = false,
+                                phase = LessonPhase.SELECT,
+                                availableLessons = items,
+                                selectedAssignmentIds = defaultSelection
+                            )
                         }
                     }
                 }
             }
         }
+    }
+
+    fun toggleLessonSelection(assignmentId: Long) {
+        _uiState.update { state ->
+            val selected = state.selectedAssignmentIds.toMutableSet()
+            if (!selected.add(assignmentId)) selected.remove(assignmentId)
+            state.copy(selectedAssignmentIds = selected)
+        }
+    }
+
+    fun selectFirst(n: Int) {
+        _uiState.update { state ->
+            state.copy(selectedAssignmentIds = state.availableLessons.take(n).map { it.assignmentId }.toSet())
+        }
+    }
+
+    fun selectAll() {
+        _uiState.update { state ->
+            state.copy(selectedAssignmentIds = state.availableLessons.map { it.assignmentId }.toSet())
+        }
+    }
+
+    fun selectNone() {
+        _uiState.update { it.copy(selectedAssignmentIds = emptySet()) }
+    }
+
+    fun startSelectedLessons() {
+        val state = _uiState.value
+        val selected = state.availableLessons.filter { it.assignmentId in state.selectedAssignmentIds }
+        if (selected.isEmpty()) return
+        _uiState.update { it.copy(phase = LessonPhase.STUDY, studyItems = selected, studyIndex = 0) }
+    }
+
+    fun onStudyCardSwiped(index: Int) {
+        val state = _uiState.value
+        if (state.phase != LessonPhase.STUDY || index !in state.studyItems.indices) return
+        _uiState.update { it.copy(studyIndex = index) }
     }
 
     fun nextStudyCard() {

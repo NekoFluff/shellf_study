@@ -27,7 +27,10 @@ data class DashboardUiState(
     val isLoggedOut: Boolean = false,
     val hasActiveReviewSession: Boolean = false,
     val lessonsCompletedToday: Int = 0,
-    val dailyLessonGoal: Int = 15
+    val dailyLessonGoal: Int = 15,
+    val kanjiGuruedForLevelUp: Int = 0,
+    val kanjiTotalForLevelUp: Int = 0,
+    val daysOnCurrentLevel: Int? = null
 )
 
 @HiltViewModel
@@ -62,9 +65,9 @@ class DashboardViewModel @Inject constructor(
             val userDeferred = async { waniKaniRepository.fetchUser() }
             val summaryDeferred = async { waniKaniRepository.fetchDashboardSummary() }
             val lessonsTodayDeferred = async { waniKaniRepository.fetchLessonsCompletedToday() }
+            val daysOnLevelDeferred = async { waniKaniRepository.fetchDaysOnCurrentLevel() }
             val userResult = userDeferred.await()
             val summaryResult = summaryDeferred.await()
-            val lessonsTodayResult = lessonsTodayDeferred.await()
 
             if (userResult is ApiResult.Error) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = userResult.message) }
@@ -77,9 +80,13 @@ class DashboardViewModel @Inject constructor(
 
             val user = (userResult as ApiResult.Success).data
             val summary = (summaryResult as ApiResult.Success).data
-            // The "lessons done today" count is a nice-to-have indicator, not core functionality —
-            // if it fails to load, default to 0 rather than blocking the whole dashboard on it.
-            val lessonsToday = (lessonsTodayResult as? ApiResult.Success)?.data ?: 0
+            val levelUpProgressResult = waniKaniRepository.fetchLevelUpProgress(user.level)
+            // The "lessons done today" count, days-on-level, and Guru'd progress are nice-to-have
+            // indicators, not core functionality — if any fails to load, fall back to a default
+            // rather than blocking the whole dashboard on it.
+            val lessonsToday = (lessonsTodayDeferred.await() as? ApiResult.Success)?.data ?: 0
+            val daysOnLevel = (daysOnLevelDeferred.await() as? ApiResult.Success)?.data
+            val levelUpProgress = (levelUpProgressResult as? ApiResult.Success)?.data
 
             _uiState.update {
                 it.copy(
@@ -88,7 +95,10 @@ class DashboardViewModel @Inject constructor(
                     level = user.level,
                     lessonCount = summary.lessonCount,
                     reviewCount = summary.reviewCount,
-                    lessonsCompletedToday = lessonsToday
+                    lessonsCompletedToday = lessonsToday,
+                    daysOnCurrentLevel = daysOnLevel,
+                    kanjiGuruedForLevelUp = levelUpProgress?.kanjiGuruedOrHigher ?: 0,
+                    kanjiTotalForLevelUp = levelUpProgress?.kanjiTotal ?: 0
                 )
             }
         }

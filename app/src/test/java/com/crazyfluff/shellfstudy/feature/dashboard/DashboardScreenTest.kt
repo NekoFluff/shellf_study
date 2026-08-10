@@ -7,10 +7,19 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.feature.search.SearchOverlayTestTags
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
+/**
+ * Runs under Robolectric (JVM) — this screen is driven purely by state, no device features needed.
+ * Pinned to SDK 35: Robolectric 4.15.1 doesn't yet have shadows for this project's targetSdk (37).
+ */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class DashboardScreenTest {
 
     @get:Rule
@@ -58,32 +67,6 @@ class DashboardScreenTest {
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.ERROR_TEXT).assertIsDisplayed()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.RETRY_BUTTON).performClick()
         assert(retried)
-    }
-
-    @Test
-    fun startReviewButton_disabledWhenNoReviewsDue() {
-        composeTestRule.setContent {
-            DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, username = "x", level = 1, reviewCount = 0),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
-            )
-        }
-
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.START_REVIEW_BUTTON).assertIsDisplayed()
-    }
-
-    @Test
-    fun startReviewButton_invokesCallback_whenReviewsDue() {
-        var started = false
-        composeTestRule.setContent {
-            DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, username = "x", level = 1, reviewCount = 3),
-                onRefresh = {}, onStartReview = { started = true }, onLogOut = {}
-            )
-        }
-
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.START_REVIEW_BUTTON).performClick()
-        assert(started)
     }
 
     @Test
@@ -161,12 +144,43 @@ class DashboardScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.LESSONS_TODAY_PROGRESS).assertIsDisplayed()
-        composeTestRule.onNodeWithText("3 / 15 lessons today").assertIsDisplayed()
+        // The badge sits inside the clickable Lessons card, whose semantics merge descendants
+        // together — useUnmergedTree finds the badge's own node instead of the merged card node.
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.LESSONS_TODAY_PROGRESS, useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("3").assertIsDisplayed()
     }
 
     @Test
-    fun resumeSessionButton_showsRenamedText_whenSessionActive() {
+    fun showsKanjiGuruProgress_whenLevelUpDataPresent() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(
+                    isLoading = false, username = "x", level = 12,
+                    kanjiGuruedForLevelUp = 18, kanjiTotalForLevelUp = 25
+                ),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.GURU_PROGRESS).assertIsDisplayed()
+        composeTestRule.onNodeWithText("18 / 25 kanji guru'd").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsDaysOnLevel_inlineWithLevelText() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isLoading = false, username = "x", level = 12, daysOnCurrentLevel = 6),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onNodeWithText("Level 12 · Day 6").assertIsDisplayed()
+    }
+
+    @Test
+    fun reviewsCard_showsRenamedLabel_whenSessionActive() {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isLoading = false, username = "x", level = 1, hasActiveReviewSession = true),

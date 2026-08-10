@@ -43,7 +43,7 @@ class LessonViewModelTest {
     private fun createViewModel() = LessonViewModel(waniKaniRepository)
 
     @Test
-    fun `loads a batch of lessons into the study phase`() = runTest {
+    fun `loads a batch of lessons into the select phase with all pre-selected`() = runTest {
         server.enqueue(jsonResponse(radicalAssignmentsJson()))
         server.enqueue(jsonResponse(radicalSubjectsJson()))
 
@@ -53,9 +53,9 @@ class LessonViewModelTest {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
 
-            assertThat(state.phase).isEqualTo(LessonPhase.STUDY)
-            assertThat(state.studyItems).hasSize(1)
-            assertThat(state.studyItems.first().meaningMnemonic).isEqualTo("A stream of water.")
+            assertThat(state.phase).isEqualTo(LessonPhase.SELECT)
+            assertThat(state.availableLessons).hasSize(1)
+            assertThat(state.selectedAssignmentIds).containsExactly(101L)
         }
     }
 
@@ -73,6 +73,67 @@ class LessonViewModelTest {
     }
 
     @Test
+    fun `toggling a lesson selection adds or removes it`() = runTest {
+        server.enqueue(jsonResponse(twoRadicalAssignmentsJson()))
+        server.enqueue(jsonResponse(twoRadicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.selectedAssignmentIds).containsExactly(101L, 102L)
+
+            viewModel.toggleLessonSelection(101L)
+            assertThat(awaitItem().selectedAssignmentIds).containsExactly(102L)
+
+            viewModel.toggleLessonSelection(101L)
+            assertThat(awaitItem().selectedAssignmentIds).containsExactly(101L, 102L)
+        }
+    }
+
+    @Test
+    fun `selectNone and selectAll clear and restore the full selection`() = runTest {
+        server.enqueue(jsonResponse(twoRadicalAssignmentsJson()))
+        server.enqueue(jsonResponse(twoRadicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.selectNone()
+            assertThat(awaitItem().selectedAssignmentIds).isEmpty()
+
+            viewModel.selectAll()
+            assertThat(awaitItem().selectedAssignmentIds).containsExactly(101L, 102L)
+        }
+    }
+
+    @Test
+    fun `startSelectedLessons enters the study phase with only the selected items`() = runTest {
+        server.enqueue(jsonResponse(twoRadicalAssignmentsJson()))
+        server.enqueue(jsonResponse(twoRadicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.toggleLessonSelection(102L)
+            awaitItem()
+
+            viewModel.startSelectedLessons()
+            val studyState = awaitItem()
+            assertThat(studyState.phase).isEqualTo(LessonPhase.STUDY)
+            assertThat(studyState.studyItems).hasSize(1)
+            assertThat(studyState.studyItems.first().assignmentId).isEqualTo(101L)
+        }
+    }
+
+    @Test
     fun `advancing past the last study card starts the quiz`() = runTest {
         server.enqueue(jsonResponse(radicalAssignmentsJson()))
         server.enqueue(jsonResponse(radicalSubjectsJson()))
@@ -82,7 +143,10 @@ class LessonViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
-            assertThat(state.studyIndex).isEqualTo(0)
+
+            viewModel.startSelectedLessons()
+            val studyState = awaitItem()
+            assertThat(studyState.studyIndex).isEqualTo(0)
 
             viewModel.nextStudyCard()
             val quizState = awaitItem()
@@ -103,6 +167,9 @@ class LessonViewModelTest {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
 
+            viewModel.startSelectedLessons()
+            awaitItem()
+
             viewModel.nextStudyCard()
             val secondCard = awaitItem()
             assertThat(secondCard.studyIndex).isEqualTo(1)
@@ -117,6 +184,25 @@ class LessonViewModelTest {
     }
 
     @Test
+    fun `onStudyCardSwiped updates the study index directly`() = runTest {
+        server.enqueue(jsonResponse(twoRadicalAssignmentsJson()))
+        server.enqueue(jsonResponse(twoRadicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+
+            viewModel.onStudyCardSwiped(1)
+            assertThat(awaitItem().studyIndex).isEqualTo(1)
+        }
+    }
+
+    @Test
     fun `a correct quiz answer marks the assignment started once all its questions are done`() = runTest {
         server.enqueue(jsonResponse(radicalAssignmentsJson()))
         server.enqueue(jsonResponse(radicalSubjectsJson()))
@@ -127,6 +213,9 @@ class LessonViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
 
             viewModel.nextStudyCard()
             awaitItem() // quiz begins
@@ -162,6 +251,9 @@ class LessonViewModelTest {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
 
+            viewModel.startSelectedLessons()
+            awaitItem()
+
             viewModel.nextStudyCard()
             awaitItem() // quiz begins
 
@@ -189,6 +281,9 @@ class LessonViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
 
             viewModel.nextStudyCard()
             awaitItem() // quiz begins
