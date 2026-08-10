@@ -49,12 +49,13 @@ data class LessonItem(
     val readingMnemonic: String?
 )
 
-/** A subject as shown in search results — no assignment/SRS context, just its content. */
+/** A subject as shown in search results. [srsStage] is null if no assignment exists yet. */
 data class SubjectSummary(
     val subjectId: Long,
     val subjectType: SubjectType,
     val characters: String?,
     val level: Int,
     val meanings: List<String>,
-    val readings: List<String>
+    val readings: List<String>,
+    val srsStage: Int? = null
 )

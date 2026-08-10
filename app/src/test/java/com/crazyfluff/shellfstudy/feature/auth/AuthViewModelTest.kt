@@ -7,10 +7,9 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
-import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
-import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
+import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
-import com.crazyfluff.shellfstudy.fakes.buildTestApi
+import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
@@ -33,6 +32,7 @@ class AuthViewModelTest {
     private lateinit var server: MockWebServer
     private lateinit var tokenRepository: TokenRepository
     private lateinit var waniKaniRepository: WaniKaniRepository
+    private lateinit var syncScheduler: FakeSyncScheduler
 
     @Before
     fun setUp() {
@@ -43,11 +43,8 @@ class AuthViewModelTest {
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
-        waniKaniRepository = WaniKaniRepository(
-            api = buildTestApi(server.url("/").toString()),
-            subjectDao = FakeSubjectDao(),
-            assignmentDao = FakeAssignmentDao()
-        )
+        waniKaniRepository = buildTestRepositories(server.url("/").toString()).waniKaniRepository
+        syncScheduler = FakeSyncScheduler()
     }
 
     @After
@@ -55,7 +52,7 @@ class AuthViewModelTest {
         server.shutdown()
     }
 
-    private fun createViewModel() = AuthViewModel(tokenRepository, waniKaniRepository)
+    private fun createViewModel() = AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler)
 
     @Test
     fun `with no stored token, finishes the check unauthenticated`() = runTest {
@@ -69,7 +66,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `with a valid stored token, auto-authenticates`() = runTest {
+    fun `with a valid stored token, auto-authenticates and schedules background sync`() = runTest {
         tokenRepository.saveToken("stored-token")
         server.enqueue(jsonResponse(userJson()))
 
@@ -80,6 +77,7 @@ class AuthViewModelTest {
             while (state.isCheckingStoredToken) state = awaitItem()
             assertThat(state.isAuthenticated).isTrue()
         }
+        assertThat(syncScheduler.scheduleCallCount).isEqualTo(1)
     }
 
     @Test
@@ -95,6 +93,7 @@ class AuthViewModelTest {
             assertThat(state.isAuthenticated).isFalse()
         }
         tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
+        assertThat(syncScheduler.scheduleCallCount).isEqualTo(0)
     }
 
     @Test
@@ -114,7 +113,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `submitting a valid token authenticates`() = runTest {
+    fun `submitting a valid token authenticates and schedules background sync`() = runTest {
         server.enqueue(jsonResponse(userJson()))
         val viewModel = createViewModel()
 
@@ -130,6 +129,7 @@ class AuthViewModelTest {
             while (afterSubmit.isSubmitting) afterSubmit = awaitItem()
             assertThat(afterSubmit.isAuthenticated).isTrue()
         }
+        assertThat(syncScheduler.scheduleCallCount).isEqualTo(1)
     }
 
     @Test

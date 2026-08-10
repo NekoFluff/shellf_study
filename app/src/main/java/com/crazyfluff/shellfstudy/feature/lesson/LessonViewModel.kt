@@ -3,7 +3,7 @@ package com.crazyfluff.shellfstudy.feature.lesson
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
-import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
@@ -46,7 +46,7 @@ private data class PendingLessonQuestion(val item: LessonItem, val type: LessonQ
 
 @HiltViewModel
 class LessonViewModel @Inject constructor(
-    private val waniKaniRepository: WaniKaniRepository
+    private val assignmentRepository: AssignmentRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LessonUiState())
@@ -65,10 +65,10 @@ class LessonViewModel @Inject constructor(
             quizQueue.clear()
             startedAssignmentIds.clear()
 
-            when (val result = waniKaniRepository.refreshLessonQueue()) {
+            when (val result = assignmentRepository.refreshLessonQueue()) {
                 is ApiResult.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
                 is ApiResult.Success -> {
-                    val items = waniKaniRepository.observeLessonQueue().first()
+                    val items = assignmentRepository.observeLessonQueue().first()
                         .sortedWith(compareBy({ it.level }, { it.subjectType.ordinal }, { it.assignmentId }))
                     if (items.isEmpty()) {
                         _uiState.update { it.copy(isLoading = false, hasNoLessonsAvailable = true) }
@@ -229,7 +229,7 @@ class LessonViewModel @Inject constructor(
 
     private fun markStarted(item: LessonItem) {
         if (!startedAssignmentIds.add(item.assignmentId)) return
-        viewModelScope.launch { waniKaniRepository.startAssignment(item.assignmentId) }
+        viewModelScope.launch { assignmentRepository.startAssignment(item.assignmentId) }
     }
 
     fun onContinue() {

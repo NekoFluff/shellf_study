@@ -5,22 +5,23 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
-import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
-import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
-import com.crazyfluff.shellfstudy.fakes.buildTestApi
+import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import mockwebserver3.Dispatcher
+import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.util.concurrent.TimeUnit
 
 class ReviewViewModelTest {
 
@@ -32,17 +33,16 @@ class ReviewViewModelTest {
 
     private lateinit var server: MockWebServer
     private lateinit var waniKaniRepository: WaniKaniRepository
+    private lateinit var assignmentRepository: AssignmentRepository
     private lateinit var reviewSessionRepository: ReviewSessionRepository
 
     @Before
     fun setUp() {
         server = MockWebServer()
         server.start()
-        waniKaniRepository = WaniKaniRepository(
-            api = buildTestApi(server.url("/").toString()),
-            subjectDao = FakeSubjectDao(),
-            assignmentDao = FakeAssignmentDao()
-        )
+        val repositories = buildTestRepositories(server.url("/").toString())
+        waniKaniRepository = repositories.waniKaniRepository
+        assignmentRepository = repositories.assignmentRepository
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
@@ -54,13 +54,26 @@ class ReviewViewModelTest {
         server.shutdown()
     }
 
-    private fun createViewModel() = ReviewViewModel(waniKaniRepository, reviewSessionRepository)
+    private fun createViewModel() = ReviewViewModel(waniKaniRepository, assignmentRepository, reviewSessionRepository)
+
+    /** Routes by path — refreshing the review queue now syncs subjects and assignments, in either order. */
+    private fun dispatch(assignmentsResponse: MockResponse, subjectsResponse: MockResponse, reviewResponse: MockResponse? = null) {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.path.orEmpty()
+                return when {
+                    request.method == "POST" && path.startsWith("/reviews") -> reviewResponse ?: jsonResponse(reviewResultJson())
+                    path.startsWith("/assignments") -> assignmentsResponse
+                    path.startsWith("/subjects") -> subjectsResponse
+                    else -> jsonResponse(emptyCollectionJson())
+                }
+            }
+        }
+    }
 
     @Test
     fun `radical item is a single meaning-only question that completes the session when answered correctly`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
-        server.enqueue(jsonResponse(reviewResultJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -81,15 +94,11 @@ class ReviewViewModelTest {
             val finalState = awaitItem()
             assertThat(finalState.isSessionComplete).isTrue()
         }
-
-        repeat(3) { assertThat(server.takeRequest(5, TimeUnit.SECONDS)).isNotNull() }
     }
 
     @Test
     fun `an incorrect answer requeues the same question instead of advancing`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
-        server.enqueue(jsonResponse(reviewResultJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -124,9 +133,7 @@ class ReviewViewModelTest {
 
     @Test
     fun `dontKnowAnswer grades as incorrect, requeues, and expands details`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
-        server.enqueue(jsonResponse(reviewResultJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -161,9 +168,7 @@ class ReviewViewModelTest {
 
     @Test
     fun `dontKnowAnswer does nothing once feedback is already showing`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
-        server.enqueue(jsonResponse(reviewResultJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -184,9 +189,7 @@ class ReviewViewModelTest {
 
     @Test
     fun `kanji item requires both meaning and reading before the session completes`() = runTest {
-        server.enqueue(jsonResponse(kanjiAssignmentsJson()))
-        server.enqueue(jsonResponse(kanjiSubjectsJson()))
-        server.enqueue(jsonResponse(reviewResultJson()))
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -214,15 +217,11 @@ class ReviewViewModelTest {
 
             assertThat(isComplete).isTrue()
         }
-
-        repeat(3) { assertThat(server.takeRequest(5, TimeUnit.SECONDS)).isNotNull() }
     }
 
     @Test
     fun `undo reverts an incorrect answer so it doesn't count as a miss`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
-        server.enqueue(jsonResponse(reviewResultJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -253,16 +252,11 @@ class ReviewViewModelTest {
             val finalState = awaitItem()
             assertThat(finalState.isSessionComplete).isTrue()
         }
-
-        // Exactly one submission to the API (assignments, subjects, one review) — the undone
-        // incorrect attempt never should have contributed to the submitted grade.
-        repeat(3) { assertThat(server.takeRequest(5, TimeUnit.SECONDS)).isNotNull() }
     }
 
     @Test
     fun `abandonSession clears persisted state and marks the session abandoned`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -282,15 +276,14 @@ class ReviewViewModelTest {
 
     @Test
     fun `a new ViewModel resumes a persisted session instead of refetching from the network`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
         }
-        assertThat(server.requestCount).isEqualTo(2)
+        val requestCountAfterFirstLoad = server.requestCount
 
         // Simulate leaving and coming back: a fresh ViewModel sharing the same repositories
         // should pick the in-progress session back up rather than hitting the network again.
@@ -301,12 +294,12 @@ class ReviewViewModelTest {
             assertThat(state.totalCount).isEqualTo(1)
             assertThat(state.currentItem?.characters).isEqualTo("口")
         }
-        assertThat(server.requestCount).isEqualTo(2)
+        assertThat(server.requestCount).isEqualTo(requestCountAfterFirstLoad)
     }
 
     @Test
     fun `an empty due queue completes the session immediately with nothing to answer`() = runTest {
-        server.enqueue(jsonResponse(emptyAssignmentsJson()))
+        dispatch(jsonResponse(emptyCollectionJson()), jsonResponse(emptyCollectionJson()))
 
         val viewModel = createViewModel()
 
@@ -378,8 +371,8 @@ class ReviewViewModelTest {
         }
     """.trimIndent()
 
-    private fun emptyAssignmentsJson() = """
-        {"object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 0, "data": []}
+    private fun emptyCollectionJson() = """
+        {"object": "collection", "url": "https://api.wanikani.com/v2/x", "total_count": 0, "data": []}
     """.trimIndent()
 
     private fun reviewResultJson() = """

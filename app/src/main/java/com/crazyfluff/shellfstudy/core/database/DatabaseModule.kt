@@ -2,6 +2,8 @@ package com.crazyfluff.shellfstudy.core.database
 
 import android.content.Context
 import androidx.room.Room
+import com.crazyfluff.shellfstudy.core.database.reviewhistory.ReviewHistoryDatabase
+import com.crazyfluff.shellfstudy.core.database.reviewhistory.ReviewLogDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,8 +19,9 @@ object DatabaseModule {
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "shellf_study.db")
-            // Local cache only (subjects/assignments re-fetched from the API), so a destructive
-            // migration on schema changes is simpler than hand-written Migration objects.
+            // Local cache only (subjects/assignments/etc. re-fetched from the API), so a
+            // destructive migration on schema changes is simpler than hand-written Migration
+            // objects.
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
@@ -27,4 +30,30 @@ object DatabaseModule {
 
     @Provides
     fun provideAssignmentDao(db: AppDatabase): AssignmentDao = db.assignmentDao()
+
+    @Provides
+    fun provideSrsSystemDao(db: AppDatabase): SrsSystemDao = db.srsSystemDao()
+
+    @Provides
+    fun provideReviewStatisticDao(db: AppDatabase): ReviewStatisticDao = db.reviewStatisticDao()
+
+    @Provides
+    fun provideStudyMaterialDao(db: AppDatabase): StudyMaterialDao = db.studyMaterialDao()
+
+    @Provides
+    fun provideLevelProgressionDao(db: AppDatabase): LevelProgressionDao = db.levelProgressionDao()
+
+    @Provides
+    fun provideSyncStateDao(db: AppDatabase): SyncStateDao = db.syncStateDao()
+
+    @Provides
+    @Singleton
+    fun provideReviewHistoryDatabase(@ApplicationContext context: Context): ReviewHistoryDatabase =
+        // Not destructive — this is the only local record of review history and can't be
+        // re-fetched from the API (see ReviewHistoryDatabase's doc comment).
+        Room.databaseBuilder(context, ReviewHistoryDatabase::class.java, "review_history.db")
+            .build()
+
+    @Provides
+    fun provideReviewLogDao(db: ReviewHistoryDatabase): ReviewLogDao = db.reviewLogDao()
 }

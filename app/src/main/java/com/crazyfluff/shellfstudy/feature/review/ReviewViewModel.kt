@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.feature.review
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
+import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.core.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.core.data.PersistedReviewSession
@@ -53,6 +54,7 @@ private class ItemProgress {
 @HiltViewModel
 class ReviewViewModel @Inject constructor(
     private val waniKaniRepository: WaniKaniRepository,
+    private val assignmentRepository: AssignmentRepository,
     private val reviewSessionRepository: ReviewSessionRepository
 ) : ViewModel() {
 
@@ -81,14 +83,14 @@ class ReviewViewModel @Inject constructor(
     }
 
     private suspend fun fetchFreshQueue() {
-        when (val result = waniKaniRepository.refreshReviewQueue()) {
+        when (val result = assignmentRepository.refreshReviewQueue()) {
             is ApiResult.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
-            is ApiResult.Success -> buildQueue(waniKaniRepository.observeReviewQueue().first())
+            is ApiResult.Success -> buildQueue(assignmentRepository.observeReviewQueue().first())
         }
     }
 
     private suspend fun resumeFromPersisted(persisted: PersistedReviewSession) {
-        val itemsById = waniKaniRepository.observeReviewQueue().first().associateBy { it.assignmentId }
+        val itemsById = assignmentRepository.observeReviewQueue().first().associateBy { it.assignmentId }
 
         // The cache backing this persisted session is gone (e.g. app storage was cleared) —
         // fall back to a fresh fetch rather than show a broken queue.

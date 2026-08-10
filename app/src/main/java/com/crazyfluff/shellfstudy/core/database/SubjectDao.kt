@@ -19,4 +19,10 @@ interface SubjectDao {
 
     @Query("SELECT * FROM subjects")
     fun observeAll(): Flow<List<SubjectEntity>>
+
+    @Query("SELECT * FROM subjects WHERE searchTarget LIKE '%' || :query || '%' LIMIT 200")
+    fun observeSearch(query: String): Flow<List<SubjectEntity>>
+
+    @Query("SELECT COUNT(*) FROM subjects")
+    fun observeTotalCount(): Flow<Int>
 }

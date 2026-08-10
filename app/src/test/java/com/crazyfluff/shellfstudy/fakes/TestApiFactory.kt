@@ -1,6 +1,11 @@
 package com.crazyfluff.shellfstudy.fakes
 
+import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.StatsRepository
+import com.crazyfluff.shellfstudy.core.data.SubjectRepository
+import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
+import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
 import kotlinx.serialization.json.Json
 import mockwebserver3.MockResponse
 import okhttp3.MediaType.Companion.toMediaType
@@ -28,4 +33,37 @@ fun buildTestApi(baseUrl: String): WaniKaniApi {
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()
     return retrofit.create(WaniKaniApi::class.java)
+}
+
+/** The full repository graph, wired with in-memory fakes, for ViewModel/repository unit tests. */
+class TestRepositories(
+    val api: WaniKaniApi,
+    val subjectDao: FakeSubjectDao,
+    val assignmentDao: FakeAssignmentDao,
+    val syncStateDao: FakeSyncStateDao,
+    val reviewLogDao: FakeReviewLogDao,
+    val subjectRepository: SubjectRepository,
+    val assignmentRepository: AssignmentRepository,
+    val statsRepository: StatsRepository,
+    val waniKaniRepository: WaniKaniRepository,
+    val syncOrchestrator: SyncOrchestrator
+)
+
+fun buildTestRepositories(baseUrl: String): TestRepositories {
+    val api = buildTestApi(baseUrl)
+    val subjectDao = FakeSubjectDao()
+    val assignmentDao = FakeAssignmentDao(subjectLevelLookup = subjectDao::levelOf)
+    val syncStateDao = FakeSyncStateDao()
+    val reviewLogDao = FakeReviewLogDao()
+
+    val subjectRepository = SubjectRepository(api, subjectDao, FakeSrsSystemDao(), FakeStudyMaterialDao(), syncStateDao)
+    val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository)
+    val statsRepository = StatsRepository(api, FakeReviewStatisticDao(), FakeLevelProgressionDao(), reviewLogDao, syncStateDao)
+    val waniKaniRepository = WaniKaniRepository(api, statsRepository)
+    val syncOrchestrator = SyncOrchestrator(subjectRepository, assignmentRepository, statsRepository)
+
+    return TestRepositories(
+        api, subjectDao, assignmentDao, syncStateDao, reviewLogDao,
+        subjectRepository, assignmentRepository, statsRepository, waniKaniRepository, syncOrchestrator
+    )
 }

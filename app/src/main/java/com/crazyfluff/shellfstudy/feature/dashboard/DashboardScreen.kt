@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
@@ -43,9 +45,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
+import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.feature.search.SubjectSearchOverlay
@@ -152,12 +156,13 @@ fun DashboardScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .padding(24.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
                 when {
                     uiState.isLoading -> {
-                        CircularProgressIndicator(
+                        DashboardLoadingSkeleton(
                             modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
+                                .fillMaxWidth()
                                 .testTag(DashboardScreenTestTags.LOADING_INDICATOR)
                         )
                     }
@@ -222,7 +227,12 @@ fun DashboardScreen(
                             SummaryCard(
                                 label = "Lessons",
                                 count = uiState.lessonCount,
-                                color = MaterialTheme.colorScheme.tertiary,
+                                // Fixed brand color rather than MaterialTheme.colorScheme.tertiary:
+                                // the dark color scheme maps tertiary to a pale tint meant for
+                                // small accents, not a full-bleed card fill — with white text on
+                                // top that read as washed out. This card should look the same
+                                // vivid blue in both themes.
+                                color = SubjectTypeColors.Radical,
                                 onClick = onStartLesson,
                                 badge = {
                                     LessonsTodayBadge(
@@ -237,13 +247,38 @@ fun DashboardScreen(
                             SummaryCard(
                                 label = if (uiState.hasActiveReviewSession) "Resume Session" else "Reviews",
                                 count = uiState.reviewCount,
-                                color = MaterialTheme.colorScheme.secondary,
+                                color = SubjectTypeColors.Kanji,
                                 onClick = onStartReview,
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag(DashboardScreenTestTags.REVIEW_COUNT)
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+                        ReviewForecastCard(forecast = uiState.reviewForecast, modifier = Modifier.fillMaxWidth())
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        StudyStreakCard(streak = uiState.studyStreak, modifier = Modifier.fillMaxWidth())
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        ReviewsCompletedCard(stats = uiState.reviewsCompletedStats, modifier = Modifier.fillMaxWidth())
+
+                        if (uiState.levelProgress != null) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            LevelProgressCard(progress = uiState.levelProgress, modifier = Modifier.fillMaxWidth())
+                        }
+
+                        if (uiState.completionProjection != null) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            CompletionProjectionCard(
+                                projection = uiState.completionProjection,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        ItemSpreadCard(spread = uiState.itemSpread, modifier = Modifier.fillMaxWidth())
                     }
                 }
             }
@@ -307,18 +342,18 @@ private fun LessonsTodayBadge(completed: Int, goal: Int) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(36.dp)
+            .size(22.dp)
             .semantics { contentDescription = "$completed of $goal lessons done today" }
             .testTag(DashboardScreenTestTags.LESSONS_TODAY_PROGRESS)
     ) {
         CircularProgressIndicator(
             progress = { progress },
             modifier = Modifier.fillMaxSize(),
-            strokeWidth = 3.dp,
+            strokeWidth = 2.dp,
             color = Color.White,
             trackColor = Color.White.copy(alpha = 0.3f)
         )
-        Text(text = completed.toString(), style = MaterialTheme.typography.labelSmall)
+        Text(text = completed.toString(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp))
     }
 }
 

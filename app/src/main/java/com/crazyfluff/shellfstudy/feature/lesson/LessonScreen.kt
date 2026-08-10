@@ -434,6 +434,7 @@ private fun subjectTypeSectionLabel(type: SubjectType): String = when (type) {
     SubjectType.RADICAL -> "Radicals"
     SubjectType.KANJI -> "Kanji"
     SubjectType.VOCABULARY -> "Vocabulary"
+    SubjectType.KANA_VOCABULARY -> "Kana Vocabulary"
 }
 
 @Composable

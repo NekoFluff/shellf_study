@@ -1,8 +1,10 @@
 package com.crazyfluff.shellfstudy.core.database
 
 import androidx.room.TypeConverter
+import com.crazyfluff.shellfstudy.core.network.AuxiliaryMeaningData
 import com.crazyfluff.shellfstudy.core.network.MeaningData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
+import com.crazyfluff.shellfstudy.core.network.SrsStageData
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -17,9 +19,37 @@ class Converters {
         json.decodeFromString(value)
 
     @TypeConverter
+    fun auxiliaryMeaningsToJson(meanings: List<AuxiliaryMeaningData>): String = json.encodeToString(meanings)
+
+    @TypeConverter
+    fun auxiliaryMeaningsFromJson(value: String): List<AuxiliaryMeaningData> =
+        json.decodeFromString(value)
+
+    @TypeConverter
     fun readingsToJson(readings: List<ReadingData>): String = json.encodeToString(readings)
 
     @TypeConverter
     fun readingsFromJson(value: String): List<ReadingData> =
+        json.decodeFromString(value)
+
+    @TypeConverter
+    fun srsStagesToJson(stages: List<SrsStageData>): String = json.encodeToString(stages)
+
+    @TypeConverter
+    fun srsStagesFromJson(value: String): List<SrsStageData> =
+        json.decodeFromString(value)
+
+    @TypeConverter
+    fun longListToJson(ids: List<Long>): String = json.encodeToString(ids)
+
+    @TypeConverter
+    fun longListFromJson(value: String): List<Long> =
+        json.decodeFromString(value)
+
+    @TypeConverter
+    fun stringListToJson(values: List<String>): String = json.encodeToString(values)
+
+    @TypeConverter
+    fun stringListFromJson(value: String): List<String> =
         json.decodeFromString(value)
 }

@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +43,8 @@ object SearchOverlayTestTags {
     const val EMPTY_STATE = "search_empty_state"
     const val NO_RESULTS = "search_no_results"
     const val RESULT_ROW_PREFIX = "search_result_"
+    const val SYNCING_STATE = "search_syncing_state"
+    const val MORE_RESULTS_FOOTER = "search_more_results_footer"
 }
 
 /**
@@ -117,6 +120,21 @@ fun SubjectSearchOverlay(
                         }
                     }
 
+                    uiState.isSyncing && uiState.results.isEmpty() -> {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(top = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.testTag(SearchOverlayTestTags.SYNCING_STATE))
+                            Text(
+                                text = "Still syncing your subject library…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+                    }
+
                     uiState.results.isEmpty() -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                             Text(
@@ -129,9 +147,22 @@ fun SubjectSearchOverlay(
                     }
 
                     else -> {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(uiState.results, key = { it.subjectId }) { subject ->
-                                SubjectResultRow(subject)
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            LazyColumn(modifier = Modifier.weight(1f)) {
+                                items(uiState.results, key = { it.subjectId }) { subject ->
+                                    SubjectResultRow(subject)
+                                }
+                            }
+                            if (uiState.totalMatchCount > uiState.results.size) {
+                                Text(
+                                    text = "Showing ${uiState.results.size} of ${uiState.totalMatchCount} — refine your search.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp)
+                                        .testTag(SearchOverlayTestTags.MORE_RESULTS_FOOTER)
+                                )
                             }
                         }
                     }

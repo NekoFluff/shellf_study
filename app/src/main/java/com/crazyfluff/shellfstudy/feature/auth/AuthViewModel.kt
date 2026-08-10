@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +28,8 @@ data class AuthUiState(
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val tokenRepository: TokenRepository,
-    private val waniKaniRepository: WaniKaniRepository
+    private val waniKaniRepository: WaniKaniRepository,
+    private val syncScheduler: SyncScheduler
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -58,7 +60,10 @@ class AuthViewModel @Inject constructor(
             _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
             tokenRepository.saveToken(token)
             when (val result = waniKaniRepository.fetchUser()) {
-                is ApiResult.Success -> _uiState.update { it.copy(isSubmitting = false, isAuthenticated = true) }
+                is ApiResult.Success -> {
+                    syncScheduler.schedulePeriodicSync()
+                    _uiState.update { it.copy(isSubmitting = false, isAuthenticated = true) }
+                }
                 is ApiResult.Error -> {
                     tokenRepository.clearToken()
                     _uiState.update { it.copy(isSubmitting = false, errorMessage = result.message) }
@@ -70,7 +75,10 @@ class AuthViewModel @Inject constructor(
     private suspend fun validateStoredToken() {
         _uiState.update { it.copy(isCheckingStoredToken = true) }
         when (val result = waniKaniRepository.fetchUser()) {
-            is ApiResult.Success -> _uiState.update { it.copy(isCheckingStoredToken = false, isAuthenticated = true) }
+            is ApiResult.Success -> {
+                syncScheduler.schedulePeriodicSync()
+                _uiState.update { it.copy(isCheckingStoredToken = false, isAuthenticated = true) }
+            }
             is ApiResult.Error -> {
                 tokenRepository.clearToken()
                 _uiState.update { it.copy(isCheckingStoredToken = false) }

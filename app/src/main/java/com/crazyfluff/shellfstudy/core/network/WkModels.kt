@@ -47,14 +47,23 @@ data class AssignmentData(
 @Serializable
 data class SubjectData(
     @SerialName("created_at") val createdAt: String,
+    @SerialName("hidden_at") val hiddenAt: String? = null,
     val level: Int,
     val slug: String,
     val characters: String? = null,
+    @SerialName("lesson_position") val lessonPosition: Int = 0,
+    @SerialName("spaced_repetition_system_id") val srsSystemId: Long = 0,
     val meanings: List<MeaningData> = emptyList(),
+    @SerialName("auxiliary_meanings") val auxiliaryMeanings: List<AuxiliaryMeaningData> = emptyList(),
     val readings: List<ReadingData> = emptyList(),
     @SerialName("document_url") val documentUrl: String? = null,
     @SerialName("meaning_mnemonic") val meaningMnemonic: String? = null,
-    @SerialName("reading_mnemonic") val readingMnemonic: String? = null
+    @SerialName("meaning_hint") val meaningHint: String? = null,
+    @SerialName("reading_mnemonic") val readingMnemonic: String? = null,
+    @SerialName("reading_hint") val readingHint: String? = null,
+    @SerialName("component_subject_ids") val componentSubjectIds: List<Long> = emptyList(),
+    @SerialName("amalgamation_subject_ids") val amalgamationSubjectIds: List<Long> = emptyList(),
+    @SerialName("parts_of_speech") val partsOfSpeech: List<String> = emptyList()
 )
 
 @Serializable
@@ -65,10 +74,62 @@ data class MeaningData(
 )
 
 @Serializable
+data class AuxiliaryMeaningData(
+    val meaning: String,
+    val type: String
+)
+
+@Serializable
 data class ReadingData(
     val reading: String,
     val primary: Boolean = false,
     @SerialName("accepted_reading") val acceptedReading: Boolean = true
+)
+
+@Serializable
+data class SpacedRepetitionSystemData(
+    val name: String,
+    val description: String,
+    @SerialName("unlocking_stage_position") val unlockingStagePosition: Int,
+    @SerialName("starting_stage_position") val startingStagePosition: Int,
+    @SerialName("passing_stage_position") val passingStagePosition: Int,
+    @SerialName("burning_stage_position") val burningStagePosition: Int,
+    val stages: List<SrsStageData> = emptyList()
+)
+
+@Serializable
+data class SrsStageData(
+    val position: Int,
+    val interval: Long? = null,
+    @SerialName("interval_unit") val intervalUnit: String? = null
+)
+
+@Serializable
+data class ReviewStatisticData(
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("subject_id") val subjectId: Long,
+    @SerialName("subject_type") val subjectType: String,
+    @SerialName("meaning_correct") val meaningCorrect: Int = 0,
+    @SerialName("meaning_incorrect") val meaningIncorrect: Int = 0,
+    @SerialName("meaning_max_streak") val meaningMaxStreak: Int = 0,
+    @SerialName("meaning_current_streak") val meaningCurrentStreak: Int = 0,
+    @SerialName("reading_correct") val readingCorrect: Int = 0,
+    @SerialName("reading_incorrect") val readingIncorrect: Int = 0,
+    @SerialName("reading_max_streak") val readingMaxStreak: Int = 0,
+    @SerialName("reading_current_streak") val readingCurrentStreak: Int = 0,
+    @SerialName("percentage_correct") val percentageCorrect: Int = 0,
+    val hidden: Boolean = false
+)
+
+@Serializable
+data class StudyMaterialData(
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("subject_id") val subjectId: Long,
+    @SerialName("subject_type") val subjectType: String,
+    @SerialName("meaning_note") val meaningNote: String? = null,
+    @SerialName("reading_note") val readingNote: String? = null,
+    @SerialName("meaning_synonyms") val meaningSynonyms: List<String> = emptyList(),
+    val hidden: Boolean = false
 )
 
 @Serializable
@@ -111,13 +172,14 @@ data class LevelProgressionData(
 
 /** Subject "object" type as returned in AssignmentData.subjectType / WkResourceItem.objectType. */
 enum class SubjectType {
-    RADICAL, KANJI, VOCABULARY;
+    RADICAL, KANJI, VOCABULARY, KANA_VOCABULARY;
 
     companion object {
         fun fromWkString(value: String): SubjectType = when (value) {
             "radical" -> RADICAL
             "kanji" -> KANJI
             "vocabulary" -> VOCABULARY
+            "kana_vocabulary" -> KANA_VOCABULARY
             else -> VOCABULARY
         }
     }

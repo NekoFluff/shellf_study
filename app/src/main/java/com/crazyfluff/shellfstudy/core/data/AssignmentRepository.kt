@@ -1,0 +1,222 @@
+package com.crazyfluff.shellfstudy.core.data
+
+import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
+import com.crazyfluff.shellfstudy.core.data.model.LessonItem
+import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
+import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.core.data.model.SubjectTypeProgress
+import com.crazyfluff.shellfstudy.core.database.AssignmentDao
+import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
+import com.crazyfluff.shellfstudy.core.database.SubjectDao
+import com.crazyfluff.shellfstudy.core.database.SyncStateDao
+import com.crazyfluff.shellfstudy.core.network.AssignmentData
+import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
+import com.crazyfluff.shellfstudy.core.network.WkResourceItem
+import com.crazyfluff.shellfstudy.core.network.collectAllPages
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import javax.inject.Inject
+import javax.inject.Singleton
+
+private const val RESOURCE_ASSIGNMENTS = "assignments"
+private val ASSIGNMENTS_STALENESS = Duration.ofHours(1)
+
+/** WaniKani SRS stages 5-6 are "Guru" and "Guru II" — Guru or higher is what counts toward leveling up. */
+private const val GURU_SRS_STAGE = 5
+
+/** Owns the full assignment mirror — SRS progress for every subject the user has encountered. */
+@Singleton
+class AssignmentRepository @Inject constructor(
+    private val api: WaniKaniApi,
+    private val assignmentDao: AssignmentDao,
+    private val subjectDao: SubjectDao,
+    private val syncStateDao: SyncStateDao,
+    private val subjectRepository: SubjectRepository
+) {
+    suspend fun syncAssignments(force: Boolean = false): ApiResult<Unit> {
+        if (!shouldSync(syncStateDao, RESOURCE_ASSIGNMENTS, force, ASSIGNMENTS_STALENESS)) return ApiResult.Success(Unit)
+        return safeApiCall {
+            val cursor = syncCursor(syncStateDao, RESOURCE_ASSIGNMENTS)
+            val startedAt = Instant.now().toString()
+            val items = collectAllPages(
+                firstPage = { api.getAssignments(updatedAfter = cursor) },
+                nextPage = { url -> api.getAssignmentsPage(url) }
+            )
+            assignmentDao.upsertAll(items.map { it.toEntity() })
+            recordSyncSuccess(syncStateDao, RESOURCE_ASSIGNMENTS, cursor = startedAt)
+        }
+    }
+
+    /**
+     * Forces a full incremental refresh right now — used before starting a review/lesson session.
+     * Also ensures subjects are synced (staleness-gated, not forced): assignments alone aren't
+     * enough to render a queue — without subject content already cached, [observeReviewQueue] and
+     * [observeLessonQueue] would join to nothing and silently show an empty queue.
+     */
+    suspend fun refreshReviewQueue(): ApiResult<Unit> = refreshQueue()
+
+    suspend fun refreshLessonQueue(): ApiResult<Unit> = refreshQueue()
+
+    private suspend fun refreshQueue(): ApiResult<Unit> {
+        val subjectsResult = subjectRepository.syncSubjects()
+        if (subjectsResult is ApiResult.Error) return subjectsResult
+        return syncAssignments(force = true)
+    }
+
+    suspend fun startAssignment(assignmentId: Long): ApiResult<Unit> = safeApiCall {
+        val response = api.startAssignment(assignmentId)
+        assignmentDao.upsertAll(listOf(response.toEntity()))
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeReviewQueue(): Flow<List<ReviewItem>> =
+        assignmentDao.observeDueForReview(Instant.now().toString()).flatMapLatest { assignments ->
+            if (assignments.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                subjectDao.observeByIds(assignments.map { it.subjectId }).map { subjects ->
+                    val subjectsById = subjects.associateBy { it.id }
+                    assignments.mapNotNull { assignment ->
+                        val subject = subjectsById[assignment.subjectId] ?: return@mapNotNull null
+                        ReviewItem(
+                            assignmentId = assignment.id,
+                            subjectId = subject.id,
+                            subjectType = SubjectType.fromWkString(subject.subjectType),
+                            characters = subject.characters,
+                            level = subject.level,
+                            srsStage = assignment.srsStage,
+                            meanings = subject.meanings.map { it.meaning },
+                            readings = subject.readings.map { it.reading }
+                        )
+                    }
+                }
+            }
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeLessonQueue(): Flow<List<LessonItem>> =
+        assignmentDao.observeDueForLesson().flatMapLatest { assignments ->
+            if (assignments.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                subjectDao.observeByIds(assignments.map { it.subjectId }).map { subjects ->
+                    val subjectsById = subjects.associateBy { it.id }
+                    assignments.mapNotNull { assignment ->
+                        val subject = subjectsById[assignment.subjectId] ?: return@mapNotNull null
+                        LessonItem(
+                            assignmentId = assignment.id,
+                            subjectId = subject.id,
+                            subjectType = SubjectType.fromWkString(subject.subjectType),
+                            characters = subject.characters,
+                            level = subject.level,
+                            meanings = subject.meanings.map { it.meaning },
+                            readings = subject.readings.map { it.reading },
+                            meaningMnemonic = subject.meaningMnemonic,
+                            readingMnemonic = subject.readingMnemonic
+                        )
+                    }
+                }
+            }
+        }
+
+    fun observeReviewForecast(hours: Int = 24): Flow<ReviewForecast> {
+        val now = Instant.now()
+        val nowIso = now.toString()
+        return combine(
+            assignmentDao.observeDueForReview(nowIso),
+            assignmentDao.observeUpcoming(nowIso)
+        ) { availableNow, upcoming ->
+            val buckets = (1..hours).map { hourOffset ->
+                val bucketStart = now.plus(Duration.ofHours((hourOffset - 1).toLong()))
+                val bucketEnd = now.plus(Duration.ofHours(hourOffset.toLong()))
+                val count = upcoming.count { assignment ->
+                    val availableAt = assignment.availableAt?.let(Instant::parse) ?: return@count false
+                    !availableAt.isBefore(bucketStart) && availableAt.isBefore(bucketEnd)
+                }
+                ReviewForecastBucket(hoursFromNow = hourOffset, availableAt = bucketStart, newlyAvailableCount = count)
+            }
+            ReviewForecast(reviewsAvailableNow = availableNow.size, buckets = buckets)
+        }
+    }
+
+    fun observeSrsItemSpread(): Flow<ItemSpread> =
+        combine(assignmentDao.observeSrsStageCounts(), subjectDao.observeTotalCount()) { stageCounts, totalSubjects ->
+            val byStage = stageCounts.associate { it.srsStage to it.count }
+            val apprentice = (1..4).sumOf { byStage[it] ?: 0 }
+            val guru = (5..6).sumOf { byStage[it] ?: 0 }
+            val master = byStage[7] ?: 0
+            val enlightened = byStage[8] ?: 0
+            val burned = byStage[9] ?: 0
+            val started = apprentice + guru + master + enlightened + burned
+            ItemSpread(
+                lockedCount = (totalSubjects - started).coerceAtLeast(0),
+                apprenticeCount = apprentice,
+                guruCount = guru,
+                masterCount = master,
+                enlightenedCount = enlightened,
+                burnedCount = burned
+            )
+        }
+
+    fun observeLevelProgress(level: Int): Flow<LevelProgress> =
+        assignmentDao.observeLevelProgressRows(level).map { rows ->
+            val bySubjectType = rows.groupBy { SubjectType.fromWkString(it.subjectType) }
+            val breakdown = listOf(SubjectType.RADICAL, SubjectType.KANJI, SubjectType.VOCABULARY).map { type ->
+                val typeRows = bySubjectType[type].orEmpty()
+                SubjectTypeProgress(
+                    subjectType = type,
+                    passedCount = typeRows.count { it.passedAt != null },
+                    totalCount = typeRows.size
+                )
+            }
+            LevelProgress(level = level, breakdown = breakdown)
+        }
+
+    fun observeItemsSeenCount(): Flow<Int> = assignmentDao.observeItemsSeenCount()
+
+    /** Count of assignments started since local midnight — used for the "lessons done today" indicator. */
+    fun observeLessonsCompletedToday(): Flow<Int> =
+        assignmentDao.observeStartedTodayCount(startOfTodayIso())
+
+    /**
+     * How many of the current level's kanji are at Guru or higher, out of the total — WaniKani
+     * requires 90% of a level's kanji at Guru+ before the user can level up.
+     */
+    fun observeLevelUpProgress(level: Int): Flow<LevelUpProgress> =
+        assignmentDao.observeKanjiLevelUpRows(level).map { rows ->
+            LevelUpProgress(
+                kanjiGuruedOrHigher = rows.count { it.srsStage >= GURU_SRS_STAGE },
+                kanjiTotal = rows.size
+            )
+        }
+
+    private fun startOfTodayIso(): String =
+        LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toString()
+}
+
+private fun WkResourceItem<AssignmentData>.toEntity(): AssignmentEntity = AssignmentEntity(
+    id = id,
+    subjectId = data.subjectId,
+    subjectType = data.subjectType,
+    srsStage = data.srsStage,
+    createdAt = data.createdAt,
+    unlockedAt = data.unlockedAt,
+    startedAt = data.startedAt,
+    passedAt = data.passedAt,
+    burnedAt = data.burnedAt,
+    availableAt = data.availableAt,
+    resurrectedAt = data.resurrectedAt,
+    hidden = data.hidden
+)

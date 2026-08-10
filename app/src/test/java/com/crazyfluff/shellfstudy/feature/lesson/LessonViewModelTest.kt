@@ -2,14 +2,15 @@ package com.crazyfluff.shellfstudy.feature.lesson
 
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
-import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
-import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
-import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
-import com.crazyfluff.shellfstudy.fakes.buildTestApi
+import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import mockwebserver3.Dispatcher
+import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -22,17 +23,13 @@ class LessonViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var server: MockWebServer
-    private lateinit var waniKaniRepository: WaniKaniRepository
+    private lateinit var assignmentRepository: AssignmentRepository
 
     @Before
     fun setUp() {
         server = MockWebServer()
         server.start()
-        waniKaniRepository = WaniKaniRepository(
-            api = buildTestApi(server.url("/").toString()),
-            subjectDao = FakeSubjectDao(),
-            assignmentDao = FakeAssignmentDao()
-        )
+        assignmentRepository = buildTestRepositories(server.url("/").toString()).assignmentRepository
     }
 
     @After
@@ -40,12 +37,30 @@ class LessonViewModelTest {
         server.shutdown()
     }
 
-    private fun createViewModel() = LessonViewModel(waniKaniRepository)
+    private fun createViewModel() = LessonViewModel(assignmentRepository)
+
+    /** Routes by path — refreshing the lesson queue now syncs subjects and assignments, in either order. */
+    private fun dispatch(
+        assignmentsResponse: MockResponse,
+        subjectsResponse: MockResponse,
+        startResponse: MockResponse? = null
+    ) {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.path.orEmpty()
+                return when {
+                    path.contains("/start") -> startResponse ?: startAssignmentResultJson().let(::jsonResponse)
+                    path.startsWith("/assignments") -> assignmentsResponse
+                    path.startsWith("/subjects") -> subjectsResponse
+                    else -> jsonResponse(emptyCollectionJson())
+                }
+            }
+        }
+    }
 
     @Test
     fun `loads a batch of lessons into the select phase with all pre-selected`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -61,7 +76,7 @@ class LessonViewModelTest {
 
     @Test
     fun `an empty lesson queue is reported as no lessons available`() = runTest {
-        server.enqueue(jsonResponse(emptyAssignmentsJson()))
+        dispatch(jsonResponse(emptyCollectionJson()), jsonResponse(emptyCollectionJson()))
 
         val viewModel = createViewModel()
 
@@ -74,8 +89,7 @@ class LessonViewModelTest {
 
     @Test
     fun `toggling a lesson selection adds or removes it`() = runTest {
-        server.enqueue(jsonResponse(twoRadicalAssignmentsJson()))
-        server.enqueue(jsonResponse(twoRadicalSubjectsJson()))
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -94,8 +108,7 @@ class LessonViewModelTest {
 
     @Test
     fun `selectNone and selectAll clear and restore the full selection`() = runTest {
-        server.enqueue(jsonResponse(twoRadicalAssignmentsJson()))
-        server.enqueue(jsonResponse(twoRadicalSubjectsJson()))
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -113,8 +126,7 @@ class LessonViewModelTest {
 
     @Test
     fun `startSelectedLessons enters the study phase with only the selected items`() = runTest {
-        server.enqueue(jsonResponse(twoRadicalAssignmentsJson()))
-        server.enqueue(jsonResponse(twoRadicalSubjectsJson()))
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -135,8 +147,7 @@ class LessonViewModelTest {
 
     @Test
     fun `advancing past the last study card starts the quiz`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -158,8 +169,7 @@ class LessonViewModelTest {
 
     @Test
     fun `previousStudyCard moves back a card but not before the first`() = runTest {
-        server.enqueue(jsonResponse(twoRadicalAssignmentsJson()))
-        server.enqueue(jsonResponse(twoRadicalSubjectsJson()))
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -185,8 +195,7 @@ class LessonViewModelTest {
 
     @Test
     fun `onStudyCardSwiped updates the study index directly`() = runTest {
-        server.enqueue(jsonResponse(twoRadicalAssignmentsJson()))
-        server.enqueue(jsonResponse(twoRadicalSubjectsJson()))
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -204,9 +213,7 @@ class LessonViewModelTest {
 
     @Test
     fun `a correct quiz answer marks the assignment started once all its questions are done`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
-        server.enqueue(jsonResponse(startAssignmentResultJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -231,9 +238,8 @@ class LessonViewModelTest {
             assertThat(finalState.isSessionComplete).isTrue()
         }
 
-        server.takeRequest(5, TimeUnit.SECONDS) // assignments
-        server.takeRequest(5, TimeUnit.SECONDS) // subjects
-        val startRequest = server.takeRequest(5, TimeUnit.SECONDS)
+        val startRequest = generateSequence { server.takeRequest(1, TimeUnit.SECONDS) }
+            .firstOrNull { it.path?.contains("/start") == true }
         assertThat(startRequest).isNotNull()
         assertThat(startRequest?.method).isEqualTo("PUT")
         assertThat(startRequest?.path).contains("/assignments/101/start")
@@ -241,9 +247,7 @@ class LessonViewModelTest {
 
     @Test
     fun `an incorrect quiz answer requeues the question instead of starting the assignment`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
-        server.enqueue(jsonResponse(startAssignmentResultJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -273,8 +277,7 @@ class LessonViewModelTest {
 
     @Test
     fun `dontKnowAnswer grades as incorrect and requeues`() = runTest {
-        server.enqueue(jsonResponse(radicalAssignmentsJson()))
-        server.enqueue(jsonResponse(radicalSubjectsJson()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -378,8 +381,8 @@ class LessonViewModelTest {
         }
     """.trimIndent()
 
-    private fun emptyAssignmentsJson() = """
-        {"object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 0, "data": []}
+    private fun emptyCollectionJson() = """
+        {"object": "collection", "url": "https://api.wanikani.com/v2/x", "total_count": 0, "data": []}
     """.trimIndent()
 
     private fun startAssignmentResultJson() = """

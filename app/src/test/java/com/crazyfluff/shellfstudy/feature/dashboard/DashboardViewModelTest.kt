@@ -12,11 +12,10 @@ import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
-import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
-import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
-import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
+import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
-import com.crazyfluff.shellfstudy.fakes.buildTestApi
+import com.crazyfluff.shellfstudy.fakes.TestRepositories
+import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
@@ -42,9 +41,10 @@ class DashboardViewModelTest {
 
     private lateinit var server: MockWebServer
     private lateinit var tokenRepository: TokenRepository
-    private lateinit var waniKaniRepository: WaniKaniRepository
+    private lateinit var repositories: TestRepositories
     private lateinit var reviewSessionRepository: ReviewSessionRepository
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var syncScheduler: FakeSyncScheduler
 
     @Before
     fun setUp() {
@@ -55,30 +55,25 @@ class DashboardViewModelTest {
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
-        waniKaniRepository = WaniKaniRepository(
-            api = buildTestApi(server.url("/").toString()),
-            subjectDao = FakeSubjectDao(),
-            assignmentDao = FakeAssignmentDao()
-        )
+        repositories = buildTestRepositories(server.url("/").toString())
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         settingsRepository = SettingsRepository(dataStore)
+        syncScheduler = FakeSyncScheduler()
     }
 
     private val viewModelStore = ViewModelStore()
 
     @After
     fun tearDown() {
-        // DashboardViewModel.uiState is a stateIn(WhileSubscribed(5_000)) combine of
-        // reviewSessionRepository.hasActiveSession and settingsRepository.settings, sharing a
-        // single upstream collector under viewModelScope for as long as something is subscribed
-        // (or within the grace period after the last subscriber leaves). In production that
-        // collector dies with the ViewModel's own viewModelScope via onCleared(), triggered by
-        // ViewModelStore.clear() on Activity/Fragment destruction. Nothing does that automatically
-        // here, so routing creation through a real ViewModelStore lets us trigger the same cleanup
-        // Android would, and draining MainDispatcherRule's scheduler afterwards forces that
-        // cancellation to actually settle now — while the MockWebServer and temp DataStore file
-        // are still alive — instead of resolving asynchronously after this test has ended, which
-        // can otherwise surface as `UncaughtExceptionsBeforeTest` in whichever test runs next.
+        // DashboardViewModel.uiState is backed by a MutableStateFlow fed by several independent
+        // viewModelScope collectors (settings, review-session, and repository-derived stats). In
+        // production those collectors die with the ViewModel's own viewModelScope via onCleared(),
+        // triggered by ViewModelStore.clear() on Activity/Fragment destruction. Nothing does that
+        // automatically here, so routing creation through a real ViewModelStore lets us trigger the
+        // same cleanup Android would, and draining MainDispatcherRule's scheduler afterwards forces
+        // that cancellation to actually settle now — while the MockWebServer and temp DataStore file
+        // are still alive — instead of resolving asynchronously after this test has ended, which can
+        // otherwise surface as `UncaughtExceptionsBeforeTest` in whichever test runs next.
         viewModelStore.clear()
         mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
         server.shutdown()
@@ -86,22 +81,30 @@ class DashboardViewModelTest {
 
     private fun createViewModel(): DashboardViewModel {
         val factory = viewModelFactory {
-            initializer { DashboardViewModel(waniKaniRepository, tokenRepository, reviewSessionRepository, settingsRepository) }
+            initializer {
+                DashboardViewModel(
+                    waniKaniRepository = repositories.waniKaniRepository,
+                    tokenRepository = tokenRepository,
+                    reviewSessionRepository = reviewSessionRepository,
+                    settingsRepository = settingsRepository,
+                    subjectRepository = repositories.subjectRepository,
+                    assignmentRepository = repositories.assignmentRepository,
+                    statsRepository = repositories.statsRepository,
+                    syncOrchestrator = repositories.syncOrchestrator,
+                    syncScheduler = syncScheduler
+                )
+            }
         }
         return ViewModelProvider(viewModelStore, factory)[DashboardViewModel::class.java]
     }
 
-    /**
-     * [lessonsTodayResponse]/[levelUpResponse] default to an empty assignments page, and
-     * [levelProgressionsResponse] to an empty collection — all three nice-to-have stats default
-     * to their zero/null state when a test doesn't care about them.
-     */
+    /** Every non-user/summary resource defaults to an empty collection when a test doesn't care about it. */
     private fun dispatchByPath(
         userResponse: MockResponse,
         summaryResponse: MockResponse,
-        lessonsTodayResponse: MockResponse = jsonResponse(emptyAssignmentsJson()),
-        levelUpResponse: MockResponse = jsonResponse(emptyAssignmentsJson()),
-        levelProgressionsResponse: MockResponse = jsonResponse(emptyLevelProgressionsJson())
+        assignmentsResponse: MockResponse = jsonResponse(emptyCollectionJson()),
+        subjectsResponse: MockResponse = jsonResponse(emptyCollectionJson()),
+        levelProgressionsResponse: MockResponse = jsonResponse(emptyCollectionJson())
     ) {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
@@ -109,9 +112,10 @@ class DashboardViewModelTest {
                 return when {
                     path.startsWith("/user") -> userResponse
                     path.startsWith("/summary") -> summaryResponse
+                    path.startsWith("/assignments") -> assignmentsResponse
+                    path.startsWith("/subjects") -> subjectsResponse
                     path.startsWith("/level_progressions") -> levelProgressionsResponse
-                    path.contains("levels=") -> levelUpResponse
-                    else -> lessonsTodayResponse
+                    else -> jsonResponse(emptyCollectionJson())
                 }
             }
         }
@@ -131,6 +135,7 @@ class DashboardViewModelTest {
             assertThat(state.lessonCount).isEqualTo(2)
             assertThat(state.reviewCount).isEqualTo(3)
             assertThat(state.errorMessage).isNull()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -143,11 +148,12 @@ class DashboardViewModelTest {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
             assertThat(state.errorMessage).isNotNull()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `logOut clears the stored token and marks state logged out`() = runTest {
+    fun `logOut clears the stored token, cancels background sync, and marks state logged out`() = runTest {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         tokenRepository.saveToken("some-token")
         val viewModel = createViewModel()
@@ -160,9 +166,11 @@ class DashboardViewModelTest {
             var afterLogout = awaitItem()
             while (!afterLogout.isLoggedOut) afterLogout = awaitItem()
             assertThat(afterLogout.isLoggedOut).isTrue()
+            cancelAndIgnoreRemainingEvents()
         }
 
         tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
+        assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
     }
 
     @Test
@@ -170,16 +178,18 @@ class DashboardViewModelTest {
         dispatchByPath(
             jsonResponse(userJson()),
             jsonResponse(summaryJson()),
-            jsonResponse(assignmentsPageJson(totalCount = 4))
+            assignmentsResponse = jsonResponse(startedTodayAssignmentsJson(count = 4))
         )
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
+            while (state.lessonsCompletedToday != 4) state = awaitItem()
 
             assertThat(state.lessonsCompletedToday).isEqualTo(4)
             assertThat(state.dailyLessonGoal).isEqualTo(15)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -193,6 +203,7 @@ class DashboardViewModelTest {
             var state = awaitItem()
             while (state.isLoading || state.dailyLessonGoal != 5) state = awaitItem()
             assertThat(state.dailyLessonGoal).isEqualTo(5)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -201,7 +212,8 @@ class DashboardViewModelTest {
         dispatchByPath(
             jsonResponse(userJson()),
             jsonResponse(summaryJson()),
-            levelUpResponse = jsonResponse(levelUpAssignmentsJson()),
+            assignmentsResponse = jsonResponse(levelUpAssignmentsJson()),
+            subjectsResponse = jsonResponse(levelUpSubjectsJson()),
             levelProgressionsResponse = jsonResponse(levelProgressionsJson())
         )
         val viewModel = createViewModel()
@@ -209,12 +221,60 @@ class DashboardViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
+            while (state.kanjiTotalForLevelUp == 0) state = awaitItem()
 
             assertThat(state.kanjiTotalForLevelUp).isEqualTo(2)
             assertThat(state.kanjiGuruedForLevelUp).isEqualTo(1)
+            while (state.daysOnCurrentLevel == null) state = awaitItem()
             assertThat(state.daysOnCurrentLevel).isNotNull()
+            cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `computes a completion projection from total subjects and items seen`() = runTest {
+        dispatchByPath(
+            jsonResponse(userJson()),
+            jsonResponse(summaryJson()),
+            assignmentsResponse = jsonResponse(startedTodayAssignmentsJson(count = 1)),
+            subjectsResponse = jsonResponse(levelUpSubjectsJson())
+        )
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.completionProjection?.totalItems != 2) state = awaitItem()
+
+            val projection = state.completionProjection
+            assertThat(projection.totalItems).isEqualTo(2)
+            assertThat(projection.dailyPace).isEqualTo(15)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private fun emptyCollectionJson() = """
+        {"object": "collection", "url": "https://api.wanikani.com/v2/x", "total_count": 0, "data": []}
+    """.trimIndent()
+
+    private fun startedTodayAssignmentsJson(count: Int) = """
+        {
+          "object": "collection",
+          "url": "https://api.wanikani.com/v2/assignments",
+          "total_count": $count,
+          "data": [${(1..count).joinToString(",") { id ->
+        """
+                {
+                  "id": $id, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/$id",
+                  "data_updated_at": "2026-01-01T00:00:00.000000Z",
+                  "data": {
+                    "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": $id, "subject_type": "kanji",
+                    "srs_stage": 1, "started_at": "${java.time.Instant.now()}", "hidden": false
+                  }
+                }
+            """.trimIndent()
+    }}]
+        }
+    """.trimIndent()
 
     private fun levelUpAssignmentsJson() = """
         {
@@ -227,7 +287,7 @@ class DashboardViewModelTest {
               "data_updated_at": "2026-01-01T00:00:00.000000Z",
               "data": {
                 "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "kanji",
-                "srs_stage": 5, "hidden": false
+                "srs_stage": 5, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
               }
             },
             {
@@ -235,7 +295,35 @@ class DashboardViewModelTest {
               "data_updated_at": "2026-01-01T00:00:00.000000Z",
               "data": {
                 "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 2, "subject_type": "kanji",
-                "srs_stage": 2, "hidden": false
+                "srs_stage": 2, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            }
+          ]
+        }
+    """.trimIndent()
+
+    private fun levelUpSubjectsJson() = """
+        {
+          "object": "collection",
+          "url": "https://api.wanikani.com/v2/subjects",
+          "total_count": 2,
+          "data": [
+            {
+              "id": 1, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/1",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 12, "slug": "一", "characters": "一",
+                "meanings": [{"meaning": "One", "primary": true, "accepted_meaning": true}],
+                "readings": [{"reading": "いち", "primary": true, "accepted_reading": true}]
+              }
+            },
+            {
+              "id": 2, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/2",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 12, "slug": "二", "characters": "二",
+                "meanings": [{"meaning": "Two", "primary": true, "accepted_meaning": true}],
+                "readings": [{"reading": "に", "primary": true, "accepted_reading": true}]
               }
             }
           ]
@@ -259,21 +347,6 @@ class DashboardViewModelTest {
           ]
         }
     """.trimIndent()
-
-    private fun emptyLevelProgressionsJson() = """
-        {"object": "collection", "url": "https://api.wanikani.com/v2/level_progressions", "total_count": 0, "data": []}
-    """.trimIndent()
-
-    private fun assignmentsPageJson(totalCount: Int) = """
-        {
-          "object": "collection",
-          "url": "https://api.wanikani.com/v2/assignments",
-          "total_count": $totalCount,
-          "data": []
-        }
-    """.trimIndent()
-
-    private fun emptyAssignmentsJson() = assignmentsPageJson(totalCount = 0)
 
     private fun userJson() = """
         {
