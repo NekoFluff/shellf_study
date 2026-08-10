@@ -68,14 +68,19 @@ class DashboardViewModelTest {
 
     @After
     fun tearDown() {
-        // DashboardViewModel keeps two collectors on infinite Flows alive for its whole lifetime
-        // (hasActiveSession, settings) — in production those die with the ViewModel's own
-        // viewModelScope via onCleared(), triggered by ViewModelStore.clear() on Activity/Fragment
-        // destruction. Nothing does that automatically here, so a collector left running past this
-        // test can crash a *later* test when it resumes after MainDispatcherRule has reset
-        // Dispatchers.Main. Routing creation through a real ViewModelStore lets us trigger the same
-        // cleanup Android would.
+        // DashboardViewModel.uiState is a stateIn(WhileSubscribed(5_000)) combine of
+        // reviewSessionRepository.hasActiveSession and settingsRepository.settings, sharing a
+        // single upstream collector under viewModelScope for as long as something is subscribed
+        // (or within the grace period after the last subscriber leaves). In production that
+        // collector dies with the ViewModel's own viewModelScope via onCleared(), triggered by
+        // ViewModelStore.clear() on Activity/Fragment destruction. Nothing does that automatically
+        // here, so routing creation through a real ViewModelStore lets us trigger the same cleanup
+        // Android would, and draining MainDispatcherRule's scheduler afterwards forces that
+        // cancellation to actually settle now — while the MockWebServer and temp DataStore file
+        // are still alive — instead of resolving asynchronously after this test has ended, which
+        // can otherwise surface as `UncaughtExceptionsBeforeTest` in whichever test runs next.
         viewModelStore.clear()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
         server.shutdown()
     }
 

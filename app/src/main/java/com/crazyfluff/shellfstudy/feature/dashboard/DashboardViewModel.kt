@@ -10,9 +10,10 @@ import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -37,30 +38,29 @@ data class DashboardUiState(
 class DashboardViewModel @Inject constructor(
     private val waniKaniRepository: WaniKaniRepository,
     private val tokenRepository: TokenRepository,
-    private val reviewSessionRepository: ReviewSessionRepository,
-    private val settingsRepository: SettingsRepository
+    reviewSessionRepository: ReviewSessionRepository,
+    settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(DashboardUiState())
-    val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+    // Holds the network-fetched dashboard data plus login state; hasActiveReviewSession and
+    // dailyLessonGoal are overlaid from the repositories' flows below rather than stored here.
+    private val _dashboardData = MutableStateFlow(DashboardUiState())
+
+    val uiState: StateFlow<DashboardUiState> = combine(
+        _dashboardData,
+        reviewSessionRepository.hasActiveSession,
+        settingsRepository.settings
+    ) { data, hasActiveSession, settings ->
+        data.copy(hasActiveReviewSession = hasActiveSession, dailyLessonGoal = settings.dailyLessonGoal)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
 
     init {
         refresh()
-        viewModelScope.launch {
-            reviewSessionRepository.hasActiveSession.collect { hasSession ->
-                _uiState.update { it.copy(hasActiveReviewSession = hasSession) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.settings.collect { settings ->
-                _uiState.update { it.copy(dailyLessonGoal = settings.dailyLessonGoal) }
-            }
-        }
     }
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _dashboardData.update { it.copy(isLoading = true, errorMessage = null) }
 
             val userDeferred = async { waniKaniRepository.fetchUser() }
             val summaryDeferred = async { waniKaniRepository.fetchDashboardSummary() }
@@ -70,11 +70,11 @@ class DashboardViewModel @Inject constructor(
             val summaryResult = summaryDeferred.await()
 
             if (userResult is ApiResult.Error) {
-                _uiState.update { it.copy(isLoading = false, errorMessage = userResult.message) }
+                _dashboardData.update { it.copy(isLoading = false, errorMessage = userResult.message) }
                 return@launch
             }
             if (summaryResult is ApiResult.Error) {
-                _uiState.update { it.copy(isLoading = false, errorMessage = summaryResult.message) }
+                _dashboardData.update { it.copy(isLoading = false, errorMessage = summaryResult.message) }
                 return@launch
             }
 
@@ -88,7 +88,7 @@ class DashboardViewModel @Inject constructor(
             val daysOnLevel = (daysOnLevelDeferred.await() as? ApiResult.Success)?.data
             val levelUpProgress = (levelUpProgressResult as? ApiResult.Success)?.data
 
-            _uiState.update {
+            _dashboardData.update {
                 it.copy(
                     isLoading = false,
                     username = user.username,
@@ -107,7 +107,7 @@ class DashboardViewModel @Inject constructor(
     fun logOut() {
         viewModelScope.launch {
             tokenRepository.clearToken()
-            _uiState.update { it.copy(isLoggedOut = true) }
+            _dashboardData.update { it.copy(isLoggedOut = true) }
         }
     }
 }
