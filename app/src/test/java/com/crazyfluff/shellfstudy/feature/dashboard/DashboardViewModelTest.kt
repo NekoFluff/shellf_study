@@ -12,6 +12,7 @@ import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
+import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
@@ -232,6 +233,33 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `browsing the level progress card to a different level leaves current-level stats untouched`() = runTest {
+        dispatchByPath(
+            jsonResponse(userJson()),
+            jsonResponse(summaryJson()),
+            assignmentsResponse = jsonResponse(levelUpAssignmentsJson(includeOtherLevel = true)),
+            subjectsResponse = jsonResponse(levelUpSubjectsJson(includeOtherLevel = true))
+        )
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.levelProgress?.level != 12) state = awaitItem()
+            assertThat(state.kanjiTotalForLevelUp).isEqualTo(2)
+
+            viewModel.onLevelProgressLevelChange(5)
+            while (state.levelProgress?.level != 5) state = awaitItem()
+
+            val kanjiAtLevel5 = state.levelProgress!!.breakdown.first { it.subjectType == SubjectType.KANJI }
+            assertThat(kanjiAtLevel5.totalCount).isEqualTo(1)
+            assertThat(kanjiAtLevel5.passedCount).isEqualTo(0)
+            // Guru-for-levelup stats always track the level actually being studied, not the browsed one.
+            assertThat(state.kanjiTotalForLevelUp).isEqualTo(2)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `computes a completion projection from total subjects and items seen`() = runTest {
         dispatchByPath(
             jsonResponse(userJson()),
@@ -276,7 +304,7 @@ class DashboardViewModelTest {
         }
     """.trimIndent()
 
-    private fun levelUpAssignmentsJson() = """
+    private fun levelUpAssignmentsJson(includeOtherLevel: Boolean = false) = """
         {
           "object": "collection",
           "url": "https://api.wanikani.com/v2/assignments",
@@ -297,12 +325,22 @@ class DashboardViewModelTest {
                 "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 2, "subject_type": "kanji",
                 "srs_stage": 2, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
               }
-            }
+            }${
+        if (!includeOtherLevel) "" else """,
+            {
+              "id": 303, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/303",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 3, "subject_type": "kanji",
+                "srs_stage": 1, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            }"""
+    }
           ]
         }
     """.trimIndent()
 
-    private fun levelUpSubjectsJson() = """
+    private fun levelUpSubjectsJson(includeOtherLevel: Boolean = false) = """
         {
           "object": "collection",
           "url": "https://api.wanikani.com/v2/subjects",
@@ -325,7 +363,18 @@ class DashboardViewModelTest {
                 "meanings": [{"meaning": "Two", "primary": true, "accepted_meaning": true}],
                 "readings": [{"reading": "に", "primary": true, "accepted_reading": true}]
               }
-            }
+            }${
+        if (!includeOtherLevel) "" else """,
+            {
+              "id": 3, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/3",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 5, "slug": "三", "characters": "三",
+                "meanings": [{"meaning": "Three", "primary": true, "accepted_meaning": true}],
+                "readings": [{"reading": "さん", "primary": true, "accepted_reading": true}]
+              }
+            }"""
+    }
           ]
         }
     """.trimIndent()

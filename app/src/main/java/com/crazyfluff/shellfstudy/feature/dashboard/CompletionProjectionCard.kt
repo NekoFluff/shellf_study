@@ -40,7 +40,7 @@ fun CompletionProjectionCard(projection: CompletionProjection?, modifier: Modifi
     if (projection == null) return
     Card(modifier = modifier.fillMaxWidth().testTag(CompletionProjectionTestTags.CARD)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Completion Projection", style = MaterialTheme.typography.titleMedium)
+            Text(text = "Completion Time", style = MaterialTheme.typography.titleMedium)
 
             if (projection.itemsRemaining <= 0) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
@@ -60,37 +60,35 @@ fun CompletionProjectionCard(projection: CompletionProjection?, modifier: Modifi
                 }
 
                 Row(modifier = Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(84.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(
                             progress = { fraction },
-                            modifier = Modifier.size(84.dp).testTag(CompletionProjectionTestTags.PROGRESS),
+                            modifier = Modifier.size(72.dp).testTag(CompletionProjectionTestTags.PROGRESS),
                             strokeWidth = 7.dp,
                             color = SubjectTypeColors.Vocabulary,
                             trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
-                        if (projection.dailyPace > 0) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = projection.daysRemaining.toString(), style = MaterialTheme.typography.headlineMedium)
-                                Text(text = "days", style = MaterialTheme.typography.labelSmall)
-                            }
-                        } else {
-                            Text(text = "${(fraction * 100).toInt()}%", style = MaterialTheme.typography.titleMedium)
-                        }
+                        Text(text = "${(fraction * 100).toInt()}%", style = MaterialTheme.typography.titleMedium)
                     }
                     Spacer(modifier = Modifier.width(20.dp))
                     Column(modifier = Modifier.testTag(CompletionProjectionTestTags.SUMMARY_TEXT)) {
-                        Text(
-                            text = "${projection.itemsRemaining} items remaining",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
                         if (projection.dailyPace > 0) {
                             Text(
-                                text = "At ${projection.dailyPace}/day",
+                                text = projection.projectedCompletionDate.format(DATE_FORMATTER),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "${projection.daysRemaining} days · ${projection.dailyPace}/day",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        } else {
                             Text(
-                                text = "Done around ${projection.projectedCompletionDate.format(DATE_FORMATTER)}",
+                                text = "${projection.itemsRemaining} items left to start",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "Keep up your pace to get a finish estimate",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

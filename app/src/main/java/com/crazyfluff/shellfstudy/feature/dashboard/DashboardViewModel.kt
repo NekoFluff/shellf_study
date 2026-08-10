@@ -14,8 +14,6 @@ import com.crazyfluff.shellfstudy.core.data.model.CompletionProjection
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
-import com.crazyfluff.shellfstudy.core.data.model.ReviewsCompletedStats
-import com.crazyfluff.shellfstudy.core.data.model.StudyStreak
 import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -50,8 +48,6 @@ data class DashboardUiState(
     val kanjiTotalForLevelUp: Int = 0,
     val daysOnCurrentLevel: Int? = null,
     val reviewForecast: ReviewForecast? = null,
-    val studyStreak: StudyStreak? = null,
-    val reviewsCompletedStats: ReviewsCompletedStats? = null,
     val levelProgress: LevelProgress? = null,
     val itemSpread: ItemSpread? = null,
     val completionProjection: CompletionProjection? = null
@@ -73,6 +69,10 @@ class DashboardViewModel @Inject constructor(
     private val _dashboardData = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _dashboardData.asStateFlow()
 
+    // Which level the Level Progress card is browsing. Null tracks the user's current level
+    // automatically; once they page to a different level it's pinned until changed again.
+    private val selectedProgressLevel = MutableStateFlow<Int?>(null)
+
     init {
         refresh()
 
@@ -82,10 +82,14 @@ class DashboardViewModel @Inject constructor(
         observe(statsRepository.observeDaysOnCurrentLevel()) { copy(daysOnCurrentLevel = it) }
         observe(assignmentRepository.observeReviewForecast()) { copy(reviewForecast = it) }
         observe(assignmentRepository.observeSrsItemSpread()) { copy(itemSpread = it) }
-        observe(statsRepository.observeStudyStreak()) { copy(studyStreak = it) }
-        observe(statsRepository.observeReviewsCompletedStats()) { copy(reviewsCompletedStats = it) }
-        observeLevelScopedStats()
+        observeLevelUpProgress()
+        observeLevelProgress()
         observeCompletionProjection()
+    }
+
+    /** Lets the Level Progress card page to a different level than the one currently being studied. */
+    fun onLevelProgressLevelChange(level: Int) {
+        selectedProgressLevel.value = level.coerceAtLeast(1)
     }
 
     fun refresh() {
@@ -128,24 +132,31 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    /** Guru'd-kanji progress and per-type item breakdown, both scoped to whichever level loads in. */
+    /** Guru'd-kanji progress toward leveling up — always scoped to the level currently being studied. */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun observeLevelScopedStats() {
+    private fun observeLevelUpProgress() {
         viewModelScope.launch {
-            _dashboardData.map { it.level }.filterNotNull().distinctUntilChanged().flatMapLatest { level ->
-                combine(
-                    assignmentRepository.observeLevelUpProgress(level),
-                    assignmentRepository.observeLevelProgress(level)
-                ) { levelUp, progress -> levelUp to progress }
-            }.collect { (levelUp, progress) ->
-                _dashboardData.update {
-                    it.copy(
-                        kanjiGuruedForLevelUp = levelUp.kanjiGuruedOrHigher,
-                        kanjiTotalForLevelUp = levelUp.kanjiTotal,
-                        levelProgress = progress
-                    )
+            _dashboardData.map { it.level }.filterNotNull().distinctUntilChanged()
+                .flatMapLatest { level -> assignmentRepository.observeLevelUpProgress(level) }
+                .collect { levelUp ->
+                    _dashboardData.update {
+                        it.copy(kanjiGuruedForLevelUp = levelUp.kanjiGuruedOrHigher, kanjiTotalForLevelUp = levelUp.kanjiTotal)
+                    }
                 }
-            }
+        }
+    }
+
+    /** Per-subject-type breakdown for the Level Progress card — defaults to the current level, but browsable. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeLevelProgress() {
+        viewModelScope.launch {
+            combine(
+                _dashboardData.map { it.level }.filterNotNull().distinctUntilChanged(),
+                selectedProgressLevel
+            ) { currentLevel, selected -> selected ?: currentLevel }
+                .distinctUntilChanged()
+                .flatMapLatest { level -> assignmentRepository.observeLevelProgress(level) }
+                .collect { progress -> _dashboardData.update { it.copy(levelProgress = progress) } }
         }
     }
 

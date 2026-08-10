@@ -8,8 +8,14 @@ import kotlinx.coroutines.flow.Flow
 
 data class SrsStageCount(val srsStage: Int, val count: Int)
 
-/** One assignment's type + passed status at a given level — the level-progress source. */
-data class LevelProgressRow(val subjectType: String, val passedAt: String?)
+/** One assignment's type, subject display text, and passed status at a given level — the level-progress source. */
+data class LevelProgressItemRow(
+    val subjectId: Long,
+    val subjectType: String,
+    val characters: String?,
+    val slug: String,
+    val passedAt: String?
+)
 
 /** One kanji assignment's SRS stage at a given level — the level-up-progress source. */
 data class KanjiLevelUpRow(val srsStage: Int)
@@ -35,16 +41,17 @@ interface AssignmentDao {
     @Query("SELECT srsStage, COUNT(*) as count FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL GROUP BY srsStage")
     fun observeSrsStageCounts(): Flow<List<SrsStageCount>>
 
-    /** Every started assignment's type + passed status at [level] — joined against subjects.level. */
+    /** Every started assignment's type, subject display text, and passed status at [level]. */
     @Query(
         """
-        SELECT a.subjectType as subjectType, a.passedAt as passedAt
+        SELECT a.subjectId as subjectId, a.subjectType as subjectType, s.characters as characters, s.slug as slug, a.passedAt as passedAt
         FROM assignments a
         JOIN subjects s ON s.id = a.subjectId
         WHERE s.level = :level AND a.hidden = 0 AND a.unlockedAt IS NOT NULL
+        ORDER BY s.lessonPosition ASC, a.subjectId ASC
         """
     )
-    fun observeLevelProgressRows(level: Int): Flow<List<LevelProgressRow>>
+    fun observeLevelProgressItemRows(level: Int): Flow<List<LevelProgressItemRow>>
 
     @Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL")
     fun observeItemsSeenCount(): Flow<Int>

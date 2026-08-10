@@ -270,7 +270,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     LinearProgressIndicator(
         progress = { (uiState.studyIndex + 1).toFloat() / uiState.studyItems.size },
         modifier = Modifier.fillMaxWidth(),
-        color = accentColor
+        color = accentColor,
+        drawStopIndicator = {}
     )
 
     HorizontalPager(
@@ -467,7 +468,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
     LinearProgressIndicator(
         progress = { progress },
         modifier = Modifier.fillMaxWidth(),
-        color = accentColor
+        color = accentColor,
+        drawStopIndicator = {}
     )
 
     Column(

@@ -25,11 +25,21 @@ data class ItemSpread(
     val totalCount: Int get() = lockedCount + apprenticeCount + guruCount + masterCount + enlightenedCount + burnedCount
 }
 
+data class LevelItem(
+    val subjectId: Long,
+    val subjectType: SubjectType,
+    /** Characters when the subject has a glyph, otherwise its slug (WaniKani's own fallback for image-only radicals). */
+    val display: String,
+    val passed: Boolean
+)
+
 data class SubjectTypeProgress(
     val subjectType: SubjectType,
-    val passedCount: Int,
-    val totalCount: Int
-)
+    val items: List<LevelItem>
+) {
+    val passedCount: Int get() = items.count { it.passed }
+    val totalCount: Int get() = items.size
+}
 
 data class LevelProgress(
     val level: Int,

@@ -3,7 +3,7 @@ package com.crazyfluff.shellfstudy.fakes
 import com.crazyfluff.shellfstudy.core.database.AssignmentDao
 import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.core.database.KanjiLevelUpRow
-import com.crazyfluff.shellfstudy.core.database.LevelProgressRow
+import com.crazyfluff.shellfstudy.core.database.LevelProgressItemRow
 import com.crazyfluff.shellfstudy.core.database.SrsStageCount
 import com.crazyfluff.shellfstudy.core.database.SubjectDao
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
@@ -33,11 +33,15 @@ class FakeSubjectDao : SubjectDao {
 
     /** Test-only helper so [FakeAssignmentDao] can resolve a subject's level for join-style queries. */
     fun levelOf(subjectId: Long): Int? = subjects.value[subjectId]?.level
+
+    /** Test-only helper so [FakeAssignmentDao] can resolve a subject's display fields for join-style queries. */
+    fun entityOf(subjectId: Long): SubjectEntity? = subjects.value[subjectId]
 }
 
 /** In-memory stand-in for [AssignmentDao] used by repository/ViewModel unit tests. */
 class FakeAssignmentDao(
-    private val subjectLevelLookup: (Long) -> Int? = { null }
+    private val subjectLevelLookup: (Long) -> Int? = { null },
+    private val subjectLookup: (Long) -> SubjectEntity? = { null }
 ) : AssignmentDao {
     private val assignments = MutableStateFlow<Map<Long, AssignmentEntity>>(emptyMap())
 
@@ -64,10 +68,19 @@ class FakeAssignmentDao(
             .map { (stage, count) -> SrsStageCount(stage, count) }
     }
 
-    override fun observeLevelProgressRows(level: Int): Flow<List<LevelProgressRow>> = assignments.map { map ->
+    override fun observeLevelProgressItemRows(level: Int): Flow<List<LevelProgressItemRow>> = assignments.map { map ->
         map.values
             .filter { !it.hidden && it.unlockedAt != null && subjectLevelLookup(it.subjectId) == level }
-            .map { LevelProgressRow(it.subjectType, it.passedAt) }
+            .map { assignment ->
+                val subject = subjectLookup(assignment.subjectId)
+                LevelProgressItemRow(
+                    subjectId = assignment.subjectId,
+                    subjectType = assignment.subjectType,
+                    characters = subject?.characters,
+                    slug = subject?.slug.orEmpty(),
+                    passedAt = assignment.passedAt
+                )
+            }
     }
 
     override fun observeItemsSeenCount(): Flow<Int> = assignments.map { map ->

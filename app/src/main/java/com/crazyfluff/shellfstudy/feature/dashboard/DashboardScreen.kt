@@ -3,8 +3,10 @@ package com.crazyfluff.shellfstudy.feature.dashboard
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +17,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,6 +32,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -92,7 +94,8 @@ fun DashboardRoute(
         onOpenSettings = onOpenSettings,
         onLogOut = viewModel::logOut,
         searchUiState = searchUiState,
-        onSearchQueryChange = searchViewModel::onQueryChange
+        onSearchQueryChange = searchViewModel::onQueryChange,
+        onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange
     )
 }
 
@@ -106,7 +109,8 @@ fun DashboardScreen(
     onStartLesson: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     searchUiState: SearchUiState = SearchUiState(),
-    onSearchQueryChange: (String) -> Unit = {}
+    onSearchQueryChange: (String) -> Unit = {},
+    onLevelProgressLevelChange: (Int) -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -125,9 +129,6 @@ fun DashboardScreen(
                             modifier = Modifier.testTag(DashboardScreenTestTags.SEARCH_BUTTON)
                         ) {
                             Icon(Icons.Default.Search, contentDescription = "Search")
-                        }
-                        IconButton(onClick = onRefresh) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                         }
                         IconButton(
                             onClick = { menuExpanded = true },
@@ -151,134 +152,144 @@ fun DashboardScreen(
                 )
             }
         ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState())
+            PullToRefreshBox(
+                isRefreshing = uiState.isLoading,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize().padding(innerPadding)
             ) {
-                when {
-                    uiState.isLoading -> {
-                        DashboardLoadingSkeleton(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag(DashboardScreenTestTags.LOADING_INDICATOR)
-                        )
-                    }
-
-                    uiState.errorMessage != null -> {
-                        Text(
-                            text = uiState.errorMessage,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.testTag(DashboardScreenTestTags.ERROR_TEXT)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        OutlinedButton(
-                            onClick = onRefresh,
-                            modifier = Modifier.testTag(DashboardScreenTestTags.RETRY_BUTTON)
-                        ) {
-                            Text("Retry")
-                        }
-                    }
-
-                    else -> {
-                        Text(
-                            text = "Welcome back, ${uiState.username}!",
-                            style = MaterialTheme.typography.headlineMedium
-                        )
-                        Text(
-                            text = buildString {
-                                append("Level ${uiState.level}")
-                                uiState.daysOnCurrentLevel?.let { append(" · Day $it") }
-                            },
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-
-                        if (uiState.kanjiTotalForLevelUp > 0) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            val guruProgress =
-                                (uiState.kanjiGuruedForLevelUp.toFloat() / uiState.kanjiTotalForLevelUp)
-                                    .coerceIn(0f, 1f)
-                            Column(
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    when {
+                        uiState.isLoading -> {
+                            DashboardLoadingSkeleton(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .testTag(DashboardScreenTestTags.GURU_PROGRESS)
+                                    .testTag(DashboardScreenTestTags.LOADING_INDICATOR)
+                            )
+                        }
+
+                        uiState.errorMessage != null -> {
+                            Text(
+                                text = uiState.errorMessage,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.testTag(DashboardScreenTestTags.ERROR_TEXT)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            OutlinedButton(
+                                onClick = onRefresh,
+                                modifier = Modifier.testTag(DashboardScreenTestTags.RETRY_BUTTON)
                             ) {
-                                Text(
-                                    text = "${uiState.kanjiGuruedForLevelUp} / ${uiState.kanjiTotalForLevelUp} kanji guru'd",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                LinearProgressIndicator(
-                                    progress = { guruProgress },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = SrsStageColors.Guru
-                                )
+                                Text("Retry")
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            SummaryCard(
-                                label = "Lessons",
-                                count = uiState.lessonCount,
-                                // Fixed brand color rather than MaterialTheme.colorScheme.tertiary:
-                                // the dark color scheme maps tertiary to a pale tint meant for
-                                // small accents, not a full-bleed card fill — with white text on
-                                // top that read as washed out. This card should look the same
-                                // vivid blue in both themes.
-                                color = SubjectTypeColors.Radical,
-                                onClick = onStartLesson,
-                                badge = {
-                                    LessonsTodayBadge(
-                                        completed = uiState.lessonsCompletedToday,
-                                        goal = uiState.dailyLessonGoal
-                                    )
+                        else -> {
+                            Text(
+                                text = "Welcome back, ${uiState.username}!",
+                                style = MaterialTheme.typography.headlineMedium
+                            )
+                            Text(
+                                text = buildString {
+                                    append("Level ${uiState.level}")
+                                    uiState.daysOnCurrentLevel?.let { append(" · Day $it") }
                                 },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag(DashboardScreenTestTags.LESSON_COUNT)
+                                style = MaterialTheme.typography.bodyLarge
                             )
-                            SummaryCard(
-                                label = if (uiState.hasActiveReviewSession) "Resume Session" else "Reviews",
-                                count = uiState.reviewCount,
-                                color = SubjectTypeColors.Kanji,
-                                onClick = onStartReview,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag(DashboardScreenTestTags.REVIEW_COUNT)
-                            )
-                        }
 
-                        Spacer(modifier = Modifier.height(24.dp))
-                        ReviewForecastCard(forecast = uiState.reviewForecast, modifier = Modifier.fillMaxWidth())
+                            if (uiState.kanjiTotalForLevelUp > 0) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                val guruProgress =
+                                    (uiState.kanjiGuruedForLevelUp.toFloat() / uiState.kanjiTotalForLevelUp)
+                                        .coerceIn(0f, 1f)
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag(DashboardScreenTestTags.GURU_PROGRESS)
+                                ) {
+                                    Text(
+                                        text = "${uiState.kanjiGuruedForLevelUp} / ${uiState.kanjiTotalForLevelUp} kanji guru'd",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    LinearProgressIndicator(
+                                        progress = { guruProgress },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = SrsStageColors.Guru,
+                                        drawStopIndicator = {}
+                                    )
+                                }
+                            }
 
-                        Spacer(modifier = Modifier.height(16.dp))
-                        StudyStreakCard(streak = uiState.studyStreak, modifier = Modifier.fillMaxWidth())
+                            Spacer(modifier = Modifier.height(24.dp))
 
-                        Spacer(modifier = Modifier.height(16.dp))
-                        ReviewsCompletedCard(stats = uiState.reviewsCompletedStats, modifier = Modifier.fillMaxWidth())
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                SummaryCard(
+                                    label = "Lessons",
+                                    count = uiState.lessonCount,
+                                    // Fixed brand color rather than MaterialTheme.colorScheme.tertiary:
+                                    // the dark color scheme maps tertiary to a pale tint meant for
+                                    // small accents, not a full-bleed card fill — with white text on
+                                    // top that read as washed out. This card should look the same
+                                    // vivid blue in both themes.
+                                    color = SubjectTypeColors.Radical,
+                                    onClick = onStartLesson,
+                                    badge = {
+                                        LessonsTodayBadge(
+                                            completed = uiState.lessonsCompletedToday,
+                                            goal = uiState.dailyLessonGoal
+                                        )
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .testTag(DashboardScreenTestTags.LESSON_COUNT)
+                                )
+                                SummaryCard(
+                                    // Kept to one short word — "Resume Session" wrapped to two lines in
+                                    // this half-width card, growing it taller than the "Lessons" card
+                                    // next to it (each Card sizes to its own content by default).
+                                    label = if (uiState.hasActiveReviewSession) "Resume" else "Reviews",
+                                    count = uiState.reviewCount,
+                                    color = SubjectTypeColors.Kanji,
+                                    onClick = onStartReview,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .testTag(DashboardScreenTestTags.REVIEW_COUNT)
+                                )
+                            }
 
-                        if (uiState.levelProgress != null) {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            ReviewForecastCard(forecast = uiState.reviewForecast, modifier = Modifier.fillMaxWidth())
+
+                            if (uiState.levelProgress != null) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                LevelProgressCard(
+                                    progress = uiState.levelProgress,
+                                    maxLevel = uiState.level,
+                                    onLevelChange = onLevelProgressLevelChange,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            if (uiState.completionProjection != null) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                CompletionProjectionCard(
+                                    projection = uiState.completionProjection,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
                             Spacer(modifier = Modifier.height(16.dp))
-                            LevelProgressCard(progress = uiState.levelProgress, modifier = Modifier.fillMaxWidth())
+                            ItemSpreadCard(spread = uiState.itemSpread, modifier = Modifier.fillMaxWidth())
                         }
-
-                        if (uiState.completionProjection != null) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            CompletionProjectionCard(
-                                projection = uiState.completionProjection,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-                        ItemSpreadCard(spread = uiState.itemSpread, modifier = Modifier.fillMaxWidth())
                     }
                 }
             }
@@ -308,7 +319,7 @@ private fun SummaryCard(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = color, contentColor = Color.White)
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .padding(16.dp)
@@ -316,7 +327,7 @@ private fun SummaryCard(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(text = count.toString(), style = MaterialTheme.typography.displayLarge)
-                Text(text = label, style = MaterialTheme.typography.bodyLarge)
+                Text(text = label, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,

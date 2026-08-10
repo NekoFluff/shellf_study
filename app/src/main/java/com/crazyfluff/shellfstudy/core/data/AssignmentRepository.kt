@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.core.data
 
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
+import com.crazyfluff.shellfstudy.core.data.model.LevelItem
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
@@ -171,15 +172,18 @@ class AssignmentRepository @Inject constructor(
         }
 
     fun observeLevelProgress(level: Int): Flow<LevelProgress> =
-        assignmentDao.observeLevelProgressRows(level).map { rows ->
+        assignmentDao.observeLevelProgressItemRows(level).map { rows ->
             val bySubjectType = rows.groupBy { SubjectType.fromWkString(it.subjectType) }
             val breakdown = listOf(SubjectType.RADICAL, SubjectType.KANJI, SubjectType.VOCABULARY).map { type ->
-                val typeRows = bySubjectType[type].orEmpty()
-                SubjectTypeProgress(
-                    subjectType = type,
-                    passedCount = typeRows.count { it.passedAt != null },
-                    totalCount = typeRows.size
-                )
+                val items = bySubjectType[type].orEmpty().map { row ->
+                    LevelItem(
+                        subjectId = row.subjectId,
+                        subjectType = type,
+                        display = row.characters ?: row.slug,
+                        passed = row.passedAt != null
+                    )
+                }
+                SubjectTypeProgress(subjectType = type, items = items)
             }
             LevelProgress(level = level, breakdown = breakdown)
         }

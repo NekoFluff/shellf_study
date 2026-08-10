@@ -52,7 +52,7 @@ class TestRepositories(
 fun buildTestRepositories(baseUrl: String): TestRepositories {
     val api = buildTestApi(baseUrl)
     val subjectDao = FakeSubjectDao()
-    val assignmentDao = FakeAssignmentDao(subjectLevelLookup = subjectDao::levelOf)
+    val assignmentDao = FakeAssignmentDao(subjectLevelLookup = subjectDao::levelOf, subjectLookup = subjectDao::entityOf)
     val syncStateDao = FakeSyncStateDao()
     val reviewLogDao = FakeReviewLogDao()
 

@@ -1,12 +1,12 @@
 package com.crazyfluff.shellfstudy.feature.search
 
-import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.network.MeaningData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -26,9 +26,17 @@ class SearchViewModelTest {
         seedSubject(id = 1, characters = "水", meaning = "Water", reading = "みず")
         val viewModel = createViewModel()
 
-        viewModel.uiState.test {
-            assertThat(awaitItem().results).isEmpty()
-        }
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.results).isEmpty()
+    }
+
+    @Test
+    fun `query text updates immediately, before the debounced results arrive`() = runTest {
+        seedSubject(id = 1, characters = "水", meaning = "Water", reading = "みず")
+        val viewModel = createViewModel()
+
+        viewModel.onQueryChange("wat")
+        assertThat(viewModel.uiState.value.query).isEqualTo("wat")
     }
 
     @Test
@@ -36,13 +44,12 @@ class SearchViewModelTest {
         seedSubject(id = 1, characters = "水", meaning = "Water", reading = "みず")
         val viewModel = createViewModel()
 
-        viewModel.uiState.test {
-            awaitItem() // initial empty state
-            viewModel.onQueryChange("wat")
-            val state = awaitItem()
-            assertThat(state.results).hasSize(1)
-            assertThat(state.results.first().characters).isEqualTo("水")
-        }
+        viewModel.onQueryChange("wat")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.results).hasSize(1)
+        assertThat(state.results.first().characters).isEqualTo("水")
     }
 
     @Test
@@ -50,11 +57,10 @@ class SearchViewModelTest {
         seedSubject(id = 1, characters = "水", meaning = "Water", reading = "みず")
         val viewModel = createViewModel()
 
-        viewModel.uiState.test {
-            awaitItem()
-            viewModel.onQueryChange("水")
-            assertThat(awaitItem().results).hasSize(1)
-        }
+        viewModel.onQueryChange("水")
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.results).hasSize(1)
     }
 
     @Test
@@ -62,11 +68,10 @@ class SearchViewModelTest {
         seedSubject(id = 1, characters = "水", meaning = "Water", reading = "みず")
         val viewModel = createViewModel()
 
-        viewModel.uiState.test {
-            awaitItem()
-            viewModel.onQueryChange("みず")
-            assertThat(awaitItem().results).hasSize(1)
-        }
+        viewModel.onQueryChange("みず")
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.results).hasSize(1)
     }
 
     @Test
@@ -74,11 +79,10 @@ class SearchViewModelTest {
         seedSubject(id = 1, characters = "水", meaning = "Water", reading = "みず")
         val viewModel = createViewModel()
 
-        viewModel.uiState.test {
-            awaitItem()
-            viewModel.onQueryChange("fire")
-            assertThat(awaitItem().results).isEmpty()
-        }
+        viewModel.onQueryChange("fire")
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.results).isEmpty()
     }
 
     @Test
@@ -86,13 +90,12 @@ class SearchViewModelTest {
         repeat(60) { index -> seedSubject(id = index.toLong(), characters = "水$index", meaning = "Water", reading = "みず") }
         val viewModel = createViewModel()
 
-        viewModel.uiState.test {
-            awaitItem()
-            viewModel.onQueryChange("water")
-            val state = awaitItem()
-            assertThat(state.results).hasSize(50)
-            assertThat(state.totalMatchCount).isEqualTo(60)
-        }
+        viewModel.onQueryChange("water")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.results).hasSize(50)
+        assertThat(state.totalMatchCount).isEqualTo(60)
     }
 
     private suspend fun seedSubject(id: Long, characters: String, meaning: String, reading: String) {

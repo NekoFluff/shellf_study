@@ -290,7 +290,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
     LinearProgressIndicator(
         progress = { progress },
         modifier = Modifier.fillMaxWidth(),
-        color = accentColor
+        color = accentColor,
+        drawStopIndicator = {}
     )
 
     Column(

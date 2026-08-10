@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -71,7 +72,11 @@ fun ReviewForecastCard(forecast: ReviewForecast?, modifier: Modifier = Modifier)
             Text(
                 text = summaryText(forecast, selectedIndex),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.secondary,
+                // A fixed brand color rather than MaterialTheme.colorScheme.secondary: in the dark
+                // scheme, secondary maps to a pale tint (see DashboardScreen's SummaryCard comment)
+                // that reads as washed out against a surfaceVariant track and doesn't match the
+                // vivid Kanji color the "Reviews" card elsewhere on this screen uses for the same concept.
+                color = SubjectTypeColors.Kanji,
                 modifier = Modifier.testTag(ReviewForecastTestTags.SUMMARY)
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -131,9 +136,11 @@ private fun ReviewForecastBarChart(
     selectedIndex: Int?,
     onSelect: (Int) -> Unit
 ) {
-    val nowColor = MaterialTheme.colorScheme.secondary
-    val futureColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f)
-    val dimmedColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+    // Fixed brand color (matches the Reviews summary card) rather than colorScheme.secondary,
+    // which resolves to a pale, low-contrast tint in the dark theme.
+    val nowColor = SubjectTypeColors.Kanji
+    val futureColor = SubjectTypeColors.Kanji.copy(alpha = 0.55f)
+    val dimmedColor = SubjectTypeColors.Kanji.copy(alpha = 0.2f)
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val gridColor = MaterialTheme.colorScheme.outlineVariant
 

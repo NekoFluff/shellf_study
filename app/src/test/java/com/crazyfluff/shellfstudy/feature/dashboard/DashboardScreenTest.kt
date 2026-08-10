@@ -188,7 +188,7 @@ class DashboardScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Resume Session").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Resume").assertIsDisplayed()
     }
 
     @Test
