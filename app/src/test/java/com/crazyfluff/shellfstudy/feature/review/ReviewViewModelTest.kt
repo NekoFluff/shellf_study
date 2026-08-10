@@ -1,0 +1,396 @@
+package com.crazyfluff.shellfstudy.feature.review
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
+import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
+import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
+import com.crazyfluff.shellfstudy.fakes.buildTestApi
+import com.crazyfluff.shellfstudy.fakes.jsonResponse
+import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import mockwebserver3.MockWebServer
+import org.junit.After
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.util.concurrent.TimeUnit
+
+class ReviewViewModelTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
+    @get:Rule
+    val tempFolder = TemporaryFolder()
+
+    private lateinit var server: MockWebServer
+    private lateinit var waniKaniRepository: WaniKaniRepository
+    private lateinit var reviewSessionRepository: ReviewSessionRepository
+
+    @Before
+    fun setUp() {
+        server = MockWebServer()
+        server.start()
+        waniKaniRepository = WaniKaniRepository(
+            api = buildTestApi(server.url("/").toString()),
+            subjectDao = FakeSubjectDao(),
+            assignmentDao = FakeAssignmentDao()
+        )
+        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            produceFile = { tempFolder.newFile("test.preferences_pb") }
+        )
+        reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+    }
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
+
+    private fun createViewModel() = ReviewViewModel(waniKaniRepository, reviewSessionRepository)
+
+    @Test
+    fun `radical item is a single meaning-only question that completes the session when answered correctly`() = runTest {
+        server.enqueue(jsonResponse(radicalAssignmentsJson()))
+        server.enqueue(jsonResponse(radicalSubjectsJson()))
+        server.enqueue(jsonResponse(reviewResultJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            assertThat(state.totalCount).isEqualTo(1)
+            assertThat(state.currentQuestionType).isEqualTo(QuestionType.MEANING)
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+        }
+
+        repeat(3) { assertThat(server.takeRequest(5, TimeUnit.SECONDS)).isNotNull() }
+    }
+
+    @Test
+    fun `an incorrect answer requeues the same question instead of advancing`() = runTest {
+        server.enqueue(jsonResponse(radicalAssignmentsJson()))
+        server.enqueue(jsonResponse(radicalSubjectsJson()))
+        server.enqueue(jsonResponse(reviewResultJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("wrong answer")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isFalse()
+            assertThat(feedbackState.remainingCount).isEqualTo(1)
+
+            viewModel.onContinue()
+            val requeuedState = awaitItem()
+            assertThat(requeuedState.isSessionComplete).isFalse()
+            assertThat(requeuedState.currentQuestionType).isEqualTo(QuestionType.MEANING)
+            assertThat(requeuedState.feedback).isNull()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat(correctState.feedback?.isCorrect).isTrue()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+        }
+    }
+
+    @Test
+    fun `dontKnowAnswer grades as incorrect, requeues, and expands details`() = runTest {
+        server.enqueue(jsonResponse(radicalAssignmentsJson()))
+        server.enqueue(jsonResponse(radicalSubjectsJson()))
+        server.enqueue(jsonResponse(reviewResultJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.isDetailsExpanded).isFalse()
+
+            viewModel.dontKnowAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isFalse()
+            assertThat(feedbackState.feedback?.correctAnswer).isEqualTo("Mouth")
+            assertThat(feedbackState.isDetailsExpanded).isTrue()
+            // Requeued, not dropped — remaining count is unchanged, still one question to answer.
+            assertThat(feedbackState.remainingCount).isEqualTo(1)
+
+            viewModel.onContinue()
+            val requeuedState = awaitItem()
+            assertThat(requeuedState.isSessionComplete).isFalse()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat(correctState.feedback?.isCorrect).isTrue()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+        }
+    }
+
+    @Test
+    fun `dontKnowAnswer does nothing once feedback is already showing`() = runTest {
+        server.enqueue(jsonResponse(radicalAssignmentsJson()))
+        server.enqueue(jsonResponse(radicalSubjectsJson()))
+        server.enqueue(jsonResponse(reviewResultJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.dontKnowAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback).isNotNull()
+
+            // A second dontKnowAnswer() while feedback is already showing must be a no-op —
+            // otherwise it would silently double-count the miss against the same question.
+            viewModel.dontKnowAnswer()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `kanji item requires both meaning and reading before the session completes`() = runTest {
+        server.enqueue(jsonResponse(kanjiAssignmentsJson()))
+        server.enqueue(jsonResponse(kanjiSubjectsJson()))
+        server.enqueue(jsonResponse(reviewResultJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.totalCount).isEqualTo(2)
+
+            var isComplete = false
+            var safetyCounter = 0
+            while (!isComplete && safetyCounter < 10) {
+                safetyCounter++
+                val current = state
+                // Reading answers are typed as romaji, same as the real reading field — this
+                // exercises RomajiConverter grading, not just literal hiragana comparison.
+                val answer = if (current.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+                viewModel.onAnswerInputChange(answer)
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem() // feedback
+                viewModel.onContinue()
+                state = awaitItem()
+                isComplete = state.isSessionComplete
+            }
+
+            assertThat(isComplete).isTrue()
+        }
+
+        repeat(3) { assertThat(server.takeRequest(5, TimeUnit.SECONDS)).isNotNull() }
+    }
+
+    @Test
+    fun `undo reverts an incorrect answer so it doesn't count as a miss`() = runTest {
+        server.enqueue(jsonResponse(radicalAssignmentsJson()))
+        server.enqueue(jsonResponse(radicalSubjectsJson()))
+        server.enqueue(jsonResponse(reviewResultJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("typo")
+            awaitItem()
+            viewModel.submitAnswer()
+            val incorrectState = awaitItem()
+            assertThat(incorrectState.feedback?.isCorrect).isFalse()
+
+            viewModel.undoLastAnswer()
+            val undoneState = awaitItem()
+            assertThat(undoneState.feedback).isNull()
+            assertThat(undoneState.answerInput).isEmpty()
+            // Undo doesn't requeue a duplicate — remaining count is back to exactly one question.
+            assertThat(undoneState.remainingCount).isEqualTo(1)
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat(correctState.feedback?.isCorrect).isTrue()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+        }
+
+        // Exactly one submission to the API (assignments, subjects, one review) — the undone
+        // incorrect attempt never should have contributed to the submitted grade.
+        repeat(3) { assertThat(server.takeRequest(5, TimeUnit.SECONDS)).isNotNull() }
+    }
+
+    @Test
+    fun `abandonSession clears persisted state and marks the session abandoned`() = runTest {
+        server.enqueue(jsonResponse(radicalAssignmentsJson()))
+        server.enqueue(jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(reviewSessionRepository.load()).isNotNull()
+
+            viewModel.abandonSession()
+            var abandonedState = awaitItem()
+            while (!abandonedState.isAbandoned) abandonedState = awaitItem()
+            assertThat(abandonedState.isAbandoned).isTrue()
+        }
+
+        assertThat(reviewSessionRepository.load()).isNull()
+    }
+
+    @Test
+    fun `a new ViewModel resumes a persisted session instead of refetching from the network`() = runTest {
+        server.enqueue(jsonResponse(radicalAssignmentsJson()))
+        server.enqueue(jsonResponse(radicalSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+        }
+        assertThat(server.requestCount).isEqualTo(2)
+
+        // Simulate leaving and coming back: a fresh ViewModel sharing the same repositories
+        // should pick the in-progress session back up rather than hitting the network again.
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.totalCount).isEqualTo(1)
+            assertThat(state.currentItem?.characters).isEqualTo("口")
+        }
+        assertThat(server.requestCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `an empty due queue completes the session immediately with nothing to answer`() = runTest {
+        server.enqueue(jsonResponse(emptyAssignmentsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.isSessionComplete).isTrue()
+            assertThat(state.totalCount).isEqualTo(0)
+        }
+    }
+
+    private fun radicalAssignmentsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
+          "data": [{
+            "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "radical",
+              "srs_stage": 1, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun radicalSubjectsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
+          "data": [{
+            "id": 1, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/1",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "mouth",
+              "characters": "口",
+              "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
+              "readings": []
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun kanjiAssignmentsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
+          "data": [{
+            "id": 555, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/555",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 440, "subject_type": "kanji",
+              "srs_stage": 3, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun kanjiSubjectsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
+          "data": [{
+            "id": 440, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/440",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2020-01-01T00:00:00.000000Z", "level": 3, "slug": "water",
+              "characters": "水",
+              "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
+              "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}]
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun emptyAssignmentsJson() = """
+        {"object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 0, "data": []}
+    """.trimIndent()
+
+    private fun reviewResultJson() = """
+        {
+          "id": 1, "object": "review", "url": "https://api.wanikani.com/v2/reviews/1",
+          "data_updated_at": "2026-01-01T00:00:00.000000Z",
+          "data": {
+            "assignment_id": 555, "subject_id": 440, "starting_srs_stage": 3, "ending_srs_stage": 4,
+            "incorrect_meaning_answers": 0, "incorrect_reading_answers": 0,
+            "created_at": "2026-01-01T00:00:00.000000Z"
+          }
+        }
+    """.trimIndent()
+}
