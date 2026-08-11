@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,7 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
@@ -220,28 +221,39 @@ fun SubjectSearchOverlay(
 
 @Composable
 private fun SubjectResultRow(subject: SubjectSummary, onClick: (Long) -> Unit) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick(subject.subjectId) }
             .padding(horizontal = 16.dp, vertical = 12.dp)
-            .testTag(SearchOverlayTestTags.RESULT_ROW_PREFIX + subject.subjectId),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+            .testTag(SearchOverlayTestTags.RESULT_ROW_PREFIX + subject.subjectId)
     ) {
+        // The main line spans the full row width instead of sharing it with a leading glyph
+        // column, so a long vocabulary word like お誕生日おめでとう has room to render on one line
+        // instead of wrapping character-by-character in a narrow fixed-width slot.
         Text(
-            text = subject.characters ?: subject.meanings.firstOrNull() ?: "?",
-            style = MaterialTheme.typography.headlineSmall,
-            color = subjectColor(subject.subjectType),
-            modifier = Modifier.width(56.dp)
+            text = buildAnnotatedString {
+                if (subject.characters != null) {
+                    withStyle(SpanStyle(color = subjectColor(subject.subjectType))) {
+                        append(subject.characters)
+                    }
+                    append(" — ")
+                }
+                append(subject.meanings.joinToString(", "))
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
-        Column {
-            Text(subject.meanings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = "Level ${subject.level} · ${subjectTypeLabel(subject.subjectType)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        val reading = subject.readings.firstOrNull()
+        Text(
+            text = listOfNotNull(reading, "Level ${subject.level}", subjectTypeLabel(subject.subjectType))
+                .joinToString(" · "),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 2.dp)
+        )
     }
 }
