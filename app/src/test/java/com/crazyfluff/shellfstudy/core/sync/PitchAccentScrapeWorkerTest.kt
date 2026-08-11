@@ -46,7 +46,7 @@ class PitchAccentScrapeWorkerTest {
             .build()
 
     @Test
-    fun `doWork scrapes every vocab word missing a cache entry, skipping non-vocab subjects`() = runTest {
+    fun `doWork scrapes every unlocked vocab word missing a cache entry, skipping non-vocab subjects`() = runTest {
         val subjectDao = FakeSubjectDao()
         subjectDao.upsertAll(
             listOf(
@@ -55,6 +55,7 @@ class PitchAccentScrapeWorkerTest {
                 subjectEntityOfType(id = 3, characters = "木", type = "kanji")
             )
         )
+        subjectDao.markUnlocked(1, 2)
         val cacheDao = FakePitchAccentCacheDao()
         val html = """<div class="NetDicHead">ミズ<span style="font-size:75%;">［0］</span></div>"""
         val repository = PitchAccentRepository(
@@ -71,6 +72,7 @@ class PitchAccentScrapeWorkerTest {
     fun `doWork does not re-scrape a word that already has a fresh cache entry`() = runTest {
         val subjectDao = FakeSubjectDao()
         subjectDao.upsertAll(listOf(vocab(id = 1, characters = "水")))
+        subjectDao.markUnlocked(1)
         val cacheDao = FakePitchAccentCacheDao()
         cacheDao.upsert(
             PitchAccentCacheEntity(characters = "水", pitchAccents = emptyList(), fetchedAt = 1L, lastAttemptedAt = System.currentTimeMillis())
@@ -83,6 +85,24 @@ class PitchAccentScrapeWorkerTest {
 
         cacheDao.observeByCharacters("水").test {
             assertThat(awaitItem()?.fetchedAt).isEqualTo(1L)
+        }
+    }
+
+    @Test
+    fun `doWork skips vocab that hasn't been unlocked, even with no cache entry`() = runTest {
+        val subjectDao = FakeSubjectDao()
+        subjectDao.upsertAll(listOf(vocab(id = 1, characters = "水")))
+        // Deliberately not marked unlocked.
+        val cacheDao = FakePitchAccentCacheDao()
+        // No configured weblio response for "水" — if the worker scraped it, the fetch would fail
+        // and write a cache entry with fetchedAt = null, so an absent entry proves it was skipped.
+        val repository = PitchAccentRepository(FakePitchAccentBundledSource(), cacheDao, FakeWeblioApi(), WeblioPitchAccentParser())
+
+        val result = buildWorker(subjectDao, cacheDao, repository).doWork()
+
+        assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        cacheDao.observeByCharacters("水").test {
+            assertThat(awaitItem()).isNull()
         }
     }
 

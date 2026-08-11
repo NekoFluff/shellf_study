@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.map
 /** In-memory stand-in for [SubjectDao] used by repository/ViewModel unit tests. */
 class FakeSubjectDao : SubjectDao {
     private val subjects = MutableStateFlow<Map<Long, SubjectEntity>>(emptyMap())
+    private val unlockedIds = MutableStateFlow<Set<Long>>(emptySet())
 
     override suspend fun upsertAll(subjects: List<SubjectEntity>) {
         this.subjects.value = this.subjects.value + subjects.associateBy { it.id }
@@ -31,9 +32,14 @@ class FakeSubjectDao : SubjectDao {
 
     override fun observeTotalCount(): Flow<Int> = subjects.map { it.size }
 
-    override suspend fun getVocabularyCharacters(): List<String> = subjects.value.values
-        .filter { it.subjectType == "vocabulary" || it.subjectType == "kana_vocabulary" }
+    override suspend fun getUnlockedVocabularyCharacters(): List<String> = subjects.value.values
+        .filter { (it.subjectType == "vocabulary" || it.subjectType == "kana_vocabulary") && it.id in unlockedIds.value }
         .mapNotNull { it.characters }
+
+    /** Test-only helper mirroring the real DAO's join against assignments.unlockedAt/hidden. */
+    fun markUnlocked(vararg ids: Long) {
+        unlockedIds.value = unlockedIds.value + ids.toSet()
+    }
 
     /** Test-only helper so [FakeAssignmentDao] can resolve a subject's level for join-style queries. */
     fun levelOf(subjectId: Long): Int? = subjects.value[subjectId]?.level

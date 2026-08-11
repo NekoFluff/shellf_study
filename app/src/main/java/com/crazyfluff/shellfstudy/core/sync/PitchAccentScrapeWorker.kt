@@ -36,7 +36,7 @@ class PitchAccentScrapeWorker @AssistedInject constructor(
         val now = Instant.now().toEpochMilli()
         val staleCutoff = now - STALE_AFTER.toMillis()
 
-        val allVocab = subjectDao.getVocabularyCharacters().toSet()
+        val allVocab = subjectDao.getUnlockedVocabularyCharacters().toSet()
         val fresh = pitchAccentCacheDao.getFreshCharacters(staleCutoff).toSet()
         val candidates = (allVocab - fresh).take(BATCH_SIZE)
 

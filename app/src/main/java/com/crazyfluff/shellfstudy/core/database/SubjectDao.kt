@@ -26,6 +26,16 @@ interface SubjectDao {
     @Query("SELECT COUNT(*) FROM subjects")
     fun observeTotalCount(): Flow<Int>
 
-    @Query("SELECT characters FROM subjects WHERE subjectType IN ('vocabulary', 'kana_vocabulary') AND characters IS NOT NULL")
-    suspend fun getVocabularyCharacters(): List<String>
+    /** Vocab characters for subjects the user has actually unlocked — keeps the background pitch-accent scrape from fetching data for locked/future-level vocab. */
+    @Query(
+        """
+        SELECT DISTINCT s.characters FROM subjects s
+        JOIN assignments a ON a.subjectId = s.id
+        WHERE s.subjectType IN ('vocabulary', 'kana_vocabulary')
+          AND s.characters IS NOT NULL
+          AND a.unlockedAt IS NOT NULL
+          AND a.hidden = 0
+        """
+    )
+    suspend fun getUnlockedVocabularyCharacters(): List<String>
 }
