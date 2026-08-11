@@ -93,7 +93,7 @@ class DefaultNotificationCoordinator @Inject constructor(
                     if (isQuiet(settings, now)) {
                         notificationScheduler.scheduleNextReviewCheck(quietHoursEnd(settings, now))
                     } else {
-                        notificationPoster.post(NotificationBuilder.reviewsAvailable(decision.delta, forecast))
+                        notificationPoster.post(NotificationBuilder.reviewsAvailable(forecast))
                         notificationStateRepository.updateReviewWatermark(decision.newWatermark)
                     }
                 }

@@ -19,10 +19,10 @@ data class NotificationSpec(
 )
 
 object NotificationBuilder {
-    fun reviewsAvailable(newCount: Int, forecast: ReviewForecast): NotificationSpec = NotificationSpec(
+    fun reviewsAvailable(forecast: ReviewForecast): NotificationSpec = NotificationSpec(
         id = NotificationIds.REVIEWS_AVAILABLE,
         channelId = NotificationChannels.REVIEWS_AVAILABLE,
-        title = if (newCount == 1) "1 review is available" else "$newCount reviews are available",
+        title = "Reviews are ready for you",
         body = reviewForecastSummary(forecast),
         destination = NotificationDeepLink.DESTINATION_REVIEW
     )
@@ -30,8 +30,8 @@ object NotificationBuilder {
     fun reviewsBacklog(totalDueNow: Int, threshold: Int): NotificationSpec = NotificationSpec(
         id = NotificationIds.REVIEWS_BACKLOG,
         channelId = NotificationChannels.REVIEWS_BACKLOG,
-        title = "Your review queue is piling up",
-        body = "$totalDueNow reviews are waiting — that's past your $threshold-item backlog threshold.",
+        title = "Your reviews miss you",
+        body = "$totalDueNow are waiting — more than usual. A few rounds now will make a big dent.",
         destination = NotificationDeepLink.DESTINATION_REVIEW,
         priority = NotificationCompat.PRIORITY_HIGH
     )
@@ -39,11 +39,11 @@ object NotificationBuilder {
     fun studyReminder(currentStreakDays: Int): NotificationSpec = NotificationSpec(
         id = NotificationIds.STUDY_REMINDER,
         channelId = NotificationChannels.STUDY_REMINDER,
-        title = "Keep your streak going",
+        title = if (currentStreakDays > 0) "Keep your streak going" else "Ready to study?",
         body = if (currentStreakDays > 0) {
             "You're on a $currentStreakDays-day streak — don't lose it today."
         } else {
-            "You haven't studied today yet."
+            "A quick session today gets your streak started."
         },
         destination = NotificationDeepLink.DESTINATION_DASHBOARD
     )
