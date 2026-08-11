@@ -62,7 +62,17 @@ class RomajiConverterTest {
         assertThat(RomajiConverter.toHiragana("si")).isEqualTo("し")
         assertThat(RomajiConverter.toHiragana("chi")).isEqualTo("ち")
         assertThat(RomajiConverter.toHiragana("tsu")).isEqualTo("つ")
+        assertThat(RomajiConverter.toHiragana("tu")).isEqualTo("つ")
         assertThat(RomajiConverter.toHiragana("fu")).isEqualTo("ふ")
+    }
+
+    @Test
+    fun `handles ja ju jo alternate spellings`() {
+        assertThat(RomajiConverter.toHiragana("ja")).isEqualTo("じゃ")
+        assertThat(RomajiConverter.toHiragana("ju")).isEqualTo("じゅ")
+        assertThat(RomajiConverter.toHiragana("jo")).isEqualTo("じょ")
+        assertThat(RomajiConverter.toHiragana("jya")).isEqualTo("じゃ")
+        assertThat(RomajiConverter.toHiragana("zya")).isEqualTo("じゃ")
     }
 
     @Test
