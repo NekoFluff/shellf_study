@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.feature.search
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -84,6 +85,13 @@ fun SubjectSearchOverlay(
     val queryFocusRequester = remember { FocusRequester() }
     LaunchedEffect(active) {
         if (active) queryFocusRequester.requestFocus()
+    }
+
+    // This is a plain inline overlay, not a Dialog, so — unlike SubjectDetailSheet — it shares the
+    // host Activity's OnBackPressedDispatcher and a top-level BackHandler is enough to intercept
+    // system back while open.
+    BackHandler(enabled = active) {
+        onActiveChange(false)
     }
 
     AnimatedVisibility(

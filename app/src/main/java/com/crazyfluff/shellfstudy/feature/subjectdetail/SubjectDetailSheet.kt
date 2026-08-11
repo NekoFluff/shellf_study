@@ -78,15 +78,19 @@ fun SubjectDetailSheet(
         }
     }
 
-    BackHandler(enabled = uiState.backStack.isNotEmpty()) {
-        viewModel.goBack()
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         modifier = Modifier.testTag(SubjectDetailTestTags.SHEET_ROOT)
     ) {
+        // Must live inside the sheet's content, not before ModalBottomSheet(...): the sheet
+        // renders in its own dialog window with its own OnBackPressedDispatcher, so a BackHandler
+        // registered outside never sees back-button events while the sheet has focus — the
+        // sheet's own predictive-back-to-dismiss handling intercepts them first instead.
+        BackHandler(enabled = uiState.backStack.isNotEmpty()) {
+            viewModel.goBack()
+        }
+
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
             if (uiState.backStack.isNotEmpty()) {
                 IconButton(onClick = { viewModel.goBack() }) {
