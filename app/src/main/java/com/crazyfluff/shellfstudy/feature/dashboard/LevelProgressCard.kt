@@ -161,13 +161,14 @@ private fun LevelItemChip(item: LevelItem) {
     }
     Text(
         text = item.display,
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.titleMedium,
         color = if (item.passed) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
         maxLines = 1,
         modifier = Modifier
-            .defaultMinSize(minWidth = 36.dp)
+            .defaultMinSize(minWidth = 48.dp)
             .then(backgroundModifier)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
             .testTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + item.subjectId)
     )
 }

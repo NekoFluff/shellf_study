@@ -1,30 +1,39 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -34,20 +43,29 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
@@ -58,6 +76,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 import kotlinx.coroutines.flow.collect
+import kotlin.math.roundToInt
 
 object LessonScreenTestTags {
     const val LOADING_INDICATOR = "lesson_loading_indicator"
@@ -68,10 +87,13 @@ object LessonScreenTestTags {
     const val NO_LESSONS_DONE_BUTTON = "lesson_no_lessons_done_button"
     const val SELECT_ALL_CHIP = "lesson_select_all_chip"
     const val SELECT_NONE_CHIP = "lesson_select_none_chip"
-    const val SELECT_FIRST_FIVE_CHIP = "lesson_select_first_five_chip"
-    const val SELECT_FIRST_TEN_CHIP = "lesson_select_first_ten_chip"
+    const val STEPPER_DECREMENT = "lesson_stepper_decrement"
+    const val STEPPER_INCREMENT = "lesson_stepper_increment"
+    const val STEPPER_SLIDER = "lesson_stepper_slider"
+    const val CUSTOMIZE_TOGGLE = "lesson_customize_toggle"
     const val START_SELECTED_BUTTON = "lesson_start_selected_button"
     fun lessonCheckboxTag(assignmentId: Long) = "lesson_checkbox_$assignmentId"
+    fun levelGroupToggleTag(level: Int) = "lesson_level_toggle_$level"
     const val STUDY_PAGER = "lesson_study_pager"
     const val STUDY_CHARACTERS = "lesson_study_characters"
     const val STUDY_NEXT_BUTTON = "lesson_study_next_button"
@@ -341,101 +363,229 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
 ) {
     val selectedCount = uiState.selectedAssignmentIds.size
     val total = uiState.availableLessons.size
+    var customizeExpanded by rememberSaveable { mutableStateOf(false) }
+    var expandedLevels by rememberSaveable {
+        val levelsWithSelection = uiState.availableLessons
+            .filter { it.assignmentId in uiState.selectedAssignmentIds }
+            .map { it.level }
+            .toSet()
+        mutableStateOf(levelsWithSelection)
+    }
 
     Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
         Text("Choose lessons to study", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Text("$selectedCount of $total selected", style = MaterialTheme.typography.bodyMedium)
-    }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        if (total > 5) {
-            AssistChip(
-                onClick = { onSelectFirst(5) },
-                label = { Text("First 5") },
-                modifier = Modifier.testTag(LessonScreenTestTags.SELECT_FIRST_FIVE_CHIP)
+        if (!customizeExpanded) {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "$selectedCount",
+                style = MaterialTheme.typography.displaySmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                IconButton(
+                    onClick = { onSelectFirst(selectedCount - 1) },
+                    enabled = selectedCount > 0,
+                    modifier = Modifier.testTag(LessonScreenTestTags.STEPPER_DECREMENT)
+                ) {
+                    Icon(Icons.Default.Remove, contentDescription = "Fewer lessons")
+                }
+                Slider(
+                    value = selectedCount.toFloat(),
+                    onValueChange = { onSelectFirst(it.roundToInt()) },
+                    valueRange = 0f..total.toFloat(),
+                    steps = (total - 1).coerceAtLeast(0),
+                    modifier = Modifier.weight(1f).testTag(LessonScreenTestTags.STEPPER_SLIDER)
+                )
+                IconButton(
+                    onClick = { onSelectFirst(selectedCount + 1) },
+                    enabled = selectedCount < total,
+                    modifier = Modifier.testTag(LessonScreenTestTags.STEPPER_INCREMENT)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "More lessons")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        } else {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        Button(
+            onClick = onStart,
+            enabled = selectedCount > 0,
+            modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.START_SELECTED_BUTTON)
+        ) {
+            Text(if (selectedCount > 0) "Start session" else "Select lessons to study")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { customizeExpanded = !customizeExpanded }
+                .testTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE)
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                if (customizeExpanded) "Back to quick pick" else "Customize selection",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = if (customizeExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null
             )
         }
-        if (total > 10) {
-            AssistChip(
-                onClick = { onSelectFirst(10) },
-                label = { Text("First 10") },
-                modifier = Modifier.testTag(LessonScreenTestTags.SELECT_FIRST_TEN_CHIP)
-            )
-        }
-        AssistChip(
-            onClick = onSelectAll,
-            label = { Text("All") },
-            modifier = Modifier.testTag(LessonScreenTestTags.SELECT_ALL_CHIP)
-        )
-        AssistChip(
-            onClick = onSelectNone,
-            label = { Text("None") },
-            modifier = Modifier.testTag(LessonScreenTestTags.SELECT_NONE_CHIP)
-        )
-    }
 
-    Spacer(modifier = Modifier.height(8.dp))
-
-    LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-        uiState.availableLessons.groupBy { it.subjectType }.forEach { (type, itemsForType) ->
-            item {
-                Text(
-                    text = subjectTypeSectionLabel(type),
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+        if (customizeExpanded) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AssistChip(
+                    onClick = onSelectAll,
+                    label = { Text("All") },
+                    modifier = Modifier.testTag(LessonScreenTestTags.SELECT_ALL_CHIP)
+                )
+                AssistChip(
+                    onClick = onSelectNone,
+                    label = { Text("None") },
+                    modifier = Modifier.testTag(LessonScreenTestTags.SELECT_NONE_CHIP)
                 )
             }
-            items(itemsForType, key = { it.assignmentId }) { lessonItem ->
-                val checked = lessonItem.assignmentId in uiState.selectedAssignmentIds
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onToggle(lessonItem.assignmentId) }
-                        .testTag(LessonScreenTestTags.lessonCheckboxTag(lessonItem.assignmentId))
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(checked = checked, onCheckedChange = { onToggle(lessonItem.assignmentId) })
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = lessonItem.characters ?: lessonItem.meanings.firstOrNull() ?: "?",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = subjectColor(type),
-                        modifier = Modifier.width(48.dp)
-                    )
-                    Column {
-                        Text(lessonItem.meanings.joinToString(", "), style = MaterialTheme.typography.bodyMedium)
-                        Text("Level ${lessonItem.level}", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+
+    if (customizeExpanded) {
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            uiState.availableLessons.groupBy { it.level }.forEach { (level, itemsForLevel) ->
+                val levelExpanded = level in expandedLevels
+                val selectedInLevel = itemsForLevel.count { it.assignmentId in uiState.selectedAssignmentIds }
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                expandedLevels = if (levelExpanded) expandedLevels - level else expandedLevels + level
+                            }
+                            .testTag(LessonScreenTestTags.levelGroupToggleTag(level))
+                            .padding(horizontal = 24.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Level $level · $selectedInLevel of ${itemsForLevel.size} selected",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Icon(
+                            imageVector = if (levelExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null
+                        )
+                    }
+                }
+                if (levelExpanded) {
+                    item {
+                        FlowRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            itemsForLevel.forEach { lessonItem ->
+                                val checked = lessonItem.assignmentId in uiState.selectedAssignmentIds
+                                LessonGlyphTile(
+                                    lessonItem = lessonItem,
+                                    selected = checked,
+                                    minWidth = 64.dp,
+                                    minHeight = 72.dp,
+                                    maxWidth = 112.dp,
+                                    modifier = Modifier.testTag(LessonScreenTestTags.lessonCheckboxTag(lessonItem.assignmentId)),
+                                    onClick = { onToggle(lessonItem.assignmentId) }
+                                )
+                            }
+                        }
                     }
                 }
             }
+            item { Spacer(modifier = Modifier.height(16.dp)) }
         }
-    }
-
-    Button(
-        onClick = onStart,
-        enabled = selectedCount > 0,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(24.dp)
-            .testTag(LessonScreenTestTags.START_SELECTED_BUTTON)
-    ) {
-        Text(if (selectedCount > 0) "Study $selectedCount selected" else "Select lessons to study")
     }
 }
 
-private fun subjectTypeSectionLabel(type: SubjectType): String = when (type) {
-    SubjectType.RADICAL -> "Radicals"
-    SubjectType.KANJI -> "Kanji"
-    SubjectType.VOCABULARY -> "Vocabulary"
-    SubjectType.KANA_VOCABULARY -> "Kana Vocabulary"
+@Composable
+private fun LessonGlyphTile(
+    lessonItem: LessonItem,
+    selected: Boolean,
+    minWidth: Dp,
+    minHeight: Dp,
+    maxWidth: Dp,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
+    val color = subjectColor(lessonItem.subjectType)
+    val contentColor = if (selected) Color.White else color
+    val shape = RoundedCornerShape(12.dp)
+    val furigana = lessonItem.readings.firstOrNull()
+
+    Box(
+        modifier = modifier
+            .defaultMinSize(minWidth = minWidth, minHeight = minHeight)
+            .widthIn(max = maxWidth)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onClick
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .background(if (selected) color else color.copy(alpha = 0.10f), shape)
+            .then(
+                if (!selected) Modifier.border(1.dp, color.copy(alpha = 0.35f), shape) else Modifier
+            )
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (furigana != null) {
+                Text(
+                    text = furigana,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = contentColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = lessonItem.characters ?: lessonItem.meanings.firstOrNull() ?: "?",
+                style = MaterialTheme.typography.titleLarge,
+                color = contentColor,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
 }
 
 @Composable

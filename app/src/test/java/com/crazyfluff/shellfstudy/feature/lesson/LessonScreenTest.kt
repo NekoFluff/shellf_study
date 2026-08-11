@@ -1,7 +1,9 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -22,7 +24,7 @@ import org.robolectric.annotation.Config
  * Pinned to SDK 35: Robolectric 4.15.1 doesn't yet have shadows for this project's targetSdk (37).
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
+@Config(sdk = [35], qualifiers = "w411dp-h891dp")
 class LessonScreenTest {
 
     @get:Rule
@@ -106,6 +108,8 @@ class LessonScreenTest {
 
         composeTestRule.onNodeWithText("1 of 2 selected").assertIsDisplayed()
 
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.lessonCheckboxTag(2L)).performClick()
         assert(toggledId == 2L)
     }
@@ -124,10 +128,106 @@ class LessonScreenTest {
             onSelectNone = { selectedNone = true }
         )
 
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECT_ALL_CHIP).performClick()
         assert(selectedAll)
         composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECT_NONE_CHIP).performClick()
         assert(selectedNone)
+    }
+
+    @Test
+    fun selectPhase_stepperButtons_invokeOnSelectFirstWithClampedCount() {
+        var selectedN: Int? = null
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem, secondRadicalItem),
+                selectedAssignmentIds = setOf(1L)
+            ),
+            onSelectFirst = { selectedN = it }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STEPPER_INCREMENT).performClick()
+        assert(selectedN == 2)
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STEPPER_DECREMENT).performClick()
+        assert(selectedN == 0)
+    }
+
+    @Test
+    fun selectPhase_stepperDecrement_disabledAtZero() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem),
+                selectedAssignmentIds = emptySet()
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STEPPER_DECREMENT).assertIsNotEnabled()
+    }
+
+    @Test
+    fun selectPhase_stepperIncrement_disabledAtTotal() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem),
+                selectedAssignmentIds = setOf(1L)
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STEPPER_INCREMENT).assertIsNotEnabled()
+    }
+
+    @Test
+    fun selectPhase_customizeToggle_showsAndHidesChecklist() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem, secondRadicalItem),
+                selectedAssignmentIds = setOf(1L)
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.lessonCheckboxTag(1L)).assertCountEquals(0)
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.lessonCheckboxTag(1L)).assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.lessonCheckboxTag(1L)).assertCountEquals(0)
+    }
+
+    @Test
+    fun selectPhase_levelGroupToggle_showsAndHidesTilesForUnselectedLevel() {
+        var toggledId: Long? = null
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem),
+                selectedAssignmentIds = emptySet()
+            ),
+            onToggleLessonSelection = { toggledId = it }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
+        composeTestRule.waitForIdle()
+
+        // Level 1 has no current selection, so it starts collapsed.
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.lessonCheckboxTag(1L)).assertCountEquals(0)
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.levelGroupToggleTag(1)).performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.lessonCheckboxTag(1L)).performClick()
+        assert(toggledId == 1L)
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.levelGroupToggleTag(1)).performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.lessonCheckboxTag(1L)).assertCountEquals(0)
     }
 
     @Test
