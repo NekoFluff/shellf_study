@@ -3,15 +3,18 @@ package com.crazyfluff.shellfstudy.feature.subjectdetail
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
+import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.network.MeaningData
 import com.crazyfluff.shellfstudy.core.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.core.network.PronunciationAudioMetadataData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -34,6 +37,7 @@ class SubjectDetailViewModelTest {
     private lateinit var viewModel: SubjectDetailViewModel
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var audioPlayer: FakePronunciationAudioPlayer
+    private lateinit var strokeOrderRepository: FakeStrokeOrderRepository
 
     @Before
     fun setUp() = runTest {
@@ -63,7 +67,8 @@ class SubjectDetailViewModelTest {
         )
         settingsRepository = SettingsRepository(dataStore)
         audioPlayer = FakePronunciationAudioPlayer()
-        viewModel = SubjectDetailViewModel(repositories.subjectRepository, settingsRepository, audioPlayer)
+        strokeOrderRepository = FakeStrokeOrderRepository(mapOf('水' to listOf("M10,10L90,90")))
+        viewModel = SubjectDetailViewModel(repositories.subjectRepository, settingsRepository, audioPlayer, strokeOrderRepository)
     }
 
     @After
@@ -71,15 +76,31 @@ class SubjectDetailViewModelTest {
         server.shutdown()
     }
 
+    /** Drains until the initial "nothing opened yet" emission clears. */
+    private suspend fun ReceiveTurbine<SubjectDetailUiState>.awaitNotLoading(): SubjectDetailUiState {
+        var state = awaitItem()
+        while (state.isLoading) state = awaitItem()
+        return state
+    }
+
+    /** Drains until [subjectId] is loaded AND its stroke-order lookup (a second, later-arriving
+     *  emission — see [SubjectDetailViewModel.strokeOrderFlow]) has resolved, so no unconsumed
+     *  event is left behind when the `test { }` block exits. */
+    private suspend fun ReceiveTurbine<SubjectDetailUiState>.awaitSettled(subjectId: Long): SubjectDetailUiState {
+        var state = awaitItem()
+        while (state.detail?.subjectId != subjectId || state.strokeOrder is StrokeOrderUiState.Loading) {
+            state = awaitItem()
+        }
+        return state
+    }
+
     @Test
     fun `open loads the subject and resolves its component as a related tile`() = runTest {
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            awaitNotLoading()
 
             viewModel.open(1)
-            var loaded = awaitItem()
-            while (loaded.detail?.subjectId != 1L) loaded = awaitItem()
+            val loaded = awaitSettled(1)
 
             assertThat(loaded.detail?.meanings).containsExactly("Water")
             assertThat(loaded.relatedSubjects[2]?.meanings).containsExactly("Water radical")
@@ -90,16 +111,13 @@ class SubjectDetailViewModelTest {
     @Test
     fun `navigateToRelated pushes current subject onto the back stack and loads the target`() = runTest {
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            awaitNotLoading()
 
             viewModel.open(1)
-            var loaded = awaitItem()
-            while (loaded.detail?.subjectId != 1L) loaded = awaitItem()
+            awaitSettled(1)
 
             viewModel.navigateToRelated(2)
-            var drilled = awaitItem()
-            while (drilled.detail?.subjectId != 2L) drilled = awaitItem()
+            val drilled = awaitSettled(2)
 
             assertThat(drilled.backStack).containsExactly(1L)
         }
@@ -108,20 +126,16 @@ class SubjectDetailViewModelTest {
     @Test
     fun `goBack pops the stack and returns false once empty`() = runTest {
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            awaitNotLoading()
 
             viewModel.open(1)
-            var loaded = awaitItem()
-            while (loaded.detail?.subjectId != 1L) loaded = awaitItem()
+            awaitSettled(1)
 
             viewModel.navigateToRelated(2)
-            var drilled = awaitItem()
-            while (drilled.detail?.subjectId != 2L) drilled = awaitItem()
+            awaitSettled(2)
 
             assertThat(viewModel.goBack()).isTrue()
-            var backAtRoot = awaitItem()
-            while (backAtRoot.detail?.subjectId != 1L) backAtRoot = awaitItem()
+            val backAtRoot = awaitSettled(1)
             assertThat(backAtRoot.backStack).isEmpty()
 
             assertThat(viewModel.goBack()).isFalse()
@@ -131,14 +145,37 @@ class SubjectDetailViewModelTest {
     @Test
     fun `uiState reflects showPitchAccent from settings and updates when it changes`() = runTest {
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            val state = awaitNotLoading()
             assertThat(state.showPitchAccent).isTrue()
 
             settingsRepository.setShowPitchAccent(false)
             var updated = awaitItem()
             while (updated.showPitchAccent) updated = awaitItem()
             assertThat(updated.showPitchAccent).isFalse()
+        }
+    }
+
+    @Test
+    fun `uiState resolves stroke order for a kanji with bundled data`() = runTest {
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(1)
+            val loaded = awaitSettled(1)
+
+            assertThat(loaded.strokeOrder).isEqualTo(StrokeOrderUiState.Available(listOf("M10,10L90,90")))
+        }
+    }
+
+    @Test
+    fun `uiState has no stroke order for a radical with no matching character`() = runTest {
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(2)
+            val loaded = awaitSettled(2)
+
+            assertThat(loaded.strokeOrder).isEqualTo(StrokeOrderUiState.Unavailable)
         }
     }
 
@@ -165,12 +202,10 @@ class SubjectDetailViewModelTest {
     @Test
     fun `playReading plays the audio matching the requested reading`() = runTest {
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            awaitNotLoading()
 
             viewModel.open(3)
-            var loaded = awaitItem()
-            while (loaded.detail?.subjectId != 3L) loaded = awaitItem()
+            awaitSettled(3)
         }
 
         viewModel.playReading("みず")
@@ -182,12 +217,10 @@ class SubjectDetailViewModelTest {
     @Test
     fun `playReading is a no-op when the subject has no pronunciation audio`() = runTest {
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            awaitNotLoading()
 
             viewModel.open(1)
-            var loaded = awaitItem()
-            while (loaded.detail?.subjectId != 1L) loaded = awaitItem()
+            awaitSettled(1)
         }
 
         viewModel.playReading("みず")

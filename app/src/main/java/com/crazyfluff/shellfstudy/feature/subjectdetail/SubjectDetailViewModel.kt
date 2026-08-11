@@ -9,13 +9,17 @@ import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
+import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -26,7 +30,15 @@ data class SubjectDetailUiState(
     val detail: SubjectDetail? = null,
     val relatedSubjects: Map<Long, SubjectSummary> = emptyMap(),
     val backStack: List<Long> = emptyList(),
-    val showPitchAccent: Boolean = true
+    val showPitchAccent: Boolean = true,
+    val strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable
+)
+
+/** Intermediate combine result — [SubjectDetailViewModel.uiState]'s detail/related/stroke fields. */
+private data class DetailAndRelated(
+    val detail: SubjectDetail?,
+    val related: List<SubjectSummary>,
+    val strokeOrder: StrokeOrderUiState
 )
 
 /**
@@ -39,7 +51,8 @@ data class SubjectDetailUiState(
 class SubjectDetailViewModel @Inject constructor(
     private val subjectRepository: SubjectRepository,
     private val settingsRepository: SettingsRepository,
-    private val audioPlayer: PronunciationAudioPlayer
+    private val audioPlayer: PronunciationAudioPlayer,
+    private val strokeOrderRepository: StrokeOrderRepository
 ) : ViewModel() {
 
     private val currentSubjectId = MutableStateFlow<Long?>(null)
@@ -64,23 +77,27 @@ class SubjectDetailViewModel @Inject constructor(
                     val relatedIds = detail?.let {
                         it.componentSubjectIds + it.amalgamationSubjectIds + it.visuallySimilarSubjectIds
                     }.orEmpty()
-                    if (relatedIds.isEmpty()) {
-                        flowOf(detail to emptyList<SubjectSummary>())
+                    val relatedFlow = if (relatedIds.isEmpty()) {
+                        flowOf(emptyList<SubjectSummary>())
                     } else {
-                        combine(flowOf(detail), subjectRepository.observeSubjectSummaries(relatedIds)) { d, related -> d to related }
+                        subjectRepository.observeSubjectSummaries(relatedIds)
+                    }
+                    combine(relatedFlow, strokeOrderFlow(detail)) { related, strokeOrder ->
+                        DetailAndRelated(detail, related, strokeOrder)
                     }
                 }
-                .combine(backStack) { (detail, related), stack -> Triple(detail, related, stack) }
-                .combine(settingsRepository.settings) { triple, settings -> triple to settings.showPitchAccent }
-                .collect { (triple, showPitchAccent) ->
-                    val (detail, related, stack) = triple
+                .combine(backStack) { detailAndRelated, stack -> detailAndRelated to stack }
+                .combine(settingsRepository.settings) { pair, settings -> pair to settings.showPitchAccent }
+                .collect { (pair, showPitchAccent) ->
+                    val (detailAndRelated, stack) = pair
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            detail = detail,
-                            relatedSubjects = related.associateBy { summary -> summary.subjectId },
+                            detail = detailAndRelated.detail,
+                            relatedSubjects = detailAndRelated.related.associateBy { summary -> summary.subjectId },
                             backStack = stack,
-                            showPitchAccent = showPitchAccent
+                            showPitchAccent = showPitchAccent,
+                            strokeOrder = detailAndRelated.strokeOrder
                         )
                     }
                 }
@@ -116,5 +133,17 @@ class SubjectDetailViewModel @Inject constructor(
 
     fun stopPlayback() {
         audioPlayer.stop()
+    }
+
+    /** Stroke data is keyed purely by character, so only single-glyph subjects (kanji, and any
+     *  radical with a real Unicode glyph) ever resolve to anything other than [StrokeOrderUiState.Unavailable]. */
+    private fun strokeOrderFlow(detail: SubjectDetail?): Flow<StrokeOrderUiState> {
+        val character = detail?.characters?.singleOrNull()
+            ?: return flowOf(StrokeOrderUiState.Unavailable)
+        return flow {
+            emit(StrokeOrderUiState.Loading)
+            val strokes = strokeOrderRepository.getStrokeOrder(character)
+            emit(strokes?.let { StrokeOrderUiState.Available(it) } ?: StrokeOrderUiState.Unavailable)
+        }
     }
 }

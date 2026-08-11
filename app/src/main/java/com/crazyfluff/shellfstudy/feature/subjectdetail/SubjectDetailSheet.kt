@@ -114,7 +114,8 @@ fun SubjectDetailSheet(
                 onRelatedSubjectClick = viewModel::navigateToRelated,
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
                 showPitchAccent = uiState.showPitchAccent,
-                onPlayReading = viewModel::playReading
+                onPlayReading = viewModel::playReading,
+                strokeOrder = uiState.strokeOrder
             )
         }
     }

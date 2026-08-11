@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.Velocity
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
+import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 
@@ -56,7 +58,8 @@ fun SubjectDetailContent(
     onRelatedSubjectClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
     showPitchAccent: Boolean = true,
-    onPlayReading: ((String) -> Unit)? = null
+    onPlayReading: ((String) -> Unit)? = null,
+    strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable
 ) {
     val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType != DetailQuestionType.MEANING)
     val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered && questionType != DetailQuestionType.READING)
@@ -95,8 +98,7 @@ fun SubjectDetailContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        // TODO(stroke-order): slot in a StrokeOrderSection(detail.characters) composable here once
-        // built — kanji/radical only. Deliberately not stubbed out; see the feature plan.
+        StrokeOrderSection(strokeOrder)
 
         if (isVocabulary && detail.partsOfSpeech.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
