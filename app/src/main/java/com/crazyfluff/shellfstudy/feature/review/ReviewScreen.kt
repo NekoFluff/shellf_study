@@ -55,6 +55,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -322,6 +324,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
     val item = uiState.currentItem ?: return
     val questionType = uiState.currentQuestionType ?: return
 
+    val answerFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(uiState.currentItem, uiState.currentQuestionType) {
+        answerFocusRequester.requestFocus()
+    }
+
     val progress = if (uiState.totalCount == 0) 0f else
         (uiState.totalCount - uiState.remainingCount).toFloat() / uiState.totalCount
     val accentColor = subjectColor(item.subjectType)
@@ -390,7 +397,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             } else null,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { if (uiState.feedback == null) onSubmit() }),
-            modifier = Modifier.fillMaxWidth().testTag(ReviewScreenTestTags.ANSWER_FIELD)
+            modifier = Modifier.fillMaxWidth()
+                .focusRequester(answerFocusRequester)
+                .testTag(ReviewScreenTestTags.ANSWER_FIELD)
         )
 
         Spacer(modifier = Modifier.height(16.dp))

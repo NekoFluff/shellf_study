@@ -57,6 +57,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
@@ -633,6 +635,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
     val item = uiState.currentQuizItem ?: return
     val questionType = uiState.currentQuestionType ?: return
 
+    val answerFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(uiState.currentQuizItem, uiState.currentQuestionType) {
+        answerFocusRequester.requestFocus()
+    }
+
     val progress = if (uiState.totalQuizCount == 0) 0f else
         (uiState.totalQuizCount - uiState.remainingQuizCount).toFloat() / uiState.totalQuizCount
     val accentColor = subjectColor(item.subjectType)
@@ -687,7 +694,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { if (uiState.feedback == null) onSubmit() }),
-            modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.ANSWER_FIELD)
+            modifier = Modifier.fillMaxWidth()
+                .focusRequester(answerFocusRequester)
+                .testTag(LessonScreenTestTags.ANSWER_FIELD)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
