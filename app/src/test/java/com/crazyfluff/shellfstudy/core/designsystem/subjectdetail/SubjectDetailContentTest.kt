@@ -19,6 +19,7 @@ import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeTestTags
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -351,6 +352,42 @@ class SubjectDetailContentTest {
         }
 
         composeTestRule.onAllNodesWithTag(StrokeOrderTestTags.SECTION).assertCountEquals(0)
+    }
+
+    @Test
+    fun writingPracticeAvailable_showsTheSection() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                strokeOrder = StrokeOrderUiState.Available(
+                    listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f))
+                )
+            )
+        }
+
+        composeTestRule.onNodeWithTag(WritingPracticeTestTags.SECTION).assertIsDisplayed()
+    }
+
+    @Test
+    fun writingPracticeUnavailable_hidesTheSection() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                strokeOrder = StrokeOrderUiState.Unavailable
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(WritingPracticeTestTags.SECTION).assertCountEquals(0)
     }
 
     @Test

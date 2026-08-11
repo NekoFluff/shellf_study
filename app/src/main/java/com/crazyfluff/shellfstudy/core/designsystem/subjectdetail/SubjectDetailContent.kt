@@ -35,6 +35,7 @@ import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
+import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 
 /** Whether the sheet shows everything (browse/study contexts) or hides the currently-tested field (mid-quiz). */
@@ -123,6 +124,7 @@ fun SubjectDetailContent(
             }
         }
         StrokeOrderSection(strokeOrder)
+        WritingPracticeSection(strokeOrder = strokeOrder, resetKey = detail.subjectId)
 
         RelatedSubjectsSection(
             title = componentsLabel(detail.subjectType),
