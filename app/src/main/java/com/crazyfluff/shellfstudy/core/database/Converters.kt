@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import com.crazyfluff.shellfstudy.core.network.AuxiliaryMeaningData
 import com.crazyfluff.shellfstudy.core.network.ContextSentenceData
 import com.crazyfluff.shellfstudy.core.network.MeaningData
+import com.crazyfluff.shellfstudy.core.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
 import com.crazyfluff.shellfstudy.core.network.SrsStageData
 import kotlinx.serialization.encodeToString
@@ -45,6 +46,13 @@ class Converters {
 
     @TypeConverter
     fun contextSentencesFromJson(value: String): List<ContextSentenceData> =
+        json.decodeFromString(value)
+
+    @TypeConverter
+    fun pronunciationAudiosToJson(audios: List<PronunciationAudioData>): String = json.encodeToString(audios)
+
+    @TypeConverter
+    fun pronunciationAudiosFromJson(value: String): List<PronunciationAudioData> =
         json.decodeFromString(value)
 
     @TypeConverter

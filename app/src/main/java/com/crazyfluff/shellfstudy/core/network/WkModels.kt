@@ -66,7 +66,8 @@ data class SubjectData(
     @SerialName("visually_similar_subject_ids") val visuallySimilarSubjectIds: List<Long> = emptyList(),
     @SerialName("parts_of_speech") val partsOfSpeech: List<String> = emptyList(),
     @SerialName("context_sentences") val contextSentences: List<ContextSentenceData> = emptyList(),
-    @SerialName("character_images") val characterImages: List<CharacterImageData> = emptyList()
+    @SerialName("character_images") val characterImages: List<CharacterImageData> = emptyList(),
+    @SerialName("pronunciation_audios") val pronunciationAudios: List<PronunciationAudioData> = emptyList()
 )
 
 @Serializable
@@ -98,6 +99,23 @@ data class CharacterImageData(
 @Serializable
 data class CharacterImageMetadataData(
     val style: String? = null
+)
+
+@Serializable
+data class PronunciationAudioData(
+    val url: String,
+    @SerialName("content_type") val contentType: String,
+    val metadata: PronunciationAudioMetadataData? = null
+)
+
+@Serializable
+data class PronunciationAudioMetadataData(
+    val gender: String? = null,
+    @SerialName("source_id") val sourceId: Long? = null,
+    val pronunciation: String? = null,
+    @SerialName("voice_actor_id") val voiceActorId: Long? = null,
+    @SerialName("voice_actor_name") val voiceActorName: String? = null,
+    @SerialName("voice_description") val voiceDescription: String? = null
 )
 
 @Serializable

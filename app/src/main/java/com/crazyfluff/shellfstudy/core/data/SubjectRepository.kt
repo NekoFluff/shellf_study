@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.core.data.model.toPronunciationAudios
 import com.crazyfluff.shellfstudy.core.database.SrsSystemDao
 import com.crazyfluff.shellfstudy.core.database.SrsSystemEntity
 import com.crazyfluff.shellfstudy.core.database.StudyMaterialDao
@@ -84,6 +85,7 @@ class SubjectRepository @Inject constructor(
                             visuallySimilarSubjectIds = item.data.visuallySimilarSubjectIds,
                             partsOfSpeech = item.data.partsOfSpeech,
                             contextSentences = item.data.contextSentences,
+                            pronunciationAudios = item.data.pronunciationAudios,
                             hiddenAt = item.data.hiddenAt,
                             searchTarget = buildSearchTarget(
                                 item.data.characters, item.data.slug, item.data.meanings.map { it.meaning },
@@ -215,5 +217,6 @@ private fun SubjectEntity.toSubjectDetail(pitchAccents: List<PitchAccent> = empt
     componentSubjectIds = componentSubjectIds,
     amalgamationSubjectIds = amalgamationSubjectIds,
     visuallySimilarSubjectIds = visuallySimilarSubjectIds,
-    pitchAccents = pitchAccents
+    pitchAccents = pitchAccents,
+    pronunciationAudios = toPronunciationAudios()
 )

@@ -63,4 +63,16 @@ class SettingsViewModelTest {
             assertThat(awaitItem().showPitchAccent).isFalse()
         }
     }
+
+    @Test
+    fun `onAutoplayPronunciationAudioChange updates the state`() = runTest {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().autoplayPronunciationAudio).isTrue()
+
+            viewModel.onAutoplayPronunciationAudioChange(false)
+            assertThat(awaitItem().autoplayPronunciationAudio).isFalse()
+        }
+    }
 }

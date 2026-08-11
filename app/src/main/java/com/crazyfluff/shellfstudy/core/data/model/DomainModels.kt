@@ -27,7 +27,8 @@ data class ReviewItem(
     val level: Int,
     val srsStage: Int,
     val meanings: List<String>,
-    val readings: List<String>
+    val readings: List<String>,
+    val pronunciationAudios: List<PronunciationAudio> = emptyList()
 )
 
 data class ReviewGrade(

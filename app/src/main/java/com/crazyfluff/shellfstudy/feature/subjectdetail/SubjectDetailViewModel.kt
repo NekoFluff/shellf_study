@@ -2,6 +2,9 @@ package com.crazyfluff.shellfstudy.feature.subjectdetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.core.audio.PlaybackState
+import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
@@ -35,7 +38,8 @@ data class SubjectDetailUiState(
 @HiltViewModel
 class SubjectDetailViewModel @Inject constructor(
     private val subjectRepository: SubjectRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val audioPlayer: PronunciationAudioPlayer
 ) : ViewModel() {
 
     private val currentSubjectId = MutableStateFlow<Long?>(null)
@@ -43,6 +47,8 @@ class SubjectDetailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(SubjectDetailUiState())
     val uiState: StateFlow<SubjectDetailUiState> = _uiState.asStateFlow()
+
+    val playbackState: StateFlow<PlaybackState> = audioPlayer.state
 
     init {
         viewModelScope.launch {
@@ -101,5 +107,14 @@ class SubjectDetailViewModel @Inject constructor(
         backStack.value = stack.dropLast(1)
         currentSubjectId.value = previous
         return true
+    }
+
+    fun playReading(reading: String) {
+        val detail = _uiState.value.detail ?: return
+        selectAudioFor(detail.pronunciationAudios, reading)?.let(audioPlayer::play)
+    }
+
+    fun stopPlayback() {
+        audioPlayer.stop()
     }
 }

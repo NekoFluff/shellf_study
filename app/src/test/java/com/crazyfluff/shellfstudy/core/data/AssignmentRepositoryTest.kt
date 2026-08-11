@@ -3,6 +3,8 @@ package com.crazyfluff.shellfstudy.core.data
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.network.MeaningData
+import com.crazyfluff.shellfstudy.core.network.PronunciationAudioData
+import com.crazyfluff.shellfstudy.core.network.PronunciationAudioMetadataData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
@@ -64,6 +66,41 @@ class AssignmentRepositoryTest {
             assertThat(items).hasSize(1)
             assertThat(items.first().meaningMnemonic).isEqualTo("A stream of water.")
             assertThat(items.first().readingMnemonic).isEqualTo("Sounds like mizu.")
+        }
+    }
+
+    @Test
+    fun `observeReviewQueue carries the subject's pronunciation audios onto the review item`() = runTest {
+        repositories.subjectDao.upsertAll(
+            listOf(
+                SubjectEntity(
+                    id = 440,
+                    subjectType = "vocabulary",
+                    level = 3,
+                    slug = "水",
+                    characters = "水",
+                    meanings = listOf(MeaningData(meaning = "Water", primary = true)),
+                    readings = listOf(ReadingData(reading = "みず", primary = true)),
+                    documentUrl = null,
+                    pronunciationAudios = listOf(
+                        PronunciationAudioData(
+                            url = "https://api.wanikani.com/audio/mizu.mp3",
+                            contentType = "audio/mpeg",
+                            metadata = PronunciationAudioMetadataData(gender = "female", pronunciation = "みず")
+                        )
+                    ),
+                    searchTarget = "水 water みず"
+                )
+            )
+        )
+        server.enqueue(jsonResponse(assignmentJson(id = 999, availableAt = "2020-01-01T00:00:00.000000Z")))
+
+        repository.syncAssignments(force = true)
+
+        repository.observeReviewQueue().test {
+            val item = awaitItem().first()
+            assertThat(item.pronunciationAudios).hasSize(1)
+            assertThat(item.pronunciationAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
         }
     }
 

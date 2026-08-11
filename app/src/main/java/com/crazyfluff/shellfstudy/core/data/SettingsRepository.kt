@@ -18,7 +18,8 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 data class AppSettings(
     val dailyLessonGoal: Int = DEFAULT_DAILY_LESSON_GOAL,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val showPitchAccent: Boolean = true
+    val showPitchAccent: Boolean = true,
+    val autoplayPronunciationAudio: Boolean = true
 )
 
 @Singleton
@@ -28,13 +29,15 @@ class SettingsRepository @Inject constructor(
     private val dailyLessonGoalKey = intPreferencesKey("daily_lesson_goal")
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val showPitchAccentKey = booleanPreferencesKey("show_pitch_accent")
+    private val autoplayPronunciationAudioKey = booleanPreferencesKey("autoplay_pronunciation_audio")
 
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
         AppSettings(
             dailyLessonGoal = prefs[dailyLessonGoalKey] ?: DEFAULT_DAILY_LESSON_GOAL,
             themeMode = prefs[themeModeKey]?.let { raw -> runCatching { ThemeMode.valueOf(raw) }.getOrNull() }
                 ?: ThemeMode.SYSTEM,
-            showPitchAccent = prefs[showPitchAccentKey] ?: true
+            showPitchAccent = prefs[showPitchAccentKey] ?: true,
+            autoplayPronunciationAudio = prefs[autoplayPronunciationAudioKey] ?: true
         )
     }
 
@@ -48,5 +51,9 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setShowPitchAccent(enabled: Boolean) {
         dataStore.edit { it[showPitchAccentKey] = enabled }
+    }
+
+    suspend fun setAutoplayPronunciationAudio(enabled: Boolean) {
+        dataStore.edit { it[autoplayPronunciationAudioKey] = enabled }
     }
 }

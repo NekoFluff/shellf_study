@@ -139,6 +139,22 @@ class SubjectRepositoryTest {
     }
 
     @Test
+    fun `syncSubjects maps pronunciation audios into the cached subject`() = runTest {
+        server.enqueue(jsonResponse(SUBJECTS_JSON))
+        repository.syncSubjects(force = true)
+
+        repository.observeSubjectDetail(440).test {
+            val detail = awaitItem()
+            assertThat(detail?.pronunciationAudios).hasSize(1)
+            val audio = detail?.pronunciationAudios?.first()
+            assertThat(audio?.url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
+            assertThat(audio?.contentType).isEqualTo("audio/mpeg")
+            assertThat(audio?.pronunciation).isEqualTo("みず")
+            assertThat(audio?.gender).isEqualTo("female")
+        }
+    }
+
+    @Test
     fun `syncSubjects groups kanji readings into onyomi and kunyomi`() = runTest {
         server.enqueue(jsonResponse(SUBJECTS_JSON))
         repository.syncSubjects(force = true)
@@ -202,7 +218,14 @@ class SubjectRepositoryTest {
                     ],
                     "meaning_mnemonic": "Looks like <radical>water</radical> flowing.",
                     "visually_similar_subject_ids": [441],
-                    "context_sentences": [{"en": "I drink water.", "ja": "水を飲みます。"}]
+                    "context_sentences": [{"en": "I drink water.", "ja": "水を飲みます。"}],
+                    "pronunciation_audios": [
+                        {
+                          "url": "https://api.wanikani.com/audio/mizu.mp3",
+                          "content_type": "audio/mpeg",
+                          "metadata": {"gender": "female", "pronunciation": "みず"}
+                        }
+                    ]
                   }
                 }
               ]

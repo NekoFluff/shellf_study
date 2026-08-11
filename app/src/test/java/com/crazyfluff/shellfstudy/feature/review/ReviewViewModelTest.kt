@@ -5,9 +5,12 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.core.audio.PlaybackState
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
+import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
@@ -35,6 +38,8 @@ class ReviewViewModelTest {
     private lateinit var waniKaniRepository: WaniKaniRepository
     private lateinit var assignmentRepository: AssignmentRepository
     private lateinit var reviewSessionRepository: ReviewSessionRepository
+    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var pronunciationAudioPlayer: FakePronunciationAudioPlayer
 
     @Before
     fun setUp() {
@@ -47,6 +52,11 @@ class ReviewViewModelTest {
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+        val settingsDataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            produceFile = { tempFolder.newFile("settings.preferences_pb") }
+        )
+        settingsRepository = SettingsRepository(settingsDataStore)
+        pronunciationAudioPlayer = FakePronunciationAudioPlayer()
     }
 
     @After
@@ -54,7 +64,9 @@ class ReviewViewModelTest {
         server.shutdown()
     }
 
-    private fun createViewModel() = ReviewViewModel(waniKaniRepository, assignmentRepository, reviewSessionRepository)
+    private fun createViewModel() = ReviewViewModel(
+        waniKaniRepository, assignmentRepository, reviewSessionRepository, pronunciationAudioPlayer, settingsRepository
+    )
 
     /** Routes by path — refreshing the review queue now syncs subjects and assignments, in either order. */
     private fun dispatch(assignmentsResponse: MockResponse, subjectsResponse: MockResponse, reviewResponse: MockResponse? = null) {
@@ -220,6 +232,99 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `answering a reading question autoplays the correct pronunciation when the setting is enabled`() = runTest {
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        // Real DataStore reads settle asynchronously on their own IO dispatcher, unlike the
+        // Main-dispatcher ViewModel coroutines the test rule makes run synchronously — so wait for
+        // the play() side effect via the player's own state flow rather than checking playedAudios
+        // immediately after the uiState turbine block exits.
+        pronunciationAudioPlayer.state.test {
+            assertThat(awaitItem()).isEqualTo(PlaybackState.IDLE)
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.isLoading) state = awaitItem()
+                while (state.currentQuestionType != QuestionType.READING) {
+                    viewModel.onAnswerInputChange(if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                    awaitItem()
+                    viewModel.submitAnswer()
+                    awaitItem()
+                    viewModel.onContinue()
+                    state = awaitItem()
+                }
+
+                viewModel.onAnswerInputChange("mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+            }
+
+            assertThat(awaitItem()).isEqualTo(PlaybackState.PLAYING)
+        }
+
+        assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
+        assertThat(pronunciationAudioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
+    }
+
+    @Test
+    fun `answering a meaning question never autoplays pronunciation audio`() = runTest {
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            while (state.currentQuestionType != QuestionType.MEANING) {
+                viewModel.onAnswerInputChange("mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("Water")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+        }
+
+        assertThat(pronunciationAudioPlayer.playedAudios).isEmpty()
+    }
+
+    @Test
+    fun `autoplay is skipped once the setting is turned off`() = runTest {
+        settingsRepository.setAutoplayPronunciationAudio(false)
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            while (state.currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange(if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("mizu")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+        }
+
+        assertThat(pronunciationAudioPlayer.playedAudios).isEmpty()
+    }
+
+    @Test
     fun `undo reverts an incorrect answer so it doesn't count as a miss`() = runTest {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
@@ -365,7 +470,14 @@ class ReviewViewModelTest {
               "created_at": "2020-01-01T00:00:00.000000Z", "level": 3, "slug": "water",
               "characters": "水",
               "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
-              "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}]
+              "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}],
+              "pronunciation_audios": [
+                {
+                  "url": "https://api.wanikani.com/audio/mizu.mp3",
+                  "content_type": "audio/mpeg",
+                  "metadata": {"gender": "female", "pronunciation": "みず"}
+                }
+              ]
             }
           }]
         }

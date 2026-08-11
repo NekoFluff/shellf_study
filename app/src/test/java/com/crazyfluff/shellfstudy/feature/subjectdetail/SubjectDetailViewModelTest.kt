@@ -8,7 +8,10 @@ import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.network.MeaningData
+import com.crazyfluff.shellfstudy.core.network.PronunciationAudioData
+import com.crazyfluff.shellfstudy.core.network.PronunciationAudioMetadataData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
+import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -30,6 +33,7 @@ class SubjectDetailViewModelTest {
     private lateinit var server: MockWebServer
     private lateinit var viewModel: SubjectDetailViewModel
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var audioPlayer: FakePronunciationAudioPlayer
 
     @Before
     fun setUp() = runTest {
@@ -39,14 +43,27 @@ class SubjectDetailViewModelTest {
         repositories.subjectDao.upsertAll(
             listOf(
                 subjectEntity(id = 1, characters = "水", meaning = "Water", componentIds = listOf(2)),
-                subjectEntity(id = 2, characters = "氵", meaning = "Water radical")
+                subjectEntity(id = 2, characters = "氵", meaning = "Water radical"),
+                subjectEntity(
+                    id = 3,
+                    characters = "水",
+                    meaning = "Water",
+                    pronunciationAudios = listOf(
+                        PronunciationAudioData(
+                            url = "https://api.wanikani.com/audio/mizu.mp3",
+                            contentType = "audio/mpeg",
+                            metadata = PronunciationAudioMetadataData(pronunciation = "みず")
+                        )
+                    )
+                )
             )
         )
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         settingsRepository = SettingsRepository(dataStore)
-        viewModel = SubjectDetailViewModel(repositories.subjectRepository, settingsRepository)
+        audioPlayer = FakePronunciationAudioPlayer()
+        viewModel = SubjectDetailViewModel(repositories.subjectRepository, settingsRepository, audioPlayer)
     }
 
     @After
@@ -129,7 +146,8 @@ class SubjectDetailViewModelTest {
         id: Long,
         characters: String,
         meaning: String,
-        componentIds: List<Long> = emptyList()
+        componentIds: List<Long> = emptyList(),
+        pronunciationAudios: List<PronunciationAudioData> = emptyList()
     ): SubjectEntity = SubjectEntity(
         id = id,
         subjectType = "kanji",
@@ -140,6 +158,40 @@ class SubjectDetailViewModelTest {
         readings = listOf(ReadingData(reading = "みず", primary = true)),
         documentUrl = null,
         componentSubjectIds = componentIds,
+        pronunciationAudios = pronunciationAudios,
         searchTarget = "$characters $meaning".lowercase()
     )
+
+    @Test
+    fun `playReading plays the audio matching the requested reading`() = runTest {
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.open(3)
+            var loaded = awaitItem()
+            while (loaded.detail?.subjectId != 3L) loaded = awaitItem()
+        }
+
+        viewModel.playReading("みず")
+
+        assertThat(audioPlayer.playedAudios).hasSize(1)
+        assertThat(audioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
+    }
+
+    @Test
+    fun `playReading is a no-op when the subject has no pronunciation audio`() = runTest {
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.open(1)
+            var loaded = awaitItem()
+            while (loaded.detail?.subjectId != 1L) loaded = awaitItem()
+        }
+
+        viewModel.playReading("みず")
+
+        assertThat(audioPlayer.playedAudios).isEmpty()
+    }
 }

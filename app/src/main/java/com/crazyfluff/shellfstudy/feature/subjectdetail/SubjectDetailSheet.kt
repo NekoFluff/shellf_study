@@ -17,6 +17,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -53,6 +54,11 @@ fun SubjectDetailSheet(
 
     LaunchedEffect(initialSubjectId) {
         viewModel.open(initialSubjectId)
+    }
+
+    // Stops audio the moment the sheet leaves composition, regardless of which screen hosts it.
+    DisposableEffect(Unit) {
+        onDispose { viewModel.stopPlayback() }
     }
 
     // ModalBottomSheet only calls onDismissRequest once its hide animation finishes, but its
@@ -107,7 +113,8 @@ fun SubjectDetailSheet(
                 questionType = questionType,
                 onRelatedSubjectClick = viewModel::navigateToRelated,
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
-                showPitchAccent = uiState.showPitchAccent
+                showPitchAccent = uiState.showPitchAccent,
+                onPlayReading = viewModel::playReading
             )
         }
     }

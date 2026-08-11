@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.core.data.model
 
+import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 
 /**
@@ -32,7 +33,31 @@ data class SubjectDetail(
     val amalgamationSubjectIds: List<Long>,
     val visuallySimilarSubjectIds: List<Long>,
     /** Vocabulary/kana-vocabulary only — empty for kanji/radicals, which don't have pitch accent. */
-    val pitchAccents: List<PitchAccent> = emptyList()
+    val pitchAccents: List<PitchAccent> = emptyList(),
+    /** Vocabulary/kana-vocabulary only — kanji/radicals don't have spoken pronunciation clips. */
+    val pronunciationAudios: List<PronunciationAudio> = emptyList()
 )
 
 data class ContextSentence(val japanese: String, val english: String)
+
+data class PronunciationAudio(
+    val url: String,
+    val contentType: String,
+    val pronunciation: String?,
+    val gender: String?,
+    val voiceActorId: Long?,
+    val voiceActorName: String?,
+    val voiceDescription: String?
+)
+
+fun SubjectEntity.toPronunciationAudios(): List<PronunciationAudio> = pronunciationAudios.map {
+    PronunciationAudio(
+        url = it.url,
+        contentType = it.contentType,
+        pronunciation = it.metadata?.pronunciation,
+        gender = it.metadata?.gender,
+        voiceActorId = it.metadata?.voiceActorId,
+        voiceActorName = it.metadata?.voiceActorName,
+        voiceDescription = it.metadata?.voiceDescription
+    )
+}

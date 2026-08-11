@@ -9,6 +9,7 @@ import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.data.model.SubjectTypeProgress
+import com.crazyfluff.shellfstudy.core.data.model.toPronunciationAudios
 import com.crazyfluff.shellfstudy.core.database.AssignmentDao
 import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.core.database.SubjectDao
@@ -99,7 +100,8 @@ class AssignmentRepository @Inject constructor(
                             level = subject.level,
                             srsStage = assignment.srsStage,
                             meanings = subject.meanings.map { it.meaning },
-                            readings = subject.readings.map { it.reading }
+                            readings = subject.readings.map { it.reading },
+                            pronunciationAudios = subject.toPronunciationAudios()
                         )
                     }
                 }

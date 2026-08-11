@@ -93,6 +93,10 @@ dependencies {
 
     implementation(libs.jsoup)
 
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.datasource)
+    implementation(libs.androidx.media3.common)
+
     // Unit tests
     testImplementation(libs.junit)
     testImplementation(libs.truth)
@@ -110,6 +114,7 @@ dependencies {
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.junit)
+    testImplementation(libs.androidx.media3.test.utils)
 
     // Instrumented tests
     androidTestImplementation(platform(libs.androidx.compose.bom))

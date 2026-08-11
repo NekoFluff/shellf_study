@@ -2,12 +2,15 @@ package com.crazyfluff.shellfstudy.feature.review
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.core.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.core.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
+import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
@@ -55,7 +58,9 @@ private class ItemProgress {
 class ReviewViewModel @Inject constructor(
     private val waniKaniRepository: WaniKaniRepository,
     private val assignmentRepository: AssignmentRepository,
-    private val reviewSessionRepository: ReviewSessionRepository
+    private val reviewSessionRepository: ReviewSessionRepository,
+    private val pronunciationAudioPlayer: PronunciationAudioPlayer,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReviewUiState())
@@ -217,6 +222,12 @@ class ReviewViewModel @Inject constructor(
                 remainingCount = queue.size,
                 isDetailsExpanded = it.isDetailsExpanded || expandDetails
             )
+        }
+
+        if (type == QuestionType.READING && settingsRepository.settings.first().autoplayPronunciationAudio) {
+            candidates.firstOrNull()?.let { reading ->
+                selectAudioFor(item.pronunciationAudios, reading)?.let(pronunciationAudioPlayer::play)
+            }
         }
     }
 

@@ -43,6 +43,7 @@ object SettingsScreenTestTags {
     const val THEME_LIGHT_OPTION = "settings_theme_light_option"
     const val THEME_DARK_OPTION = "settings_theme_dark_option"
     const val PITCH_ACCENT_TOGGLE = "settings_pitch_accent_toggle"
+    const val AUTOPLAY_AUDIO_TOGGLE = "settings_autoplay_audio_toggle"
 }
 
 @Composable
@@ -56,6 +57,7 @@ fun SettingsRoute(
         onDailyLessonGoalChange = viewModel::onDailyLessonGoalChange,
         onThemeModeChange = viewModel::onThemeModeChange,
         onShowPitchAccentChange = viewModel::onShowPitchAccentChange,
+        onAutoplayPronunciationAudioChange = viewModel::onAutoplayPronunciationAudioChange,
         onBack = onBack
     )
 }
@@ -67,6 +69,7 @@ fun SettingsScreen(
     onDailyLessonGoalChange: (Int) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
     onShowPitchAccentChange: (Boolean) -> Unit,
+    onAutoplayPronunciationAudioChange: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -156,6 +159,18 @@ fun SettingsScreen(
                     modifier = Modifier.testTag(SettingsScreenTestTags.PITCH_ACCENT_TOGGLE)
                 )
             }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Auto-play pronunciation audio")
+                Switch(
+                    checked = uiState.autoplayPronunciationAudio,
+                    onCheckedChange = onAutoplayPronunciationAudioChange,
+                    modifier = Modifier.testTag(SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE)
+                )
+            }
         }
     }
 }
@@ -191,6 +206,7 @@ private fun SettingsScreenPreview() {
             onDailyLessonGoalChange = {},
             onThemeModeChange = {},
             onShowPitchAccentChange = {},
+            onAutoplayPronunciationAudioChange = {},
             onBack = {}
         )
     }

@@ -8,7 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +24,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Velocity
+import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
@@ -50,7 +55,8 @@ fun SubjectDetailContent(
     questionType: DetailQuestionType?,
     onRelatedSubjectClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    showPitchAccent: Boolean = true
+    showPitchAccent: Boolean = true,
+    onPlayReading: ((String) -> Unit)? = null
 ) {
     val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType != DetailQuestionType.MEANING)
     val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered && questionType != DetailQuestionType.READING)
@@ -129,10 +135,16 @@ fun SubjectDetailContent(
                     if (detail.nanoriReadings.isNotEmpty()) {
                         ReadingTypeRow(label = "Nanori", readings = detail.nanoriReadings)
                     }
-                } else if (isVocabulary && showPitchAccent && detail.pitchAccents.isNotEmpty()) {
+                } else if (isVocabulary) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         detail.readings.forEach { reading ->
-                            PitchAccentReadingRow(reading = reading, pitchAccents = detail.pitchAccents)
+                            VocabReadingRow(
+                                reading = reading,
+                                pitchAccents = detail.pitchAccents,
+                                showPitchAccent = showPitchAccent,
+                                hasAudio = detail.pronunciationAudios.isNotEmpty(),
+                                onPlayReading = onPlayReading
+                            )
                         }
                     }
                 } else {
@@ -203,6 +215,28 @@ private fun componentsLabel(type: SubjectType): String = when (type) {
     SubjectType.KANJI -> "Radicals"
     SubjectType.VOCABULARY, SubjectType.KANA_VOCABULARY -> "Kanji"
     SubjectType.RADICAL -> "Components"
+}
+
+@Composable
+private fun VocabReadingRow(
+    reading: String,
+    pitchAccents: List<PitchAccent>,
+    showPitchAccent: Boolean,
+    hasAudio: Boolean,
+    onPlayReading: ((String) -> Unit)?
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (showPitchAccent && pitchAccents.isNotEmpty()) {
+            PitchAccentReadingRow(reading = reading, pitchAccents = pitchAccents)
+        } else {
+            Text(reading, style = MaterialTheme.typography.bodyLarge)
+        }
+        if (onPlayReading != null && hasAudio) {
+            IconButton(onClick = { onPlayReading(reading) }) {
+                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Play pronunciation for $reading")
+            }
+        }
+    }
 }
 
 @Composable

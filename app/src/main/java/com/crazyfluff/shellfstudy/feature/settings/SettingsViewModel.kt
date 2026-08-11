@@ -15,7 +15,8 @@ import javax.inject.Inject
 data class SettingsUiState(
     val dailyLessonGoal: Int = 15,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val showPitchAccent: Boolean = true
+    val showPitchAccent: Boolean = true,
+    val autoplayPronunciationAudio: Boolean = true
 )
 
 @HiltViewModel
@@ -24,7 +25,14 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val uiState: StateFlow<SettingsUiState> = settingsRepository.settings
-        .map { SettingsUiState(dailyLessonGoal = it.dailyLessonGoal, themeMode = it.themeMode, showPitchAccent = it.showPitchAccent) }
+        .map {
+            SettingsUiState(
+                dailyLessonGoal = it.dailyLessonGoal,
+                themeMode = it.themeMode,
+                showPitchAccent = it.showPitchAccent,
+                autoplayPronunciationAudio = it.autoplayPronunciationAudio
+            )
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun onDailyLessonGoalChange(goal: Int) {
@@ -37,5 +45,9 @@ class SettingsViewModel @Inject constructor(
 
     fun onShowPitchAccentChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setShowPitchAccent(enabled) }
+    }
+
+    fun onAutoplayPronunciationAudioChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAutoplayPronunciationAudio(enabled) }
     }
 }

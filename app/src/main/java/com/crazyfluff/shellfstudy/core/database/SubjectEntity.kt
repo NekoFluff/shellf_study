@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 import com.crazyfluff.shellfstudy.core.network.AuxiliaryMeaningData
 import com.crazyfluff.shellfstudy.core.network.ContextSentenceData
 import com.crazyfluff.shellfstudy.core.network.MeaningData
+import com.crazyfluff.shellfstudy.core.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
 
 @Entity(tableName = "subjects", indices = [Index("level"), Index("subjectType")])
@@ -31,6 +32,7 @@ data class SubjectEntity(
     val visuallySimilarSubjectIds: List<Long> = emptyList(),
     val partsOfSpeech: List<String> = emptyList(),
     val contextSentences: List<ContextSentenceData> = emptyList(),
+    val pronunciationAudios: List<PronunciationAudioData> = emptyList(),
     val hiddenAt: String? = null,
     /** Precomputed lowercase concat of characters+slug+meanings+readings, for LIKE search. */
     val searchTarget: String = ""

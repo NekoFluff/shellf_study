@@ -3,16 +3,20 @@ package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.core.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -214,6 +218,58 @@ class SubjectDetailContentTest {
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
         composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+    }
+
+    @Test
+    fun vocabularyWithPronunciationAudio_showsPlayButtonThatInvokesCallbackWithTheReading() {
+        var playedReading: String? = null
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            pronunciationAudios = listOf(
+                PronunciationAudio(
+                    url = "https://example.com/mizu.mp3",
+                    contentType = "audio/mpeg",
+                    pronunciation = "みず",
+                    gender = null,
+                    voiceActorId = null,
+                    voiceActorName = null,
+                    voiceDescription = null
+                )
+            )
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                onPlayReading = { playedReading = it }
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
+        assertThat(playedReading).isEqualTo("みず")
+    }
+
+    @Test
+    fun vocabularyWithNoPronunciationAudio_showsNoPlayButton() {
+        val vocabDetail = detail.copy(subjectType = SubjectType.VOCABULARY, readings = listOf("みず"), pronunciationAudios = emptyList())
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                onPlayReading = {}
+            )
+        }
+
+        composeTestRule.onAllNodesWithContentDescription("Play pronunciation for みず").assertCountEquals(0)
     }
 
     @Test

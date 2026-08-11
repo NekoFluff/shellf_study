@@ -22,6 +22,7 @@ class SettingsScreenTest {
                 onDailyLessonGoalChange = {},
                 onThemeModeChange = {},
                 onShowPitchAccentChange = {},
+                onAutoplayPronunciationAudioChange = {},
                 onBack = {}
             )
         }
@@ -39,6 +40,7 @@ class SettingsScreenTest {
                 onDailyLessonGoalChange = { lastGoal = it },
                 onThemeModeChange = {},
                 onShowPitchAccentChange = {},
+                onAutoplayPronunciationAudioChange = {},
                 onBack = {}
             )
         }
@@ -58,6 +60,7 @@ class SettingsScreenTest {
                 onDailyLessonGoalChange = {},
                 onThemeModeChange = {},
                 onShowPitchAccentChange = {},
+                onAutoplayPronunciationAudioChange = {},
                 onBack = {}
             )
         }
@@ -74,6 +77,7 @@ class SettingsScreenTest {
                 onDailyLessonGoalChange = {},
                 onThemeModeChange = { selectedMode = it },
                 onShowPitchAccentChange = {},
+                onAutoplayPronunciationAudioChange = {},
                 onBack = {}
             )
         }
@@ -91,12 +95,31 @@ class SettingsScreenTest {
                 onDailyLessonGoalChange = {},
                 onThemeModeChange = {},
                 onShowPitchAccentChange = { showPitchAccent = it },
+                onAutoplayPronunciationAudioChange = {},
                 onBack = {}
             )
         }
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.PITCH_ACCENT_TOGGLE).performClick()
         assert(showPitchAccent == false)
+    }
+
+    @Test
+    fun togglingAutoplayAudioSwitch_invokesCallback() {
+        var autoplay: Boolean? = null
+        composeTestRule.setContent {
+            SettingsScreen(
+                uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, autoplayPronunciationAudio = true),
+                onDailyLessonGoalChange = {},
+                onThemeModeChange = {},
+                onShowPitchAccentChange = {},
+                onAutoplayPronunciationAudioChange = { autoplay = it },
+                onBack = {}
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE).performClick()
+        assert(autoplay == false)
     }
 
     @Test
@@ -108,6 +131,7 @@ class SettingsScreenTest {
                 onDailyLessonGoalChange = {},
                 onThemeModeChange = {},
                 onShowPitchAccentChange = {},
+                onAutoplayPronunciationAudioChange = {},
                 onBack = { wentBack = true }
             )
         }

@@ -30,6 +30,7 @@ class SettingsRepositoryTest {
             assertThat(settings.dailyLessonGoal).isEqualTo(DEFAULT_DAILY_LESSON_GOAL)
             assertThat(settings.themeMode).isEqualTo(ThemeMode.SYSTEM)
             assertThat(settings.showPitchAccent).isTrue()
+            assertThat(settings.autoplayPronunciationAudio).isTrue()
         }
     }
 
@@ -41,6 +42,17 @@ class SettingsRepositoryTest {
 
         repository.settings.test {
             assertThat(awaitItem().showPitchAccent).isFalse()
+        }
+    }
+
+    @Test
+    fun `setAutoplayPronunciationAudio persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setAutoplayPronunciationAudio(false)
+
+        repository.settings.test {
+            assertThat(awaitItem().autoplayPronunciationAudio).isFalse()
         }
     }
 
