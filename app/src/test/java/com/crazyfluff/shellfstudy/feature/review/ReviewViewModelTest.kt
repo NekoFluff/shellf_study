@@ -271,23 +271,20 @@ class ReviewViewModelTest {
 
     @Test
     fun `answering a meaning question never autoplays pronunciation audio`() = runTest {
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+        // A radical only ever produces a single MEANING question (see questionTypesFor) — unlike
+        // the kanji fixture used elsewhere, this sidesteps the shuffled queue potentially serving a
+        // READING question first, which would legitimately (and racily, since the setting read is
+        // real disk IO) autoplay before this test ever gets to the MEANING answer under test.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJsonWithAudio()))
 
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
-            while (state.currentQuestionType != QuestionType.MEANING) {
-                viewModel.onAnswerInputChange("mizu")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
+            assertThat(state.currentQuestionType).isEqualTo(QuestionType.MEANING)
 
-            viewModel.onAnswerInputChange("Water")
+            viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             awaitItem()
@@ -441,6 +438,31 @@ class ReviewViewModelTest {
               "characters": "口",
               "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
               "readings": []
+            }
+          }]
+        }
+    """.trimIndent()
+
+    /** Same fixture as [radicalSubjectsJson] but with a pronunciation clip attached, to prove the
+     *  autoplay gate is on question type (MEANING never autoplays) rather than on audio presence. */
+    private fun radicalSubjectsJsonWithAudio() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
+          "data": [{
+            "id": 1, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/1",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "mouth",
+              "characters": "口",
+              "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
+              "readings": [],
+              "pronunciation_audios": [
+                {
+                  "url": "https://api.wanikani.com/audio/kuchi.mp3",
+                  "content_type": "audio/mpeg",
+                  "metadata": {"gender": "female", "pronunciation": "くち"}
+                }
+              ]
             }
           }]
         }
