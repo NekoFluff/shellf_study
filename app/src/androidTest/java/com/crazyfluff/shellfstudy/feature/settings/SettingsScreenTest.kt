@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.crazyfluff.shellfstudy.core.data.ThemeMode
 import org.junit.Rule
 import org.junit.Test
@@ -150,9 +151,11 @@ class SettingsScreenTest {
     fun categoryToggles_areShownWhenNotificationsAreEnabled() {
         setContent(uiState = SettingsUiState(notificationsEnabled = true))
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_TOGGLE).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_TOGGLE).assertIsDisplayed()
+        // The whole screen is one scrolling column (SettingsScreen.kt), so these notification
+        // sub-toggles can sit below the fold depending on device screen height.
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_TOGGLE).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_TOGGLE).performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -163,10 +166,10 @@ class SettingsScreenTest {
             onBacklogThresholdChange = { threshold = it }
         )
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE).performScrollTo().performClick()
         assert(threshold == 55)
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE).performScrollTo().performClick()
         assert(threshold == 45)
     }
 
@@ -178,7 +181,7 @@ class SettingsScreenTest {
             onDailyReminderHourChange = { hour = it }
         )
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_HOUR_INCREASE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_HOUR_INCREASE).performScrollTo().performClick()
         assert(hour == 0)
     }
 
@@ -192,10 +195,10 @@ class SettingsScreenTest {
             onQuietHoursEndHourChange = { end = it }
         )
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_START_INCREASE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_START_INCREASE).performScrollTo().performClick()
         assert(start == 23)
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_END_DECREASE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_END_DECREASE).performScrollTo().performClick()
         assert(end == 6)
     }
 }
