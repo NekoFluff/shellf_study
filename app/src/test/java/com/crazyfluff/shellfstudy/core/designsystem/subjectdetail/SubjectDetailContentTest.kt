@@ -357,6 +357,27 @@ class SubjectDetailContentTest {
     }
 
     @Test
+    fun strokeOrderAvailable_autoPlayFalse_stillShowsTheSection() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                strokeOrder = StrokeOrderUiState.Available(
+                    listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f))
+                ),
+                autoPlayStrokeOrder = false
+            )
+        }
+
+        composeTestRule.onNodeWithTag(StrokeOrderTestTags.SECTION).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(StrokeOrderTestTags.DIAGRAM).assertIsDisplayed()
+    }
+
+    @Test
     fun strokeOrderUnavailable_hidesTheSection() {
         composeTestRule.setContent {
             SubjectDetailContent(

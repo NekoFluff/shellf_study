@@ -67,7 +67,8 @@ fun SubjectDetailContent(
     modifier: Modifier = Modifier,
     showPitchAccent: Boolean = true,
     onPlayReading: ((String) -> Unit)? = null,
-    strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable
+    strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
+    autoPlayStrokeOrder: Boolean = true
 ) {
     val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.MEANING)
     val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.READING)
@@ -134,7 +135,7 @@ fun SubjectDetailContent(
                 }
             }
         }
-        StrokeOrderSection(strokeOrder)
+        StrokeOrderSection(strokeOrder, autoPlay = autoPlayStrokeOrder)
         WritingPracticeSection(strokeOrder = strokeOrder, resetKey = detail.subjectId)
 
         RelatedSubjectsSection(

@@ -152,6 +152,13 @@ fun DetailPeekSheet(
 
     val isOpenIsh = dragState.targetValue == PeekAnchor.Open || dragState.currentValue == PeekAnchor.Open
 
+    // Same reasoning as SubjectDetailSheet's strokeOrderSettled: starting the stroke-order
+    // playback before the drag has genuinely settled would make it compete with this sheet's own
+    // open animation for frame budget. settledValue only updates once a drag/animateTo fully
+    // settles at an anchor (unlike currentValue/targetValue, which can reflect an in-flight drag),
+    // so it's the precise "stopped moving" signal here.
+    val strokeOrderSettled = dragState.settledValue == PeekAnchor.Open
+
     Box(modifier = modifier.fillMaxSize()) {
         // Dims the rest of the screen only while meaningfully open — never while merely peeking,
         // so the collapsed handle bar behaves like today's: fully passive, doesn't steal touches
@@ -212,7 +219,8 @@ fun DetailPeekSheet(
                         revealMode = revealMode,
                         isAnswered = isAnswered,
                         questionType = questionType,
-                        onCollapse = { scope.launch { dragState.animateTo(PeekAnchor.Collapsed) } }
+                        onCollapse = { scope.launch { dragState.animateTo(PeekAnchor.Collapsed) } },
+                        autoPlayStrokeOrder = strokeOrderSettled
                     )
                 }
             }
@@ -233,6 +241,7 @@ private fun ColumnScope.DetailPeekBody(
     isAnswered: Boolean,
     questionType: DetailQuestionType,
     onCollapse: () -> Unit,
+    autoPlayStrokeOrder: Boolean,
     viewModel: SubjectDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -287,7 +296,8 @@ private fun ColumnScope.DetailPeekBody(
                 .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
             showPitchAccent = uiState.showPitchAccent,
             onPlayReading = viewModel::playReading,
-            strokeOrder = uiState.strokeOrder
+            strokeOrder = uiState.strokeOrder,
+            autoPlayStrokeOrder = autoPlayStrokeOrder
         )
     }
 }

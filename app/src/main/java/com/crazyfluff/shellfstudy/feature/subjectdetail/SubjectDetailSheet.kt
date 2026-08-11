@@ -150,6 +150,14 @@ fun SubjectDetailSheet(
                     CircularProgressIndicator()
                 }
             } else {
+                // The stroke-order playback inside SubjectDetailContent is a second, independent
+                // animation system; starting it before the sheet itself has settled makes two
+                // Canvas-driven animations fight for the same frame budget right when the sheet is
+                // trying to look smooth. isAnimationRunning stays true for an animateTo call's
+                // entire duration (unlike currentValue, which can flip to the destination anchor
+                // partway through, once the drag crosses the anchors' midpoint) — so this is a
+                // precise "has it stopped moving" signal, not polling or a timer.
+                val strokeOrderSettled = sheetState.isVisible && !sheetState.isAnimationRunning
                 SubjectDetailContent(
                     detail = detail,
                     relatedSubjects = uiState.relatedSubjects,
@@ -160,7 +168,8 @@ fun SubjectDetailSheet(
                     modifier = Modifier.weight(1f).padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
                     showPitchAccent = uiState.showPitchAccent,
                     onPlayReading = viewModel::playReading,
-                    strokeOrder = uiState.strokeOrder
+                    strokeOrder = uiState.strokeOrder,
+                    autoPlayStrokeOrder = strokeOrderSettled
                 )
             }
         }

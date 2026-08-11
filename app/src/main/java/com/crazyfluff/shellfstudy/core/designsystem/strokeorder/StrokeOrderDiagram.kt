@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.designsystem.strokeorder
 
 import android.graphics.Paint as NativePaint
+import androidx.annotation.VisibleForTesting
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -65,6 +66,30 @@ private const val NUMBER_FONT_SIZE_UNITS = 9f
 private const val STROKE_DURATION_MS = 350
 private const val INTER_STROKE_DELAY_MS = 120L
 
+internal data class ParsedStrokes(val paths: List<Path>, val measures: List<PathMeasure>)
+
+/**
+ * Caches the pure [PathParser]/[PathMeasure] derivation of a stroke list across sheet opens within
+ * the process — parsing is deterministic, and kanji get revisited often (repeat reviews,
+ * related-subject drill-downs), so redoing it from scratch every open is wasted main-thread work.
+ * Deliberately unbounded: what's cached is derived from WaniKani's fixed, small kanji corpus, so
+ * even a session touching every kanji in the app tops out at a few thousand tiny entries — mirrors
+ * [com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository]'s own unbounded cache
+ * for the same underlying reason.
+ */
+internal object ParsedStrokesCache {
+    private val entries = mutableMapOf<List<StrokeOrderStroke>, ParsedStrokes>()
+
+    fun obtain(strokes: List<StrokeOrderStroke>): ParsedStrokes =
+        entries.getOrPut(strokes) {
+            val paths = strokes.map { PathParser().parsePathString(it.pathData).toPath() }
+            ParsedStrokes(paths, paths.map { PathMeasure().apply { setPath(it, false) } })
+        }
+
+    @VisibleForTesting
+    internal fun clear() = entries.clear()
+}
+
 /**
  * The "Stroke order" section slotted into the subject detail view — a header, the diagram itself,
  * and the KanjiVG attribution the bundled data's CC BY-SA license requires. Renders nothing while
@@ -72,7 +97,7 @@ private const val INTER_STROKE_DELAY_MS = 120L
  * no Unicode glyph and so no stroke data at all).
  */
 @Composable
-fun StrokeOrderSection(state: StrokeOrderUiState, modifier: Modifier = Modifier) {
+fun StrokeOrderSection(state: StrokeOrderUiState, modifier: Modifier = Modifier, autoPlay: Boolean = true) {
     if (state !is StrokeOrderUiState.Available) return
     // Owned here rather than inside StrokeOrderDiagram so the replay button can live in its own row
     // below the diagram — sharing a Box with the canvas let it visually overlap strokes that
@@ -84,7 +109,7 @@ fun StrokeOrderSection(state: StrokeOrderUiState, modifier: Modifier = Modifier)
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text("Stroke order", style = MaterialTheme.typography.titleSmall)
-        StrokeOrderDiagram(strokes = state.strokes, replayTrigger = replayTrigger)
+        StrokeOrderDiagram(strokes = state.strokes, replayTrigger = replayTrigger, autoPlay = autoPlay)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "Stroke data © KanjiVG contributors, CC BY-SA",
@@ -114,10 +139,12 @@ fun StrokeOrderDiagram(
     size: Dp = 120.dp,
     strokeColor: Color = subjectColor(SubjectType.KANJI),
     ghostColor: Color = MaterialTheme.colorScheme.outlineVariant,
-    replayTrigger: Int = 0
+    replayTrigger: Int = 0,
+    autoPlay: Boolean = true
 ) {
-    val paths = remember(strokes) { strokes.map { PathParser().parsePathString(it.pathData).toPath() } }
-    val pathMeasures = remember(paths) { paths.map { PathMeasure().apply { setPath(it, false) } } }
+    val parsedStrokes = remember(strokes) { ParsedStrokesCache.obtain(strokes) }
+    val paths = parsedStrokes.paths
+    val pathMeasures = parsedStrokes.measures
     val segmentPath = remember { Path() }
     val numberPaint = remember {
         NativePaint().apply {
@@ -133,7 +160,8 @@ fun StrokeOrderDiagram(
     var playedCount by remember(strokes) { mutableIntStateOf(0) }
     val currentProgress = remember(strokes) { Animatable(0f) }
 
-    LaunchedEffect(strokes, replayTrigger) {
+    LaunchedEffect(strokes, replayTrigger, autoPlay) {
+        if (!autoPlay) return@LaunchedEffect
         playedCount = 0
         currentProgress.snapTo(0f)
         paths.indices.forEach { index ->
