@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  A honeycomb of shell scutes in a single cream tone, floating directly on the dark
-  background. The gaps between cells (not strokes) form the grid, so there are no
-  border lines — just cream fills and the negative space between them.
+  A honeycomb "shell" mosaic on a white background, cells sized slightly smaller than
+  their grid spacing so the white background shows through as gaps between them (no
+  strokes needed). Colored in a diagonal sweep through the app's own subject-type
+  palette (see SubjectTypeColors in core/designsystem/theme/Color.kt): Radical blue
+  top-left, Kanji pink through the center, Vocabulary purple bottom-right.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -10,26 +12,31 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
+    <!-- Radical blue: top-left band -->
     <path
-        android:fillColor="#F4E4C6"
-        android:pathData="M73.05,44.54L81.24,49.27L81.24,58.73L73.05,63.46L64.86,58.73L64.86,49.27Z" />
-    <path
-        android:fillColor="#F4E4C6"
-        android:pathData="M63.53,61.04L71.72,65.77L71.72,75.23L63.53,79.96L55.34,75.23L55.34,65.77Z" />
-    <path
-        android:fillColor="#F4E4C6"
-        android:pathData="M44.48,61.04L52.67,65.77L52.67,75.23L44.48,79.96L36.29,75.23L36.29,65.77Z" />
-    <path
-        android:fillColor="#F4E4C6"
-        android:pathData="M34.95,44.54L43.14,49.27L43.14,58.73L34.95,63.46L26.76,58.73L26.76,49.27Z" />
-    <path
-        android:fillColor="#F4E4C6"
+        android:fillColor="#0093DD"
         android:pathData="M44.47,28.04L52.66,32.77L52.66,42.23L44.47,46.96L36.28,42.23L36.28,32.77Z" />
     <path
-        android:fillColor="#F4E4C6"
+        android:fillColor="#0093DD"
+        android:pathData="M34.95,44.54L43.14,49.27L43.14,58.73L34.95,63.46L26.76,58.73L26.76,49.27Z" />
+
+    <!-- Kanji pink: middle diagonal band -->
+    <path
+        android:fillColor="#DD0093"
         android:pathData="M63.53,28.04L71.72,32.77L71.72,42.23L63.53,46.96L55.34,42.23L55.34,32.77Z" />
     <path
-        android:fillColor="#F4E4C6"
+        android:fillColor="#DD0093"
         android:pathData="M54,44.54L62.19,49.27L62.19,58.73L54,63.46L45.81,58.73L45.81,49.27Z" />
+    <path
+        android:fillColor="#DD0093"
+        android:pathData="M44.48,61.04L52.67,65.77L52.67,75.23L44.48,79.96L36.29,75.23L36.29,65.77Z" />
+
+    <!-- Vocabulary purple: bottom-right band -->
+    <path
+        android:fillColor="#A020F0"
+        android:pathData="M73.05,44.54L81.24,49.27L81.24,58.73L73.05,63.46L64.86,58.73L64.86,49.27Z" />
+    <path
+        android:fillColor="#A020F0"
+        android:pathData="M63.53,61.04L71.72,65.77L71.72,75.23L63.53,79.96L55.34,75.23L55.34,65.77Z" />
 
 </vector>
