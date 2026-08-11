@@ -12,10 +12,14 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Velocity
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
@@ -52,9 +56,20 @@ fun SubjectDetailContent(
     val hasReadings = detail.readings.isNotEmpty()
     val isVocabulary = detail.subjectType == SubjectType.VOCABULARY || detail.subjectType == SubjectType.KANA_VOCABULARY
 
+    // Swallow leftover fling velocity once this column's own scroll hits a bound (e.g. flinging
+    // back up to the top). Without this, the enclosing ModalBottomSheet's nested scroll connection
+    // treats that residual velocity as a swipe-to-dismiss fling, closing the sheet on a fast
+    // scroll-up that never touched the sheet itself.
+    val absorbResidualFlingConnection = remember {
+        object : NestedScrollConnection {
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity = available
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .nestedScroll(absorbResidualFlingConnection)
             .verticalScroll(rememberScrollState())
             .testTag(SubjectDetailTestTags.CONTENT_ROOT),
         verticalArrangement = Arrangement.spacedBy(16.dp)

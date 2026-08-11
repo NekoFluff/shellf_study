@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -52,6 +53,23 @@ fun SubjectDetailSheet(
 
     LaunchedEffect(initialSubjectId) {
         viewModel.open(initialSubjectId)
+    }
+
+    // ModalBottomSheet only calls onDismissRequest once its hide animation finishes, but its
+    // full-screen scrim keeps swallowing taps for that entire window. sheetState.targetValue flips
+    // to Hidden as soon as the drag/fling commits to dismissing (well before the animation settles),
+    // so react to that instead — it removes this composable (and its Dialog/scrim) immediately,
+    // rather than leaving it around to steal a fast tap on whatever is underneath (e.g. the search
+    // bar) and reopen it.
+    LaunchedEffect(sheetState) {
+        var hasAppeared = false
+        snapshotFlow { sheetState.targetValue }.collect { target ->
+            if (target != SheetValue.Hidden) {
+                hasAppeared = true
+            } else if (hasAppeared) {
+                onDismiss()
+            }
+        }
     }
 
     BackHandler(enabled = uiState.backStack.isNotEmpty()) {
