@@ -86,6 +86,8 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
+import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
+import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
 import kotlinx.coroutines.flow.collect
 import kotlin.math.roundToInt
 
@@ -172,6 +174,8 @@ fun LessonScreen(
     onDone: () -> Unit,
     onBack: () -> Unit
 ) {
+    val detailSheetState = rememberSubjectDetailSheetState()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -263,7 +267,8 @@ fun LessonScreen(
                         uiState = uiState,
                         onNext = onNextStudyCard,
                         onPrevious = onPreviousStudyCard,
-                        onSwiped = onStudyCardSwiped
+                        onSwiped = onStudyCardSwiped,
+                        onSubjectClick = { detailSheetState.show(it) }
                     )
                 }
 
@@ -279,6 +284,8 @@ fun LessonScreen(
             }
         }
     }
+
+    SubjectDetailSheetHost(detailSheetState)
 }
 
 @Composable
@@ -286,7 +293,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     uiState: LessonUiState,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
-    onSwiped: (Int) -> Unit
+    onSwiped: (Int) -> Unit,
+    onSubjectClick: (Long) -> Unit
 ) {
     val currentItem = uiState.studyItems.getOrNull(uiState.studyIndex) ?: return
     val isLastCard = uiState.studyIndex == uiState.studyItems.lastIndex
@@ -361,7 +369,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
             RelatedSubjectsSection(
                 title = componentsLabel(item.subjectType),
                 subjects = item.componentSubjectIds.mapNotNull { uiState.relatedSubjectsById[it] },
-                onSubjectClick = {}
+                onSubjectClick = onSubjectClick
             )
 
             LessonMeaningSection(item)
@@ -384,13 +392,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 RelatedSubjectsSection(
                     title = "Visually similar",
                     subjects = item.visuallySimilarSubjectIds.mapNotNull { uiState.relatedSubjectsById[it] },
-                    onSubjectClick = {}
+                    onSubjectClick = onSubjectClick
                 )
             }
             RelatedSubjectsSection(
                 title = "Used in",
                 subjects = item.amalgamationSubjectIds.mapNotNull { uiState.relatedSubjectsById[it] },
-                onSubjectClick = {}
+                onSubjectClick = onSubjectClick
             )
         }
     }

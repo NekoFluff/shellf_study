@@ -2,11 +2,16 @@ package com.crazyfluff.shellfstudy.feature.subjectdetail
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -28,8 +33,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
@@ -107,52 +114,55 @@ fun SubjectDetailSheet(
             revealMode
         }
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-        ) {
-            if (uiState.backStack.isNotEmpty()) {
-                IconButton(onClick = { viewModel.goBack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            if (canShowAll) {
-                TextButton(onClick = viewModel::toggleForceReveal) {
-                    Text("Show all")
-                }
-            }
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Filled.Close, contentDescription = "Close")
-            }
-        }
-
-        val detail = uiState.detail
-        if (uiState.isLoading || detail == null) {
-            // A fixed minimum height here keeps the sheet's measured content roughly stable across
-            // the loading -> loaded swap. Without it, ModalBottomSheet (whose anchors are derived
-            // from measured content height) recomputes those anchors mid-open-animation as this tiny
-            // spinner is replaced by the full detail content, which is what produced a visible stall
-            // partway up the screen the first time the sheet opened.
-            Box(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 400.dp).padding(32.dp),
-                contentAlignment = Alignment.Center
+        // A fixed height here — rather than sizing to content — keeps ModalBottomSheet's measured
+        // anchor stable across the loading -> loaded swap and the later stroke-order/writing-practice
+        // pop-in for kanji/radicals; both used to force a visible re-settle mid-open-animation.
+        // Mirrors DetailPeekSheet's identical fixed-height contract (see
+        // rememberNearFullScreenSheetHeightDp below) — content that grows/shrinks inside just
+        // scrolls within this fixed frame via SubjectDetailContent's own verticalScroll.
+        Column(modifier = Modifier.height(rememberNearFullScreenSheetHeightDp())) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
             ) {
-                CircularProgressIndicator()
+                if (uiState.backStack.isNotEmpty()) {
+                    IconButton(onClick = { viewModel.goBack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                if (canShowAll) {
+                    TextButton(onClick = viewModel::toggleForceReveal) {
+                        Text("Show all")
+                    }
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = "Close")
+                }
             }
-        } else {
-            SubjectDetailContent(
-                detail = detail,
-                relatedSubjects = uiState.relatedSubjects,
-                revealMode = effectiveRevealMode,
-                isAnswered = isAnswered,
-                questionType = questionType,
-                onRelatedSubjectClick = viewModel::navigateToRelated,
-                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
-                showPitchAccent = uiState.showPitchAccent,
-                onPlayReading = viewModel::playReading,
-                strokeOrder = uiState.strokeOrder
-            )
+
+            val detail = uiState.detail
+            if (uiState.isLoading || detail == null) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().weight(1f).padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                SubjectDetailContent(
+                    detail = detail,
+                    relatedSubjects = uiState.relatedSubjects,
+                    revealMode = effectiveRevealMode,
+                    isAnswered = isAnswered,
+                    questionType = questionType,
+                    onRelatedSubjectClick = viewModel::navigateToRelated,
+                    modifier = Modifier.weight(1f).padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
+                    showPitchAccent = uiState.showPitchAccent,
+                    onPlayReading = viewModel::playReading,
+                    strokeOrder = uiState.strokeOrder
+                )
+            }
         }
     }
 }
@@ -176,4 +186,18 @@ private fun rememberReluctantDismissSheetState(): SheetState {
     ) {
         SheetState(true, positionalThresholdPx, velocityThresholdPx, SheetValue.Hidden)
     }
+}
+
+/**
+ * Reaches almost to the top of the screen — just enough gap below the status bar to read as a
+ * sheet, not a full-screen takeover — rather than sizing to content, so callers get a stable
+ * height regardless of what's inside. [DetailPeekSheet] reuses this same calculation for its own
+ * fixed-height panel.
+ */
+@Composable
+internal fun rememberNearFullScreenSheetHeightDp(): Dp {
+    val statusBarTopDp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navBarBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp.dp
+    return (screenHeightDp - statusBarTopDp - navBarBottomDp - 12.dp).coerceAtLeast(200.dp)
 }

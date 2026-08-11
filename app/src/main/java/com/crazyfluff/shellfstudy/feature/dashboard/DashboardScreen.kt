@@ -49,14 +49,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.feature.search.SubjectSearchOverlay
-import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet
+import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
+import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
 
 object DashboardScreenTestTags {
     const val LOADING_INDICATOR = "dashboard_loading_indicator"
@@ -124,7 +124,7 @@ fun DashboardScreen(
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
-    var detailSubjectId by remember { mutableStateOf<Long?>(null) }
+    val detailSheetState = rememberSubjectDetailSheetState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -286,7 +286,7 @@ fun DashboardScreen(
                                     progress = uiState.levelProgress,
                                     maxLevel = uiState.level,
                                     onLevelChange = onLevelProgressLevelChange,
-                                    onSubjectClick = { detailSubjectId = it },
+                                    onSubjectClick = { detailSheetState.show(it) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -313,19 +313,11 @@ fun DashboardScreen(
             uiState = searchUiState,
             onQueryChange = onSearchQueryChange,
             modifier = Modifier.fillMaxSize(),
-            onSubjectClick = { detailSubjectId = it }
+            onSubjectClick = { detailSheetState.show(it) }
         )
     }
 
-    detailSubjectId?.let { id ->
-        SubjectDetailSheet(
-            initialSubjectId = id,
-            revealMode = DetailRevealMode.FULL,
-            isAnswered = true,
-            questionType = null,
-            onDismiss = { detailSubjectId = null }
-        )
-    }
+    SubjectDetailSheetHost(detailSheetState)
 }
 
 @Composable

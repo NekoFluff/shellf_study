@@ -14,16 +14,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,7 +45,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
@@ -107,15 +102,11 @@ fun DetailPeekSheet(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // Reaches almost to the top of the screen (matching the old ModalBottomSheet's "Expanded"
-    // reach) rather than an arbitrary fraction of it — just enough gap below the status bar to
-    // read as a sheet, not a full-screen takeover. navigationBarsPadding on the Surface below
-    // already reserves the bottom system-bar clearance, so it's subtracted here too, otherwise
-    // the sheet would be pushed the same amount past the top of the screen.
-    val statusBarTopDp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val navBarBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val screenHeightDp = LocalConfiguration.current.screenHeightDp.dp
-    val sheetHeightDp = (screenHeightDp - statusBarTopDp - navBarBottomDp - 12.dp).coerceAtLeast(200.dp)
+    // Shared with SubjectDetailSheet's own fixed-height contract (see
+    // rememberNearFullScreenSheetHeightDp's doc comment) — navigationBarsPadding on the Surface
+    // below already reserves the bottom system-bar clearance, so it's subtracted here too,
+    // otherwise the sheet would be pushed the same amount past the top of the screen.
+    val sheetHeightDp = rememberNearFullScreenSheetHeightDp()
     val sheetHeightPx = with(density) { sheetHeightDp.toPx() }
     val handleHeightPx = with(density) { DetailPeekHandleHeight.toPx() }
     val collapsedOffsetPx = (sheetHeightPx - handleHeightPx).coerceAtLeast(0f)

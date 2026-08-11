@@ -70,7 +70,8 @@ import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.feature.subjectdetail.DetailPeekHandleHeight
 import com.crazyfluff.shellfstudy.feature.subjectdetail.DetailPeekSheet
-import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet
+import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
+import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
 
 object ReviewScreenTestTags {
     const val LOADING_INDICATOR = "review_loading_indicator"
@@ -155,7 +156,7 @@ fun ReviewScreen(
     var isSearchActive by remember { mutableStateOf(false) }
     // Distinct from the gated details toggle below — an arbitrary subject looked up mid-review via
     // search has no relationship to the current question, so it's never gated by answer state.
-    var searchDetailSubjectId by remember { mutableStateOf<Long?>(null) }
+    val searchDetailSheetState = rememberSubjectDetailSheetState()
     val canManageSession = !uiState.isLoading && !uiState.isSessionComplete && uiState.errorMessage == null
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -312,18 +313,10 @@ fun ReviewScreen(
             uiState = searchUiState,
             onQueryChange = onSearchQueryChange,
             modifier = Modifier.fillMaxSize(),
-            onSubjectClick = { searchDetailSubjectId = it }
+            onSubjectClick = { searchDetailSheetState.show(it) }
         )
 
-        searchDetailSubjectId?.let { id ->
-            SubjectDetailSheet(
-                initialSubjectId = id,
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onDismiss = { searchDetailSubjectId = null }
-            )
-        }
+        SubjectDetailSheetHost(searchDetailSheetState)
     }
 }
 
