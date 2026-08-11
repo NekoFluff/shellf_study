@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.feature.dashboard
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -46,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -64,6 +68,8 @@ import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailShe
 
 object DashboardScreenTestTags {
     const val LOADING_INDICATOR = "dashboard_loading_indicator"
+    const val REFRESHING_BANNER = "dashboard_refreshing_banner"
+    const val OFFLINE_BANNER = "dashboard_offline_banner"
     const val ERROR_TEXT = "dashboard_error_text"
     const val LESSON_COUNT = "dashboard_lesson_count"
     const val REVIEW_COUNT = "dashboard_review_count"
@@ -181,7 +187,11 @@ fun DashboardScreen(
             }
         ) { innerPadding ->
             PullToRefreshBox(
-                isRefreshing = uiState.isLoading,
+                // Hardcoded rather than bound to uiState.isRefreshing: the drag-follow arrow
+                // (state.distanceFraction) works regardless of this flag and always snaps away on
+                // release, but wiring the real refresh state here would additionally re-pin it as a
+                // spinner for the whole refresh — the status banner below is that signal instead.
+                isRefreshing = false,
                 onRefresh = onRefresh,
                 modifier = Modifier.fillMaxSize().padding(innerPadding)
             ) {
@@ -192,7 +202,9 @@ fun DashboardScreen(
                         .verticalScroll(rememberScrollState())
                 ) {
                     when {
-                        uiState.isLoading -> {
+                        // Nothing cached yet to show while the very first fetch is in flight — the
+                        // only case that still blocks on a full-screen placeholder.
+                        uiState.isRefreshing && uiState.username == null -> {
                             DashboardLoadingSkeleton(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -216,6 +228,12 @@ fun DashboardScreen(
                         }
 
                         else -> {
+                            DashboardStatusBanner(
+                                isRefreshing = uiState.isRefreshing,
+                                isOffline = uiState.isOffline,
+                                lastSyncedAtMillis = uiState.lastSyncedAtMillis,
+                                onRetry = onRefresh
+                            )
                             Text(
                                 text = "Welcome back, ${uiState.username}!",
                                 style = MaterialTheme.typography.headlineMedium
@@ -378,6 +396,84 @@ private fun SummaryCard(
     }
 }
 
+/**
+ * Sits above the welcome message instead of blocking the screen: a slim "Refreshing…" bar while a
+ * sync is in flight, or an offline notice (with the age of the data on screen and a tap-to-retry)
+ * when the last attempt failed but there's still content to show. Renders nothing the rest of the
+ * time, so it takes up no space when the dashboard is idle and up to date.
+ */
+@Composable
+private fun DashboardStatusBanner(
+    isRefreshing: Boolean,
+    isOffline: Boolean,
+    lastSyncedAtMillis: Long?,
+    onRetry: () -> Unit
+) {
+    when {
+        isOffline -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .clickable(onClick = onRetry)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .testTag(DashboardScreenTestTags.OFFLINE_BANNER),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "You're offline — showing data from ${formatRelativeSyncTime(lastSyncedAtMillis)}. Tap to retry.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        isRefreshing -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .testTag(DashboardScreenTestTags.REFRESHING_BANNER),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Refreshing…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+private fun formatRelativeSyncTime(lastSyncedAtMillis: Long?): String {
+    if (lastSyncedAtMillis == null) return "an earlier sync"
+    val minutesAgo = (System.currentTimeMillis() - lastSyncedAtMillis).coerceAtLeast(0) / 60_000
+    return when {
+        minutesAgo < 1 -> "just now"
+        minutesAgo < 60 -> "$minutesAgo minute${if (minutesAgo == 1L) "" else "s"} ago"
+        minutesAgo < 60 * 24 -> {
+            val hoursAgo = minutesAgo / 60
+            "$hoursAgo hour${if (hoursAgo == 1L) "" else "s"} ago"
+        }
+        else -> {
+            val daysAgo = minutesAgo / (60 * 24)
+            "$daysAgo day${if (daysAgo == 1L) "" else "s"} ago"
+        }
+    }
+}
+
 /** Small ring showing progress toward the daily lesson goal, tucked in a card's corner. */
 @Composable
 private fun LessonsTodayBadge(completed: Int, goal: Int) {
@@ -406,7 +502,7 @@ private fun DashboardScreenPreview() {
     ShellfStudyTheme {
         DashboardScreen(
             uiState = DashboardUiState(
-                isLoading = false,
+                isRefreshing = false,
                 username = "durtle_fan",
                 level = 12,
                 lessonCount = 5,

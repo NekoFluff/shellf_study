@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.feature.dashboard
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -26,10 +27,10 @@ class DashboardScreenTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun showsLoadingIndicator_whileLoading() {
+    fun showsLoadingIndicator_whileLoading_andNothingIsCachedYet() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isLoading = true),
+                uiState = DashboardUiState(isRefreshing = true, username = null),
                 onRefresh = {}, onStartReview = {}, onLogOut = {}
             )
         }
@@ -38,11 +39,49 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun showsRefreshingBanner_andKeepsContentVisible_whenRefreshingWithCachedContent() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(
+                    isRefreshing = true, username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
+                ),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.LOADING_INDICATOR).assertCountEquals(0)
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.REFRESHING_BANNER).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Welcome back, durtle_fan!").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.LESSON_COUNT).assertIsDisplayed()
+    }
+
+    @Test
+    fun showsOfflineBanner_andKeepsContentVisible_whenOfflineWithCachedContent() {
+        var retried = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(
+                    isRefreshing = false, isOffline = true,
+                    username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
+                ),
+                onRefresh = { retried = true }, onStartReview = {}, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.LOADING_INDICATOR).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.ERROR_TEXT).assertCountEquals(0)
+        composeTestRule.onNodeWithText("Welcome back, durtle_fan!").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OFFLINE_BANNER).performClick()
+        assert(retried)
+    }
+
+    @Test
     fun showsUserInfoAndCounts_whenLoaded() {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isLoading = false, username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
+                    isRefreshing = false, username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
                 onRefresh = {}, onStartReview = {}, onLogOut = {}
             )
@@ -59,7 +98,7 @@ class DashboardScreenTest {
         var retried = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, errorMessage = "Network error"),
+                uiState = DashboardUiState(isRefreshing = false, errorMessage = "Network error"),
                 onRefresh = { retried = true }, onStartReview = {}, onLogOut = {}
             )
         }
@@ -74,7 +113,7 @@ class DashboardScreenTest {
         var loggedOut = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, username = "x", level = 1),
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
                 onRefresh = {}, onStartReview = {}, onLogOut = { loggedOut = true }
             )
         }
@@ -92,7 +131,7 @@ class DashboardScreenTest {
         var openedSettings = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, username = "x", level = 1),
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
                 onRefresh = {}, onStartReview = {}, onLogOut = {}, onOpenSettings = { openedSettings = true }
             )
         }
@@ -109,7 +148,7 @@ class DashboardScreenTest {
         var startedLesson = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, username = "x", level = 1, lessonCount = 5),
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, lessonCount = 5),
                 onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true }
             )
         }
@@ -123,7 +162,7 @@ class DashboardScreenTest {
         var startedReview = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, username = "x", level = 1, reviewCount = 5),
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, reviewCount = 5),
                 onRefresh = {}, onStartReview = { startedReview = true }, onLogOut = {}
             )
         }
@@ -137,7 +176,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isLoading = false, username = "x", level = 1,
+                    isRefreshing = false, username = "x", level = 1,
                     lessonsCompletedToday = 3, dailyLessonGoal = 15
                 ),
                 onRefresh = {}, onStartReview = {}, onLogOut = {}
@@ -156,7 +195,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isLoading = false, username = "x", level = 12,
+                    isRefreshing = false, username = "x", level = 12,
                     kanjiGuruedForLevelUp = 18, kanjiTotalForLevelUp = 25
                 ),
                 onRefresh = {}, onStartReview = {}, onLogOut = {}
@@ -171,7 +210,7 @@ class DashboardScreenTest {
     fun showsDaysOnLevel_inlineWithLevelText() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, username = "x", level = 12, daysOnCurrentLevel = 6),
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 12, daysOnCurrentLevel = 6),
                 onRefresh = {}, onStartReview = {}, onLogOut = {}
             )
         }
@@ -183,7 +222,7 @@ class DashboardScreenTest {
     fun reviewsCard_showsRenamedLabel_whenSessionActive() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, username = "x", level = 1, hasActiveReviewSession = true),
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveReviewSession = true),
                 onRefresh = {}, onStartReview = {}, onLogOut = {}
             )
         }
@@ -195,7 +234,7 @@ class DashboardScreenTest {
     fun searchButton_opensInlineSearchOverlay() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, username = "x", level = 1),
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
                 onRefresh = {}, onStartReview = {}, onLogOut = {}
             )
         }
@@ -211,7 +250,7 @@ class DashboardScreenTest {
     fun header_hasNoWordmarkTitle() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isLoading = false, username = "x", level = 1),
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
                 onRefresh = {}, onStartReview = {}, onLogOut = {}
             )
         }

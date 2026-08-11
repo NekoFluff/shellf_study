@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.StatsRepository
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -37,12 +39,14 @@ import javax.inject.Inject
 import kotlin.math.ceil
 
 data class DashboardUiState(
-    val isLoading: Boolean = true,
+    val isRefreshing: Boolean = true,
     val username: String? = null,
     val level: Int? = null,
     val lessonCount: Int = 0,
     val reviewCount: Int = 0,
     val errorMessage: String? = null,
+    val isOffline: Boolean = false,
+    val lastSyncedAtMillis: Long? = null,
     val isLoggedOut: Boolean = false,
     val hasActiveReviewSession: Boolean = false,
     val lessonsCompletedToday: Int = 0,
@@ -65,6 +69,7 @@ class DashboardViewModel @Inject constructor(
     private val subjectRepository: SubjectRepository,
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
+    private val dashboardCacheRepository: DashboardCacheRepository,
     private val syncOrchestrator: SyncOrchestrator,
     private val syncScheduler: SyncScheduler,
     private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,
@@ -79,7 +84,13 @@ class DashboardViewModel @Inject constructor(
     private val selectedProgressLevel = MutableStateFlow<Int?>(null)
 
     init {
-        refresh()
+        // Awaiting the (fast, local) cache read before kicking off refresh() guarantees any cached
+        // content is on screen before the network round trip starts, and avoids a race where a
+        // slow cache read could otherwise land after refresh() and clobber fresher network data.
+        viewModelScope.launch {
+            seedFromCache()
+            refresh()
+        }
 
         observe(reviewSessionRepository.hasActiveSession) { copy(hasActiveReviewSession = it) }
         observe(settingsRepository.settings) { copy(dailyLessonGoal = it.dailyLessonGoal) }
@@ -97,14 +108,47 @@ class DashboardViewModel @Inject constructor(
         selectedProgressLevel.value = level.coerceAtLeast(1)
     }
 
+    /**
+     * Fills in the last-known username/level/lesson/review counts from [DashboardCacheRepository]
+     * so a cold start renders real content immediately, instead of the skeleton, while [refresh]
+     * (kicked off separately in `init`) races to confirm/update it over the network.
+     */
+    private suspend fun seedFromCache() {
+        val cached = dashboardCacheRepository.cachedSummary.first() ?: return
+        _dashboardData.update { current ->
+            // A completed refresh (successful or not) always sets lastSyncedAtMillis or leaves it
+            // at a prior real value; never let a cache read that lands late override it.
+            if (current.lastSyncedAtMillis != null) {
+                current
+            } else {
+                current.copy(
+                    username = cached.username,
+                    level = cached.level,
+                    lessonCount = cached.lessonCount,
+                    reviewCount = cached.reviewCount,
+                    lastSyncedAtMillis = cached.lastSyncedAtMillis
+                )
+            }
+        }
+    }
+
+    /**
+     * Refreshes the dashboard. Deliberately doesn't clear [DashboardUiState]'s content fields up
+     * front — any previously loaded (or cache-seeded) values stay on screen for the whole
+     * operation, with only [DashboardUiState.isRefreshing] flipping on, so the screen never goes
+     * blank mid-refresh. [DashboardUiState.errorMessage] (the full-screen error state) is reserved
+     * for a failure with nothing cached to fall back on; a failure while content is already showing
+     * sets [DashboardUiState.isOffline] instead, which the screen renders as a small banner.
+     */
     fun refresh() {
         viewModelScope.launch {
-            _dashboardData.update { it.copy(isLoading = true, errorMessage = null) }
+            _dashboardData.update { it.copy(isRefreshing = true, errorMessage = null, isOffline = false) }
 
             syncOrchestrator.syncAll(force = true)
 
             val userResult = waniKaniRepository.fetchUser()
             val summaryResult = waniKaniRepository.fetchDashboardSummary()
+            val hasContent = _dashboardData.value.username != null
 
             if (userResult is ApiResult.Error) {
                 if (userResult.isAuthError) {
@@ -112,26 +156,42 @@ class DashboardViewModel @Inject constructor(
                     syncScheduler.cancelPeriodicSync()
                     pitchAccentScrapeScheduler.cancelPeriodicScrape()
                     notificationCoordinator.onLogout()
-                    _dashboardData.update { it.copy(isLoading = false, isLoggedOut = true) }
+                    _dashboardData.update { it.copy(isRefreshing = false, isLoggedOut = true) }
+                } else if (hasContent) {
+                    _dashboardData.update { it.copy(isRefreshing = false, isOffline = true) }
                 } else {
-                    _dashboardData.update { it.copy(isLoading = false, errorMessage = userResult.message) }
+                    _dashboardData.update { it.copy(isRefreshing = false, errorMessage = userResult.message) }
                 }
                 return@launch
             }
             if (summaryResult is ApiResult.Error) {
-                _dashboardData.update { it.copy(isLoading = false, errorMessage = summaryResult.message) }
+                if (hasContent) {
+                    _dashboardData.update { it.copy(isRefreshing = false, isOffline = true) }
+                } else {
+                    _dashboardData.update { it.copy(isRefreshing = false, errorMessage = summaryResult.message) }
+                }
                 return@launch
             }
 
             val user = (userResult as ApiResult.Success).data
             val summary = (summaryResult as ApiResult.Success).data
+            val syncedAtMillis = System.currentTimeMillis()
+            dashboardCacheRepository.save(
+                username = user.username,
+                level = user.level,
+                lessonCount = summary.lessonCount,
+                reviewCount = summary.reviewCount,
+                syncedAtMillis = syncedAtMillis
+            )
             _dashboardData.update {
                 it.copy(
-                    isLoading = false,
+                    isRefreshing = false,
+                    isOffline = false,
                     username = user.username,
                     level = user.level,
                     lessonCount = summary.lessonCount,
-                    reviewCount = summary.reviewCount
+                    reviewCount = summary.reviewCount,
+                    lastSyncedAtMillis = syncedAtMillis
                 )
             }
         }
@@ -142,9 +202,10 @@ class DashboardViewModel @Inject constructor(
      * review/lesson session), so lesson/review counts don't sit stale until the next hourly
      * background sync or a manual pull-to-refresh. Deliberately lighter than [refresh]: reuses
      * [SyncOrchestrator]'s own per-resource staleness gate (`force = false`) rather than forcing a
-     * full resync of everything, and never touches [DashboardUiState.isLoading] or
+     * full resync of everything, and never touches [DashboardUiState.isRefreshing] or
      * [DashboardUiState.errorMessage] — most calls will be near-instant no-ops, and a transient
-     * failure here shouldn't blank out an already-populated dashboard with a full error screen.
+     * failure here shouldn't blank out an already-populated dashboard, just flag it as
+     * [DashboardUiState.isOffline].
      */
     fun onDashboardResumed() {
         viewModelScope.launch {
@@ -152,12 +213,31 @@ class DashboardViewModel @Inject constructor(
 
             val user = (waniKaniRepository.fetchUser() as? ApiResult.Success)?.data
             val summary = (waniKaniRepository.fetchDashboardSummary() as? ApiResult.Success)?.data
+            val fetchFailed = user == null || summary == null
+            val syncedAtMillis = System.currentTimeMillis()
+
             _dashboardData.update {
+                val resolvedUsername = user?.username ?: it.username
+                val resolvedLevel = user?.level ?: it.level
+                val resolvedLessonCount = summary?.lessonCount ?: it.lessonCount
+                val resolvedReviewCount = summary?.reviewCount ?: it.reviewCount
                 it.copy(
-                    username = user?.username ?: it.username,
-                    level = user?.level ?: it.level,
-                    lessonCount = summary?.lessonCount ?: it.lessonCount,
-                    reviewCount = summary?.reviewCount ?: it.reviewCount
+                    username = resolvedUsername,
+                    level = resolvedLevel,
+                    lessonCount = resolvedLessonCount,
+                    reviewCount = resolvedReviewCount,
+                    isOffline = fetchFailed && resolvedUsername != null,
+                    lastSyncedAtMillis = if (fetchFailed) it.lastSyncedAtMillis else syncedAtMillis
+                )
+            }
+
+            if (!fetchFailed && user != null && summary != null) {
+                dashboardCacheRepository.save(
+                    username = user.username,
+                    level = user.level,
+                    lessonCount = summary.lessonCount,
+                    reviewCount = summary.reviewCount,
+                    syncedAtMillis = syncedAtMillis
                 )
             }
         }

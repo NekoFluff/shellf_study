@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.core.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
@@ -43,10 +44,12 @@ class DashboardViewModelTest {
     val tempFolder = TemporaryFolder()
 
     private lateinit var server: MockWebServer
+    private lateinit var dataStore: DataStore<Preferences>
     private lateinit var tokenRepository: TokenRepository
     private lateinit var repositories: TestRepositories
     private lateinit var reviewSessionRepository: ReviewSessionRepository
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var dashboardCacheRepository: DashboardCacheRepository
     private lateinit var syncScheduler: FakeSyncScheduler
     private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
     private lateinit var notificationCoordinator: FakeNotificationCoordinator
@@ -56,13 +59,14 @@ class DashboardViewModelTest {
         server = MockWebServer()
         server.start()
 
-        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+        dataStore = PreferenceDataStoreFactory.create(
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
         repositories = buildTestRepositories(server.url("/").toString())
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         settingsRepository = SettingsRepository(dataStore)
+        dashboardCacheRepository = DashboardCacheRepository(dataStore)
         syncScheduler = FakeSyncScheduler()
         pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
         notificationCoordinator = FakeNotificationCoordinator()
@@ -97,6 +101,7 @@ class DashboardViewModelTest {
                     subjectRepository = repositories.subjectRepository,
                     assignmentRepository = repositories.assignmentRepository,
                     statsRepository = repositories.statsRepository,
+                    dashboardCacheRepository = dashboardCacheRepository,
                     syncOrchestrator = repositories.syncOrchestrator,
                     syncScheduler = syncScheduler,
                     pitchAccentScrapeScheduler = pitchAccentScrapeScheduler,
@@ -137,13 +142,76 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.isRefreshing) state = awaitItem()
 
             assertThat(state.username).isEqualTo("durtle_fan")
             assertThat(state.level).isEqualTo(12)
             assertThat(state.lessonCount).isEqualTo(2)
             assertThat(state.reviewCount).isEqualTo(3)
             assertThat(state.errorMessage).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `seeds cached username and counts before the network refresh resolves, then updates them once it does`() = runTest {
+        dashboardCacheRepository.save(
+            username = "cached_user", level = 1, lessonCount = 9, reviewCount = 9, syncedAtMillis = 1_000L
+        )
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.username == null) state = awaitItem()
+            assertThat(state.username).isEqualTo("cached_user")
+            assertThat(state.lastSyncedAtMillis).isEqualTo(1_000L)
+            assertThat(state.isRefreshing).isTrue()
+
+            while (state.isRefreshing) state = awaitItem()
+            assertThat(state.username).isEqualTo("durtle_fan")
+            assertThat(state.lastSyncedAtMillis).isNotEqualTo(1_000L)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `falls back to cached content and flags offline, instead of the full error screen, when a refresh fails with content already cached`() = runTest {
+        dashboardCacheRepository.save(
+            username = "cached_user", level = 5, lessonCount = 3, reviewCount = 7, syncedAtMillis = 1_000L
+        )
+        dispatchByPath(emptyResponse(500), jsonResponse(summaryJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isRefreshing) state = awaitItem()
+
+            assertThat(state.isOffline).isTrue()
+            assertThat(state.errorMessage).isNull()
+            assertThat(state.username).isEqualTo("cached_user")
+            assertThat(state.lessonCount).isEqualTo(3)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `writes the fetched summary to the cache repository on a successful refresh`() = runTest {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isRefreshing) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        dashboardCacheRepository.cachedSummary.test {
+            val summary = awaitItem()
+            assertThat(summary?.username).isEqualTo("durtle_fan")
+            assertThat(summary?.level).isEqualTo(12)
+            assertThat(summary?.lessonCount).isEqualTo(2)
+            assertThat(summary?.reviewCount).isEqualTo(3)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -156,7 +224,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.isRefreshing) state = awaitItem()
             assertThat(state.errorMessage).isNotNull()
             assertThat(state.isLoggedOut).isFalse()
             cancelAndIgnoreRemainingEvents()
@@ -191,7 +259,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.isRefreshing) state = awaitItem()
 
             viewModel.logOut()
             var afterLogout = awaitItem()
@@ -216,7 +284,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.isRefreshing) state = awaitItem()
             while (state.lessonsCompletedToday != 4) state = awaitItem()
 
             assertThat(state.lessonsCompletedToday).isEqualTo(4)
@@ -233,7 +301,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading || state.dailyLessonGoal != 5) state = awaitItem()
+            while (state.isRefreshing || state.dailyLessonGoal != 5) state = awaitItem()
             assertThat(state.dailyLessonGoal).isEqualTo(5)
             cancelAndIgnoreRemainingEvents()
         }
@@ -252,7 +320,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.isRefreshing) state = awaitItem()
             while (state.kanjiTotalForLevelUp == 0) state = awaitItem()
 
             assertThat(state.kanjiTotalForLevelUp).isEqualTo(2)
