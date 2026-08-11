@@ -57,6 +57,7 @@ object SettingsScreenTestTags {
     const val THEME_SYSTEM_OPTION = "settings_theme_system_option"
     const val THEME_LIGHT_OPTION = "settings_theme_light_option"
     const val THEME_DARK_OPTION = "settings_theme_dark_option"
+    const val THEME_EINK_OPTION = "settings_theme_eink_option"
     const val PITCH_ACCENT_TOGGLE = "settings_pitch_accent_toggle"
     const val AUTOPLAY_AUDIO_TOGGLE = "settings_autoplay_audio_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
@@ -205,6 +206,13 @@ fun SettingsScreen(
                     selected = uiState.themeMode,
                     onSelect = onThemeModeChange,
                     testTag = SettingsScreenTestTags.THEME_DARK_OPTION
+                )
+                ThemeOptionRow(
+                    label = "E-Ink (grayscale)",
+                    mode = ThemeMode.EINK,
+                    selected = uiState.themeMode,
+                    onSelect = onThemeModeChange,
+                    testTag = SettingsScreenTestTags.THEME_EINK_OPTION
                 )
             }
 

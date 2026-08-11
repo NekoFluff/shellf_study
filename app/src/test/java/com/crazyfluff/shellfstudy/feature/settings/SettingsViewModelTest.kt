@@ -63,6 +63,18 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `onThemeModeChange updates the state to eink`() = runTest {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().themeMode).isEqualTo(ThemeMode.SYSTEM)
+
+            viewModel.onThemeModeChange(ThemeMode.EINK)
+            assertThat(awaitItem().themeMode).isEqualTo(ThemeMode.EINK)
+        }
+    }
+
+    @Test
     fun `onShowPitchAccentChange updates the state`() = runTest {
         val viewModel = createViewModel()
 

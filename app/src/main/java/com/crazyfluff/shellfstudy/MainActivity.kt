@@ -38,9 +38,10 @@ class MainActivity : ComponentActivity() {
             val darkTheme = when (themeMode) {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
+                ThemeMode.EINK -> false
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
             }
-            ShellfStudyTheme(darkTheme = darkTheme) {
+            ShellfStudyTheme(themeMode = themeMode, darkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     ShellfStudyNavHost(
                         pendingDestination = pendingDestination,

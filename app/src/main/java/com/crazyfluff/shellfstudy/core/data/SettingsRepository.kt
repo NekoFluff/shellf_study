@@ -13,7 +13,7 @@ import javax.inject.Singleton
 
 const val DEFAULT_DAILY_LESSON_GOAL = 15
 
-enum class ThemeMode { SYSTEM, LIGHT, DARK }
+enum class ThemeMode { SYSTEM, LIGHT, DARK, EINK }
 
 data class AppSettings(
     val dailyLessonGoal: Int = DEFAULT_DAILY_LESSON_GOAL,

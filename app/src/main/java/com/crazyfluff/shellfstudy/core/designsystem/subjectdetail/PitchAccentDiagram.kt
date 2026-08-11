@@ -17,6 +17,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.forReading
+import com.crazyfluff.shellfstudy.core.designsystem.theme.LocalEinkTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.PitchAccentColors
 
 object PitchAccentTestTags {
@@ -46,11 +47,17 @@ internal fun isHighMora(moraIndex: Int, pitchNumber: Int, moraCount: Int): Boole
     else -> moraIndex in 1 until pitchNumber
 }
 
-internal fun pitchPatternColor(pitchNumber: Int, moraCount: Int): Color = when {
-    pitchNumber == 0 -> PitchAccentColors.Heiban
-    pitchNumber == 1 -> PitchAccentColors.Atamadaka
-    pitchNumber == moraCount -> PitchAccentColors.Odaka
-    else -> PitchAccentColors.Nakadaka
+@Composable
+internal fun pitchPatternColor(pitchNumber: Int, moraCount: Int): Color {
+    // The pattern is already conveyed by dot height/position and the odaka drop-tick below, so
+    // under the e-ink theme every pattern just draws in the same flat onSurface color.
+    if (LocalEinkTheme.current) return MaterialTheme.colorScheme.onSurface
+    return when {
+        pitchNumber == 0 -> PitchAccentColors.Heiban
+        pitchNumber == 1 -> PitchAccentColors.Atamadaka
+        pitchNumber == moraCount -> PitchAccentColors.Odaka
+        else -> PitchAccentColors.Nakadaka
+    }
 }
 
 /**

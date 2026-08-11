@@ -64,9 +64,11 @@ import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
+import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
+import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
@@ -449,7 +451,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         } else {
             Text(
                 text = if (feedback.isCorrect) "Correct!" else "Incorrect",
-                color = if (feedback.isCorrect) SrsStageColors.Enlightened else MaterialTheme.colorScheme.error,
+                color = if (feedback.isCorrect) {
+                    themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.testTag(ReviewScreenTestTags.FEEDBACK_TEXT)
             )

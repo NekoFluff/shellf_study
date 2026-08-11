@@ -82,6 +82,17 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `setThemeMode persists the eink mode`() = runTest {
+        val repository = createRepository()
+
+        repository.setThemeMode(ThemeMode.EINK)
+
+        repository.settings.test {
+            assertThat(awaitItem().themeMode).isEqualTo(ThemeMode.EINK)
+        }
+    }
+
+    @Test
     fun `notificationSettings emits opt-in defaults when nothing stored`() = runTest {
         val repository = createRepository()
         repository.notificationSettings.test {

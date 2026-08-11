@@ -3,8 +3,7 @@ package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
@@ -25,19 +24,19 @@ class WkMnemonicTextTest {
         assertThat(result.text).isEqualTo("drop means water")
         val span = result.spanStyles.single()
         assertThat(result.text.substring(span.start, span.end)).isEqualTo("drop")
-        assertThat(span.item.color).isEqualTo(subjectColor(SubjectType.RADICAL))
+        assertThat(span.item.color).isEqualTo(SubjectTypeColors.Radical)
     }
 
     @Test
     fun `kanji and vocabulary tags use their own type colors`() {
         val kanji = parseWkMarkup("<kanji>水</kanji>")
-        assertThat(kanji.spanStyles.single().item.color).isEqualTo(subjectColor(SubjectType.KANJI))
+        assertThat(kanji.spanStyles.single().item.color).isEqualTo(SubjectTypeColors.Kanji)
 
         val vocab = parseWkMarkup("<vocabulary>水道</vocabulary>")
-        assertThat(vocab.spanStyles.single().item.color).isEqualTo(subjectColor(SubjectType.VOCABULARY))
+        assertThat(vocab.spanStyles.single().item.color).isEqualTo(SubjectTypeColors.Vocabulary)
 
         val kanaVocab = parseWkMarkup("<kana_vocabulary>みず</kana_vocabulary>")
-        assertThat(kanaVocab.spanStyles.single().item.color).isEqualTo(subjectColor(SubjectType.VOCABULARY))
+        assertThat(kanaVocab.spanStyles.single().item.color).isEqualTo(SubjectTypeColors.Vocabulary)
     }
 
     @Test
@@ -72,7 +71,7 @@ class WkMnemonicTextTest {
         assertThat(result.spanStyles).hasSize(2)
         val radicalSpan = result.spanStyles.first { result.text.substring(it.start, it.end) == "drop" }
         val kanjiSpan = result.spanStyles.first { result.text.substring(it.start, it.end) == "water" }
-        assertThat(radicalSpan.item.color).isEqualTo(subjectColor(SubjectType.RADICAL))
-        assertThat(kanjiSpan.item.color).isEqualTo(subjectColor(SubjectType.KANJI))
+        assertThat(radicalSpan.item.color).isEqualTo(SubjectTypeColors.Radical)
+        assertThat(kanjiSpan.item.color).isEqualTo(SubjectTypeColors.Kanji)
     }
 }

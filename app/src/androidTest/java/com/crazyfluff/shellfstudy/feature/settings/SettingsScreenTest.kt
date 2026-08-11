@@ -96,6 +96,18 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun selectingEinkThemeOption_invokesCallback() {
+        var selectedMode: ThemeMode? = null
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
+            onThemeModeChange = { selectedMode = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.THEME_EINK_OPTION).performClick()
+        assert(selectedMode == ThemeMode.EINK)
+    }
+
+    @Test
     fun togglingPitchAccentSwitch_invokesCallback() {
         var showPitchAccent: Boolean? = null
         setContent(

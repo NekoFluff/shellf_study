@@ -26,8 +26,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
+import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
+import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
 
 object ItemSpreadTestTags {
     const val CARD = "item_spread_card"
@@ -45,12 +47,12 @@ fun ItemSpreadCard(spread: ItemSpread?, modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.height(8.dp))
 
             val segments = listOf(
-                SpreadSegment("Locked", spread?.lockedCount ?: 0, SrsStageColors.Locked),
-                SpreadSegment("Apprentice", spread?.apprenticeCount ?: 0, SrsStageColors.Apprentice),
-                SpreadSegment("Guru", spread?.guruCount ?: 0, SrsStageColors.Guru),
-                SpreadSegment("Master", spread?.masterCount ?: 0, SrsStageColors.Master),
-                SpreadSegment("Enlightened", spread?.enlightenedCount ?: 0, SrsStageColors.Enlightened),
-                SpreadSegment("Burned", spread?.burnedCount ?: 0, SrsStageColors.Burned)
+                SpreadSegment("Locked", spread?.lockedCount ?: 0, themeAwareColor(SrsStageColors.Locked, EinkStageColors.Locked)),
+                SpreadSegment("Apprentice", spread?.apprenticeCount ?: 0, themeAwareColor(SrsStageColors.Apprentice, EinkStageColors.Apprentice)),
+                SpreadSegment("Guru", spread?.guruCount ?: 0, themeAwareColor(SrsStageColors.Guru, EinkStageColors.Guru)),
+                SpreadSegment("Master", spread?.masterCount ?: 0, themeAwareColor(SrsStageColors.Master, EinkStageColors.Master)),
+                SpreadSegment("Enlightened", spread?.enlightenedCount ?: 0, themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)),
+                SpreadSegment("Burned", spread?.burnedCount ?: 0, themeAwareColor(SrsStageColors.Burned, EinkStageColors.Burned))
             )
 
             ItemSpreadBar(segments)
