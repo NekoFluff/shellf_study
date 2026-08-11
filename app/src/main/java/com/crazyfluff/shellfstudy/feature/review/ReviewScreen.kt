@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -93,6 +94,9 @@ object ReviewScreenTestTags {
     const val CONTINUE_BUTTON = "review_continue_button"
     const val UNDO_BUTTON = "review_undo_button"
     const val SESSION_COMPLETE = "review_session_complete"
+    const val SESSION_STATS_CARD = "review_session_stats_card"
+    const val ITEMS_REVIEWED_TEXT = "review_items_reviewed_text"
+    const val CORRECT_FIRST_TRY_TEXT = "review_correct_first_try_text"
     const val DONE_BUTTON = "review_done_button"
     const val BACK_BUTTON = "review_back_button"
     const val SEARCH_BUTTON = "review_search_button"
@@ -246,13 +250,18 @@ fun ReviewScreen(
 
                 uiState.isSessionComplete -> {
                     Column(
-                        modifier = Modifier.fillMaxSize().testTag(ReviewScreenTestTags.SESSION_COMPLETE),
+                        modifier = Modifier.fillMaxSize().padding(24.dp).testTag(ReviewScreenTestTags.SESSION_COMPLETE),
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text("Session complete!", style = MaterialTheme.typography.headlineMedium)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Great work. Your reviews have been submitted.")
+                        if (uiState.sessionItemsReviewed > 0) {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            SessionStatsCard(
+                                itemsReviewed = uiState.sessionItemsReviewed,
+                                correctFirstTry = uiState.sessionItemsCorrectFirstTry
+                            )
+                        }
                         Spacer(modifier = Modifier.height(24.dp))
                         Button(
                             onClick = onDone,
@@ -446,6 +455,26 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
                 isAnswered = uiState.feedback != null,
                 questionType = questionType.toDetailQuestionType(),
                 onDismiss = onToggleDetails
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionStatsCard(itemsReviewed: Int, correctFirstTry: Int, modifier: Modifier = Modifier) {
+    val accuracyPercent = correctFirstTry * 100 / itemsReviewed
+    Card(modifier = modifier.testTag(ReviewScreenTestTags.SESSION_STATS_CARD)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Items reviewed: $itemsReviewed",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.testTag(ReviewScreenTestTags.ITEMS_REVIEWED_TEXT)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Correct on first try: $correctFirstTry of $itemsReviewed ($accuracyPercent%)",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.testTag(ReviewScreenTestTags.CORRECT_FIRST_TRY_TEXT)
             )
         }
     }

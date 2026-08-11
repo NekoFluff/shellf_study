@@ -41,7 +41,9 @@ data class ReviewUiState(
     val isSessionComplete: Boolean = false,
     val isAbandoned: Boolean = false,
     val isWrappingUp: Boolean = false,
-    val isDetailsExpanded: Boolean = false
+    val isDetailsExpanded: Boolean = false,
+    val sessionItemsReviewed: Int = 0,
+    val sessionItemsCorrectFirstTry: Int = 0
 )
 
 private data class PendingQuestion(val item: ReviewItem, val type: QuestionType)
@@ -303,17 +305,28 @@ class ReviewViewModel @Inject constructor(
     private fun completedQuestionCount(): Int =
         progressByAssignmentId.values.sumOf { (if (it.meaningDone) 1 else 0) + (if (it.readingDone) 1 else 0) }
 
+    /** Items reviewed vs. how many of those were answered correctly without ever missing. */
+    private fun sessionStats(): Pair<Int, Int> {
+        val itemsReviewed = progressByAssignmentId.size
+        val correctFirstTry = progressByAssignmentId.values.count { !it.hadIncorrectMeaning && !it.hadIncorrectReading }
+        return itemsReviewed to correctFirstTry
+    }
+
     private suspend fun advanceToNextQuestion() {
         val next = queue.firstOrNull()
         if (next == null) {
             reviewSessionRepository.clear()
+            val (itemsReviewed, correctFirstTry) = sessionStats()
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     isSessionComplete = true,
                     currentItem = null,
                     currentQuestionType = null,
-                    remainingCount = 0
+                    remainingCount = 0,
+                    feedback = null,
+                    sessionItemsReviewed = itemsReviewed,
+                    sessionItemsCorrectFirstTry = correctFirstTry
                 )
             }
             return

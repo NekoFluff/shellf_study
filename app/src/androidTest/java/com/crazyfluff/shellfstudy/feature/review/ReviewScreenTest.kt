@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -314,6 +315,42 @@ class ReviewScreenTest {
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_COMPLETE).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.DONE_BUTTON).performClick()
         assert(done)
+    }
+
+    @Test
+    fun sessionComplete_showsStatsCardWithCounts() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsReviewed = 5, sessionItemsCorrectFirstTry = 3
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_STATS_CARD).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Items reviewed: 5").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Correct on first try: 3 of 5 (60%)").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Great work. Your reviews have been submitted.").assertCountEquals(0)
+    }
+
+    @Test
+    fun sessionComplete_hidesStatsCardWhenNothingWasReviewed() {
+        setScreen(ReviewUiState(isLoading = false, isSessionComplete = true, sessionItemsReviewed = 0))
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SESSION_STATS_CARD).assertCountEquals(0)
+    }
+
+    @Test
+    fun sessionComplete_neverShowsSwipeUpDetailsHandle_evenWithStaleFeedback() {
+        // Regression test: feedback from the last-answered question used to leak into the
+        // completed state and kept this dead handle visible with nothing for it to reveal.
+        setScreen(
+            ReviewUiState(
+                isLoading = false, isSessionComplete = true,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.DETAILS_TOGGLE).assertCountEquals(0)
     }
 
     @Test

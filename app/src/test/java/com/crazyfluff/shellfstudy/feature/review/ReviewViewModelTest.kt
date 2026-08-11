@@ -105,6 +105,11 @@ class ReviewViewModelTest {
             viewModel.onContinue()
             val finalState = awaitItem()
             assertThat(finalState.isSessionComplete).isTrue()
+            // Answered correctly first try, and the stale feedback from the last question must not
+            // leak into the completed state (it would otherwise keep the swipe-up handle visible).
+            assertThat(finalState.feedback).isNull()
+            assertThat(finalState.sessionItemsReviewed).isEqualTo(1)
+            assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(1)
         }
     }
 
@@ -140,6 +145,10 @@ class ReviewViewModelTest {
             viewModel.onContinue()
             val finalState = awaitItem()
             assertThat(finalState.isSessionComplete).isTrue()
+            // Needed a retry, so it doesn't count as correct-on-first-try even though it was
+            // eventually answered correctly.
+            assertThat(finalState.sessionItemsReviewed).isEqualTo(1)
+            assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(0)
         }
     }
 
