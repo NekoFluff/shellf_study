@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
+import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.database.SrsSystemDao
@@ -14,9 +15,12 @@ import com.crazyfluff.shellfstudy.core.network.CharacterImageData
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.core.network.collectAllPages
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.time.Duration
 import java.time.Instant
@@ -36,7 +40,8 @@ class SubjectRepository @Inject constructor(
     private val subjectDao: SubjectDao,
     private val srsSystemDao: SrsSystemDao,
     private val studyMaterialDao: StudyMaterialDao,
-    private val syncStateDao: SyncStateDao
+    private val syncStateDao: SyncStateDao,
+    private val pitchAccentRepository: PitchAccentRepository
 ) {
     private val _isSyncingSubjectLibrary = MutableStateFlow(false)
     fun observeIsSyncingSubjectLibrary(): Flow<Boolean> = _isSyncingSubjectLibrary.asStateFlow()
@@ -152,9 +157,23 @@ class SubjectRepository @Inject constructor(
     fun observeSubjectSummaries(ids: List<Long>): Flow<List<SubjectSummary>> =
         subjectDao.observeByIds(ids).map { entities -> entities.map { it.toSubjectSummary() } }
 
-    /** Flow-based so an open detail sheet live-updates if a background sync refreshes this subject. */
+    /**
+     * Flow-based so an open detail sheet live-updates if a background sync refreshes this subject
+     * or a background pitch-accent scrape fills in data for it.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun observeSubjectDetail(subjectId: Long): Flow<SubjectDetail?> =
-        subjectDao.observeByIds(listOf(subjectId)).map { it.firstOrNull()?.toSubjectDetail() }
+        subjectDao.observeByIds(listOf(subjectId)).flatMapLatest { entities ->
+            val entity = entities.firstOrNull()
+            val type = entity?.let { SubjectType.fromWkString(it.subjectType) }
+            val pitchAccentsFlow: Flow<List<PitchAccent>> =
+                if (entity?.characters != null && (type == SubjectType.VOCABULARY || type == SubjectType.KANA_VOCABULARY)) {
+                    pitchAccentRepository.observePitchAccents(entity.characters)
+                } else {
+                    flowOf(emptyList())
+                }
+            pitchAccentsFlow.map { pitchAccents -> entity?.toSubjectDetail(pitchAccents) }
+        }
 }
 
 private fun buildSearchTarget(characters: String?, slug: String, meanings: List<String>, readings: List<String>): String =
@@ -174,7 +193,7 @@ private fun SubjectEntity.toSubjectSummary(): SubjectSummary = SubjectSummary(
     readings = readings.map { it.reading }
 )
 
-private fun SubjectEntity.toSubjectDetail(): SubjectDetail = SubjectDetail(
+private fun SubjectEntity.toSubjectDetail(pitchAccents: List<PitchAccent> = emptyList()): SubjectDetail = SubjectDetail(
     subjectId = id,
     subjectType = SubjectType.fromWkString(subjectType),
     characters = characters,
@@ -195,5 +214,6 @@ private fun SubjectEntity.toSubjectDetail(): SubjectDetail = SubjectDetail(
     contextSentences = contextSentences.map { ContextSentence(japanese = it.ja, english = it.en) },
     componentSubjectIds = componentSubjectIds,
     amalgamationSubjectIds = amalgamationSubjectIds,
-    visuallySimilarSubjectIds = visuallySimilarSubjectIds
+    visuallySimilarSubjectIds = visuallySimilarSubjectIds,
+    pitchAccents = pitchAccents
 )

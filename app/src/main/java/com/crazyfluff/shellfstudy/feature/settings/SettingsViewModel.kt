@@ -14,7 +14,8 @@ import javax.inject.Inject
 
 data class SettingsUiState(
     val dailyLessonGoal: Int = 15,
-    val themeMode: ThemeMode = ThemeMode.SYSTEM
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val showPitchAccent: Boolean = true
 )
 
 @HiltViewModel
@@ -23,7 +24,7 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val uiState: StateFlow<SettingsUiState> = settingsRepository.settings
-        .map { SettingsUiState(dailyLessonGoal = it.dailyLessonGoal, themeMode = it.themeMode) }
+        .map { SettingsUiState(dailyLessonGoal = it.dailyLessonGoal, themeMode = it.themeMode, showPitchAccent = it.showPitchAccent) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun onDailyLessonGoalChange(goal: Int) {
@@ -32,5 +33,9 @@ class SettingsViewModel @Inject constructor(
 
     fun onThemeModeChange(mode: ThemeMode) {
         viewModelScope.launch { settingsRepository.setThemeMode(mode) }
+    }
+
+    fun onShowPitchAccentChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowPitchAccent(enabled) }
     }
 }

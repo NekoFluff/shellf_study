@@ -21,6 +21,7 @@ class SettingsScreenTest {
                 uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.DARK),
                 onDailyLessonGoalChange = {},
                 onThemeModeChange = {},
+                onShowPitchAccentChange = {},
                 onBack = {}
             )
         }
@@ -37,6 +38,7 @@ class SettingsScreenTest {
                 uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
                 onDailyLessonGoalChange = { lastGoal = it },
                 onThemeModeChange = {},
+                onShowPitchAccentChange = {},
                 onBack = {}
             )
         }
@@ -55,6 +57,7 @@ class SettingsScreenTest {
                 uiState = SettingsUiState(dailyLessonGoal = 1, themeMode = ThemeMode.SYSTEM),
                 onDailyLessonGoalChange = {},
                 onThemeModeChange = {},
+                onShowPitchAccentChange = {},
                 onBack = {}
             )
         }
@@ -70,12 +73,30 @@ class SettingsScreenTest {
                 uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
                 onDailyLessonGoalChange = {},
                 onThemeModeChange = { selectedMode = it },
+                onShowPitchAccentChange = {},
                 onBack = {}
             )
         }
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.THEME_DARK_OPTION).performClick()
         assert(selectedMode == ThemeMode.DARK)
+    }
+
+    @Test
+    fun togglingPitchAccentSwitch_invokesCallback() {
+        var showPitchAccent: Boolean? = null
+        composeTestRule.setContent {
+            SettingsScreen(
+                uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showPitchAccent = true),
+                onDailyLessonGoalChange = {},
+                onThemeModeChange = {},
+                onShowPitchAccentChange = { showPitchAccent = it },
+                onBack = {}
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.PITCH_ACCENT_TOGGLE).performClick()
+        assert(showPitchAccent == false)
     }
 
     @Test
@@ -86,6 +107,7 @@ class SettingsScreenTest {
                 uiState = SettingsUiState(),
                 onDailyLessonGoalChange = {},
                 onThemeModeChange = {},
+                onShowPitchAccentChange = {},
                 onBack = { wentBack = true }
             )
         }

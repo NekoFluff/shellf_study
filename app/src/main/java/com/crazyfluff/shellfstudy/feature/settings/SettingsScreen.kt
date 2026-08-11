@@ -20,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -41,6 +42,7 @@ object SettingsScreenTestTags {
     const val THEME_SYSTEM_OPTION = "settings_theme_system_option"
     const val THEME_LIGHT_OPTION = "settings_theme_light_option"
     const val THEME_DARK_OPTION = "settings_theme_dark_option"
+    const val PITCH_ACCENT_TOGGLE = "settings_pitch_accent_toggle"
 }
 
 @Composable
@@ -53,6 +55,7 @@ fun SettingsRoute(
         uiState = uiState,
         onDailyLessonGoalChange = viewModel::onDailyLessonGoalChange,
         onThemeModeChange = viewModel::onThemeModeChange,
+        onShowPitchAccentChange = viewModel::onShowPitchAccentChange,
         onBack = onBack
     )
 }
@@ -63,6 +66,7 @@ fun SettingsScreen(
     uiState: SettingsUiState,
     onDailyLessonGoalChange: (Int) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onShowPitchAccentChange: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -135,6 +139,23 @@ fun SettingsScreen(
                 onSelect = onThemeModeChange,
                 testTag = SettingsScreenTestTags.THEME_DARK_OPTION
             )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text("Vocabulary", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Show pitch accent")
+                Switch(
+                    checked = uiState.showPitchAccent,
+                    onCheckedChange = onShowPitchAccentChange,
+                    modifier = Modifier.testTag(SettingsScreenTestTags.PITCH_ACCENT_TOGGLE)
+                )
+            }
         }
     }
 }
@@ -169,6 +190,7 @@ private fun SettingsScreenPreview() {
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
             onDailyLessonGoalChange = {},
             onThemeModeChange = {},
+            onShowPitchAccentChange = {},
             onBack = {}
         )
     }

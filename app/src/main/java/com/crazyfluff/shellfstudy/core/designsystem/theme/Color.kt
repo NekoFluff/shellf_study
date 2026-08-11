@@ -27,3 +27,11 @@ object SrsStageColors {
     val Burned = Color(0xFF434343)
     val Locked = Color(0xFF9E9E9E)
 }
+
+/** Smouldering Durtles' pitch-accent-pattern color convention, kept for a familiar look. */
+object PitchAccentColors {
+    val Heiban = Color(0xFFD20CA3)
+    val Atamadaka = Color(0xFFEA9316)
+    val Nakadaka = Color(0xFF27A2FF)
+    val Odaka = Color(0xFF0CD24D)
+}

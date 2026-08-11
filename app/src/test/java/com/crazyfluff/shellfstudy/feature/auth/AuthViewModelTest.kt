@@ -7,6 +7,7 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
@@ -33,6 +34,7 @@ class AuthViewModelTest {
     private lateinit var tokenRepository: TokenRepository
     private lateinit var waniKaniRepository: WaniKaniRepository
     private lateinit var syncScheduler: FakeSyncScheduler
+    private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
 
     @Before
     fun setUp() {
@@ -45,6 +47,7 @@ class AuthViewModelTest {
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
         waniKaniRepository = buildTestRepositories(server.url("/").toString()).waniKaniRepository
         syncScheduler = FakeSyncScheduler()
+        pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
     }
 
     @After
@@ -52,7 +55,8 @@ class AuthViewModelTest {
         server.shutdown()
     }
 
-    private fun createViewModel() = AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler)
+    private fun createViewModel() =
+        AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler, pitchAccentScrapeScheduler)
 
     @Test
     fun `with no stored token, finishes the check unauthenticated`() = runTest {

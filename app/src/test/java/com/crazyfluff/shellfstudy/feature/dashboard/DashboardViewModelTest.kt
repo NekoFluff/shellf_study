@@ -13,6 +13,7 @@ import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
@@ -46,6 +47,7 @@ class DashboardViewModelTest {
     private lateinit var reviewSessionRepository: ReviewSessionRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var syncScheduler: FakeSyncScheduler
+    private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
 
     @Before
     fun setUp() {
@@ -60,6 +62,7 @@ class DashboardViewModelTest {
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         settingsRepository = SettingsRepository(dataStore)
         syncScheduler = FakeSyncScheduler()
+        pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
     }
 
     private val viewModelStore = ViewModelStore()
@@ -92,7 +95,8 @@ class DashboardViewModelTest {
                     assignmentRepository = repositories.assignmentRepository,
                     statsRepository = repositories.statsRepository,
                     syncOrchestrator = repositories.syncOrchestrator,
-                    syncScheduler = syncScheduler
+                    syncScheduler = syncScheduler,
+                    pitchAccentScrapeScheduler = pitchAccentScrapeScheduler
                 )
             }
         }

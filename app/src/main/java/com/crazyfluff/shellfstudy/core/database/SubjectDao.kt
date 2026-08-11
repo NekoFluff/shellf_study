@@ -25,4 +25,7 @@ interface SubjectDao {
 
     @Query("SELECT COUNT(*) FROM subjects")
     fun observeTotalCount(): Flow<Int>
+
+    @Query("SELECT characters FROM subjects WHERE subjectType IN ('vocabulary', 'kana_vocabulary') AND characters IS NOT NULL")
+    suspend fun getVocabularyCharacters(): List<String>
 }

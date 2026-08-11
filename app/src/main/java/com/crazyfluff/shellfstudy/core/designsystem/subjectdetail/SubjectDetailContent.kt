@@ -49,7 +49,8 @@ fun SubjectDetailContent(
     isAnswered: Boolean,
     questionType: DetailQuestionType?,
     onRelatedSubjectClick: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showPitchAccent: Boolean = true
 ) {
     val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType != DetailQuestionType.MEANING)
     val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered && questionType != DetailQuestionType.READING)
@@ -127,6 +128,12 @@ fun SubjectDetailContent(
                     }
                     if (detail.nanoriReadings.isNotEmpty()) {
                         ReadingTypeRow(label = "Nanori", readings = detail.nanoriReadings)
+                    }
+                } else if (isVocabulary && showPitchAccent && detail.pitchAccents.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        detail.readings.forEach { reading ->
+                            PitchAccentReadingRow(reading = reading, pitchAccents = detail.pitchAccents)
+                        }
                     }
                 } else {
                     Text(detail.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)

@@ -1,6 +1,10 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.core.database.SubjectEntity
+import com.crazyfluff.shellfstudy.core.network.MeaningData
+import com.crazyfluff.shellfstudy.core.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
@@ -27,6 +31,49 @@ class SubjectRepositoryTest {
     @After
     fun tearDown() {
         server.shutdown()
+    }
+
+    @Test
+    fun `observeSubjectDetail merges bundled pitch accent data into a vocabulary subject`() = runTest {
+        val withPitchAccent = buildTestRepositories(
+            server.url("/").toString(),
+            pitchAccentEntries = mapOf("水" to listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
+        )
+        withPitchAccent.subjectDao.upsertAll(
+            listOf(
+                SubjectEntity(
+                    id = 900,
+                    subjectType = "vocabulary",
+                    level = 1,
+                    slug = "水",
+                    characters = "水",
+                    meanings = listOf(MeaningData(meaning = "Water", primary = true)),
+                    readings = listOf(ReadingData(reading = "みず", primary = true)),
+                    documentUrl = null,
+                    searchTarget = "水 water"
+                )
+            )
+        )
+
+        withPitchAccent.subjectRepository.observeSubjectDetail(900).test {
+            val detail = awaitItem()
+            assertThat(detail?.pitchAccents).containsExactly(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+        }
+    }
+
+    @Test
+    fun `observeSubjectDetail leaves pitch accents empty for a kanji subject even if the dictionary has an entry`() = runTest {
+        val withPitchAccent = buildTestRepositories(
+            server.url("/").toString(),
+            pitchAccentEntries = mapOf("水" to listOf(PitchAccent(reading = "スイ", partOfSpeech = null, pitchNumber = 1)))
+        )
+        server.enqueue(jsonResponse(SUBJECTS_JSON))
+        withPitchAccent.subjectRepository.syncSubjects(force = true)
+
+        withPitchAccent.subjectRepository.observeSubjectDetail(440).test {
+            val detail = awaitItem()
+            assertThat(detail?.pitchAccents).isEmpty()
+        }
     }
 
     @Test

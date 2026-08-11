@@ -1,7 +1,11 @@
 package com.crazyfluff.shellfstudy.feature.subjectdetail
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.network.MeaningData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
@@ -13,14 +17,19 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class SubjectDetailViewModelTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    @get:Rule
+    val tempFolder = TemporaryFolder()
+
     private lateinit var server: MockWebServer
     private lateinit var viewModel: SubjectDetailViewModel
+    private lateinit var settingsRepository: SettingsRepository
 
     @Before
     fun setUp() = runTest {
@@ -33,7 +42,11 @@ class SubjectDetailViewModelTest {
                 subjectEntity(id = 2, characters = "氵", meaning = "Water radical")
             )
         )
-        viewModel = SubjectDetailViewModel(repositories.subjectRepository)
+        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            produceFile = { tempFolder.newFile("test.preferences_pb") }
+        )
+        settingsRepository = SettingsRepository(dataStore)
+        viewModel = SubjectDetailViewModel(repositories.subjectRepository, settingsRepository)
     }
 
     @After
@@ -95,6 +108,20 @@ class SubjectDetailViewModelTest {
             assertThat(backAtRoot.backStack).isEmpty()
 
             assertThat(viewModel.goBack()).isFalse()
+        }
+    }
+
+    @Test
+    fun `uiState reflects showPitchAccent from settings and updates when it changes`() = runTest {
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.showPitchAccent).isTrue()
+
+            settingsRepository.setShowPitchAccent(false)
+            var updated = awaitItem()
+            while (updated.showPitchAccent) updated = awaitItem()
+            assertThat(updated.showPitchAccent).isFalse()
         }
     }
 

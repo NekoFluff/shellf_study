@@ -10,4 +10,9 @@ import dagger.hilt.components.SingletonComponent
 abstract class SyncModule {
     @Binds
     abstract fun bindSyncScheduler(impl: WorkManagerSyncScheduler): SyncScheduler
+
+    @Binds
+    abstract fun bindPitchAccentScrapeScheduler(
+        impl: WorkManagerPitchAccentScrapeScheduler
+    ): PitchAccentScrapeScheduler
 }

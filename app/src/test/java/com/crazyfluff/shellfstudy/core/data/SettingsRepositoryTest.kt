@@ -29,6 +29,18 @@ class SettingsRepositoryTest {
             val settings = awaitItem()
             assertThat(settings.dailyLessonGoal).isEqualTo(DEFAULT_DAILY_LESSON_GOAL)
             assertThat(settings.themeMode).isEqualTo(ThemeMode.SYSTEM)
+            assertThat(settings.showPitchAccent).isTrue()
+        }
+    }
+
+    @Test
+    fun `setShowPitchAccent persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setShowPitchAccent(false)
+
+        repository.settings.test {
+            assertThat(awaitItem().showPitchAccent).isFalse()
         }
     }
 

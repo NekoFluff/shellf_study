@@ -51,4 +51,16 @@ class SettingsViewModelTest {
             assertThat(awaitItem().themeMode).isEqualTo(ThemeMode.DARK)
         }
     }
+
+    @Test
+    fun `onShowPitchAccentChange updates the state`() = runTest {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().showPitchAccent).isTrue()
+
+            viewModel.onShowPitchAccentChange(false)
+            assertThat(awaitItem().showPitchAccent).isFalse()
+        }
+    }
 }

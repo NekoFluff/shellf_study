@@ -30,7 +30,9 @@ data class SubjectDetail(
     val contextSentences: List<ContextSentence>,
     val componentSubjectIds: List<Long>,
     val amalgamationSubjectIds: List<Long>,
-    val visuallySimilarSubjectIds: List<Long>
+    val visuallySimilarSubjectIds: List<Long>,
+    /** Vocabulary/kana-vocabulary only — empty for kanji/radicals, which don't have pitch accent. */
+    val pitchAccents: List<PitchAccent> = emptyList()
 )
 
 data class ContextSentence(val japanese: String, val english: String)

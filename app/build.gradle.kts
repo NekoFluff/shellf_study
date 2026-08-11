@@ -91,6 +91,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
+    implementation(libs.jsoup)
+
     // Unit tests
     testImplementation(libs.junit)
     testImplementation(libs.truth)

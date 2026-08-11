@@ -30,3 +30,11 @@ abstract class TokenCipherModule {
     @Singleton
     abstract fun bindTokenCipher(impl: AndroidKeystoreTokenCipher): TokenCipher
 }
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class PitchAccentBundledSourceModule {
+    @Binds
+    @Singleton
+    abstract fun bindPitchAccentBundledSource(impl: AndroidPitchAccentBundledSource): PitchAccentBundledSource
+}

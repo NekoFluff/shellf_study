@@ -106,7 +106,8 @@ fun SubjectDetailSheet(
                 isAnswered = isAnswered,
                 questionType = questionType,
                 onRelatedSubjectClick = viewModel::navigateToRelated,
-                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
+                showPitchAccent = uiState.showPitchAccent
             )
         }
     }

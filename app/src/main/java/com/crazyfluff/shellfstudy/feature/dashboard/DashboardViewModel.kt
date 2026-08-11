@@ -15,6 +15,7 @@ import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
+import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -63,7 +64,8 @@ class DashboardViewModel @Inject constructor(
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
     private val syncOrchestrator: SyncOrchestrator,
-    private val syncScheduler: SyncScheduler
+    private val syncScheduler: SyncScheduler,
+    private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler
 ) : ViewModel() {
 
     private val _dashboardData = MutableStateFlow(DashboardUiState())
@@ -128,6 +130,7 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             tokenRepository.clearToken()
             syncScheduler.cancelPeriodicSync()
+            pitchAccentScrapeScheduler.cancelPeriodicScrape()
             _dashboardData.update { it.copy(isLoggedOut = true) }
         }
     }

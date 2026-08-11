@@ -31,6 +31,10 @@ class FakeSubjectDao : SubjectDao {
 
     override fun observeTotalCount(): Flow<Int> = subjects.map { it.size }
 
+    override suspend fun getVocabularyCharacters(): List<String> = subjects.value.values
+        .filter { it.subjectType == "vocabulary" || it.subjectType == "kana_vocabulary" }
+        .mapNotNull { it.characters }
+
     /** Test-only helper so [FakeAssignmentDao] can resolve a subject's level for join-style queries. */
     fun levelOf(subjectId: Long): Int? = subjects.value[subjectId]?.level
 

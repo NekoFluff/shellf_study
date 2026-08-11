@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.feature.subjectdetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
@@ -21,7 +22,8 @@ data class SubjectDetailUiState(
     val isLoading: Boolean = true,
     val detail: SubjectDetail? = null,
     val relatedSubjects: Map<Long, SubjectSummary> = emptyMap(),
-    val backStack: List<Long> = emptyList()
+    val backStack: List<Long> = emptyList(),
+    val showPitchAccent: Boolean = true
 )
 
 /**
@@ -32,7 +34,8 @@ data class SubjectDetailUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SubjectDetailViewModel @Inject constructor(
-    private val subjectRepository: SubjectRepository
+    private val subjectRepository: SubjectRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val currentSubjectId = MutableStateFlow<Long?>(null)
@@ -62,13 +65,16 @@ class SubjectDetailViewModel @Inject constructor(
                     }
                 }
                 .combine(backStack) { (detail, related), stack -> Triple(detail, related, stack) }
-                .collect { (detail, related, stack) ->
+                .combine(settingsRepository.settings) { triple, settings -> triple to settings.showPitchAccent }
+                .collect { (triple, showPitchAccent) ->
+                    val (detail, related, stack) = triple
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             detail = detail,
                             relatedSubjects = related.associateBy { summary -> summary.subjectId },
-                            backStack = stack
+                            backStack = stack,
+                            showPitchAccent = showPitchAccent
                         )
                     }
                 }

@@ -2,6 +2,8 @@ package com.crazyfluff.shellfstudy.core.database
 
 import android.content.Context
 import androidx.room.Room
+import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentCacheDao
+import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentDatabase
 import com.crazyfluff.shellfstudy.core.database.reviewhistory.ReviewHistoryDatabase
 import com.crazyfluff.shellfstudy.core.database.reviewhistory.ReviewLogDao
 import dagger.Module
@@ -56,4 +58,15 @@ object DatabaseModule {
 
     @Provides
     fun provideReviewLogDao(db: ReviewHistoryDatabase): ReviewLogDao = db.reviewLogDao()
+
+    @Provides
+    @Singleton
+    fun providePitchAccentDatabase(@ApplicationContext context: Context): PitchAccentDatabase =
+        // Re-derivable by re-scraping weblio.jp (see PitchAccentDatabase's doc comment), but a
+        // destructive migration would force needless re-scraping, so this uses normal migrations.
+        Room.databaseBuilder(context, PitchAccentDatabase::class.java, "pitch_accent.db")
+            .build()
+
+    @Provides
+    fun providePitchAccentCacheDao(db: PitchAccentDatabase): PitchAccentCacheDao = db.pitchAccentCacheDao()
 }

@@ -1,9 +1,12 @@
 package com.crazyfluff.shellfstudy.fakes
 
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.core.data.StatsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.core.data.WeblioPitchAccentParser
+import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
 import kotlinx.serialization.json.Json
@@ -49,14 +52,21 @@ class TestRepositories(
     val syncOrchestrator: SyncOrchestrator
 )
 
-fun buildTestRepositories(baseUrl: String): TestRepositories {
+fun buildTestRepositories(
+    baseUrl: String,
+    pitchAccentEntries: Map<String, List<PitchAccent>> = emptyMap()
+): TestRepositories {
     val api = buildTestApi(baseUrl)
     val subjectDao = FakeSubjectDao()
     val assignmentDao = FakeAssignmentDao(subjectLevelLookup = subjectDao::levelOf, subjectLookup = subjectDao::entityOf)
     val syncStateDao = FakeSyncStateDao()
     val reviewLogDao = FakeReviewLogDao()
 
-    val subjectRepository = SubjectRepository(api, subjectDao, FakeSrsSystemDao(), FakeStudyMaterialDao(), syncStateDao)
+    val pitchAccentRepository = PitchAccentRepository(
+        FakePitchAccentBundledSource(pitchAccentEntries), FakePitchAccentCacheDao(), FakeWeblioApi(), WeblioPitchAccentParser()
+    )
+    val subjectRepository =
+        SubjectRepository(api, subjectDao, FakeSrsSystemDao(), FakeStudyMaterialDao(), syncStateDao, pitchAccentRepository)
     val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository)
     val statsRepository = StatsRepository(api, FakeReviewStatisticDao(), FakeLevelProgressionDao(), reviewLogDao, syncStateDao)
     val waniKaniRepository = WaniKaniRepository(api, statsRepository)
