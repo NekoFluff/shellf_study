@@ -7,20 +7,28 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -152,179 +161,210 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp)
         ) {
-            Text("Daily lesson goal", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                IconButton(
-                    onClick = { onDailyLessonGoalChange(uiState.dailyLessonGoal - 1) },
-                    enabled = uiState.dailyLessonGoal > 1,
-                    modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_DECREASE)
-                ) {
-                    Icon(Icons.Default.Remove, contentDescription = "Decrease daily lesson goal")
-                }
+            SectionCard(title = "Daily lesson goal", icon = Icons.Default.MenuBook) {
                 Text(
-                    text = uiState.dailyLessonGoal.toString(),
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_VALUE)
+                    text = "How many new lessons the dashboard's ring badge counts toward each day.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                IconButton(
-                    onClick = { onDailyLessonGoalChange(uiState.dailyLessonGoal + 1) },
-                    enabled = uiState.dailyLessonGoal < 99,
-                    modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_INCREASE)
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Increase daily lesson goal")
+                    IconButton(
+                        onClick = { onDailyLessonGoalChange(uiState.dailyLessonGoal - 1) },
+                        enabled = uiState.dailyLessonGoal > 1,
+                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_DECREASE)
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = "Decrease daily lesson goal")
+                    }
+                    Text(
+                        text = uiState.dailyLessonGoal.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_VALUE)
+                    )
+                    IconButton(
+                        onClick = { onDailyLessonGoalChange(uiState.dailyLessonGoal + 1) },
+                        enabled = uiState.dailyLessonGoal < 99,
+                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_INCREASE)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Increase daily lesson goal")
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Text("Appearance", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            ThemeOptionRow(
-                label = "System default",
-                mode = ThemeMode.SYSTEM,
-                selected = uiState.themeMode,
-                onSelect = onThemeModeChange,
-                testTag = SettingsScreenTestTags.THEME_SYSTEM_OPTION
-            )
-            ThemeOptionRow(
-                label = "Light",
-                mode = ThemeMode.LIGHT,
-                selected = uiState.themeMode,
-                onSelect = onThemeModeChange,
-                testTag = SettingsScreenTestTags.THEME_LIGHT_OPTION
-            )
-            ThemeOptionRow(
-                label = "Dark",
-                mode = ThemeMode.DARK,
-                selected = uiState.themeMode,
-                onSelect = onThemeModeChange,
-                testTag = SettingsScreenTestTags.THEME_DARK_OPTION
-            )
+            SectionCard(title = "Appearance", icon = Icons.Default.Palette) {
+                ThemeOptionRow(
+                    label = "System default",
+                    mode = ThemeMode.SYSTEM,
+                    selected = uiState.themeMode,
+                    onSelect = onThemeModeChange,
+                    testTag = SettingsScreenTestTags.THEME_SYSTEM_OPTION
+                )
+                ThemeOptionRow(
+                    label = "Light",
+                    mode = ThemeMode.LIGHT,
+                    selected = uiState.themeMode,
+                    onSelect = onThemeModeChange,
+                    testTag = SettingsScreenTestTags.THEME_LIGHT_OPTION
+                )
+                ThemeOptionRow(
+                    label = "Dark",
+                    mode = ThemeMode.DARK,
+                    selected = uiState.themeMode,
+                    onSelect = onThemeModeChange,
+                    testTag = SettingsScreenTestTags.THEME_DARK_OPTION
+                )
+            }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Text("Vocabulary", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Show pitch accent")
-                Switch(
+            SectionCard(title = "Vocabulary", icon = Icons.Default.Translate) {
+                ToggleRow(
+                    label = "Show pitch accent",
+                    description = "Overlays WaniKani's pitch-accent pattern markers on vocabulary readings.",
                     checked = uiState.showPitchAccent,
                     onCheckedChange = onShowPitchAccentChange,
-                    modifier = Modifier.testTag(SettingsScreenTestTags.PITCH_ACCENT_TOGGLE)
+                    testTag = SettingsScreenTestTags.PITCH_ACCENT_TOGGLE
                 )
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Auto-play pronunciation audio")
-                Switch(
+                ToggleRow(
+                    label = "Auto-play pronunciation audio",
+                    description = "Plays a word's audio automatically when a reading question is revealed during reviews.",
                     checked = uiState.autoplayPronunciationAudio,
                     onCheckedChange = onAutoplayPronunciationAudioChange,
-                    modifier = Modifier.testTag(SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE)
+                    testTag = SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Text("Notifications", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            ToggleRow(
-                label = "Enable notifications",
-                checked = uiState.notificationsEnabled,
-                onCheckedChange = onNotificationsEnabledChange,
-                testTag = SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE
-            )
+            SectionCard(title = "Notifications", icon = Icons.Default.Notifications) {
+                ToggleRow(
+                    label = "Enable notifications",
+                    description = "Master switch for every alert below. Turning this off cancels all pending notifications.",
+                    checked = uiState.notificationsEnabled,
+                    onCheckedChange = onNotificationsEnabledChange,
+                    testTag = SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE
+                )
 
-            if (uiState.notificationsEnabled) {
-                ToggleRow(
-                    label = "Reviews available",
-                    checked = uiState.reviewsAvailableEnabled,
-                    onCheckedChange = onReviewsAvailableEnabledChange,
-                    testTag = SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE
-                )
-                ToggleRow(
-                    label = "Review backlog warning",
-                    checked = uiState.reviewsBacklogEnabled,
-                    onCheckedChange = onReviewsBacklogEnabledChange,
-                    testTag = SettingsScreenTestTags.REVIEWS_BACKLOG_TOGGLE
-                )
-                if (uiState.reviewsBacklogEnabled) {
-                    StepperRow(
-                        label = "Backlog threshold",
-                        value = uiState.backlogThreshold,
-                        onValueChange = onBacklogThresholdChange,
-                        decreaseTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE,
-                        increaseTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE,
-                        valueTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_VALUE,
-                        step = 5
+                if (uiState.notificationsEnabled) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    ToggleRow(
+                        label = "Reviews available",
+                        description = "Alerts you the moment new reviews become due — timed to when they actually unlock, not on a fixed schedule.",
+                        checked = uiState.reviewsAvailableEnabled,
+                        onCheckedChange = onReviewsAvailableEnabledChange,
+                        testTag = SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE
                     )
-                }
-                ToggleRow(
-                    label = "Lessons available",
-                    checked = uiState.lessonsAvailableEnabled,
-                    onCheckedChange = onLessonsAvailableEnabledChange,
-                    testTag = SettingsScreenTestTags.LESSONS_AVAILABLE_TOGGLE
-                )
-                ToggleRow(
-                    label = "Daily study reminder",
-                    checked = uiState.dailyReminderEnabled,
-                    onCheckedChange = onDailyReminderEnabledChange,
-                    testTag = SettingsScreenTestTags.DAILY_REMINDER_TOGGLE
-                )
-                if (uiState.dailyReminderEnabled) {
-                    StepperRow(
-                        label = "Reminder hour",
-                        value = uiState.dailyReminderHour,
-                        onValueChange = { onDailyReminderHourChange(it.mod(24)) },
-                        decreaseTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_DECREASE,
-                        increaseTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_INCREASE,
-                        valueTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_VALUE,
-                        valueLabel = { formatHour(it) }
+                    ToggleRow(
+                        label = "Review backlog warning",
+                        description = "Warns you when unanswered reviews pile up past the threshold below. Won't repeat more than once every 6 hours.",
+                        checked = uiState.reviewsBacklogEnabled,
+                        onCheckedChange = onReviewsBacklogEnabledChange,
+                        testTag = SettingsScreenTestTags.REVIEWS_BACKLOG_TOGGLE
                     )
-                }
-                ToggleRow(
-                    label = "Milestones",
-                    checked = uiState.milestonesEnabled,
-                    onCheckedChange = onMilestonesEnabledChange,
-                    testTag = SettingsScreenTestTags.MILESTONES_TOGGLE
-                )
-                ToggleRow(
-                    label = "Quiet hours",
-                    checked = uiState.quietHoursEnabled,
-                    onCheckedChange = onQuietHoursEnabledChange,
-                    testTag = SettingsScreenTestTags.QUIET_HOURS_TOGGLE
-                )
-                if (uiState.quietHoursEnabled) {
-                    StepperRow(
-                        label = "Quiet hours start",
-                        value = uiState.quietHoursStartHour,
-                        onValueChange = { onQuietHoursStartHourChange(it.mod(24)) },
-                        decreaseTestTag = SettingsScreenTestTags.QUIET_HOURS_START_DECREASE,
-                        increaseTestTag = SettingsScreenTestTags.QUIET_HOURS_START_INCREASE,
-                        valueTestTag = SettingsScreenTestTags.QUIET_HOURS_START_VALUE,
-                        valueLabel = { formatHour(it) }
+                    if (uiState.reviewsBacklogEnabled) {
+                        StepperRow(
+                            label = "Backlog threshold",
+                            value = uiState.backlogThreshold,
+                            onValueChange = onBacklogThresholdChange,
+                            decreaseTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE,
+                            increaseTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE,
+                            valueTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_VALUE,
+                            step = 5
+                        )
+                    }
+                    ToggleRow(
+                        label = "Lessons available",
+                        description = "Alerts you when new lessons unlock for the first time.",
+                        checked = uiState.lessonsAvailableEnabled,
+                        onCheckedChange = onLessonsAvailableEnabledChange,
+                        testTag = SettingsScreenTestTags.LESSONS_AVAILABLE_TOGGLE
                     )
-                    StepperRow(
-                        label = "Quiet hours end",
-                        value = uiState.quietHoursEndHour,
-                        onValueChange = { onQuietHoursEndHourChange(it.mod(24)) },
-                        decreaseTestTag = SettingsScreenTestTags.QUIET_HOURS_END_DECREASE,
-                        increaseTestTag = SettingsScreenTestTags.QUIET_HOURS_END_INCREASE,
-                        valueTestTag = SettingsScreenTestTags.QUIET_HOURS_END_VALUE,
-                        valueLabel = { formatHour(it) }
+                    ToggleRow(
+                        label = "Daily study reminder",
+                        description = "A one-time nudge at the hour below, sent only if you haven't studied yet that day.",
+                        checked = uiState.dailyReminderEnabled,
+                        onCheckedChange = onDailyReminderEnabledChange,
+                        testTag = SettingsScreenTestTags.DAILY_REMINDER_TOGGLE
                     )
+                    if (uiState.dailyReminderEnabled) {
+                        StepperRow(
+                            label = "Reminder hour",
+                            value = uiState.dailyReminderHour,
+                            onValueChange = { onDailyReminderHourChange(it.mod(24)) },
+                            decreaseTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_DECREASE,
+                            increaseTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_INCREASE,
+                            valueTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_VALUE,
+                            valueLabel = { formatHour(it) }
+                        )
+                    }
+                    ToggleRow(
+                        label = "Milestones",
+                        description = "Celebrates leveling up and every 10 items you burn.",
+                        checked = uiState.milestonesEnabled,
+                        onCheckedChange = onMilestonesEnabledChange,
+                        testTag = SettingsScreenTestTags.MILESTONES_TOGGLE
+                    )
+                    ToggleRow(
+                        label = "Quiet hours",
+                        description = "Holds back reviews/lessons/milestone alerts during the window below and delivers them right after it ends. The daily reminder is skipped instead of delayed.",
+                        checked = uiState.quietHoursEnabled,
+                        onCheckedChange = onQuietHoursEnabledChange,
+                        testTag = SettingsScreenTestTags.QUIET_HOURS_TOGGLE
+                    )
+                    if (uiState.quietHoursEnabled) {
+                        StepperRow(
+                            label = "Quiet hours start",
+                            value = uiState.quietHoursStartHour,
+                            onValueChange = { onQuietHoursStartHourChange(it.mod(24)) },
+                            decreaseTestTag = SettingsScreenTestTags.QUIET_HOURS_START_DECREASE,
+                            increaseTestTag = SettingsScreenTestTags.QUIET_HOURS_START_INCREASE,
+                            valueTestTag = SettingsScreenTestTags.QUIET_HOURS_START_VALUE,
+                            valueLabel = { formatHour(it) }
+                        )
+                        StepperRow(
+                            label = "Quiet hours end",
+                            value = uiState.quietHoursEndHour,
+                            onValueChange = { onQuietHoursEndHourChange(it.mod(24)) },
+                            decreaseTestTag = SettingsScreenTestTags.QUIET_HOURS_END_DECREASE,
+                            increaseTestTag = SettingsScreenTestTags.QUIET_HOURS_END_INCREASE,
+                            valueTestTag = SettingsScreenTestTags.QUIET_HOURS_END_VALUE,
+                            valueLabel = { formatHour(it) }
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+/** Card shell used for every settings section — a small tinted icon next to the section title, matching the dashboard's card language. */
+@Composable
+private fun SectionCard(
+    title: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(title, style = MaterialTheme.typography.titleMedium)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            content()
         }
     }
 }
@@ -334,15 +374,27 @@ private fun ToggleRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    testTag: String
+    testTag: String,
+    description: String? = null
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-    ) {
-        Text(label)
-        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.testTag(testTag))
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.testTag(testTag))
+        }
+        if (description != null) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 52.dp)
+            )
+        }
     }
 }
 
@@ -420,7 +472,7 @@ private fun ThemeOptionRow(
 private fun SettingsScreenPreview() {
     ShellfStudyTheme {
         SettingsScreen(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, notificationsEnabled = true),
             onDailyLessonGoalChange = {},
             onThemeModeChange = {},
             onShowPitchAccentChange = {},
