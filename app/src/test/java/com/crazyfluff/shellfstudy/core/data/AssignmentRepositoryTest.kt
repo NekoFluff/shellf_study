@@ -52,6 +52,23 @@ class AssignmentRepositoryTest {
     }
 
     @Test
+    fun `refreshReviewQueue skips re-syncing assignments once the cache is fresh`() = runTest {
+        server.enqueue(jsonResponse(collectionJson(emptyList()))) // subjects sync
+        server.enqueue(jsonResponse(assignmentJson(id = 999, availableAt = "2020-01-01T00:00:00.000000Z"))) // assignments sync
+
+        val first = repository.refreshReviewQueue()
+        assertThat(first).isInstanceOf(ApiResult.Success::class.java)
+        assertThat(server.requestCount).isEqualTo(2)
+
+        // A second call right after should be served entirely from the staleness-gated cache —
+        // no further requests, since neither subjects nor assignments are stale yet. Only two
+        // responses are enqueued above, so a regression that forces a re-sync here would fail.
+        val second = repository.refreshReviewQueue()
+        assertThat(second).isInstanceOf(ApiResult.Success::class.java)
+        assertThat(server.requestCount).isEqualTo(2)
+    }
+
+    @Test
     fun `observeLessonQueue emits unlocked-not-started items with mnemonics`() = runTest {
         seedSubject(
             id = 440, characters = "水", meaning = "Water", reading = "みず",

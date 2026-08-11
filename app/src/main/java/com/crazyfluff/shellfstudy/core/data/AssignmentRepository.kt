@@ -68,10 +68,11 @@ class AssignmentRepository @Inject constructor(
     }
 
     /**
-     * Forces a full incremental refresh right now — used before starting a review/lesson session.
-     * Also ensures subjects are synced (staleness-gated, not forced): assignments alone aren't
-     * enough to render a queue — without subject content already cached, [observeReviewQueue] and
-     * [observeLessonQueue] would join to nothing and silently show an empty queue.
+     * Ensures assignments and subjects are up to date before starting a review/lesson session —
+     * both staleness-gated, not forced, since the dashboard already syncs this same data on load
+     * and on every resume. Subjects are needed alongside assignments: without subject content
+     * already cached, [observeReviewQueue] and [observeLessonQueue] would join to nothing and
+     * silently show an empty queue.
      */
     suspend fun refreshReviewQueue(): ApiResult<Unit> = refreshQueue()
 
@@ -80,7 +81,7 @@ class AssignmentRepository @Inject constructor(
     private suspend fun refreshQueue(): ApiResult<Unit> {
         val subjectsResult = subjectRepository.syncSubjects()
         if (subjectsResult is ApiResult.Error) return subjectsResult
-        return syncAssignments(force = true)
+        return syncAssignments(force = false)
     }
 
     suspend fun startAssignment(assignmentId: Long): ApiResult<Unit> = safeApiCall {
