@@ -1,8 +1,13 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
+import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
@@ -15,6 +20,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.util.concurrent.TimeUnit
 
 class LessonViewModelTest {
@@ -22,14 +28,25 @@ class LessonViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    @get:Rule
+    val tempFolder = TemporaryFolder()
+
     private lateinit var server: MockWebServer
     private lateinit var assignmentRepository: AssignmentRepository
+    private lateinit var pitchAccentRepository: PitchAccentRepository
+    private lateinit var settingsRepository: SettingsRepository
 
     @Before
     fun setUp() {
         server = MockWebServer()
         server.start()
-        assignmentRepository = buildTestRepositories(server.url("/").toString()).assignmentRepository
+        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            produceFile = { tempFolder.newFile("test.preferences_pb") }
+        )
+        settingsRepository = SettingsRepository(dataStore)
+        val repositories = buildTestRepositories(server.url("/").toString())
+        assignmentRepository = repositories.assignmentRepository
+        pitchAccentRepository = repositories.pitchAccentRepository
     }
 
     @After
@@ -37,7 +54,7 @@ class LessonViewModelTest {
         server.shutdown()
     }
 
-    private fun createViewModel() = LessonViewModel(assignmentRepository)
+    private fun createViewModel() = LessonViewModel(assignmentRepository, pitchAccentRepository, settingsRepository)
 
     /** Routes by path — refreshing the lesson queue now syncs subjects and assignments, in either order. */
     private fun dispatch(

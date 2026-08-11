@@ -47,7 +47,15 @@ data class LessonItem(
     val meanings: List<String>,
     val readings: List<String>,
     val meaningMnemonic: String?,
-    val readingMnemonic: String?
+    val readingMnemonic: String?,
+    val auxiliaryMeanings: List<String> = emptyList(),
+    val meaningHint: String? = null,
+    val readingHint: String? = null,
+    val onyomiReadings: List<String> = emptyList(),
+    val kunyomiReadings: List<String> = emptyList(),
+    val nanoriReadings: List<String> = emptyList(),
+    val partsOfSpeech: List<String> = emptyList(),
+    val contextSentences: List<ContextSentence> = emptyList()
 )
 
 /** A subject as shown in search results. [srsStage] is null if no assignment exists yet. */

@@ -275,7 +275,7 @@ fun SectionEyebrow(text: String) {
 }
 
 @Composable
-private fun VocabReadingRow(
+fun VocabReadingRow(
     reading: String,
     pitchAccents: List<PitchAccent>,
     showPitchAccent: Boolean,
@@ -300,7 +300,7 @@ private fun VocabReadingRow(
 }
 
 @Composable
-private fun ReadingTypeRow(label: String, readings: List<String>) {
+fun ReadingTypeRow(label: String, readings: List<String>) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = label,

@@ -47,6 +47,7 @@ class TestRepositories(
     val reviewLogDao: FakeReviewLogDao,
     val subjectRepository: SubjectRepository,
     val assignmentRepository: AssignmentRepository,
+    val pitchAccentRepository: PitchAccentRepository,
     val statsRepository: StatsRepository,
     val waniKaniRepository: WaniKaniRepository,
     val syncOrchestrator: SyncOrchestrator
@@ -74,6 +75,6 @@ fun buildTestRepositories(
 
     return TestRepositories(
         api, subjectDao, assignmentDao, syncStateDao, reviewLogDao,
-        subjectRepository, assignmentRepository, statsRepository, waniKaniRepository, syncOrchestrator
+        subjectRepository, assignmentRepository, pitchAccentRepository, statsRepository, waniKaniRepository, syncOrchestrator
     )
 }

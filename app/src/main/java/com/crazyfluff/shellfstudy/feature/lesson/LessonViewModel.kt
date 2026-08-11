@@ -4,13 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
+import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
+import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -39,14 +45,18 @@ data class LessonUiState(
     val feedback: LessonAnswerFeedback? = null,
     val totalQuizCount: Int = 0,
     val remainingQuizCount: Int = 0,
-    val isSessionComplete: Boolean = false
+    val isSessionComplete: Boolean = false,
+    val showPitchAccent: Boolean = true,
+    val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap()
 )
 
 private data class PendingLessonQuestion(val item: LessonItem, val type: LessonQuestionType)
 
 @HiltViewModel
 class LessonViewModel @Inject constructor(
-    private val assignmentRepository: AssignmentRepository
+    private val assignmentRepository: AssignmentRepository,
+    private val pitchAccentRepository: PitchAccentRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LessonUiState())
@@ -57,6 +67,11 @@ class LessonViewModel @Inject constructor(
 
     init {
         load()
+        viewModelScope.launch {
+            settingsRepository.settings.collect { settings ->
+                _uiState.update { it.copy(showPitchAccent = settings.showPitchAccent) }
+            }
+        }
     }
 
     fun load() {
@@ -118,7 +133,21 @@ class LessonViewModel @Inject constructor(
         val state = _uiState.value
         val selected = state.availableLessons.filter { it.assignmentId in state.selectedAssignmentIds }
         if (selected.isEmpty()) return
-        _uiState.update { it.copy(phase = LessonPhase.STUDY, studyItems = selected, studyIndex = 0) }
+        viewModelScope.launch {
+            val pitchAccents = fetchPitchAccents(selected)
+            _uiState.update {
+                it.copy(phase = LessonPhase.STUDY, studyItems = selected, studyIndex = 0, pitchAccentsBySubjectId = pitchAccents)
+            }
+        }
+    }
+
+    /** Fanned out in parallel rather than sequentially, so a large "Select All" batch of vocabulary
+     * items doesn't serialize dozens of individual pitch-accent lookups one after another. */
+    private suspend fun fetchPitchAccents(items: List<LessonItem>): Map<Long, List<PitchAccent>> = coroutineScope {
+        items
+            .filter { (it.subjectType == SubjectType.VOCABULARY || it.subjectType == SubjectType.KANA_VOCABULARY) && it.characters != null }
+            .map { item -> item.subjectId to async { pitchAccentRepository.observePitchAccents(item.characters!!).first() } }
+            .associate { (subjectId, deferred) -> subjectId to deferred.await() }
     }
 
     fun onStudyCardSwiped(index: Int) {

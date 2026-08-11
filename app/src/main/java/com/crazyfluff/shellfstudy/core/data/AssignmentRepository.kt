@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.core.data
 
+import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.LevelItem
@@ -127,7 +128,15 @@ class AssignmentRepository @Inject constructor(
                             meanings = subject.meanings.map { it.meaning },
                             readings = subject.readings.map { it.reading },
                             meaningMnemonic = subject.meaningMnemonic,
-                            readingMnemonic = subject.readingMnemonic
+                            readingMnemonic = subject.readingMnemonic,
+                            auxiliaryMeanings = subject.auxiliaryMeanings.map { it.meaning },
+                            meaningHint = subject.meaningHint,
+                            readingHint = subject.readingHint,
+                            onyomiReadings = subject.readings.filter { it.type == "onyomi" }.map { it.reading },
+                            kunyomiReadings = subject.readings.filter { it.type == "kunyomi" }.map { it.reading },
+                            nanoriReadings = subject.readings.filter { it.type == "nanori" }.map { it.reading },
+                            partsOfSpeech = subject.partsOfSpeech,
+                            contextSentences = subject.contextSentences.map { ContextSentence(japanese = it.ja, english = it.en) }
                         )
                     }
                 }

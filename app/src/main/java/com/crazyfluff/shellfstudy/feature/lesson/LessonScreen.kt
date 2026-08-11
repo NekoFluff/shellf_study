@@ -72,9 +72,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
+import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.ReadingTypeRow
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SectionEyebrow
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.VocabReadingRow
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
@@ -327,8 +331,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Headline: glyph + level/type subtitle as one tight cluster, mirroring the subject
-            // detail view's headline — see SubjectDetailContent.kt.
+            val isVocabulary = item.subjectType == SubjectType.VOCABULARY || item.subjectType == SubjectType.KANA_VOCABULARY
+            val hasReadingBreakdown = item.onyomiReadings.isNotEmpty() || item.kunyomiReadings.isNotEmpty() || item.nanoriReadings.isNotEmpty()
+
+            // Headline: glyph + level/type subtitle + (vocab) part-of-speech tags as one tight
+            // cluster, mirroring the subject detail view's headline — see SubjectDetailContent.kt.
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SubjectGlyph(
                     characters = item.characters ?: item.meanings.firstOrNull(),
@@ -342,13 +349,28 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (isVocabulary && item.partsOfSpeech.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item.partsOfSpeech.forEach { part -> AssistChip(onClick = {}, label = { Text(part) }) }
+                    }
+                }
             }
 
-            LessonDetailSection(title = "Meaning", primary = item.meanings.joinToString(", "), mnemonic = item.meaningMnemonic)
+            LessonMeaningSection(item)
 
             if (item.readings.isNotEmpty()) {
                 HorizontalDivider()
-                LessonDetailSection(title = "Reading", primary = item.readings.joinToString(", "), mnemonic = item.readingMnemonic)
+                LessonReadingSection(
+                    item = item,
+                    isVocabulary = isVocabulary,
+                    hasReadingBreakdown = hasReadingBreakdown,
+                    pitchAccents = uiState.pitchAccentsBySubjectId[item.subjectId].orEmpty(),
+                    showPitchAccent = uiState.showPitchAccent
+                )
+            }
+            if (isVocabulary && item.contextSentences.isNotEmpty()) {
+                HorizontalDivider()
+                LessonContextSentencesSection(item.contextSentences)
             }
         }
     }
@@ -609,16 +631,88 @@ private fun LessonGlyphTile(
 }
 
 @Composable
-private fun LessonDetailSection(title: String, primary: String, mnemonic: String?) {
+private fun LessonMeaningSection(item: LessonItem) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(primary, style = MaterialTheme.typography.bodyLarge)
+            Text("Meaning", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(item.meanings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
+            if (item.auxiliaryMeanings.isNotEmpty()) {
+                Text(
+                    text = item.auxiliaryMeanings.joinToString(", "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-        if (!mnemonic.isNullOrBlank()) {
+        if (!item.meaningMnemonic.isNullOrBlank()) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SectionEyebrow("$title mnemonic")
-                WkMnemonicText(mnemonic, style = MaterialTheme.typography.bodyMedium)
+                SectionEyebrow("Meaning mnemonic")
+                WkMnemonicText(item.meaningMnemonic, style = MaterialTheme.typography.bodyMedium)
+                if (!item.meaningHint.isNullOrBlank()) {
+                    WkMnemonicText(item.meaningHint, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LessonReadingSection(
+    item: LessonItem,
+    isVocabulary: Boolean,
+    hasReadingBreakdown: Boolean,
+    pitchAccents: List<PitchAccent>,
+    showPitchAccent: Boolean
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Reading", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            when {
+                item.subjectType == SubjectType.KANJI && hasReadingBreakdown -> {
+                    if (item.onyomiReadings.isNotEmpty()) ReadingTypeRow(label = "On'yomi", readings = item.onyomiReadings)
+                    if (item.kunyomiReadings.isNotEmpty()) ReadingTypeRow(label = "Kun'yomi", readings = item.kunyomiReadings)
+                    if (item.nanoriReadings.isNotEmpty()) ReadingTypeRow(label = "Nanori", readings = item.nanoriReadings)
+                }
+                isVocabulary -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    item.readings.forEach { reading ->
+                        VocabReadingRow(
+                            reading = reading,
+                            pitchAccents = pitchAccents,
+                            showPitchAccent = showPitchAccent,
+                            hasAudio = false,
+                            onPlayReading = null
+                        )
+                    }
+                }
+                else -> Text(item.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        if (!item.readingMnemonic.isNullOrBlank()) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SectionEyebrow("Reading mnemonic")
+                WkMnemonicText(item.readingMnemonic, style = MaterialTheme.typography.bodyMedium)
+                if (!item.readingHint.isNullOrBlank()) {
+                    WkMnemonicText(item.readingHint, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionEyebrow("Context sentences")
+        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            sentences.forEach { sentence ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = sentence.english,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
