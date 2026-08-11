@@ -2,14 +2,20 @@ package com.crazyfluff.shellfstudy.core.designsystem.writing
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -35,6 +41,8 @@ object WritingPracticeTestTags {
 private const val KANJIVG_UNITS = 109f
 private const val REFERENCE_STROKE_WIDTH_UNITS = 3f
 private const val INK_STROKE_WIDTH_DP = 4f
+private const val GRID_STROKE_WIDTH_DP = 1f
+private val GRID_DASH = floatArrayOf(12f, 10f)
 
 /**
  * A blank(ish) drawing surface for tracing a kanji's glyph with a finger or stylus. Stateless:
@@ -46,6 +54,10 @@ private const val INK_STROKE_WIDTH_DP = 4f
  * 109x109 unit square and are drawn inside a `scale()` block to fit; user ink points arrive from
  * `pointerInput` already in this canvas's own local pixel space and are drawn outside that block.
  * Mixing the two up would draw the user's ink at 109/[size]ths of its intended size.
+ *
+ * [shape] is applied via `clip`, not just as a visual outline — pointer drags that continue past
+ * the edge of the canvas (finger/stylus overshoot is common) would otherwise paint ink outside the
+ * paper area entirely, since Compose doesn't clip draw calls to a layout's bounds by default.
  */
 @Composable
 fun WritingCanvas(
@@ -57,9 +69,12 @@ fun WritingCanvas(
     onStrokeDrag: (Offset) -> Unit,
     onStrokeEnd: () -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 240.dp,
+    size: Dp = 260.dp,
+    shape: Shape = RoundedCornerShape(16.dp),
     inkColor: Color = Color.Black,
-    referenceColor: Color = Color.Black.copy(alpha = 0.15f)
+    referenceColor: Color = Color.Black.copy(alpha = 0.15f),
+    gridColor: Color = Color.Black.copy(alpha = 0.09f),
+    borderColor: Color = MaterialTheme.colorScheme.outlineVariant
 ) {
     val referencePaths = remember(referenceStrokes) {
         referenceStrokes.map { PathParser().parsePathString(it.pathData).toPath() }
@@ -71,7 +86,9 @@ fun WritingCanvas(
     Canvas(
         modifier = modifier
             .size(size)
+            .clip(shape)
             .background(Color.White)
+            .border(width = 1.dp, color = borderColor, shape = shape)
             .testTag(WritingPracticeTestTags.CANVAS)
             .pointerInput(onStrokeStart, onStrokeDrag, onStrokeEnd) {
                 detectDragGestures(
@@ -85,6 +102,8 @@ fun WritingCanvas(
                 )
             }
     ) {
+        drawPracticeGrid(gridColor)
+
         if (showReference && referencePaths.isNotEmpty()) {
             val scaleFactor = this.size.width / KANJIVG_UNITS
             scale(scaleFactor, scaleFactor, pivot = Offset.Zero) {
@@ -96,6 +115,22 @@ fun WritingCanvas(
         completedStrokes.forEach { stroke -> drawInkPath(stroke.points, inkColor, ink) }
         if (currentStrokePoints.size > 1) drawInkPath(currentStrokePoints, inkColor, ink)
     }
+}
+
+/**
+ * The classic 米字格 ("rice character grid") kanji practice paper guide — a center cross plus
+ * corner-to-corner diagonals — so strokes can be judged against the glyph's natural center and
+ * proportions rather than freehand on a blank square.
+ */
+private fun DrawScope.drawPracticeGrid(color: Color) {
+    val w = size.width
+    val h = size.height
+    val style = Stroke(width = GRID_STROKE_WIDTH_DP.dp.toPx(), pathEffect = PathEffect.dashPathEffect(GRID_DASH))
+
+    drawLine(color, Offset(w / 2f, 0f), Offset(w / 2f, h), style.width, pathEffect = style.pathEffect)
+    drawLine(color, Offset(0f, h / 2f), Offset(w, h / 2f), style.width, pathEffect = style.pathEffect)
+    drawLine(color, Offset(0f, 0f), Offset(w, h), style.width, pathEffect = style.pathEffect)
+    drawLine(color, Offset(w, 0f), Offset(0f, h), style.width, pathEffect = style.pathEffect)
 }
 
 private fun DrawScope.drawInkPath(points: List<Offset>, color: Color, style: Stroke) {
