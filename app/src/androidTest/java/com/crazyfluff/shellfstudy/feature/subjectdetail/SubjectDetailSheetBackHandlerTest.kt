@@ -7,6 +7,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.espresso.Espresso
@@ -37,7 +38,7 @@ class SubjectDetailSheetBackHandlerTest {
         var popped = false
         var dismissed = false
         composeTestRule.setContent {
-            var hasHistory by mutableStateOf(true)
+            var hasHistory by remember { mutableStateOf(true) }
             ModalBottomSheet(onDismissRequest = { dismissed = true }, sheetState = rememberModalBottomSheetState()) {
                 BackHandler(enabled = hasHistory) {
                     popped = true
