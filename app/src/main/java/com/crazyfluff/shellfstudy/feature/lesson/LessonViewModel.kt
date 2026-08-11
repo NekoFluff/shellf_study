@@ -8,7 +8,10 @@ import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.core.data.model.RankChange
+import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -28,7 +31,12 @@ private const val DEFAULT_LESSON_SELECTION_SIZE = 5
 enum class LessonPhase { SELECT, STUDY, QUIZ }
 enum class LessonQuestionType { MEANING, READING }
 
-data class LessonAnswerFeedback(val isCorrect: Boolean, val correctAnswer: String)
+data class LessonAnswerFeedback(
+    val isCorrect: Boolean,
+    val correctAnswer: String,
+    val wasCloseMatch: Boolean = false,
+    val answerCount: Int = 1
+)
 
 data class LessonUiState(
     val isLoading: Boolean = true,
@@ -43,6 +51,7 @@ data class LessonUiState(
     val currentQuestionType: LessonQuestionType? = null,
     val answerInput: String = "",
     val feedback: LessonAnswerFeedback? = null,
+    val rankChange: RankChange? = null,
     val totalQuizCount: Int = 0,
     val remainingQuizCount: Int = 0,
     val isSessionComplete: Boolean = false,
@@ -206,6 +215,11 @@ class LessonViewModel @Inject constructor(
         _uiState.update { it.copy(answerInput = value) }
     }
 
+    /** Meaning answers pool the primary meanings with WaniKani's own whitelist synonyms — both are
+     *  equally acceptable. Reading answers stay exact-match-only, so no auxiliary readings exist. */
+    private fun candidatesFor(item: LessonItem, type: LessonQuestionType): List<String> =
+        if (type == LessonQuestionType.MEANING) item.meanings + item.auxiliaryMeanings else item.readings
+
     fun submitAnswer() {
         val state = _uiState.value
         if (state.feedback != null) return
@@ -213,15 +227,24 @@ class LessonViewModel @Inject constructor(
         val type = state.currentQuestionType ?: return
         if (state.answerInput.isBlank()) return
 
-        val candidates = if (type == LessonQuestionType.MEANING) item.meanings else item.readings
-        val normalizedAnswer = if (type == LessonQuestionType.READING) {
-            RomajiConverter.toHiragana(state.answerInput.trim())
+        val candidates = candidatesFor(item, type)
+        if (type == LessonQuestionType.MEANING) {
+            val match = CloseEnoughMatcher.match(state.answerInput, candidates)
+            gradeAnswer(item, type, match.isMatch, candidates, wasCloseMatch = match.isMatch && !match.isExact)
         } else {
-            state.answerInput.trim()
+            val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
+            val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
+            gradeAnswer(item, type, isCorrect, candidates)
         }
-        val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
-        gradeAnswer(item, type, isCorrect, candidates)
     }
+
+    /** Never lets a malformed answer crash grading — falls back to the raw (untranslated) text. */
+    private fun convertReadingSafely(rawAnswer: String): String =
+        try {
+            RomajiConverter.toHiragana(rawAnswer)
+        } catch (e: Exception) {
+            rawAnswer
+        }
 
     /** Gives up on the current question — treated the same as a wrong answer, requeued for another pass. */
     fun dontKnowAnswer() {
@@ -229,7 +252,7 @@ class LessonViewModel @Inject constructor(
         if (state.feedback != null) return
         val item = state.currentQuizItem ?: return
         val type = state.currentQuestionType ?: return
-        val candidates = if (type == LessonQuestionType.MEANING) item.meanings else item.readings
+        val candidates = candidatesFor(item, type)
         gradeAnswer(item, type, isCorrect = false, candidates)
     }
 
@@ -237,7 +260,8 @@ class LessonViewModel @Inject constructor(
         item: LessonItem,
         type: LessonQuestionType,
         isCorrect: Boolean,
-        candidates: List<String>
+        candidates: List<String>,
+        wasCloseMatch: Boolean = false
     ) {
         quizQueue.removeFirstOrNull()
         if (!isCorrect) {
@@ -250,7 +274,7 @@ class LessonViewModel @Inject constructor(
 
         _uiState.update {
             it.copy(
-                feedback = LessonAnswerFeedback(isCorrect, candidates.joinToString(", ")),
+                feedback = LessonAnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
                 remainingQuizCount = quizQueue.size
             )
         }
@@ -258,7 +282,15 @@ class LessonViewModel @Inject constructor(
 
     private fun markStarted(item: LessonItem) {
         if (!startedAssignmentIds.add(item.assignmentId)) return
-        viewModelScope.launch { assignmentRepository.startAssignment(item.assignmentId) }
+        viewModelScope.launch {
+            val result = assignmentRepository.startAssignment(item.assignmentId)
+            if (result is ApiResult.Success) {
+                // Every lesson item starts the same way — locked/unstarted straight to Apprentice I —
+                // so unlike a review's SRS-stage change, no server round-trip data is needed to know
+                // the transition; only whether it actually succeeded.
+                _uiState.update { it.copy(rankChange = RankChange(SrsStage.LOCKED, SrsStage.APPRENTICE_1)) }
+            }
+        }
     }
 
     fun onContinue() {
@@ -269,7 +301,7 @@ class LessonViewModel @Inject constructor(
         val next = quizQueue.firstOrNull()
         if (next == null) {
             _uiState.update {
-                it.copy(isSessionComplete = true, currentQuizItem = null, currentQuestionType = null)
+                it.copy(isSessionComplete = true, currentQuizItem = null, currentQuestionType = null, rankChange = null)
             }
             return
         }
@@ -279,6 +311,7 @@ class LessonViewModel @Inject constructor(
                 currentQuestionType = next.type,
                 answerInput = "",
                 feedback = null,
+                rankChange = null,
                 remainingQuizCount = quizQueue.size
             )
         }

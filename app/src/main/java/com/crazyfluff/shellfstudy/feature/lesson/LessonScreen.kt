@@ -61,11 +61,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,12 +77,12 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SectionEyebrow
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.VocabReadingRow
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.WkMnemonicText
+import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.network.SubjectType
-import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 import kotlinx.coroutines.flow.collect
 import kotlin.math.roundToInt
 
@@ -117,6 +114,7 @@ object LessonScreenTestTags {
     const val SUBMIT_BUTTON = "lesson_submit_button"
     const val DONT_KNOW_BUTTON = "lesson_dont_know_button"
     const val FEEDBACK_TEXT = "lesson_feedback_text"
+    const val RANK_CHANGE_TEXT = "lesson_rank_change_text"
     const val CONTINUE_BUTTON = "lesson_continue_button"
     const val SESSION_COMPLETE = "lesson_session_complete"
     const val DONE_BUTTON = "lesson_done_button"
@@ -782,7 +780,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             singleLine = true,
             enabled = uiState.feedback == null,
             visualTransformation = if (questionType == LessonQuestionType.READING) {
-                LessonRomajiVisualTransformation
+                RomajiVisualTransformation
             } else {
                 VisualTransformation.None
             },
@@ -810,11 +808,20 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             }
         } else {
             Text(
-                text = if (feedback.isCorrect) "Correct!" else "Incorrect: ${feedback.correctAnswer}",
+                text = feedbackText(feedback),
                 color = if (feedback.isCorrect) SrsStageColors.Enlightened else MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.testTag(LessonScreenTestTags.FEEDBACK_TEXT)
             )
+            uiState.rankChange?.let { rankChange ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Now: ${rankChange.to.displayName}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.testTag(LessonScreenTestTags.RANK_CHANGE_TEXT)
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = onContinue,
@@ -824,16 +831,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
     }
 }
 
-/** Mirrors ReviewScreen's romaji preview transform — see that file for why this doesn't touch the raw input. */
-private object LessonRomajiVisualTransformation : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText {
-        val converted = RomajiConverter.toHiragana(text.text)
-        val offsetMapping = object : OffsetMapping {
-            override fun originalToTransformed(offset: Int): Int = converted.length
-            override fun transformedToOriginal(offset: Int): Int = text.length
-        }
-        return TransformedText(AnnotatedString(converted), offsetMapping)
-    }
+private fun feedbackText(feedback: LessonAnswerFeedback): String = when {
+    !feedback.isCorrect -> "Incorrect: ${feedback.correctAnswer}"
+    feedback.wasCloseMatch -> "Correct! (accepted as close to: ${feedback.correctAnswer})"
+    feedback.answerCount > 1 -> "Correct! Other accepted answers: ${feedback.correctAnswer}"
+    else -> "Correct!"
 }
 
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)

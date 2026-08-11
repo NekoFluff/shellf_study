@@ -17,6 +17,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,7 @@ enum class DetailQuestionType { MEANING, READING }
 object SubjectDetailTestTags {
     const val SHEET_ROOT = "subject_detail_sheet_root"
     const val CONTENT_ROOT = "subject_detail_content_root"
+    const val PEEK_HANDLE = "subject_detail_peek_handle"
 }
 
 /**
@@ -67,8 +69,8 @@ fun SubjectDetailContent(
     onPlayReading: ((String) -> Unit)? = null,
     strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable
 ) {
-    val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType != DetailQuestionType.MEANING)
-    val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered && questionType != DetailQuestionType.READING)
+    val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.MEANING)
+    val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.READING)
     val hasReadings = detail.readings.isNotEmpty()
     val isVocabulary = detail.subjectType == SubjectType.VOCABULARY || detail.subjectType == SubjectType.KANA_VOCABULARY
 
@@ -93,11 +95,20 @@ fun SubjectDetailContent(
         }
     }
 
+    // Reset (not just remembered fresh) so navigating deeper into a related subject scrolls back
+    // to the top of its own content, instead of inheriting whatever offset the previous subject was
+    // scrolled to — an effect-driven reset animates cleanly rather than discarding in-flight gesture
+    // state on the same frame the way keying rememberScrollState() to subjectId would.
+    val scrollState = rememberScrollState()
+    LaunchedEffect(detail.subjectId) {
+        scrollState.scrollTo(0)
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .nestedScroll(scrollBoundaryConnection)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .testTag(SubjectDetailTestTags.CONTENT_ROOT),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {

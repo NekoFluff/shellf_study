@@ -10,6 +10,8 @@ import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.core.data.model.RankChange
+import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
@@ -110,6 +112,35 @@ class ReviewViewModelTest {
             assertThat(finalState.feedback).isNull()
             assertThat(finalState.sessionItemsReviewed).isEqualTo(1)
             assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `a rank change from completing an item surfaces once and clears on continue`() = runTest {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()), jsonResponse(reviewResultJsonWithRankChange()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.rankChange).isNull()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            // The rank change arrives asynchronously — submitReview is a separate network call not
+            // strictly ordered against the feedback update, so wait until both have landed rather
+            // than assuming a fixed number of emissions.
+            var settled = awaitItem()
+            while (settled.feedback == null || settled.rankChange == null) settled = awaitItem()
+            assertThat(settled.feedback?.isCorrect).isTrue()
+            assertThat(settled.rankChange).isEqualTo(RankChange(SrsStage.APPRENTICE_3, SrsStage.GURU_1))
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat(finalState.rankChange).isNull()
         }
     }
 
@@ -518,12 +549,26 @@ class ReviewViewModelTest {
         {"object": "collection", "url": "https://api.wanikani.com/v2/x", "total_count": 0, "data": []}
     """.trimIndent()
 
+    /** Same stage in and out — no rank-change emission, so tests unrelated to that feature don't
+     *  need to account for an extra uiState update. See [reviewResultJsonWithRankChange] for that. */
     private fun reviewResultJson() = """
         {
           "id": 1, "object": "review", "url": "https://api.wanikani.com/v2/reviews/1",
           "data_updated_at": "2026-01-01T00:00:00.000000Z",
           "data": {
-            "assignment_id": 555, "subject_id": 440, "starting_srs_stage": 3, "ending_srs_stage": 4,
+            "assignment_id": 555, "subject_id": 440, "starting_srs_stage": 3, "ending_srs_stage": 3,
+            "incorrect_meaning_answers": 0, "incorrect_reading_answers": 0,
+            "created_at": "2026-01-01T00:00:00.000000Z"
+          }
+        }
+    """.trimIndent()
+
+    private fun reviewResultJsonWithRankChange() = """
+        {
+          "id": 1, "object": "review", "url": "https://api.wanikani.com/v2/reviews/1",
+          "data_updated_at": "2026-01-01T00:00:00.000000Z",
+          "data": {
+            "assignment_id": 555, "subject_id": 440, "starting_srs_stage": 3, "ending_srs_stage": 5,
             "incorrect_meaning_answers": 0, "incorrect_reading_answers": 0,
             "created_at": "2026-01-01T00:00:00.000000Z"
           }

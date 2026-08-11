@@ -12,9 +12,12 @@ import com.crazyfluff.shellfstudy.core.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +30,12 @@ import javax.inject.Inject
 
 enum class QuestionType { MEANING, READING }
 
-data class AnswerFeedback(val isCorrect: Boolean, val correctAnswer: String)
+data class AnswerFeedback(
+    val isCorrect: Boolean,
+    val correctAnswer: String,
+    val wasCloseMatch: Boolean = false,
+    val answerCount: Int = 1
+)
 
 data class ReviewUiState(
     val isLoading: Boolean = true,
@@ -38,6 +46,8 @@ data class ReviewUiState(
     val currentQuestionType: QuestionType? = null,
     val answerInput: String = "",
     val feedback: AnswerFeedback? = null,
+    val rankChange: RankChange? = null,
+    val undoCounter: Int = 0,
     val isSessionComplete: Boolean = false,
     val isAbandoned: Boolean = false,
     val isWrappingUp: Boolean = false,
@@ -143,6 +153,14 @@ class ReviewViewModel @Inject constructor(
         }
     }
 
+    /** Never lets a malformed answer crash grading — falls back to the raw (untranslated) text. */
+    private fun convertReadingSafely(rawAnswer: String): String =
+        try {
+            RomajiConverter.toHiragana(rawAnswer)
+        } catch (e: Exception) {
+            rawAnswer
+        }
+
     private fun questionTypesFor(item: ReviewItem): List<QuestionType> =
         if (item.subjectType == SubjectType.RADICAL) {
             listOf(QuestionType.MEANING)
@@ -158,6 +176,11 @@ class ReviewViewModel @Inject constructor(
         _uiState.update { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
     }
 
+    /** Meaning answers pool the primary meanings with WaniKani's own whitelist synonyms — both are
+     *  equally acceptable. Reading answers stay exact-match-only, so no auxiliary readings exist. */
+    private fun candidatesFor(item: ReviewItem, type: QuestionType): List<String> =
+        if (type == QuestionType.MEANING) item.meanings + item.auxiliaryMeanings else item.readings
+
     fun submitAnswer() {
         val state = _uiState.value
         if (state.feedback != null) return
@@ -166,14 +189,17 @@ class ReviewViewModel @Inject constructor(
         if (state.answerInput.isBlank()) return
 
         viewModelScope.launch {
-            val candidates = if (type == QuestionType.MEANING) item.meanings else item.readings
-            val normalizedAnswer = if (type == QuestionType.READING) {
-                RomajiConverter.toHiragana(state.answerInput.trim())
+            val candidates = candidatesFor(item, type)
+            if (type == QuestionType.MEANING) {
+                // A small typo is graded as correct but flagged, rather than a flat miss — readings
+                // stay exact-match, matching WaniKani's own convention for kana.
+                val match = CloseEnoughMatcher.match(state.answerInput, candidates)
+                gradeAnswer(item, type, match.isMatch, candidates, expandDetails = false, wasCloseMatch = match.isMatch && !match.isExact)
             } else {
-                state.answerInput.trim()
+                val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
+                val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
+                gradeAnswer(item, type, isCorrect, candidates, expandDetails = false)
             }
-            val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
-            gradeAnswer(item, type, isCorrect, candidates, expandDetails = false)
         }
     }
 
@@ -185,7 +211,7 @@ class ReviewViewModel @Inject constructor(
         val type = state.currentQuestionType ?: return
 
         viewModelScope.launch {
-            val candidates = if (type == QuestionType.MEANING) item.meanings else item.readings
+            val candidates = candidatesFor(item, type)
             gradeAnswer(item, type, isCorrect = false, candidates, expandDetails = true)
         }
     }
@@ -195,7 +221,8 @@ class ReviewViewModel @Inject constructor(
         type: QuestionType,
         isCorrect: Boolean,
         candidates: List<String>,
-        expandDetails: Boolean
+        expandDetails: Boolean,
+        wasCloseMatch: Boolean = false
     ) {
         val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress() }
 
@@ -220,7 +247,7 @@ class ReviewViewModel @Inject constructor(
         persistCurrentState()
         _uiState.update {
             it.copy(
-                feedback = AnswerFeedback(isCorrect, candidates.joinToString(", ")),
+                feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
                 remainingCount = queue.size,
                 isDetailsExpanded = it.isDetailsExpanded || expandDetails
             )
@@ -254,19 +281,29 @@ class ReviewViewModel @Inject constructor(
             if (requeuedIndex >= 0) queue.addFirst(queue.removeAt(requeuedIndex))
 
             persistCurrentState()
-            _uiState.update { it.copy(feedback = null, answerInput = "", remainingCount = queue.size) }
+            // undoCounter changes even though currentItem/currentQuestionType don't — this is what
+            // the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't change
+            // either of those but still needs to refocus the field the user just tapped away from.
+            _uiState.update { it.copy(feedback = null, answerInput = "", remainingCount = queue.size, undoCounter = it.undoCounter + 1) }
         }
     }
 
     private fun submitReviewResult(item: ReviewItem, progress: ItemProgress) {
         viewModelScope.launch {
-            waniKaniRepository.submitReview(
+            val result = waniKaniRepository.submitReview(
                 item.assignmentId,
                 ReviewGrade(
                     meaningCorrect = !progress.hadIncorrectMeaning,
                     readingCorrect = !progress.hadIncorrectReading
                 )
             )
+            if (result is ApiResult.Success && result.data.startingSrsStage != result.data.endingSrsStage) {
+                val rankChange = RankChange(
+                    from = SrsStage.fromRaw(result.data.startingSrsStage),
+                    to = SrsStage.fromRaw(result.data.endingSrsStage)
+                )
+                _uiState.update { it.copy(rankChange = rankChange) }
+            }
         }
     }
 
@@ -325,6 +362,7 @@ class ReviewViewModel @Inject constructor(
                     currentQuestionType = null,
                     remainingCount = 0,
                     feedback = null,
+                    rankChange = null,
                     sessionItemsReviewed = itemsReviewed,
                     sessionItemsCorrectFirstTry = correctFirstTry
                 )
@@ -338,6 +376,7 @@ class ReviewViewModel @Inject constructor(
                 currentQuestionType = next.type,
                 answerInput = "",
                 feedback = null,
+                rankChange = null,
                 isDetailsExpanded = false,
                 totalCount = totalQuestions,
                 remainingCount = queue.size

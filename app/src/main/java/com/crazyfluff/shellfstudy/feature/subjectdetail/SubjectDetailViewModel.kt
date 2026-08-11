@@ -31,7 +31,10 @@ data class SubjectDetailUiState(
     val relatedSubjects: Map<Long, SubjectSummary> = emptyMap(),
     val backStack: List<Long> = emptyList(),
     val showPitchAccent: Boolean = true,
-    val strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable
+    val strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
+    /** User asked to see every section on the root subject even though the sheet's reveal mode
+     *  would otherwise hide the field matching the in-progress/failed question. Reset on [open]. */
+    val forceRevealAll: Boolean = false
 )
 
 /** Intermediate combine result — [SubjectDetailViewModel.uiState]'s detail/related/stroke fields. */
@@ -108,6 +111,12 @@ class SubjectDetailViewModel @Inject constructor(
     fun open(subjectId: Long) {
         backStack.value = emptyList()
         currentSubjectId.value = subjectId
+        _uiState.update { it.copy(forceRevealAll = false) }
+    }
+
+    /** Toggles the "show all" override for the root subject — see [SubjectDetailUiState.forceRevealAll]. */
+    fun toggleForceReveal() {
+        _uiState.update { it.copy(forceRevealAll = !it.forceRevealAll) }
     }
 
     /** Drills into a related subject, pushing the current one onto the back stack. */

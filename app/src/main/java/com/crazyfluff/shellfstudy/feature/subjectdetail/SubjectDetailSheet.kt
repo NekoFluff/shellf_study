@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -16,6 +17,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -91,13 +94,34 @@ fun SubjectDetailSheet(
             viewModel.goBack()
         }
 
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+        // Drilling into a related radical/kanji/vocab is meant to show everything about it
+        // regardless of what the original triggering question was gating — the restriction only
+        // makes sense for the root subject actually being quizzed. A "Show all" override lifts the
+        // same restriction on the root subject itself, for a user who just wants to peek.
+        val canShowAll = revealMode == DetailRevealMode.HIDE_UNTIL_ANSWERED &&
+            uiState.backStack.isEmpty() &&
+            !uiState.forceRevealAll
+        val effectiveRevealMode = if (uiState.forceRevealAll || uiState.backStack.isNotEmpty()) {
+            DetailRevealMode.FULL
+        } else {
+            revealMode
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+        ) {
             if (uiState.backStack.isNotEmpty()) {
                 IconButton(onClick = { viewModel.goBack() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
+            if (canShowAll) {
+                TextButton(onClick = viewModel::toggleForceReveal) {
+                    Text("Show all")
+                }
+            }
             IconButton(onClick = onDismiss) {
                 Icon(Icons.Filled.Close, contentDescription = "Close")
             }
@@ -105,14 +129,22 @@ fun SubjectDetailSheet(
 
         val detail = uiState.detail
         if (uiState.isLoading || detail == null) {
-            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+            // A fixed minimum height here keeps the sheet's measured content roughly stable across
+            // the loading -> loaded swap. Without it, ModalBottomSheet (whose anchors are derived
+            // from measured content height) recomputes those anchors mid-open-animation as this tiny
+            // spinner is replaced by the full detail content, which is what produced a visible stall
+            // partway up the screen the first time the sheet opened.
+            Box(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 400.dp).padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator()
             }
         } else {
             SubjectDetailContent(
                 detail = detail,
                 relatedSubjects = uiState.relatedSubjects,
-                revealMode = revealMode,
+                revealMode = effectiveRevealMode,
                 isAnswered = isAnswered,
                 questionType = questionType,
                 onRelatedSubjectClick = viewModel::navigateToRelated,

@@ -88,6 +88,14 @@ fun DashboardRoute(
         if (uiState.isLoggedOut) onLoggedOut()
     }
 
+    // Compose Navigation tears this Route composable down when navigating to Review/Lesson and
+    // rebuilds it on the way back (the ViewModel instance itself survives via the nav-graph-scoped
+    // ViewModelStore, but its init{} doesn't rerun) — so this is what actually catches "returning
+    // to the dashboard" and refreshes lesson/review counts, without needing a lifecycle observer.
+    LaunchedEffect(Unit) {
+        viewModel.onDashboardResumed()
+    }
+
     DashboardScreen(
         uiState = uiState,
         onRefresh = viewModel::refresh,

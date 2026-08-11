@@ -3,12 +3,7 @@ package com.crazyfluff.shellfstudy.feature.review
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,16 +12,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -43,7 +35,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -59,26 +50,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.network.SubjectType
-import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.feature.search.SubjectSearchOverlay
+import com.crazyfluff.shellfstudy.feature.subjectdetail.DetailPeekHandleHeight
+import com.crazyfluff.shellfstudy.feature.subjectdetail.DetailPeekSheet
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet
 
 object ReviewScreenTestTags {
@@ -91,6 +80,7 @@ object ReviewScreenTestTags {
     const val SUBMIT_BUTTON = "review_submit_button"
     const val DONT_KNOW_BUTTON = "review_dont_know_button"
     const val FEEDBACK_TEXT = "review_feedback_text"
+    const val RANK_CHANGE_TEXT = "review_rank_change_text"
     const val CONTINUE_BUTTON = "review_continue_button"
     const val UNDO_BUTTON = "review_undo_button"
     const val SESSION_COMPLETE = "review_session_complete"
@@ -286,17 +276,31 @@ fun ReviewScreen(
     }
 
         // Only shown once there's actually something to toggle — pre-answer it'd just be a dimmed,
-        // non-interactive bar taking up space and inviting a swipe that does nothing.
+        // non-interactive bar taking up space and inviting a swipe that does nothing. Stays composed
+        // (collapsed to just the handle) for as long as feedback is showing, not only while expanded,
+        // so the same AnchoredDraggableState-driven handle is always there to grab — see
+        // DetailPeekSheet for why this single drag state is what makes the swipe feel connected to
+        // the sheet opening, rather than a drag on a separate handle merely toggling a boolean that a
+        // different, independently-animating sheet then reacts to.
+        val detailItem = uiState.currentItem
+        val detailQuestionType = uiState.currentQuestionType
         AnimatedVisibility(
-            visible = !isSearchActive && uiState.feedback != null,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it },
-            modifier = Modifier.align(Alignment.BottomCenter)
+            visible = !isSearchActive && uiState.feedback != null && detailItem != null && detailQuestionType != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize()
         ) {
-            SwipeUpDetailsHandle(
-                expanded = uiState.isDetailsExpanded,
-                onToggle = onToggleDetails
-            )
+            if (detailItem != null && detailQuestionType != null) {
+                DetailPeekSheet(
+                    subjectId = detailItem.subjectId,
+                    expanded = uiState.isDetailsExpanded,
+                    onToggle = onToggleDetails,
+                    revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
+                    isAnswered = true,
+                    questionType = detailQuestionType.toDetailQuestionType(),
+                    handleTestTag = ReviewScreenTestTags.DETAILS_TOGGLE
+                )
+            }
         }
 
         SubjectSearchOverlay(
@@ -334,7 +338,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
     val questionType = uiState.currentQuestionType ?: return
 
     val answerFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(uiState.currentItem, uiState.currentQuestionType) {
+    // Also keyed on undoCounter: undo clears the field and re-enables it without changing
+    // currentItem/currentQuestionType, so this effect wouldn't otherwise refire and the user would
+    // be left tapped-out of the field they just asked to retry.
+    LaunchedEffect(uiState.currentItem, uiState.currentQuestionType, uiState.undoCounter) {
         answerFocusRequester.requestFocus()
     }
 
@@ -428,11 +435,21 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             }
         } else {
             Text(
-                text = if (feedback.isCorrect) "Correct!" else "Incorrect: ${feedback.correctAnswer}",
+                text = feedbackText(feedback),
                 color = if (feedback.isCorrect) SrsStageColors.Enlightened else MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.testTag(ReviewScreenTestTags.FEEDBACK_TEXT)
             )
+            uiState.rankChange?.let { rankChange ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${if (rankChange.isRankUp) "Rank up" else "Rank down"}: " +
+                        "${rankChange.from.displayName} → ${rankChange.to.displayName}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.testTag(ReviewScreenTestTags.RANK_CHANGE_TEXT)
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
@@ -444,19 +461,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
 
         // Reserves room so the swipe-up handle — pinned to the true bottom of the screen as its
         // own overlay in ReviewScreen's outer Box, not laid out inline here — doesn't cover this
-        // content. See SwipeUpDetailsHandle for why it lives outside this Column. The extra 24dp
-        // covers the handle's own navigationBarsPadding, which grows its footprint on devices with
-        // a gesture pill or 3-button nav bar.
-        Spacer(modifier = Modifier.height(16.dp + SwipeHandleHeight + 24.dp))
-        if (uiState.isDetailsExpanded) {
-            SubjectDetailSheet(
-                initialSubjectId = item.subjectId,
-                revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
-                isAnswered = uiState.feedback != null,
-                questionType = questionType.toDetailQuestionType(),
-                onDismiss = onToggleDetails
-            )
-        }
+        // content. See DetailPeekSheet for why it lives outside this Column. The extra 24dp covers
+        // the handle's own navigationBarsPadding, which grows its footprint on devices with a
+        // gesture pill or 3-button nav bar.
+        Spacer(modifier = Modifier.height(16.dp + DetailPeekHandleHeight + 24.dp))
     }
 }
 
@@ -480,86 +488,16 @@ private fun SessionStatsCard(itemsReviewed: Int, correctFirstTry: Int, modifier:
     }
 }
 
+private fun feedbackText(feedback: AnswerFeedback): String = when {
+    !feedback.isCorrect -> "Incorrect: ${feedback.correctAnswer}"
+    feedback.wasCloseMatch -> "Correct! (accepted as close to: ${feedback.correctAnswer})"
+    feedback.answerCount > 1 -> "Correct! Other accepted answers: ${feedback.correctAnswer}"
+    else -> "Correct!"
+}
+
 private fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
     QuestionType.MEANING -> DetailQuestionType.MEANING
     QuestionType.READING -> DetailQuestionType.READING
-}
-
-private val SwipeHandleHeight = 56.dp
-
-/**
- * A bar pinned to the true bottom edge of the screen (rendered from [ReviewScreen]'s outer `Box`,
- * not inline in the scrolling question content) so a swipe starting from the screen's bottom edge
- * — where a user instinctively swipes up from — actually lands on it. [navigationBarsPadding] keeps
- * it clear of the system gesture pill / 3-button nav bar rather than sitting underneath it. Swipe up
- * (or tap, kept as a fallback for accessibility/testability) reveals the subject detail sheet.
- * [draggable] only starts consuming once the drag exceeds touch slop, so a plain tap still passes
- * through untouched to the co-located [clickable] — the two don't fight over the gesture. Triggers
- * as soon as the drag crosses the threshold (not only once the finger lifts) so it feels responsive.
- * Only ever composed once there's something to toggle (see the caller), so it's always interactive —
- * no disabled/dimmed state to render here.
- */
-@Composable
-private fun SwipeUpDetailsHandle(expanded: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
-    val swipeThresholdPx = with(LocalDensity.current) { 32.dp.toPx() }
-    var dragAccumulator by remember { mutableStateOf(0f) }
-    var triggeredThisGesture by remember { mutableStateOf(false) }
-    val draggableState = rememberDraggableState { delta ->
-        dragAccumulator += delta
-        if (!triggeredThisGesture && dragAccumulator < -swipeThresholdPx) {
-            triggeredThisGesture = true
-            onToggle()
-        }
-    }
-    val contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-
-    Surface(
-        tonalElevation = 3.dp,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .height(SwipeHandleHeight)
-            .clickable(onClick = onToggle)
-            .draggable(
-                orientation = Orientation.Vertical,
-                state = draggableState,
-                onDragStarted = { dragAccumulator = 0f; triggeredThisGesture = false },
-                onDragStopped = { dragAccumulator = 0f }
-            )
-            .testTag(ReviewScreenTestTags.DETAILS_TOGGLE)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = null, tint = contentColor)
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = if (expanded) "Hide details" else "Swipe up for details",
-                color = contentColor,
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-    }
-}
-
-/**
- * Renders the user's raw romaji keystrokes as their live hiragana conversion, without touching
- * the underlying [ReviewUiState.answerInput] — that stays exactly what the user typed, so there's
- * no feedback loop where already-converted kana gets fed back through the converter as more text
- * is typed (which would mis-convert a mid-word "n").
- */
-private object RomajiVisualTransformation : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText {
-        val converted = RomajiConverter.toHiragana(text.text)
-        val offsetMapping = object : OffsetMapping {
-            override fun originalToTransformed(offset: Int): Int = converted.length
-            override fun transformedToOriginal(offset: Int): Int = text.length
-        }
-        return TransformedText(AnnotatedString(converted), offsetMapping)
-    }
 }
 
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)

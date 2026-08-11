@@ -128,6 +128,32 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Called whenever the dashboard becomes visible again (e.g. returning from a finished
+     * review/lesson session), so lesson/review counts don't sit stale until the next hourly
+     * background sync or a manual pull-to-refresh. Deliberately lighter than [refresh]: reuses
+     * [SyncOrchestrator]'s own per-resource staleness gate (`force = false`) rather than forcing a
+     * full resync of everything, and never touches [DashboardUiState.isLoading] or
+     * [DashboardUiState.errorMessage] — most calls will be near-instant no-ops, and a transient
+     * failure here shouldn't blank out an already-populated dashboard with a full error screen.
+     */
+    fun onDashboardResumed() {
+        viewModelScope.launch {
+            syncOrchestrator.syncAll(force = false)
+
+            val user = (waniKaniRepository.fetchUser() as? ApiResult.Success)?.data
+            val summary = (waniKaniRepository.fetchDashboardSummary() as? ApiResult.Success)?.data
+            _dashboardData.update {
+                it.copy(
+                    username = user?.username ?: it.username,
+                    level = user?.level ?: it.level,
+                    lessonCount = summary?.lessonCount ?: it.lessonCount,
+                    reviewCount = summary?.reviewCount ?: it.reviewCount
+                )
+            }
+        }
+    }
+
     fun logOut() {
         viewModelScope.launch {
             tokenRepository.clearToken()

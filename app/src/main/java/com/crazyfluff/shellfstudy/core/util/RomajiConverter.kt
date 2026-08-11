@@ -55,8 +55,20 @@ object RomajiConverter {
         "n" to "ん"
     )
 
-    fun toHiragana(input: String): String {
+    /**
+     * Result of a conversion pass: the hiragana [output], plus parallel cumulative-length
+     * boundary arrays recording how each conversion step's raw input span maps to its hiragana
+     * output span — e.g. `rawBoundaries[k]`/`hiraganaBoundaries[k]` is the raw/hiragana length
+     * consumed/produced after the first `k` steps. Lets a [androidx.compose.ui.text.input.OffsetMapping]
+     * translate cursor/selection offsets between the two without guessing at a many-to-many
+     * mapping, since every offset the user could tap into falls on or between these boundaries.
+     */
+    data class Conversion(val output: String, val rawBoundaries: IntArray, val hiraganaBoundaries: IntArray)
+
+    fun convert(input: String): Conversion {
         val result = StringBuilder()
+        val rawBoundaries = mutableListOf(0)
+        val hiraganaBoundaries = mutableListOf(0)
         var i = 0
         while (i < input.length) {
             val remaining = input.length - i
@@ -83,6 +95,16 @@ object RomajiConverter {
                     i += 1
                 }
 
+                // "n'" explicitly forces ん and drops the apostrophe, so a following vowel or "y"
+                // stays its own mora instead of merging into な/に/ぬ/ね/の/にゃ... — the standard
+                // IME escape hatch for words like 権威 (けんい), typed "ken'i". Without this,
+                // "ni" always greedily reads as に (via the two-char rule above) and ん + い is
+                // otherwise unreachable no matter how many n's precede it.
+                current == 'n' && next == '\'' -> {
+                    result.append('ん')
+                    i += 2
+                }
+
                 // A lone "n" converts to ん once we know it isn't the start of "na/ni/nu/ne/no/nya...":
                 // when followed by a consonant, another "n", or end of input.
                 current == 'n' && (next == null || next !in VOWELS && next != 'y') -> {
@@ -102,7 +124,12 @@ object RomajiConverter {
                     }
                 }
             }
+
+            rawBoundaries.add(i)
+            hiraganaBoundaries.add(result.length)
         }
-        return result.toString()
+        return Conversion(result.toString(), rawBoundaries.toIntArray(), hiraganaBoundaries.toIntArray())
     }
+
+    fun toHiragana(input: String): String = convert(input).output
 }

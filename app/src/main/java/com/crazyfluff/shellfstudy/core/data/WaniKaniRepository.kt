@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.core.data
 import com.crazyfluff.shellfstudy.core.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.WaniKaniUser
+import com.crazyfluff.shellfstudy.core.network.ReviewResultData
 import com.crazyfluff.shellfstudy.core.network.ReviewSubmissionBody
 import com.crazyfluff.shellfstudy.core.network.ReviewSubmissionRequest
 import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
@@ -32,7 +33,7 @@ class WaniKaniRepository @Inject constructor(
         )
     }
 
-    suspend fun submitReview(assignmentId: Long, grade: ReviewGrade): ApiResult<Unit> = safeApiCall {
+    suspend fun submitReview(assignmentId: Long, grade: ReviewGrade): ApiResult<ReviewResultData> = safeApiCall {
         val result = api.submitReview(
             ReviewSubmissionRequest(
                 ReviewSubmissionBody(
@@ -43,5 +44,6 @@ class WaniKaniRepository @Inject constructor(
             )
         ).data
         statsRepository.logReviewEvent(result)
+        result
     }
 }

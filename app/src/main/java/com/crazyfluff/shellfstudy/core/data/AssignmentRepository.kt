@@ -9,11 +9,13 @@ import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.data.model.SubjectTypeProgress
 import com.crazyfluff.shellfstudy.core.data.model.toPronunciationAudios
 import com.crazyfluff.shellfstudy.core.database.AssignmentDao
 import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.core.database.SubjectDao
+import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.database.SyncStateDao
 import com.crazyfluff.shellfstudy.core.network.AssignmentData
 import com.crazyfluff.shellfstudy.core.network.SubjectType
@@ -36,8 +38,11 @@ import javax.inject.Singleton
 private const val RESOURCE_ASSIGNMENTS = "assignments"
 private val ASSIGNMENTS_STALENESS = Duration.ofHours(1)
 
-/** WaniKani SRS stages 5-6 are "Guru" and "Guru II" — Guru or higher is what counts toward leveling up. */
-private const val GURU_SRS_STAGE = 5
+private val APPRENTICE_STAGES = listOf(SrsStage.APPRENTICE_1, SrsStage.APPRENTICE_2, SrsStage.APPRENTICE_3, SrsStage.APPRENTICE_4)
+private val GURU_STAGES = listOf(SrsStage.GURU_1, SrsStage.GURU_2)
+
+/** Guru or higher is what counts toward leveling up. */
+private val GURU_SRS_STAGE = SrsStage.GURU_1.raw
 
 /** Owns the full assignment mirror — SRS progress for every subject the user has encountered. */
 @Singleton
@@ -100,8 +105,9 @@ class AssignmentRepository @Inject constructor(
                             characters = subject.characters,
                             level = subject.level,
                             srsStage = assignment.srsStage,
-                            meanings = subject.meanings.map { it.meaning },
-                            readings = subject.readings.map { it.reading },
+                            meanings = subject.acceptedMeanings(),
+                            readings = subject.acceptedGradableReadings(),
+                            auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
                             pronunciationAudios = subject.toPronunciationAudios()
                         )
                     }
@@ -125,11 +131,11 @@ class AssignmentRepository @Inject constructor(
                             subjectType = SubjectType.fromWkString(subject.subjectType),
                             characters = subject.characters,
                             level = subject.level,
-                            meanings = subject.meanings.map { it.meaning },
-                            readings = subject.readings.map { it.reading },
+                            meanings = subject.acceptedMeanings(),
+                            readings = subject.acceptedGradableReadings(),
                             meaningMnemonic = subject.meaningMnemonic,
                             readingMnemonic = subject.readingMnemonic,
-                            auxiliaryMeanings = subject.auxiliaryMeanings.map { it.meaning },
+                            auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
                             meaningHint = subject.meaningHint,
                             readingHint = subject.readingHint,
                             onyomiReadings = subject.readings.filter { it.type == "onyomi" }.map { it.reading },
@@ -165,12 +171,12 @@ class AssignmentRepository @Inject constructor(
 
     fun observeSrsItemSpread(): Flow<ItemSpread> =
         combine(assignmentDao.observeSrsStageCounts(), subjectDao.observeTotalCount()) { stageCounts, totalSubjects ->
-            val byStage = stageCounts.associate { it.srsStage to it.count }
-            val apprentice = (1..4).sumOf { byStage[it] ?: 0 }
-            val guru = (5..6).sumOf { byStage[it] ?: 0 }
-            val master = byStage[7] ?: 0
-            val enlightened = byStage[8] ?: 0
-            val burned = byStage[9] ?: 0
+            val byStage = stageCounts.associate { SrsStage.fromRaw(it.srsStage) to it.count }
+            val apprentice = APPRENTICE_STAGES.sumOf { byStage[it] ?: 0 }
+            val guru = GURU_STAGES.sumOf { byStage[it] ?: 0 }
+            val master = byStage[SrsStage.MASTER] ?: 0
+            val enlightened = byStage[SrsStage.ENLIGHTENED] ?: 0
+            val burned = byStage[SrsStage.BURNED] ?: 0
             val started = apprentice + guru + master + enlightened + burned
             ItemSpread(
                 lockedCount = (totalSubjects - started).coerceAtLeast(0),
@@ -221,6 +227,23 @@ class AssignmentRepository @Inject constructor(
     private fun startOfTodayIso(): String =
         LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toString()
 }
+
+/** Meanings WaniKani actually accepts as a correct answer — excludes any explicitly flagged
+ *  `accepted_answer: false` (shown for reference, e.g. deprecated alternates, but not gradable). */
+private fun SubjectEntity.acceptedMeanings(): List<String> =
+    meanings.filter { it.acceptedMeaning }.map { it.meaning }
+
+/** Readings gradable against the single "what is the reading?" quiz question — excludes any
+ *  explicitly flagged not-accepted, and kanji nanori (name readings), which WaniKani shows for
+ *  reference but never tests. */
+private fun SubjectEntity.acceptedGradableReadings(): List<String> =
+    readings.filter { it.acceptedReading && it.type != "nanori" }.map { it.reading }
+
+/** WaniKani's own official alternate meanings (e.g. "1" alongside "one") that should be accepted
+ *  just like a primary meaning — excludes blacklist entries, which are deliberately wrong-looking
+ *  decoys never meant to be treated as correct. */
+private fun SubjectEntity.whitelistAuxiliaryMeanings(): List<String> =
+    auxiliaryMeanings.filter { it.type == "whitelist" }.map { it.meaning }
 
 private fun WkResourceItem<AssignmentData>.toEntity(): AssignmentEntity = AssignmentEntity(
     id = id,

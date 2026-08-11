@@ -28,6 +28,9 @@ data class ReviewItem(
     val srsStage: Int,
     val meanings: List<String>,
     val readings: List<String>,
+    /** WaniKani's own official alternate meanings (e.g. "1" alongside "one") — distinct from the
+     *  primary [meanings], but just as acceptable a grading answer. */
+    val auxiliaryMeanings: List<String> = emptyList(),
     val pronunciationAudios: List<PronunciationAudio> = emptyList()
 )
 

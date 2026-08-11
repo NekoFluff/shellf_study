@@ -76,4 +76,31 @@ class RomajiConverterTest {
     fun `empty input returns empty output`() {
         assertThat(RomajiConverter.toHiragana("")).isEqualTo("")
     }
+
+    @Test
+    fun `apostrophe after n forces standalone n-kana before a vowel or y`() {
+        // "ni" alone always greedily reads as に, so ん directly before い is otherwise
+        // unreachable — this is the standard IME escape hatch (e.g. 権威, typed "ken'i").
+        assertThat(RomajiConverter.toHiragana("ken'i")).isEqualTo("けんい")
+        assertThat(RomajiConverter.toHiragana("n'i")).isEqualTo("んい")
+        assertThat(RomajiConverter.toHiragana("n'ya")).isEqualTo("んや")
+        // Without the apostrophe, the same input reads as a merged syllable instead.
+        assertThat(RomajiConverter.toHiragana("ni")).isEqualTo("に")
+    }
+
+    @Test
+    fun `convert reports boundaries that round-trip to the same output as toHiragana`() {
+        val conversion = RomajiConverter.convert("kyoutokitte")
+        assertThat(conversion.output).isEqualTo(RomajiConverter.toHiragana("kyoutokitte"))
+        assertThat(conversion.rawBoundaries.first()).isEqualTo(0)
+        assertThat(conversion.hiraganaBoundaries.first()).isEqualTo(0)
+        assertThat(conversion.rawBoundaries.last()).isEqualTo("kyoutokitte".length)
+        assertThat(conversion.hiraganaBoundaries.last()).isEqualTo(conversion.output.length)
+        // Both boundary arrays are non-decreasing and the same length (one per conversion step).
+        assertThat(conversion.rawBoundaries.size).isEqualTo(conversion.hiraganaBoundaries.size)
+        for (i in 1 until conversion.rawBoundaries.size) {
+            assertThat(conversion.rawBoundaries[i]).isAtLeast(conversion.rawBoundaries[i - 1])
+            assertThat(conversion.hiraganaBoundaries[i]).isAtLeast(conversion.hiraganaBoundaries[i - 1])
+        }
+    }
 }

@@ -82,7 +82,7 @@ class SubjectDetailContentTest {
     }
 
     @Test
-    fun hideUntilAnswered_hidesTheFieldCurrentlyBeingTested() {
+    fun hideUntilAnswered_revealsOnlyTheFieldJustAnswered_reading() {
         composeTestRule.setContent {
             SubjectDetailContent(
                 detail = detail,
@@ -94,10 +94,29 @@ class SubjectDetailContentTest {
             )
         }
 
-        // Reading is being tested, so it — and its mnemonic — stay hidden; meaning is free to show.
+        // Reading is what was just answered, so it — and its mnemonic — reveal; meaning (the
+        // field not being tested right now) stays hidden.
+        composeTestRule.onAllNodesWithText("Water").assertCountEquals(0)
+        composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Sounds like mee-zoo.").assertIsDisplayed()
+    }
+
+    @Test
+    fun hideUntilAnswered_revealsOnlyTheFieldJustAnswered_meaning() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
+                isAnswered = true,
+                questionType = DetailQuestionType.MEANING,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        // Meaning is what was just answered, so it reveals; reading stays hidden.
         composeTestRule.onNodeWithText("Water").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("みず").assertCountEquals(0)
-        composeTestRule.onAllNodesWithText("Sounds like mee-zoo.").assertCountEquals(0)
     }
 
     @Test
