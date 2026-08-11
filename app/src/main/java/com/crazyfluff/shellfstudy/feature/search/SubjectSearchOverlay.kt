@@ -31,8 +31,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
@@ -77,6 +81,11 @@ fun SubjectSearchOverlay(
     modifier: Modifier = Modifier,
     onSubjectClick: (Long) -> Unit = {}
 ) {
+    val queryFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(active) {
+        if (active) queryFocusRequester.requestFocus()
+    }
+
     AnimatedVisibility(
         visible = active,
         enter = fadeIn() + expandVertically(),
@@ -135,6 +144,7 @@ fun SubjectSearchOverlay(
                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .focusRequester(queryFocusRequester)
                                     .testTag(SearchOverlayTestTags.QUERY_FIELD)
                             )
                         }
