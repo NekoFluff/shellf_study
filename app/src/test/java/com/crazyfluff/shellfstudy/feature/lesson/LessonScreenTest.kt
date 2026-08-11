@@ -13,6 +13,9 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
+import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
+import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import org.junit.Rule
 import org.junit.Test
@@ -282,6 +285,30 @@ class LessonScreenTest {
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_CHARACTERS).assertIsDisplayed()
+    }
+
+    @Test
+    fun studyPhase_showsStrokeOrderSection_whenAvailableForCurrentItem() {
+        val strokes = listOf(StrokeOrderStroke(pathData = "M10,10L90,10", labelX = 5f, labelY = 5f))
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.STUDY,
+                studyItems = listOf(radicalItem), studyIndex = 0,
+                strokeOrderBySubjectId = mapOf(radicalItem.subjectId to StrokeOrderUiState.Available(strokes))
+            )
+        )
+
+        composeTestRule.onNodeWithTag(StrokeOrderTestTags.SECTION).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(StrokeOrderTestTags.DIAGRAM).assertIsDisplayed()
+    }
+
+    @Test
+    fun studyPhase_hidesStrokeOrderSection_whenUnavailableForCurrentItem() {
+        setScreen(
+            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(radicalItem), studyIndex = 0)
+        )
+
+        composeTestRule.onAllNodesWithTag(StrokeOrderTestTags.SECTION).assertCountEquals(0)
     }
 
     @Test

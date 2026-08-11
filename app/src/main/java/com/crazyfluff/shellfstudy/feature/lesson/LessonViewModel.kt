@@ -12,6 +12,8 @@ import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
+import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
+import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
@@ -59,7 +61,8 @@ data class LessonUiState(
     val isSessionComplete: Boolean = false,
     val showPitchAccent: Boolean = true,
     val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
-    val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap()
+    val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
+    val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
 )
 
 private data class PendingLessonQuestion(val item: LessonItem, val type: LessonQuestionType)
@@ -69,7 +72,8 @@ class LessonViewModel @Inject constructor(
     private val assignmentRepository: AssignmentRepository,
     private val pitchAccentRepository: PitchAccentRepository,
     private val settingsRepository: SettingsRepository,
-    private val subjectRepository: SubjectRepository
+    private val subjectRepository: SubjectRepository,
+    private val strokeOrderRepository: StrokeOrderRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LessonUiState())
@@ -147,10 +151,11 @@ class LessonViewModel @Inject constructor(
         val selected = state.availableLessons.filter { it.assignmentId in state.selectedAssignmentIds }
         if (selected.isEmpty()) return
         viewModelScope.launch {
-            val (pitchAccents, relatedSubjects) = coroutineScope {
+            val (pitchAccents, relatedSubjects, strokeOrders) = coroutineScope {
                 val pitchAccentsDeferred = async { fetchPitchAccents(selected) }
                 val relatedSubjectsDeferred = async { fetchRelatedSubjects(selected) }
-                pitchAccentsDeferred.await() to relatedSubjectsDeferred.await()
+                val strokeOrdersDeferred = async { fetchStrokeOrders(selected) }
+                Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
             }
             _uiState.update {
                 it.copy(
@@ -158,7 +163,8 @@ class LessonViewModel @Inject constructor(
                     studyItems = selected,
                     studyIndex = 0,
                     pitchAccentsBySubjectId = pitchAccents,
-                    relatedSubjectsById = relatedSubjects
+                    relatedSubjectsById = relatedSubjects,
+                    strokeOrderBySubjectId = strokeOrders
                 )
             }
         }
@@ -182,6 +188,22 @@ class LessonViewModel @Inject constructor(
             .distinct()
         if (relatedIds.isEmpty()) return emptyMap()
         return subjectRepository.observeSubjectSummaries(relatedIds).first().associateBy { it.subjectId }
+    }
+
+    /** Stroke data is keyed purely by character (same lookup [SubjectDetailViewModel] uses), so only
+     *  single-glyph items — kanji, and any radical with a real Unicode glyph — resolve to anything
+     *  other than [StrokeOrderUiState.Unavailable]. Fanned out in parallel for the same reason
+     *  [fetchPitchAccents] is: a large study batch shouldn't serialize dozens of lookups. */
+    private suspend fun fetchStrokeOrders(items: List<LessonItem>): Map<Long, StrokeOrderUiState> = coroutineScope {
+        items
+            .mapNotNull { item -> item.characters?.singleOrNull()?.let { item.subjectId to it } }
+            .map { (subjectId, character) ->
+                subjectId to async {
+                    strokeOrderRepository.getStrokeOrder(character)?.let { StrokeOrderUiState.Available(it) }
+                        ?: StrokeOrderUiState.Unavailable
+                }
+            }
+            .associate { (subjectId, deferred) -> subjectId to deferred.await() }
     }
 
     fun onStudyCardSwiped(index: Int) {

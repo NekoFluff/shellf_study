@@ -5,9 +5,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Replay
@@ -75,17 +74,31 @@ private const val INTER_STROKE_DELAY_MS = 120L
 @Composable
 fun StrokeOrderSection(state: StrokeOrderUiState, modifier: Modifier = Modifier) {
     if (state !is StrokeOrderUiState.Available) return
+    // Owned here rather than inside StrokeOrderDiagram so the replay button can live in its own row
+    // below the diagram — sharing a Box with the canvas let it visually overlap strokes that
+    // legitimately reach the same corner (KanjiVG artwork draws edge-to-edge).
+    var replayTrigger by remember { mutableIntStateOf(0) }
+
     Column(
         modifier = modifier.testTag(StrokeOrderTestTags.SECTION),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text("Stroke order", style = MaterialTheme.typography.titleSmall)
-        StrokeOrderDiagram(strokes = state.strokes)
-        Text(
-            text = "Stroke data © KanjiVG contributors, CC BY-SA",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        StrokeOrderDiagram(strokes = state.strokes, replayTrigger = replayTrigger)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Stroke data © KanjiVG contributors, CC BY-SA",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(
+                onClick = { replayTrigger++ },
+                modifier = Modifier.size(28.dp).testTag(StrokeOrderTestTags.REPLAY_BUTTON)
+            ) {
+                Icon(Icons.Filled.Replay, contentDescription = "Replay stroke order", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 
@@ -100,7 +113,8 @@ fun StrokeOrderDiagram(
     modifier: Modifier = Modifier,
     size: Dp = 120.dp,
     strokeColor: Color = subjectColor(SubjectType.KANJI),
-    ghostColor: Color = MaterialTheme.colorScheme.outlineVariant
+    ghostColor: Color = MaterialTheme.colorScheme.outlineVariant,
+    replayTrigger: Int = 0
 ) {
     val paths = remember(strokes) { strokes.map { PathParser().parsePathString(it.pathData).toPath() } }
     val pathMeasures = remember(paths) { paths.map { PathMeasure().apply { setPath(it, false) } } }
@@ -118,7 +132,6 @@ fun StrokeOrderDiagram(
 
     var playedCount by remember(strokes) { mutableIntStateOf(0) }
     val currentProgress = remember(strokes) { Animatable(0f) }
-    var replayTrigger by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(strokes, replayTrigger) {
         playedCount = 0
@@ -138,35 +151,27 @@ fun StrokeOrderDiagram(
     val strokeColorArgb = strokeColor.toArgb()
     val strokeStyle = Stroke(width = STROKE_WIDTH_UNITS, cap = StrokeCap.Round, join = StrokeJoin.Round)
 
-    Box(modifier = modifier.size(size)) {
-        Canvas(modifier = Modifier.fillMaxSize().testTag(StrokeOrderTestTags.DIAGRAM)) {
-            val scaleFactor = this.size.width / KANJIVG_UNITS
-            scale(scaleFactor, scaleFactor, pivot = Offset.Zero) {
-                paths.forEach { path -> drawPath(path, color = ghostColor, style = strokeStyle) }
+    Canvas(modifier = modifier.size(size).testTag(StrokeOrderTestTags.DIAGRAM)) {
+        val scaleFactor = this.size.width / KANJIVG_UNITS
+        scale(scaleFactor, scaleFactor, pivot = Offset.Zero) {
+            paths.forEach { path -> drawPath(path, color = ghostColor, style = strokeStyle) }
 
-                for (index in 0 until playedCount) {
-                    drawPath(paths[index], color = strokeColor, style = strokeStyle)
-                    drawStrokeNumber(numberPaint, strokeColorArgb, strokes[index], index + 1)
-                }
-
-                if (playedCount < paths.size) {
-                    val measure = pathMeasures[playedCount]
-                    val distance = measure.length * currentProgress.value
-                    segmentPath.reset()
-                    measure.getSegment(0f, distance, segmentPath, startWithMoveTo = true)
-                    drawPath(segmentPath, color = strokeColor, style = strokeStyle)
-                    if (currentProgress.value > 0f) {
-                        drawCircle(color = strokeColor, radius = PEN_TIP_RADIUS_UNITS, center = measure.getPosition(distance))
-                    }
-                    drawStrokeNumber(numberPaint, strokeColorArgb, strokes[playedCount], playedCount + 1)
-                }
+            for (index in 0 until playedCount) {
+                drawPath(paths[index], color = strokeColor, style = strokeStyle)
+                drawStrokeNumber(numberPaint, strokeColorArgb, strokes[index], index + 1)
             }
-        }
-        IconButton(
-            onClick = { replayTrigger++ },
-            modifier = Modifier.align(Alignment.BottomEnd).size(28.dp).testTag(StrokeOrderTestTags.REPLAY_BUTTON)
-        ) {
-            Icon(Icons.Filled.Replay, contentDescription = "Replay stroke order", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            if (playedCount < paths.size) {
+                val measure = pathMeasures[playedCount]
+                val distance = measure.length * currentProgress.value
+                segmentPath.reset()
+                measure.getSegment(0f, distance, segmentPath, startWithMoveTo = true)
+                drawPath(segmentPath, color = strokeColor, style = strokeStyle)
+                if (currentProgress.value > 0f) {
+                    drawCircle(color = strokeColor, radius = PEN_TIP_RADIUS_UNITS, center = measure.getPosition(distance))
+                }
+                drawStrokeNumber(numberPaint, strokeColorArgb, strokes[playedCount], playedCount + 1)
+            }
         }
     }
 }

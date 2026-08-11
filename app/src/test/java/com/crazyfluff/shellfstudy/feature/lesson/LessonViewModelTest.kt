@@ -9,6 +9,10 @@ import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
+import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
+import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
@@ -37,6 +41,7 @@ class LessonViewModelTest {
     private lateinit var pitchAccentRepository: PitchAccentRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var subjectRepository: SubjectRepository
+    private var strokeOrderRepository: StrokeOrderRepository = FakeStrokeOrderRepository()
 
     @Before
     fun setUp() {
@@ -50,6 +55,7 @@ class LessonViewModelTest {
         assignmentRepository = repositories.assignmentRepository
         pitchAccentRepository = repositories.pitchAccentRepository
         subjectRepository = repositories.subjectRepository
+        strokeOrderRepository = FakeStrokeOrderRepository()
     }
 
     @After
@@ -58,7 +64,7 @@ class LessonViewModelTest {
     }
 
     private fun createViewModel() =
-        LessonViewModel(assignmentRepository, pitchAccentRepository, settingsRepository, subjectRepository)
+        LessonViewModel(assignmentRepository, pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository)
 
     /** Routes by path — refreshing the lesson queue now syncs subjects and assignments, in either order. */
     private fun dispatch(
@@ -163,6 +169,27 @@ class LessonViewModelTest {
             assertThat(studyState.phase).isEqualTo(LessonPhase.STUDY)
             assertThat(studyState.studyItems).hasSize(1)
             assertThat(studyState.studyItems.first().assignmentId).isEqualTo(101L)
+        }
+    }
+
+    @Test
+    fun `startSelectedLessons loads stroke order per subject, keyed by subject id`() = runTest {
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
+        strokeOrderRepository = FakeStrokeOrderRepository(
+            mapOf('口' to listOf(StrokeOrderStroke(pathData = "M10,10L90,10", labelX = 5f, labelY = 5f)))
+        )
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            val studyState = awaitItem()
+
+            assertThat(studyState.strokeOrderBySubjectId[1L]).isInstanceOf(StrokeOrderUiState.Available::class.java)
+            assertThat(studyState.strokeOrderBySubjectId[2L]).isEqualTo(StrokeOrderUiState.Unavailable)
         }
     }
 

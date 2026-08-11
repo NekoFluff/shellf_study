@@ -72,6 +72,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
+import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.ReadingTypeRow
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.RelatedSubjectsSection
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SectionEyebrow
@@ -84,6 +86,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
+import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
@@ -365,6 +368,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                     }
                 }
             }
+
+            val strokeOrder = uiState.strokeOrderBySubjectId[item.subjectId] ?: StrokeOrderUiState.Unavailable
+            StrokeOrderSection(strokeOrder)
+            WritingPracticeSection(strokeOrder = strokeOrder, resetKey = item.subjectId)
 
             RelatedSubjectsSection(
                 title = componentsLabel(item.subjectType),

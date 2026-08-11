@@ -38,7 +38,7 @@ class StrokeOrderDiagramTest {
     @Test
     fun `tapping replay restarts the animation without crashing`() {
         composeTestRule.setContent {
-            StrokeOrderDiagram(strokes = twoStrokes)
+            StrokeOrderSection(state = StrokeOrderUiState.Available(twoStrokes))
         }
 
         composeTestRule.onNodeWithTag(StrokeOrderTestTags.REPLAY_BUTTON).performClick()
