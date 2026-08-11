@@ -257,6 +257,43 @@ class SubjectDetailContentTest {
     }
 
     @Test
+    fun vocabularyWithPitchAccentAndAudio_showsBothTheDiagramAndThePlayButton() {
+        var playedReading: String? = null
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            pitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)),
+            pronunciationAudios = listOf(
+                PronunciationAudio(
+                    url = "https://example.com/mizu.mp3",
+                    contentType = "audio/mpeg",
+                    pronunciation = "みず",
+                    gender = null,
+                    voiceActorId = null,
+                    voiceActorName = null,
+                    voiceDescription = null
+                )
+            )
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                showPitchAccent = true,
+                onPlayReading = { playedReading = it }
+            )
+        }
+
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.DIAGRAM).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
+        assertThat(playedReading).isEqualTo("みず")
+    }
+
+    @Test
     fun vocabularyWithNoPronunciationAudio_showsNoPlayButton() {
         val vocabDetail = detail.copy(subjectType = SubjectType.VOCABULARY, readings = listOf("みず"), pronunciationAudios = emptyList())
         composeTestRule.setContent {
