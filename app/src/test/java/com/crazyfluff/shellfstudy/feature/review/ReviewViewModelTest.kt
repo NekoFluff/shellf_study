@@ -362,6 +362,34 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `autoplay is skipped when restrictAudioToMp3 is enabled and only an ogg clip exists`() = runTest {
+        settingsRepository.setRestrictAudioToMp3(true)
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJsonWithOggOnlyAudio()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            while (state.currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange(if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("mizu")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+        }
+
+        assertThat(pronunciationAudioPlayer.playedAudios).isEmpty()
+    }
+
+    @Test
     fun `undo reverts an incorrect answer so it doesn't count as a miss`() = runTest {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
@@ -537,6 +565,29 @@ class ReviewViewModelTest {
                 {
                   "url": "https://api.wanikani.com/audio/mizu.mp3",
                   "content_type": "audio/mpeg",
+                  "metadata": {"gender": "female", "pronunciation": "みず"}
+                }
+              ]
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun kanjiSubjectsJsonWithOggOnlyAudio() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
+          "data": [{
+            "id": 440, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/440",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2020-01-01T00:00:00.000000Z", "level": 3, "slug": "water",
+              "characters": "水",
+              "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
+              "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}],
+              "pronunciation_audios": [
+                {
+                  "url": "https://api.wanikani.com/audio/mizu.ogg",
+                  "content_type": "audio/ogg",
                   "metadata": {"gender": "female", "pronunciation": "みず"}
                 }
               ]

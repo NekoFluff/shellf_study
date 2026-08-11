@@ -60,6 +60,7 @@ object SettingsScreenTestTags {
     const val THEME_EINK_OPTION = "settings_theme_eink_option"
     const val PITCH_ACCENT_TOGGLE = "settings_pitch_accent_toggle"
     const val AUTOPLAY_AUDIO_TOGGLE = "settings_autoplay_audio_toggle"
+    const val MP3_ONLY_AUDIO_TOGGLE = "settings_mp3_only_audio_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
     const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
     const val REVIEWS_BACKLOG_TOGGLE = "settings_reviews_backlog_toggle"
@@ -99,6 +100,7 @@ fun SettingsRoute(
         onThemeModeChange = viewModel::onThemeModeChange,
         onShowPitchAccentChange = viewModel::onShowPitchAccentChange,
         onAutoplayPronunciationAudioChange = viewModel::onAutoplayPronunciationAudioChange,
+        onRestrictAudioToMp3Change = viewModel::onRestrictAudioToMp3Change,
         onNotificationsEnabledChange = { enabled ->
             if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -126,6 +128,7 @@ fun SettingsScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     onShowPitchAccentChange: (Boolean) -> Unit,
     onAutoplayPronunciationAudioChange: (Boolean) -> Unit,
+    onRestrictAudioToMp3Change: (Boolean) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onReviewsAvailableEnabledChange: (Boolean) -> Unit,
     onReviewsBacklogEnabledChange: (Boolean) -> Unit,
@@ -232,6 +235,13 @@ fun SettingsScreen(
                     checked = uiState.autoplayPronunciationAudio,
                     onCheckedChange = onAutoplayPronunciationAudioChange,
                     testTag = SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE
+                )
+                ToggleRow(
+                    label = "MP3 audio only",
+                    description = "Only play pronunciation clips available as MP3. Every word has an MP3 version, so nothing is lost — this just guarantees playback on devices that can't play Ogg audio (e.g. e-ink readers).",
+                    checked = uiState.restrictAudioToMp3,
+                    onCheckedChange = onRestrictAudioToMp3Change,
+                    testTag = SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE
                 )
             }
 
@@ -479,6 +489,7 @@ private fun SettingsScreenPreview() {
             onThemeModeChange = {},
             onShowPitchAccentChange = {},
             onAutoplayPronunciationAudioChange = {},
+            onRestrictAudioToMp3Change = {},
             onNotificationsEnabledChange = {},
             onReviewsAvailableEnabledChange = {},
             onReviewsBacklogEnabledChange = {},

@@ -19,7 +19,8 @@ data class AppSettings(
     val dailyLessonGoal: Int = DEFAULT_DAILY_LESSON_GOAL,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val showPitchAccent: Boolean = true,
-    val autoplayPronunciationAudio: Boolean = true
+    val autoplayPronunciationAudio: Boolean = true,
+    val restrictAudioToMp3: Boolean = false
 )
 
 data class NotificationSettings(
@@ -42,6 +43,7 @@ class SettingsRepository @Inject constructor(
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val showPitchAccentKey = booleanPreferencesKey("show_pitch_accent")
     private val autoplayPronunciationAudioKey = booleanPreferencesKey("autoplay_pronunciation_audio")
+    private val restrictAudioToMp3Key = booleanPreferencesKey("restrict_audio_to_mp3")
 
     private val notificationsEnabledKey = booleanPreferencesKey("notifications_enabled")
     private val reviewsAvailableEnabledKey = booleanPreferencesKey("notif_reviews_available_enabled")
@@ -59,7 +61,8 @@ class SettingsRepository @Inject constructor(
             themeMode = prefs[themeModeKey]?.let { raw -> runCatching { ThemeMode.valueOf(raw) }.getOrNull() }
                 ?: ThemeMode.SYSTEM,
             showPitchAccent = prefs[showPitchAccentKey] ?: true,
-            autoplayPronunciationAudio = prefs[autoplayPronunciationAudioKey] ?: true
+            autoplayPronunciationAudio = prefs[autoplayPronunciationAudioKey] ?: true,
+            restrictAudioToMp3 = prefs[restrictAudioToMp3Key] ?: false
         )
     }
 
@@ -92,6 +95,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setAutoplayPronunciationAudio(enabled: Boolean) {
         dataStore.edit { it[autoplayPronunciationAudioKey] = enabled }
+    }
+
+    suspend fun setRestrictAudioToMp3(enabled: Boolean) {
+        dataStore.edit { it[restrictAudioToMp3Key] = enabled }
     }
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {

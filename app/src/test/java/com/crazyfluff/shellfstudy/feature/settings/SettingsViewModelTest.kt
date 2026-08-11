@@ -99,6 +99,18 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `onRestrictAudioToMp3Change updates the state`() = runTest {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().restrictAudioToMp3).isFalse()
+
+            viewModel.onRestrictAudioToMp3Change(true)
+            assertThat(awaitItem().restrictAudioToMp3).isTrue()
+        }
+    }
+
+    @Test
     fun `uiState reflects opt-in notification defaults`() = runTest {
         val viewModel = createViewModel()
         viewModel.uiState.test {

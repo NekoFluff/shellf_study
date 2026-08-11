@@ -31,6 +31,7 @@ data class SubjectDetailUiState(
     val relatedSubjects: Map<Long, SubjectSummary> = emptyMap(),
     val backStack: List<Long> = emptyList(),
     val showPitchAccent: Boolean = true,
+    val restrictAudioToMp3: Boolean = false,
     val strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
     /** User asked to see every section on the root subject even though the sheet's reveal mode
      *  would otherwise hide the field matching the in-progress/failed question. Reset on [open]. */
@@ -90,8 +91,8 @@ class SubjectDetailViewModel @Inject constructor(
                     }
                 }
                 .combine(backStack) { detailAndRelated, stack -> detailAndRelated to stack }
-                .combine(settingsRepository.settings) { pair, settings -> pair to settings.showPitchAccent }
-                .collect { (pair, showPitchAccent) ->
+                .combine(settingsRepository.settings) { pair, settings -> pair to settings }
+                .collect { (pair, settings) ->
                     val (detailAndRelated, stack) = pair
                     _uiState.update {
                         it.copy(
@@ -99,7 +100,8 @@ class SubjectDetailViewModel @Inject constructor(
                             detail = detailAndRelated.detail,
                             relatedSubjects = detailAndRelated.related.associateBy { summary -> summary.subjectId },
                             backStack = stack,
-                            showPitchAccent = showPitchAccent,
+                            showPitchAccent = settings.showPitchAccent,
+                            restrictAudioToMp3 = settings.restrictAudioToMp3,
                             strokeOrder = detailAndRelated.strokeOrder
                         )
                     }
@@ -136,8 +138,10 @@ class SubjectDetailViewModel @Inject constructor(
     }
 
     fun playReading(reading: String) {
-        val detail = _uiState.value.detail ?: return
-        selectAudioFor(detail.pronunciationAudios, reading)?.let(audioPlayer::play)
+        val state = _uiState.value
+        val detail = state.detail ?: return
+        selectAudioFor(detail.pronunciationAudios, reading, mp3Only = state.restrictAudioToMp3)
+            ?.let(audioPlayer::play)
     }
 
     fun stopPlayback() {

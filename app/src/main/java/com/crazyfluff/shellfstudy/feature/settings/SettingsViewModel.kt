@@ -19,6 +19,7 @@ data class SettingsUiState(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val showPitchAccent: Boolean = true,
     val autoplayPronunciationAudio: Boolean = true,
+    val restrictAudioToMp3: Boolean = false,
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
@@ -46,6 +47,7 @@ class SettingsViewModel @Inject constructor(
             themeMode = app.themeMode,
             showPitchAccent = app.showPitchAccent,
             autoplayPronunciationAudio = app.autoplayPronunciationAudio,
+            restrictAudioToMp3 = app.restrictAudioToMp3,
             notificationsEnabled = notif.notificationsEnabled,
             reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
             reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
@@ -72,6 +74,10 @@ class SettingsViewModel @Inject constructor(
 
     fun onAutoplayPronunciationAudioChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setAutoplayPronunciationAudio(enabled) }
+    }
+
+    fun onRestrictAudioToMp3Change(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setRestrictAudioToMp3(enabled) }
     }
 
     /**

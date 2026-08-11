@@ -6,9 +6,13 @@ import org.junit.Test
 
 class AudioSelectionTest {
 
-    private fun audio(pronunciation: String?, gender: String? = null) = PronunciationAudio(
+    private fun audio(
+        pronunciation: String?,
+        gender: String? = null,
+        contentType: String = "audio/mpeg"
+    ) = PronunciationAudio(
         url = "https://example.com/$pronunciation-$gender.mp3",
-        contentType = "audio/mpeg",
+        contentType = contentType,
         pronunciation = pronunciation,
         gender = gender,
         voiceActorId = null,
@@ -67,5 +71,40 @@ class AudioSelectionTest {
     @Test
     fun `an empty audio list returns null`() {
         assertThat(selectAudioFor(emptyList(), reading = "みず")).isNull()
+    }
+
+    @Test
+    fun `mp3Only filters out non-mp3 clips before matching`() {
+        val audios = listOf(
+            audio(pronunciation = "みず", contentType = "audio/ogg"),
+            audio(pronunciation = "みず", contentType = "audio/mpeg")
+        )
+
+        val selected = selectAudioFor(audios, reading = "みず", mp3Only = true)
+
+        assertThat(selected?.contentType).isEqualTo("audio/mpeg")
+    }
+
+    @Test
+    fun `mp3Only returns null when no mp3 candidate exists`() {
+        val audios = listOf(audio(pronunciation = "みず", contentType = "audio/ogg"))
+
+        val selected = selectAudioFor(audios, reading = "みず", mp3Only = true)
+
+        assertThat(selected).isNull()
+    }
+
+    @Test
+    fun `mp3Only still applies voice preference among the filtered clips`() {
+        val audios = listOf(
+            audio(pronunciation = "みず", gender = "female", contentType = "audio/mpeg"),
+            audio(pronunciation = "みず", gender = "male", contentType = "audio/mpeg"),
+            audio(pronunciation = "みず", gender = "male", contentType = "audio/ogg")
+        )
+
+        val selected = selectAudioFor(audios, reading = "みず", preference = VoicePreference.MALE, mp3Only = true)
+
+        assertThat(selected?.gender).isEqualTo("male")
+        assertThat(selected?.contentType).isEqualTo("audio/mpeg")
     }
 }

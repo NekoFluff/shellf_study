@@ -253,9 +253,11 @@ class ReviewViewModel @Inject constructor(
             )
         }
 
-        if (type == QuestionType.READING && settingsRepository.settings.first().autoplayPronunciationAudio) {
+        val settings = settingsRepository.settings.first()
+        if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
             candidates.firstOrNull()?.let { reading ->
-                selectAudioFor(item.pronunciationAudios, reading)?.let(pronunciationAudioPlayer::play)
+                selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
+                    ?.let(pronunciationAudioPlayer::play)
             }
         }
     }

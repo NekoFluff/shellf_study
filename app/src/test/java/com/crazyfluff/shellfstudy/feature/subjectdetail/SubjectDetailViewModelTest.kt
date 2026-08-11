@@ -60,6 +60,35 @@ class SubjectDetailViewModelTest {
                             metadata = PronunciationAudioMetadataData(pronunciation = "みず")
                         )
                     )
+                ),
+                subjectEntity(
+                    id = 4,
+                    characters = "水",
+                    meaning = "Water",
+                    pronunciationAudios = listOf(
+                        PronunciationAudioData(
+                            url = "https://api.wanikani.com/audio/mizu.ogg",
+                            contentType = "audio/ogg",
+                            metadata = PronunciationAudioMetadataData(pronunciation = "みず")
+                        ),
+                        PronunciationAudioData(
+                            url = "https://api.wanikani.com/audio/mizu.mp3",
+                            contentType = "audio/mpeg",
+                            metadata = PronunciationAudioMetadataData(pronunciation = "みず")
+                        )
+                    )
+                ),
+                subjectEntity(
+                    id = 5,
+                    characters = "水",
+                    meaning = "Water",
+                    pronunciationAudios = listOf(
+                        PronunciationAudioData(
+                            url = "https://api.wanikani.com/audio/mizu.ogg",
+                            contentType = "audio/ogg",
+                            metadata = PronunciationAudioMetadataData(pronunciation = "みず")
+                        )
+                    )
                 )
             )
         )
@@ -226,6 +255,41 @@ class SubjectDetailViewModelTest {
 
             viewModel.open(1)
             awaitSettled(1)
+        }
+
+        viewModel.playReading("みず")
+
+        assertThat(audioPlayer.playedAudios).isEmpty()
+    }
+
+    @Test
+    fun `playReading picks the mp3 clip when restrictAudioToMp3 is enabled`() = runTest {
+        settingsRepository.setRestrictAudioToMp3(true)
+
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(4)
+            var state = awaitSettled(4)
+            while (!state.restrictAudioToMp3) state = awaitItem()
+        }
+
+        viewModel.playReading("みず")
+
+        assertThat(audioPlayer.playedAudios).hasSize(1)
+        assertThat(audioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
+    }
+
+    @Test
+    fun `playReading is a no-op when restrictAudioToMp3 is enabled and only an ogg clip exists`() = runTest {
+        settingsRepository.setRestrictAudioToMp3(true)
+
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(5)
+            var state = awaitSettled(5)
+            while (!state.restrictAudioToMp3) state = awaitItem()
         }
 
         viewModel.playReading("みず")

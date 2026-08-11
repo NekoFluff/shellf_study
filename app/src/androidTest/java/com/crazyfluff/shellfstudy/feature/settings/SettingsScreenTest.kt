@@ -21,6 +21,7 @@ class SettingsScreenTest {
         onThemeModeChange: (ThemeMode) -> Unit = {},
         onShowPitchAccentChange: (Boolean) -> Unit = {},
         onAutoplayPronunciationAudioChange: (Boolean) -> Unit = {},
+        onRestrictAudioToMp3Change: (Boolean) -> Unit = {},
         onNotificationsEnabledChange: (Boolean) -> Unit = {},
         onReviewsAvailableEnabledChange: (Boolean) -> Unit = {},
         onReviewsBacklogEnabledChange: (Boolean) -> Unit = {},
@@ -39,6 +40,7 @@ class SettingsScreenTest {
                 onThemeModeChange = onThemeModeChange,
                 onShowPitchAccentChange = onShowPitchAccentChange,
                 onAutoplayPronunciationAudioChange = onAutoplayPronunciationAudioChange,
+                onRestrictAudioToMp3Change = onRestrictAudioToMp3Change,
                 onNotificationsEnabledChange = onNotificationsEnabledChange,
                 onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
                 onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
@@ -129,6 +131,18 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE).performClick()
         assert(autoplay == false)
+    }
+
+    @Test
+    fun togglingMp3OnlyAudioSwitch_invokesCallback() {
+        var restrictToMp3: Boolean? = null
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, restrictAudioToMp3 = false),
+            onRestrictAudioToMp3Change = { restrictToMp3 = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE).performClick()
+        assert(restrictToMp3 == true)
     }
 
     @Test
