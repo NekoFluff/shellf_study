@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
@@ -63,6 +64,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.feature.search.SubjectSearchOverlay
@@ -80,6 +82,7 @@ object ReviewScreenTestTags {
     const val SUBMIT_BUTTON = "review_submit_button"
     const val DONT_KNOW_BUTTON = "review_dont_know_button"
     const val FEEDBACK_TEXT = "review_feedback_text"
+    const val ANSWER_DETAIL_TEXT = "review_answer_detail_text"
     const val RANK_CHANGE_TEXT = "review_rank_change_text"
     const val CONTINUE_BUTTON = "review_continue_button"
     const val UNDO_BUTTON = "review_undo_button"
@@ -435,11 +438,31 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             }
         } else {
             Text(
-                text = feedbackText(feedback),
+                text = if (feedback.isCorrect) "Correct!" else "Incorrect",
                 color = if (feedback.isCorrect) SrsStageColors.Enlightened else MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.testTag(ReviewScreenTestTags.FEEDBACK_TEXT)
             )
+            feedbackDetailPrefix(feedback)?.let { prefix ->
+                var isDetailExpanded by remember(feedback) { mutableStateOf(false) }
+                val answers = formatAnswerList(feedback.correctAnswer, expanded = isDetailExpanded)
+                Text(
+                    text = "$prefix ${answers.text}",
+                    color = if (answers.hasMore) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = if (isDetailExpanded) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .testTag(ReviewScreenTestTags.ANSWER_DETAIL_TEXT)
+                        .then(
+                            if (answers.hasMore) {
+                                Modifier.clickable { isDetailExpanded = !isDetailExpanded }
+                            } else {
+                                Modifier
+                            }
+                        )
+                )
+            }
             uiState.rankChange?.let { rankChange ->
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -488,11 +511,15 @@ private fun SessionStatsCard(itemsReviewed: Int, correctFirstTry: Int, modifier:
     }
 }
 
-private fun feedbackText(feedback: AnswerFeedback): String = when {
-    !feedback.isCorrect -> "Incorrect: ${feedback.correctAnswer}"
-    feedback.wasCloseMatch -> "Correct! (accepted as close to: ${feedback.correctAnswer})"
-    feedback.answerCount > 1 -> "Correct! Other accepted answers: ${feedback.correctAnswer}"
-    else -> "Correct!"
+/** Label for the small secondary line under the Correct!/Incorrect headline — kept short (capped
+ *  candidate list, single line with ellipsis, tap-to-expand for the rest — see [formatAnswerList])
+ *  so an item with lots of synonyms doesn't push the Continue button down or crowd out the
+ *  swipe-up handle. Null means nothing to show below the headline. */
+private fun feedbackDetailPrefix(feedback: AnswerFeedback): String? = when {
+    !feedback.isCorrect -> "Answer:"
+    feedback.wasCloseMatch -> "Close to:"
+    feedback.answerCount > 1 -> "Also accepted:"
+    else -> null
 }
 
 private fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {

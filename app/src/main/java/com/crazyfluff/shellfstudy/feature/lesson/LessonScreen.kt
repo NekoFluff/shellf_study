@@ -73,16 +73,19 @@ import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.ReadingTypeRow
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.RelatedSubjectsSection
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SectionEyebrow
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.VocabReadingRow
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.WkMnemonicText
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.componentsLabel
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import kotlinx.coroutines.flow.collect
 import kotlin.math.roundToInt
 
@@ -114,6 +117,7 @@ object LessonScreenTestTags {
     const val SUBMIT_BUTTON = "lesson_submit_button"
     const val DONT_KNOW_BUTTON = "lesson_dont_know_button"
     const val FEEDBACK_TEXT = "lesson_feedback_text"
+    const val ANSWER_DETAIL_TEXT = "lesson_answer_detail_text"
     const val RANK_CHANGE_TEXT = "lesson_rank_change_text"
     const val CONTINUE_BUTTON = "lesson_continue_button"
     const val SESSION_COMPLETE = "lesson_session_complete"
@@ -354,6 +358,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 }
             }
 
+            RelatedSubjectsSection(
+                title = componentsLabel(item.subjectType),
+                subjects = item.componentSubjectIds.mapNotNull { uiState.relatedSubjectsById[it] },
+                onSubjectClick = {}
+            )
+
             LessonMeaningSection(item)
 
             if (item.readings.isNotEmpty()) {
@@ -370,6 +380,18 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 HorizontalDivider()
                 LessonContextSentencesSection(item.contextSentences)
             }
+            if (item.subjectType == SubjectType.KANJI) {
+                RelatedSubjectsSection(
+                    title = "Visually similar",
+                    subjects = item.visuallySimilarSubjectIds.mapNotNull { uiState.relatedSubjectsById[it] },
+                    onSubjectClick = {}
+                )
+            }
+            RelatedSubjectsSection(
+                title = "Used in",
+                subjects = item.amalgamationSubjectIds.mapNotNull { uiState.relatedSubjectsById[it] },
+                onSubjectClick = {}
+            )
         }
     }
 
@@ -808,11 +830,31 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             }
         } else {
             Text(
-                text = feedbackText(feedback),
+                text = if (feedback.isCorrect) "Correct!" else "Incorrect",
                 color = if (feedback.isCorrect) SrsStageColors.Enlightened else MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.testTag(LessonScreenTestTags.FEEDBACK_TEXT)
             )
+            feedbackDetailPrefix(feedback)?.let { prefix ->
+                var isDetailExpanded by remember(feedback) { mutableStateOf(false) }
+                val answers = formatAnswerList(feedback.correctAnswer, expanded = isDetailExpanded)
+                Text(
+                    text = "$prefix ${answers.text}",
+                    color = if (answers.hasMore) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = if (isDetailExpanded) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .testTag(LessonScreenTestTags.ANSWER_DETAIL_TEXT)
+                        .then(
+                            if (answers.hasMore) {
+                                Modifier.clickable { isDetailExpanded = !isDetailExpanded }
+                            } else {
+                                Modifier
+                            }
+                        )
+                )
+            }
             uiState.rankChange?.let { rankChange ->
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -831,11 +873,15 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
     }
 }
 
-private fun feedbackText(feedback: LessonAnswerFeedback): String = when {
-    !feedback.isCorrect -> "Incorrect: ${feedback.correctAnswer}"
-    feedback.wasCloseMatch -> "Correct! (accepted as close to: ${feedback.correctAnswer})"
-    feedback.answerCount > 1 -> "Correct! Other accepted answers: ${feedback.correctAnswer}"
-    else -> "Correct!"
+/** Label for the small secondary line under the Correct!/Incorrect headline — kept short (capped
+ *  candidate list, single line with ellipsis, tap-to-expand for the rest — see [formatAnswerList])
+ *  so an item with lots of synonyms doesn't push the Continue button down. Null means nothing to
+ *  show below the headline. */
+private fun feedbackDetailPrefix(feedback: LessonAnswerFeedback): String? = when {
+    !feedback.isCorrect -> "Answer:"
+    feedback.wasCloseMatch -> "Close to:"
+    feedback.answerCount > 1 -> "Also accepted:"
+    else -> null
 }
 
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)

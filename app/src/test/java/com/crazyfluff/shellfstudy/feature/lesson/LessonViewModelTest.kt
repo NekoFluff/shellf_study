@@ -8,6 +8,7 @@ import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
+import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
@@ -35,6 +36,7 @@ class LessonViewModelTest {
     private lateinit var assignmentRepository: AssignmentRepository
     private lateinit var pitchAccentRepository: PitchAccentRepository
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var subjectRepository: SubjectRepository
 
     @Before
     fun setUp() {
@@ -47,6 +49,7 @@ class LessonViewModelTest {
         val repositories = buildTestRepositories(server.url("/").toString())
         assignmentRepository = repositories.assignmentRepository
         pitchAccentRepository = repositories.pitchAccentRepository
+        subjectRepository = repositories.subjectRepository
     }
 
     @After
@@ -54,7 +57,8 @@ class LessonViewModelTest {
         server.shutdown()
     }
 
-    private fun createViewModel() = LessonViewModel(assignmentRepository, pitchAccentRepository, settingsRepository)
+    private fun createViewModel() =
+        LessonViewModel(assignmentRepository, pitchAccentRepository, settingsRepository, subjectRepository)
 
     /** Routes by path — refreshing the lesson queue now syncs subjects and assignments, in either order. */
     private fun dispatch(

@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -201,7 +202,7 @@ fun DetailPeekSheet(
                 ) {
                     Spacer(modifier = Modifier.width(16.dp))
                     Icon(
-                        Icons.Filled.KeyboardArrowUp,
+                        if (isOpenIsh) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )

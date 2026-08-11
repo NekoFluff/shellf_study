@@ -142,7 +142,10 @@ class AssignmentRepository @Inject constructor(
                             kunyomiReadings = subject.readings.filter { it.type == "kunyomi" }.map { it.reading },
                             nanoriReadings = subject.readings.filter { it.type == "nanori" }.map { it.reading },
                             partsOfSpeech = subject.partsOfSpeech,
-                            contextSentences = subject.contextSentences.map { ContextSentence(japanese = it.ja, english = it.en) }
+                            contextSentences = subject.contextSentences.map { ContextSentence(japanese = it.ja, english = it.en) },
+                            componentSubjectIds = subject.componentSubjectIds,
+                            amalgamationSubjectIds = subject.amalgamationSubjectIds,
+                            visuallySimilarSubjectIds = subject.visuallySimilarSubjectIds
                         )
                     }
                 }

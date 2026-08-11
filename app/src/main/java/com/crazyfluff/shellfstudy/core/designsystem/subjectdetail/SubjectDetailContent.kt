@@ -269,7 +269,7 @@ fun SubjectDetailContent(
     }
 }
 
-private fun componentsLabel(type: SubjectType): String = when (type) {
+fun componentsLabel(type: SubjectType): String = when (type) {
     SubjectType.KANJI -> "Radicals"
     SubjectType.VOCABULARY, SubjectType.KANA_VOCABULARY -> "Kanji"
     SubjectType.RADICAL -> "Components"

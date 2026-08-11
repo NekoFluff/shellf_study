@@ -6,8 +6,10 @@ import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
+import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.network.SubjectType
@@ -56,7 +58,8 @@ data class LessonUiState(
     val remainingQuizCount: Int = 0,
     val isSessionComplete: Boolean = false,
     val showPitchAccent: Boolean = true,
-    val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap()
+    val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
+    val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap()
 )
 
 private data class PendingLessonQuestion(val item: LessonItem, val type: LessonQuestionType)
@@ -65,7 +68,8 @@ private data class PendingLessonQuestion(val item: LessonItem, val type: LessonQ
 class LessonViewModel @Inject constructor(
     private val assignmentRepository: AssignmentRepository,
     private val pitchAccentRepository: PitchAccentRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val subjectRepository: SubjectRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LessonUiState())
@@ -143,9 +147,19 @@ class LessonViewModel @Inject constructor(
         val selected = state.availableLessons.filter { it.assignmentId in state.selectedAssignmentIds }
         if (selected.isEmpty()) return
         viewModelScope.launch {
-            val pitchAccents = fetchPitchAccents(selected)
+            val (pitchAccents, relatedSubjects) = coroutineScope {
+                val pitchAccentsDeferred = async { fetchPitchAccents(selected) }
+                val relatedSubjectsDeferred = async { fetchRelatedSubjects(selected) }
+                pitchAccentsDeferred.await() to relatedSubjectsDeferred.await()
+            }
             _uiState.update {
-                it.copy(phase = LessonPhase.STUDY, studyItems = selected, studyIndex = 0, pitchAccentsBySubjectId = pitchAccents)
+                it.copy(
+                    phase = LessonPhase.STUDY,
+                    studyItems = selected,
+                    studyIndex = 0,
+                    pitchAccentsBySubjectId = pitchAccents,
+                    relatedSubjectsById = relatedSubjects
+                )
             }
         }
     }
@@ -157,6 +171,17 @@ class LessonViewModel @Inject constructor(
             .filter { (it.subjectType == SubjectType.VOCABULARY || it.subjectType == SubjectType.KANA_VOCABULARY) && it.characters != null }
             .map { item -> item.subjectId to async { pitchAccentRepository.observePitchAccents(item.characters!!).first() } }
             .associate { (subjectId, deferred) -> subjectId to deferred.await() }
+    }
+
+    /** One batch lookup for every related subject (radicals/kanji/visually-similar/used-in) across
+     * the whole study set, so the glyphs the detail view shows for these can render on the study
+     * card too without a per-tile network/DB round trip. */
+    private suspend fun fetchRelatedSubjects(items: List<LessonItem>): Map<Long, SubjectSummary> {
+        val relatedIds = items
+            .flatMap { it.componentSubjectIds + it.amalgamationSubjectIds + it.visuallySimilarSubjectIds }
+            .distinct()
+        if (relatedIds.isEmpty()) return emptyMap()
+        return subjectRepository.observeSubjectSummaries(relatedIds).first().associateBy { it.subjectId }
     }
 
     fun onStudyCardSwiped(index: Int) {

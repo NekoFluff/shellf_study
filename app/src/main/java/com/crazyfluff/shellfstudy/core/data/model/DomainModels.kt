@@ -58,7 +58,10 @@ data class LessonItem(
     val kunyomiReadings: List<String> = emptyList(),
     val nanoriReadings: List<String> = emptyList(),
     val partsOfSpeech: List<String> = emptyList(),
-    val contextSentences: List<ContextSentence> = emptyList()
+    val contextSentences: List<ContextSentence> = emptyList(),
+    val componentSubjectIds: List<Long> = emptyList(),
+    val amalgamationSubjectIds: List<Long> = emptyList(),
+    val visuallySimilarSubjectIds: List<Long> = emptyList()
 )
 
 /** A subject as shown in search results. [srsStage] is null if no assignment exists yet. */
