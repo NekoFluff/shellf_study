@@ -56,6 +56,28 @@ class StatsRepositoryTest {
     }
 
     @Test
+    fun `observeCurrentLevel is the highest not-yet-passed level`() = runTest {
+        server.enqueue(jsonResponse(levelProgressionsJson(startedAt = "2026-01-01T00:00:00.000000Z")))
+
+        repository.syncLevelProgressions(force = true)
+
+        repository.observeCurrentLevel().test {
+            assertThat(awaitItem()).isEqualTo(12)
+        }
+    }
+
+    @Test
+    fun `observeCurrentLevel is null once every level has been passed`() = runTest {
+        server.enqueue(jsonResponse(ALL_LEVELS_PASSED_JSON))
+
+        repository.syncLevelProgressions(force = true)
+
+        repository.observeCurrentLevel().test {
+            assertThat(awaitItem()).isNull()
+        }
+    }
+
+    @Test
     fun `logReviewEvent then observeReviewsCompletedStats reflects the logged review`() = runTest {
         repository.logReviewEvent(reviewResult(createdAt = Instant.now().toString()))
 

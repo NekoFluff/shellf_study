@@ -80,4 +80,88 @@ class SettingsRepositoryTest {
             assertThat(awaitItem().themeMode).isEqualTo(ThemeMode.DARK)
         }
     }
+
+    @Test
+    fun `notificationSettings emits opt-in defaults when nothing stored`() = runTest {
+        val repository = createRepository()
+        repository.notificationSettings.test {
+            val settings = awaitItem()
+            assertThat(settings.notificationsEnabled).isFalse()
+            assertThat(settings.reviewsAvailableEnabled).isTrue()
+            assertThat(settings.reviewsBacklogEnabled).isTrue()
+            assertThat(settings.backlogThreshold).isEqualTo(50)
+            assertThat(settings.lessonsAvailableEnabled).isTrue()
+            assertThat(settings.dailyReminderEnabled).isTrue()
+            assertThat(settings.dailyReminderHour).isEqualTo(20)
+            assertThat(settings.milestonesEnabled).isTrue()
+            assertThat(settings.quietHoursEnabled).isTrue()
+            assertThat(settings.quietHoursStartHour).isEqualTo(22)
+            assertThat(settings.quietHoursEndHour).isEqualTo(7)
+        }
+    }
+
+    @Test
+    fun `setNotificationsEnabled persists the chosen value`() = runTest {
+        val repository = createRepository()
+        repository.setNotificationsEnabled(true)
+        repository.notificationSettings.test { assertThat(awaitItem().notificationsEnabled).isTrue() }
+    }
+
+    @Test
+    fun `per-category toggles persist independently`() = runTest {
+        val repository = createRepository()
+
+        repository.setReviewsAvailableEnabled(false)
+        repository.setReviewsBacklogEnabled(false)
+        repository.setLessonsAvailableEnabled(false)
+        repository.setDailyReminderEnabled(false)
+        repository.setMilestonesEnabled(false)
+
+        repository.notificationSettings.test {
+            val settings = awaitItem()
+            assertThat(settings.reviewsAvailableEnabled).isFalse()
+            assertThat(settings.reviewsBacklogEnabled).isFalse()
+            assertThat(settings.lessonsAvailableEnabled).isFalse()
+            assertThat(settings.dailyReminderEnabled).isFalse()
+            assertThat(settings.milestonesEnabled).isFalse()
+        }
+    }
+
+    @Test
+    fun `setBacklogThreshold persists and clamps to the valid range`() = runTest {
+        val repository = createRepository()
+
+        repository.setBacklogThreshold(100)
+        repository.notificationSettings.test { assertThat(awaitItem().backlogThreshold).isEqualTo(100) }
+
+        repository.setBacklogThreshold(1)
+        repository.notificationSettings.test { assertThat(awaitItem().backlogThreshold).isEqualTo(5) }
+
+        repository.setBacklogThreshold(1000)
+        repository.notificationSettings.test { assertThat(awaitItem().backlogThreshold).isEqualTo(500) }
+    }
+
+    @Test
+    fun `hour setters persist and clamp to 0 through 23`() = runTest {
+        val repository = createRepository()
+
+        repository.setDailyReminderHour(9)
+        repository.notificationSettings.test { assertThat(awaitItem().dailyReminderHour).isEqualTo(9) }
+        repository.setDailyReminderHour(-1)
+        repository.notificationSettings.test { assertThat(awaitItem().dailyReminderHour).isEqualTo(0) }
+        repository.setDailyReminderHour(30)
+        repository.notificationSettings.test { assertThat(awaitItem().dailyReminderHour).isEqualTo(23) }
+
+        repository.setQuietHoursStartHour(6)
+        repository.notificationSettings.test { assertThat(awaitItem().quietHoursStartHour).isEqualTo(6) }
+        repository.setQuietHoursEndHour(30)
+        repository.notificationSettings.test { assertThat(awaitItem().quietHoursEndHour).isEqualTo(23) }
+    }
+
+    @Test
+    fun `setQuietHoursEnabled persists the chosen value`() = runTest {
+        val repository = createRepository()
+        repository.setQuietHoursEnabled(false)
+        repository.notificationSettings.test { assertThat(awaitItem().quietHoursEnabled).isFalse() }
+    }
 }

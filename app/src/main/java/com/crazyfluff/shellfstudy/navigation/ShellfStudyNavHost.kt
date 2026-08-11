@@ -1,10 +1,14 @@
 package com.crazyfluff.shellfstudy.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.runtime.getValue
+import com.crazyfluff.shellfstudy.core.notifications.NotificationDeepLink
 import com.crazyfluff.shellfstudy.feature.auth.AuthRoute
 import com.crazyfluff.shellfstudy.feature.dashboard.DashboardRoute
 import com.crazyfluff.shellfstudy.feature.lesson.LessonRoute
@@ -20,7 +24,32 @@ object ShellfStudyDestinations {
 }
 
 @Composable
-fun ShellfStudyNavHost(navController: NavHostController = rememberNavController()) {
+fun ShellfStudyNavHost(
+    navController: NavHostController = rememberNavController(),
+    pendingDestination: String? = null,
+    onPendingDestinationConsumed: () -> Unit = {}
+) {
+    // Handles both cold start (this recomposes once the post-login popUpTo lands on DASHBOARD)
+    // and warm start (the user is already past auth when a notification is tapped) with a single
+    // effect — deliberately not also handled inside AUTH's onAuthenticated below, to avoid a race
+    // where both paths fire the navigation.
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    LaunchedEffect(pendingDestination, currentBackStackEntry) {
+        if (pendingDestination == null) return@LaunchedEffect
+        val currentRoute = currentBackStackEntry?.destination?.route ?: return@LaunchedEffect
+        if (currentRoute == ShellfStudyDestinations.AUTH) return@LaunchedEffect
+
+        val targetRoute = when (pendingDestination) {
+            NotificationDeepLink.DESTINATION_REVIEW -> ShellfStudyDestinations.REVIEW
+            NotificationDeepLink.DESTINATION_LESSON -> ShellfStudyDestinations.LESSON
+            else -> null
+        }
+        if (targetRoute != null && targetRoute != currentRoute) {
+            navController.navigateSafely(targetRoute)
+        }
+        onPendingDestinationConsumed()
+    }
+
     NavHost(navController = navController, startDestination = ShellfStudyDestinations.AUTH) {
         composable(ShellfStudyDestinations.AUTH) {
             AuthRoute(

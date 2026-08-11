@@ -7,6 +7,7 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
@@ -35,6 +36,7 @@ class AuthViewModelTest {
     private lateinit var waniKaniRepository: WaniKaniRepository
     private lateinit var syncScheduler: FakeSyncScheduler
     private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
+    private lateinit var notificationCoordinator: FakeNotificationCoordinator
 
     @Before
     fun setUp() {
@@ -48,6 +50,7 @@ class AuthViewModelTest {
         waniKaniRepository = buildTestRepositories(server.url("/").toString()).waniKaniRepository
         syncScheduler = FakeSyncScheduler()
         pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
+        notificationCoordinator = FakeNotificationCoordinator()
     }
 
     @After
@@ -56,7 +59,7 @@ class AuthViewModelTest {
     }
 
     private fun createViewModel() =
-        AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler, pitchAccentScrapeScheduler)
+        AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler, pitchAccentScrapeScheduler, notificationCoordinator)
 
     @Test
     fun `with no stored token, finishes the check unauthenticated`() = runTest {
@@ -82,6 +85,7 @@ class AuthViewModelTest {
             assertThat(state.isAuthenticated).isTrue()
         }
         assertThat(syncScheduler.scheduleCallCount).isEqualTo(1)
+        assertThat(notificationCoordinator.onLoginCallCount).isEqualTo(1)
     }
 
     @Test
@@ -134,6 +138,7 @@ class AuthViewModelTest {
             assertThat(afterSubmit.isAuthenticated).isTrue()
         }
         assertThat(syncScheduler.scheduleCallCount).isEqualTo(1)
+        assertThat(notificationCoordinator.onLoginCallCount).isEqualTo(1)
     }
 
     @Test

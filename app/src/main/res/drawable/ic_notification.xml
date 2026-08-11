@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Placeholder monochrome status-bar icon (a single shell scute, echoing ic_launcher_foreground) —
+  needs a real designed asset. Android notification icons must be a flat white silhouette on a
+  transparent background; the system applies its own tint.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12,2L20,6.5L20,15.5L12,20L4,15.5L4,6.5Z" />
+
+</vector>

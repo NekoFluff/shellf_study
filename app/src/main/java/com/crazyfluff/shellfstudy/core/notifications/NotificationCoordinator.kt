@@ -1,0 +1,231 @@
+package com.crazyfluff.shellfstudy.core.notifications
+
+import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.NotificationSettings
+import com.crazyfluff.shellfstudy.core.data.SettingsRepository
+import com.crazyfluff.shellfstudy.core.data.StatsRepository
+import kotlinx.coroutines.flow.first
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalTime
+import java.time.ZoneId
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * All real notification decision-making lives here — the workers in this package are thin
+ * delegates (mirroring [com.crazyfluff.shellfstudy.core.sync.SyncWorker]'s existing thinness), and
+ * ViewModels depend on this interface so tests can substitute a call-count fake instead of
+ * exercising real repositories/WorkManager.
+ */
+interface NotificationCoordinator {
+    /** Schedules future wakeups only — never posts. Safe to call from any context, including foreground. */
+    suspend fun onLogin()
+
+    /** Cancels every scheduled wakeup, clears the notification tray, and resets dedupe state. */
+    suspend fun onLogout()
+
+    suspend fun rescheduleDailyReminder()
+    suspend fun rescheduleNextReviewCheck()
+
+    /** Posts. Background-only callers (workers). */
+    suspend fun evaluateReviewsAndBacklog()
+
+    /** Posts. Background-only callers (workers). */
+    suspend fun evaluateLessons()
+
+    /** Posts. Background-only callers (workers). */
+    suspend fun evaluateMilestones()
+
+    /** Posts. Background-only callers (workers). */
+    suspend fun evaluateStudyReminder()
+}
+
+@Singleton
+class DefaultNotificationCoordinator @Inject constructor(
+    private val assignmentRepository: AssignmentRepository,
+    private val statsRepository: StatsRepository,
+    private val settingsRepository: SettingsRepository,
+    private val notificationStateRepository: NotificationStateRepository,
+    private val notificationScheduler: NotificationScheduler,
+    private val notificationPoster: NotificationPoster
+) : NotificationCoordinator {
+
+    override suspend fun onLogin() {
+        rescheduleNextReviewCheck()
+        rescheduleDailyReminder()
+    }
+
+    override suspend fun onLogout() {
+        notificationScheduler.cancelAll()
+        listOf(
+            NotificationIds.REVIEWS_AVAILABLE,
+            NotificationIds.REVIEWS_BACKLOG,
+            NotificationIds.LESSONS_AVAILABLE,
+            NotificationIds.STUDY_REMINDER,
+            NotificationIds.MILESTONES
+        ).forEach(notificationPoster::cancel)
+        notificationStateRepository.clear()
+    }
+
+    override suspend fun rescheduleDailyReminder() {
+        val settings = settingsRepository.notificationSettings.first()
+        if (!settings.notificationsEnabled || !settings.dailyReminderEnabled) {
+            notificationScheduler.cancelDailyStreakReminder()
+            return
+        }
+        notificationScheduler.scheduleDailyStreakReminder(settings.dailyReminderHour)
+    }
+
+    override suspend fun rescheduleNextReviewCheck() {
+        val settings = settingsRepository.notificationSettings.first()
+        if (!settings.notificationsEnabled || !settings.reviewsAvailableEnabled) {
+            notificationScheduler.cancelNextReviewCheck()
+            return
+        }
+        val forecast = assignmentRepository.observeReviewForecast().first()
+        val nextBucket = forecast.buckets.firstOrNull { it.newlyAvailableCount > 0 }
+        notificationScheduler.scheduleNextReviewCheck(nextBucket?.availableAt)
+    }
+
+    override suspend fun evaluateReviewsAndBacklog() {
+        val settings = settingsRepository.notificationSettings.first()
+        if (!settings.notificationsEnabled) return
+        val forecast = assignmentRepository.observeReviewForecast().first()
+        val state = notificationStateRepository.state.first()
+        val now = Instant.now()
+
+        if (settings.reviewsAvailableEnabled) {
+            when (val decision = WatermarkPolicy.decide(forecast.reviewsAvailableNow, state.lastNotifiedReviewCount)) {
+                is WatermarkDecision.Notify -> {
+                    if (isQuiet(settings, now)) {
+                        notificationScheduler.scheduleNextReviewCheck(quietHoursEnd(settings, now))
+                    } else {
+                        notificationPoster.post(NotificationBuilder.reviewsAvailable(decision.delta, forecast))
+                        notificationStateRepository.updateReviewWatermark(decision.newWatermark)
+                    }
+                }
+                is WatermarkDecision.ResetWatermark -> notificationStateRepository.updateReviewWatermark(decision.newWatermark)
+                WatermarkDecision.NoChange -> Unit
+            }
+        }
+
+        if (settings.reviewsBacklogEnabled) {
+            val shouldNotify = BacklogPolicy.shouldNotify(
+                currentCount = forecast.reviewsAvailableNow,
+                threshold = settings.backlogThreshold,
+                lastNotifiedAt = state.lastBacklogNotifiedAt,
+                now = now,
+                cooldown = BACKLOG_COOLDOWN
+            )
+            if (shouldNotify) {
+                if (isQuiet(settings, now)) {
+                    notificationScheduler.scheduleDeferredNotification(DeferredNotificationCategory.BACKLOG, quietHoursEnd(settings, now))
+                } else {
+                    notificationPoster.post(NotificationBuilder.reviewsBacklog(forecast.reviewsAvailableNow, settings.backlogThreshold))
+                    notificationStateRepository.recordBacklogNotified(now)
+                }
+            }
+        }
+    }
+
+    override suspend fun evaluateLessons() {
+        val settings = settingsRepository.notificationSettings.first()
+        if (!settings.notificationsEnabled || !settings.lessonsAvailableEnabled) return
+        val lessonCount = assignmentRepository.observeLessonQueue().first().size
+        val state = notificationStateRepository.state.first()
+        val now = Instant.now()
+
+        when (val decision = WatermarkPolicy.decide(lessonCount, state.lastNotifiedLessonCount)) {
+            is WatermarkDecision.Notify -> {
+                if (isQuiet(settings, now)) {
+                    notificationScheduler.scheduleDeferredNotification(DeferredNotificationCategory.LESSONS, quietHoursEnd(settings, now))
+                } else {
+                    notificationPoster.post(NotificationBuilder.lessonsAvailable(decision.delta, lessonCount))
+                    notificationStateRepository.updateLessonWatermark(decision.newWatermark)
+                }
+            }
+            is WatermarkDecision.ResetWatermark -> notificationStateRepository.updateLessonWatermark(decision.newWatermark)
+            WatermarkDecision.NoChange -> Unit
+        }
+    }
+
+    override suspend fun evaluateMilestones() {
+        val settings = settingsRepository.notificationSettings.first()
+        if (!settings.notificationsEnabled || !settings.milestonesEnabled) return
+        val level = statsRepository.observeCurrentLevel().first()
+        val burnedCount = assignmentRepository.observeSrsItemSpread().first().burnedCount
+        val state = notificationStateRepository.state.first()
+        val now = Instant.now()
+
+        if (!state.milestonesInitialized) {
+            // First-ever evaluation: just record a baseline, nothing to compare against yet.
+            notificationStateRepository.updateMilestoneWatermark(level, burnedCount)
+            return
+        }
+
+        val messages = buildList {
+            if (level != null && (state.lastNotifiedLevel == null || level > state.lastNotifiedLevel)) {
+                add("You reached Level $level!")
+            }
+            val previousMilestone = state.lastNotifiedBurnedCount / BURN_MILESTONE_STEP
+            val currentMilestone = burnedCount / BURN_MILESTONE_STEP
+            if (currentMilestone > previousMilestone) {
+                add("You've burned $burnedCount items!")
+            }
+        }
+
+        if (messages.isEmpty()) {
+            notificationStateRepository.updateMilestoneWatermark(level, burnedCount)
+            return
+        }
+
+        if (isQuiet(settings, now)) {
+            notificationScheduler.scheduleDeferredNotification(DeferredNotificationCategory.MILESTONES, quietHoursEnd(settings, now))
+            return
+        }
+        notificationPoster.post(NotificationBuilder.milestone(messages.joinToString(" ")))
+        notificationStateRepository.updateMilestoneWatermark(level, burnedCount)
+    }
+
+    override suspend fun evaluateStudyReminder() {
+        val settings = settingsRepository.notificationSettings.first()
+        if (!settings.notificationsEnabled || !settings.dailyReminderEnabled) return
+        val streak = statsRepository.observeStudyStreak().first()
+        if (streak.isActiveToday) return
+
+        val today = java.time.LocalDate.now()
+        val state = notificationStateRepository.state.first()
+        if (state.lastStreakReminderSentDate == today) return
+
+        val now = Instant.now()
+        if (isQuiet(settings, now)) return // the next daily-reminder wakeup already lands at a fixed local hour
+        notificationPoster.post(NotificationBuilder.studyReminder(streak.currentStreakDays))
+        notificationStateRepository.recordStreakReminderSent(today)
+    }
+
+    private fun isQuiet(settings: NotificationSettings, now: Instant): Boolean {
+        if (!settings.quietHoursEnabled) return false
+        val localTime = now.atZone(ZoneId.systemDefault()).toLocalTime()
+        return QuietHours.isQuietNow(
+            localTime,
+            LocalTime.of(settings.quietHoursStartHour, 0),
+            LocalTime.of(settings.quietHoursEndHour, 0)
+        )
+    }
+
+    private fun quietHoursEnd(settings: NotificationSettings, now: Instant): Instant {
+        val zone = ZoneId.systemDefault()
+        return QuietHours.nextEndInstant(
+            now.atZone(zone).toLocalDateTime(),
+            zone,
+            LocalTime.of(settings.quietHoursStartHour, 0),
+            LocalTime.of(settings.quietHoursEndHour, 0)
+        )
+    }
+
+    private companion object {
+        val BACKLOG_COOLDOWN: Duration = Duration.ofHours(6)
+        const val BURN_MILESTONE_STEP = 10
+    }
+}

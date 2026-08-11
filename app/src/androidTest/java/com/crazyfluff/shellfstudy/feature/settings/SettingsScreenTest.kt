@@ -14,18 +14,51 @@ class SettingsScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    @Test
-    fun showsCurrentDailyLessonGoalAndThemeSelection() {
+    private fun setContent(
+        uiState: SettingsUiState,
+        onDailyLessonGoalChange: (Int) -> Unit = {},
+        onThemeModeChange: (ThemeMode) -> Unit = {},
+        onShowPitchAccentChange: (Boolean) -> Unit = {},
+        onAutoplayPronunciationAudioChange: (Boolean) -> Unit = {},
+        onNotificationsEnabledChange: (Boolean) -> Unit = {},
+        onReviewsAvailableEnabledChange: (Boolean) -> Unit = {},
+        onReviewsBacklogEnabledChange: (Boolean) -> Unit = {},
+        onBacklogThresholdChange: (Int) -> Unit = {},
+        onLessonsAvailableEnabledChange: (Boolean) -> Unit = {},
+        onDailyReminderEnabledChange: (Boolean) -> Unit = {},
+        onDailyReminderHourChange: (Int) -> Unit = {},
+        onMilestonesEnabledChange: (Boolean) -> Unit = {},
+        onQuietHoursEnabledChange: (Boolean) -> Unit = {},
+        onQuietHoursStartHourChange: (Int) -> Unit = {},
+        onQuietHoursEndHourChange: (Int) -> Unit = {},
+        onBack: () -> Unit = {}
+    ) {
         composeTestRule.setContent {
             SettingsScreen(
-                uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.DARK),
-                onDailyLessonGoalChange = {},
-                onThemeModeChange = {},
-                onShowPitchAccentChange = {},
-                onAutoplayPronunciationAudioChange = {},
-                onBack = {}
+                uiState = uiState,
+                onDailyLessonGoalChange = onDailyLessonGoalChange,
+                onThemeModeChange = onThemeModeChange,
+                onShowPitchAccentChange = onShowPitchAccentChange,
+                onAutoplayPronunciationAudioChange = onAutoplayPronunciationAudioChange,
+                onNotificationsEnabledChange = onNotificationsEnabledChange,
+                onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
+                onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
+                onBacklogThresholdChange = onBacklogThresholdChange,
+                onLessonsAvailableEnabledChange = onLessonsAvailableEnabledChange,
+                onDailyReminderEnabledChange = onDailyReminderEnabledChange,
+                onDailyReminderHourChange = onDailyReminderHourChange,
+                onMilestonesEnabledChange = onMilestonesEnabledChange,
+                onQuietHoursEnabledChange = onQuietHoursEnabledChange,
+                onQuietHoursStartHourChange = onQuietHoursStartHourChange,
+                onQuietHoursEndHourChange = onQuietHoursEndHourChange,
+                onBack = onBack
             )
         }
+    }
+
+    @Test
+    fun showsCurrentDailyLessonGoalAndThemeSelection() {
+        setContent(uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.DARK))
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.LESSON_GOAL_VALUE).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.THEME_DARK_OPTION).assertIsDisplayed()
@@ -34,16 +67,10 @@ class SettingsScreenTest {
     @Test
     fun increaseAndDecreaseButtons_invokeCallbackWithAdjustedGoal() {
         var lastGoal = -1
-        composeTestRule.setContent {
-            SettingsScreen(
-                uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
-                onDailyLessonGoalChange = { lastGoal = it },
-                onThemeModeChange = {},
-                onShowPitchAccentChange = {},
-                onAutoplayPronunciationAudioChange = {},
-                onBack = {}
-            )
-        }
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
+            onDailyLessonGoalChange = { lastGoal = it }
+        )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.LESSON_GOAL_INCREASE).performClick()
         assert(lastGoal == 16)
@@ -54,16 +81,7 @@ class SettingsScreenTest {
 
     @Test
     fun decreaseButton_disabledAtMinimumGoal() {
-        composeTestRule.setContent {
-            SettingsScreen(
-                uiState = SettingsUiState(dailyLessonGoal = 1, themeMode = ThemeMode.SYSTEM),
-                onDailyLessonGoalChange = {},
-                onThemeModeChange = {},
-                onShowPitchAccentChange = {},
-                onAutoplayPronunciationAudioChange = {},
-                onBack = {}
-            )
-        }
+        setContent(uiState = SettingsUiState(dailyLessonGoal = 1, themeMode = ThemeMode.SYSTEM))
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.LESSON_GOAL_DECREASE).assertIsNotEnabled()
     }
@@ -71,16 +89,10 @@ class SettingsScreenTest {
     @Test
     fun selectingThemeOption_invokesCallback() {
         var selectedMode: ThemeMode? = null
-        composeTestRule.setContent {
-            SettingsScreen(
-                uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
-                onDailyLessonGoalChange = {},
-                onThemeModeChange = { selectedMode = it },
-                onShowPitchAccentChange = {},
-                onAutoplayPronunciationAudioChange = {},
-                onBack = {}
-            )
-        }
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
+            onThemeModeChange = { selectedMode = it }
+        )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.THEME_DARK_OPTION).performClick()
         assert(selectedMode == ThemeMode.DARK)
@@ -89,16 +101,10 @@ class SettingsScreenTest {
     @Test
     fun togglingPitchAccentSwitch_invokesCallback() {
         var showPitchAccent: Boolean? = null
-        composeTestRule.setContent {
-            SettingsScreen(
-                uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showPitchAccent = true),
-                onDailyLessonGoalChange = {},
-                onThemeModeChange = {},
-                onShowPitchAccentChange = { showPitchAccent = it },
-                onAutoplayPronunciationAudioChange = {},
-                onBack = {}
-            )
-        }
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showPitchAccent = true),
+            onShowPitchAccentChange = { showPitchAccent = it }
+        )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.PITCH_ACCENT_TOGGLE).performClick()
         assert(showPitchAccent == false)
@@ -107,16 +113,10 @@ class SettingsScreenTest {
     @Test
     fun togglingAutoplayAudioSwitch_invokesCallback() {
         var autoplay: Boolean? = null
-        composeTestRule.setContent {
-            SettingsScreen(
-                uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, autoplayPronunciationAudio = true),
-                onDailyLessonGoalChange = {},
-                onThemeModeChange = {},
-                onShowPitchAccentChange = {},
-                onAutoplayPronunciationAudioChange = { autoplay = it },
-                onBack = {}
-            )
-        }
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, autoplayPronunciationAudio = true),
+            onAutoplayPronunciationAudioChange = { autoplay = it }
+        )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE).performClick()
         assert(autoplay == false)
@@ -125,18 +125,83 @@ class SettingsScreenTest {
     @Test
     fun backButton_invokesCallback() {
         var wentBack = false
-        composeTestRule.setContent {
-            SettingsScreen(
-                uiState = SettingsUiState(),
-                onDailyLessonGoalChange = {},
-                onThemeModeChange = {},
-                onShowPitchAccentChange = {},
-                onAutoplayPronunciationAudioChange = {},
-                onBack = { wentBack = true }
-            )
-        }
+        setContent(uiState = SettingsUiState(), onBack = { wentBack = true })
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACK_BUTTON).performClick()
         assert(wentBack)
+    }
+
+    @Test
+    fun togglingNotificationsMasterSwitch_invokesCallback() {
+        var enabled: Boolean? = null
+        setContent(
+            uiState = SettingsUiState(notificationsEnabled = false),
+            onNotificationsEnabledChange = { enabled = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE).performClick()
+        assert(enabled == true)
+    }
+
+    @Test
+    fun categoryToggles_areHiddenWhenNotificationsAreDisabled() {
+        setContent(uiState = SettingsUiState(notificationsEnabled = false))
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE).assertDoesNotExist()
+    }
+
+    @Test
+    fun categoryToggles_areShownWhenNotificationsAreEnabled() {
+        setContent(uiState = SettingsUiState(notificationsEnabled = true))
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.LESSONS_AVAILABLE_TOGGLE).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_TOGGLE).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.MILESTONES_TOGGLE).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_TOGGLE).assertIsDisplayed()
+    }
+
+    @Test
+    fun backlogThresholdStepper_invokesCallbackWithStepOfFive() {
+        var threshold = -1
+        setContent(
+            uiState = SettingsUiState(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 50),
+            onBacklogThresholdChange = { threshold = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE).performClick()
+        assert(threshold == 55)
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE).performClick()
+        assert(threshold == 45)
+    }
+
+    @Test
+    fun dailyReminderHourStepper_wrapsAroundMidnight() {
+        var hour = -1
+        setContent(
+            uiState = SettingsUiState(notificationsEnabled = true, dailyReminderEnabled = true, dailyReminderHour = 23),
+            onDailyReminderHourChange = { hour = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_HOUR_INCREASE).performClick()
+        assert(hour == 0)
+    }
+
+    @Test
+    fun quietHoursSteppers_invokeCallbacks() {
+        var start: Int? = null
+        var end: Int? = null
+        setContent(
+            uiState = SettingsUiState(notificationsEnabled = true, quietHoursEnabled = true, quietHoursStartHour = 22, quietHoursEndHour = 7),
+            onQuietHoursStartHourChange = { start = it },
+            onQuietHoursEndHourChange = { end = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_START_INCREASE).performClick()
+        assert(start == 23)
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_END_DECREASE).performClick()
+        assert(end == 6)
     }
 }

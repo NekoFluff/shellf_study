@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.crazyfluff.shellfstudy.core.notifications.NotificationChannels
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -13,4 +14,9 @@ class ShellfStudyApplication : Application(), Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
+
+    override fun onCreate() {
+        super.onCreate()
+        NotificationChannels.ensureCreated(this)
+    }
 }

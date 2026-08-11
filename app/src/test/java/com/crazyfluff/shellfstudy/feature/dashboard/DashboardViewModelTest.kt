@@ -13,6 +13,7 @@ import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
@@ -48,6 +49,7 @@ class DashboardViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var syncScheduler: FakeSyncScheduler
     private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
+    private lateinit var notificationCoordinator: FakeNotificationCoordinator
 
     @Before
     fun setUp() {
@@ -63,6 +65,7 @@ class DashboardViewModelTest {
         settingsRepository = SettingsRepository(dataStore)
         syncScheduler = FakeSyncScheduler()
         pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
+        notificationCoordinator = FakeNotificationCoordinator()
     }
 
     private val viewModelStore = ViewModelStore()
@@ -96,7 +99,8 @@ class DashboardViewModelTest {
                     statsRepository = repositories.statsRepository,
                     syncOrchestrator = repositories.syncOrchestrator,
                     syncScheduler = syncScheduler,
-                    pitchAccentScrapeScheduler = pitchAccentScrapeScheduler
+                    pitchAccentScrapeScheduler = pitchAccentScrapeScheduler,
+                    notificationCoordinator = notificationCoordinator
                 )
             }
         }
@@ -176,6 +180,7 @@ class DashboardViewModelTest {
 
         tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
         assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
+        assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
     }
 
     @Test

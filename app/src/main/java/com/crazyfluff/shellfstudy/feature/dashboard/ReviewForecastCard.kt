@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
+import com.crazyfluff.shellfstudy.core.data.model.reviewForecastSummary
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
 import java.time.Instant
@@ -116,18 +117,7 @@ private fun summaryText(forecast: ReviewForecast?, selectedIndex: Int?): String 
             if (bucket.newlyAvailableCount == 0) "No new reviews at $time" else "${bucket.newlyAvailableCount} new at $time"
         }
     }
-    val upcomingTotal = forecast.buckets.sumOf { it.newlyAvailableCount }
-    return when {
-        forecast.reviewsAvailableNow > 0 && upcomingTotal > 0 ->
-            "${forecast.reviewsAvailableNow} due now · $upcomingTotal more in the next 24h"
-        forecast.reviewsAvailableNow > 0 -> "${forecast.reviewsAvailableNow} due now"
-        upcomingTotal > 0 -> {
-            val next = forecast.buckets.first { it.newlyAvailableCount > 0 }
-            val time = TIME_FORMATTER.format(next.availableAt.atZone(ZoneId.systemDefault()))
-            "Next up: ${next.newlyAvailableCount} at $time"
-        }
-        else -> "All caught up — nothing due in the next 24h"
-    }
+    return reviewForecastSummary(forecast)
 }
 
 @Composable

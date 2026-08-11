@@ -14,6 +14,7 @@ import com.crazyfluff.shellfstudy.core.data.model.CompletionProjection
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
@@ -65,7 +66,8 @@ class DashboardViewModel @Inject constructor(
     private val statsRepository: StatsRepository,
     private val syncOrchestrator: SyncOrchestrator,
     private val syncScheduler: SyncScheduler,
-    private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler
+    private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,
+    private val notificationCoordinator: NotificationCoordinator
 ) : ViewModel() {
 
     private val _dashboardData = MutableStateFlow(DashboardUiState())
@@ -131,6 +133,7 @@ class DashboardViewModel @Inject constructor(
             tokenRepository.clearToken()
             syncScheduler.cancelPeriodicSync()
             pitchAccentScrapeScheduler.cancelPeriodicScrape()
+            notificationCoordinator.onLogout()
             _dashboardData.update { it.copy(isLoggedOut = true) }
         }
     }

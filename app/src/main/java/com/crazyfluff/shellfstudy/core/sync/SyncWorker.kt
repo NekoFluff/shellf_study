@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.crazyfluff.shellfstudy.core.data.ApiResult
+import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
@@ -12,11 +13,18 @@ import dagger.assisted.AssistedInject
 class SyncWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
-    private val syncOrchestrator: SyncOrchestrator
+    private val syncOrchestrator: SyncOrchestrator,
+    private val notificationCoordinator: NotificationCoordinator
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = when (syncOrchestrator.syncAll(force = false)) {
-        is ApiResult.Success -> Result.success()
+        is ApiResult.Success -> {
+            notificationCoordinator.evaluateReviewsAndBacklog()
+            notificationCoordinator.evaluateLessons()
+            notificationCoordinator.evaluateMilestones()
+            notificationCoordinator.rescheduleNextReviewCheck()
+            Result.success()
+        }
         is ApiResult.Error -> Result.retry()
     }
 }

@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,18 +10,28 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.ThemeMode
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.core.notifications.NotificationDeepLink
 import com.crazyfluff.shellfstudy.navigation.ShellfStudyNavHost
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    // Tracks a notification tap's target screen. android:launchMode is the default ("standard"),
+    // so a tap while the Activity is already running (the poster sets FLAG_ACTIVITY_CLEAR_TOP or
+    // FLAG_ACTIVITY_SINGLE_TOP) routes through onNewIntent below rather than a fresh onCreate.
+    private var pendingDestination by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        pendingDestination = intent?.getStringExtra(NotificationDeepLink.EXTRA_DESTINATION)
         setContent {
             val themeViewModel: ThemeViewModel = hiltViewModel()
             val themeMode by themeViewModel.themeMode.collectAsState()
@@ -31,9 +42,18 @@ class MainActivity : ComponentActivity() {
             }
             ShellfStudyTheme(darkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    ShellfStudyNavHost()
+                    ShellfStudyNavHost(
+                        pendingDestination = pendingDestination,
+                        onPendingDestinationConsumed = { pendingDestination = null }
+                    )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingDestination = intent.getStringExtra(NotificationDeepLink.EXTRA_DESTINATION)
     }
 }

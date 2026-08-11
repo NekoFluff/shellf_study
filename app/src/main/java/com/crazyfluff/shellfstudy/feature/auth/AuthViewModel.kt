@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -31,7 +32,8 @@ class AuthViewModel @Inject constructor(
     private val tokenRepository: TokenRepository,
     private val waniKaniRepository: WaniKaniRepository,
     private val syncScheduler: SyncScheduler,
-    private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler
+    private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,
+    private val notificationCoordinator: NotificationCoordinator
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -65,6 +67,7 @@ class AuthViewModel @Inject constructor(
                 is ApiResult.Success -> {
                     syncScheduler.schedulePeriodicSync()
                     pitchAccentScrapeScheduler.schedulePeriodicScrape()
+                    notificationCoordinator.onLogin()
                     _uiState.update { it.copy(isSubmitting = false, isAuthenticated = true) }
                 }
                 is ApiResult.Error -> {
@@ -81,6 +84,7 @@ class AuthViewModel @Inject constructor(
             is ApiResult.Success -> {
                 syncScheduler.schedulePeriodicSync()
                 pitchAccentScrapeScheduler.schedulePeriodicScrape()
+                notificationCoordinator.onLogin()
                 _uiState.update { it.copy(isCheckingStoredToken = false, isAuthenticated = true) }
             }
             is ApiResult.Error -> {

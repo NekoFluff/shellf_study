@@ -148,10 +148,17 @@ class StatsRepository @Inject constructor(
 
     fun observeDaysOnCurrentLevel(): Flow<Int?> =
         levelProgressionDao.observeAll().map { progressions ->
-            val current = progressions.filter { it.passedAt == null }.maxByOrNull { it.level }
+            val current = currentLevelProgression(progressions)
             val startedAtRaw = current?.startedAt ?: current?.unlockedAt
             startedAtRaw?.let { (ChronoUnit.DAYS.between(Instant.parse(it), Instant.now()) + 1).toInt() }
         }
+
+    /** The level currently being studied (highest not-yet-passed level), for milestone notifications. */
+    fun observeCurrentLevel(): Flow<Int?> =
+        levelProgressionDao.observeAll().map { progressions -> currentLevelProgression(progressions)?.level }
+
+    private fun currentLevelProgression(progressions: List<LevelProgressionEntity>): LevelProgressionEntity? =
+        progressions.filter { it.passedAt == null }.maxByOrNull { it.level }
 
     private fun startOfDayIso(daysAgo: Int): String =
         LocalDate.now().minusDays(daysAgo.toLong()).atStartOfDay(ZoneId.systemDefault()).toInstant().toString()

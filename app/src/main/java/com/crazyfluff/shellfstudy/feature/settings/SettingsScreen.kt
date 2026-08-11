@@ -1,5 +1,9 @@
 package com.crazyfluff.shellfstudy.feature.settings
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -44,6 +48,25 @@ object SettingsScreenTestTags {
     const val THEME_DARK_OPTION = "settings_theme_dark_option"
     const val PITCH_ACCENT_TOGGLE = "settings_pitch_accent_toggle"
     const val AUTOPLAY_AUDIO_TOGGLE = "settings_autoplay_audio_toggle"
+    const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
+    const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
+    const val REVIEWS_BACKLOG_TOGGLE = "settings_reviews_backlog_toggle"
+    const val BACKLOG_THRESHOLD_DECREASE = "settings_backlog_threshold_decrease"
+    const val BACKLOG_THRESHOLD_INCREASE = "settings_backlog_threshold_increase"
+    const val BACKLOG_THRESHOLD_VALUE = "settings_backlog_threshold_value"
+    const val LESSONS_AVAILABLE_TOGGLE = "settings_lessons_available_toggle"
+    const val DAILY_REMINDER_TOGGLE = "settings_daily_reminder_toggle"
+    const val DAILY_REMINDER_HOUR_DECREASE = "settings_daily_reminder_hour_decrease"
+    const val DAILY_REMINDER_HOUR_INCREASE = "settings_daily_reminder_hour_increase"
+    const val DAILY_REMINDER_HOUR_VALUE = "settings_daily_reminder_hour_value"
+    const val MILESTONES_TOGGLE = "settings_milestones_toggle"
+    const val QUIET_HOURS_TOGGLE = "settings_quiet_hours_toggle"
+    const val QUIET_HOURS_START_DECREASE = "settings_quiet_hours_start_decrease"
+    const val QUIET_HOURS_START_INCREASE = "settings_quiet_hours_start_increase"
+    const val QUIET_HOURS_START_VALUE = "settings_quiet_hours_start_value"
+    const val QUIET_HOURS_END_DECREASE = "settings_quiet_hours_end_decrease"
+    const val QUIET_HOURS_END_INCREASE = "settings_quiet_hours_end_increase"
+    const val QUIET_HOURS_END_VALUE = "settings_quiet_hours_end_value"
 }
 
 @Composable
@@ -52,12 +75,37 @@ fun SettingsRoute(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // POST_NOTIFICATIONS is only a runtime permission from API 33 onward — below that, and when
+    // turning the toggle off, there's nothing to request, so onNotificationsEnabledChange is
+    // called directly instead of going through the launcher.
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> viewModel.onNotificationsPermissionResult(granted) }
+
     SettingsScreen(
         uiState = uiState,
         onDailyLessonGoalChange = viewModel::onDailyLessonGoalChange,
         onThemeModeChange = viewModel::onThemeModeChange,
         onShowPitchAccentChange = viewModel::onShowPitchAccentChange,
         onAutoplayPronunciationAudioChange = viewModel::onAutoplayPronunciationAudioChange,
+        onNotificationsEnabledChange = { enabled ->
+            if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                viewModel.onNotificationsEnabledChange(enabled)
+            }
+        },
+        onReviewsAvailableEnabledChange = viewModel::onReviewsAvailableEnabledChange,
+        onReviewsBacklogEnabledChange = viewModel::onReviewsBacklogEnabledChange,
+        onBacklogThresholdChange = viewModel::onBacklogThresholdChange,
+        onLessonsAvailableEnabledChange = viewModel::onLessonsAvailableEnabledChange,
+        onDailyReminderEnabledChange = viewModel::onDailyReminderEnabledChange,
+        onDailyReminderHourChange = viewModel::onDailyReminderHourChange,
+        onMilestonesEnabledChange = viewModel::onMilestonesEnabledChange,
+        onQuietHoursEnabledChange = viewModel::onQuietHoursEnabledChange,
+        onQuietHoursStartHourChange = viewModel::onQuietHoursStartHourChange,
+        onQuietHoursEndHourChange = viewModel::onQuietHoursEndHourChange,
         onBack = onBack
     )
 }
@@ -70,6 +118,17 @@ fun SettingsScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     onShowPitchAccentChange: (Boolean) -> Unit,
     onAutoplayPronunciationAudioChange: (Boolean) -> Unit,
+    onNotificationsEnabledChange: (Boolean) -> Unit,
+    onReviewsAvailableEnabledChange: (Boolean) -> Unit,
+    onReviewsBacklogEnabledChange: (Boolean) -> Unit,
+    onBacklogThresholdChange: (Int) -> Unit,
+    onLessonsAvailableEnabledChange: (Boolean) -> Unit,
+    onDailyReminderEnabledChange: (Boolean) -> Unit,
+    onDailyReminderHourChange: (Int) -> Unit,
+    onMilestonesEnabledChange: (Boolean) -> Unit,
+    onQuietHoursEnabledChange: (Boolean) -> Unit,
+    onQuietHoursStartHourChange: (Int) -> Unit,
+    onQuietHoursEndHourChange: (Int) -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -171,8 +230,164 @@ fun SettingsScreen(
                     modifier = Modifier.testTag(SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE)
                 )
             }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text("Notifications", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            ToggleRow(
+                label = "Enable notifications",
+                checked = uiState.notificationsEnabled,
+                onCheckedChange = onNotificationsEnabledChange,
+                testTag = SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE
+            )
+
+            if (uiState.notificationsEnabled) {
+                ToggleRow(
+                    label = "Reviews available",
+                    checked = uiState.reviewsAvailableEnabled,
+                    onCheckedChange = onReviewsAvailableEnabledChange,
+                    testTag = SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE
+                )
+                ToggleRow(
+                    label = "Review backlog warning",
+                    checked = uiState.reviewsBacklogEnabled,
+                    onCheckedChange = onReviewsBacklogEnabledChange,
+                    testTag = SettingsScreenTestTags.REVIEWS_BACKLOG_TOGGLE
+                )
+                if (uiState.reviewsBacklogEnabled) {
+                    StepperRow(
+                        label = "Backlog threshold",
+                        value = uiState.backlogThreshold,
+                        onValueChange = onBacklogThresholdChange,
+                        decreaseTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE,
+                        increaseTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE,
+                        valueTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_VALUE,
+                        step = 5
+                    )
+                }
+                ToggleRow(
+                    label = "Lessons available",
+                    checked = uiState.lessonsAvailableEnabled,
+                    onCheckedChange = onLessonsAvailableEnabledChange,
+                    testTag = SettingsScreenTestTags.LESSONS_AVAILABLE_TOGGLE
+                )
+                ToggleRow(
+                    label = "Daily study reminder",
+                    checked = uiState.dailyReminderEnabled,
+                    onCheckedChange = onDailyReminderEnabledChange,
+                    testTag = SettingsScreenTestTags.DAILY_REMINDER_TOGGLE
+                )
+                if (uiState.dailyReminderEnabled) {
+                    StepperRow(
+                        label = "Reminder hour",
+                        value = uiState.dailyReminderHour,
+                        onValueChange = { onDailyReminderHourChange(it.mod(24)) },
+                        decreaseTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_DECREASE,
+                        increaseTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_INCREASE,
+                        valueTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_VALUE,
+                        valueLabel = { formatHour(it) }
+                    )
+                }
+                ToggleRow(
+                    label = "Milestones",
+                    checked = uiState.milestonesEnabled,
+                    onCheckedChange = onMilestonesEnabledChange,
+                    testTag = SettingsScreenTestTags.MILESTONES_TOGGLE
+                )
+                ToggleRow(
+                    label = "Quiet hours",
+                    checked = uiState.quietHoursEnabled,
+                    onCheckedChange = onQuietHoursEnabledChange,
+                    testTag = SettingsScreenTestTags.QUIET_HOURS_TOGGLE
+                )
+                if (uiState.quietHoursEnabled) {
+                    StepperRow(
+                        label = "Quiet hours start",
+                        value = uiState.quietHoursStartHour,
+                        onValueChange = { onQuietHoursStartHourChange(it.mod(24)) },
+                        decreaseTestTag = SettingsScreenTestTags.QUIET_HOURS_START_DECREASE,
+                        increaseTestTag = SettingsScreenTestTags.QUIET_HOURS_START_INCREASE,
+                        valueTestTag = SettingsScreenTestTags.QUIET_HOURS_START_VALUE,
+                        valueLabel = { formatHour(it) }
+                    )
+                    StepperRow(
+                        label = "Quiet hours end",
+                        value = uiState.quietHoursEndHour,
+                        onValueChange = { onQuietHoursEndHourChange(it.mod(24)) },
+                        decreaseTestTag = SettingsScreenTestTags.QUIET_HOURS_END_DECREASE,
+                        increaseTestTag = SettingsScreenTestTags.QUIET_HOURS_END_INCREASE,
+                        valueTestTag = SettingsScreenTestTags.QUIET_HOURS_END_VALUE,
+                        valueLabel = { formatHour(it) }
+                    )
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun ToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Text(label)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.testTag(testTag))
+    }
+}
+
+/** A +/- stepper, same shape as the daily-lesson-goal control above, wrapping hour values 0-23. */
+@Composable
+private fun StepperRow(
+    label: String,
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    decreaseTestTag: String,
+    increaseTestTag: String,
+    valueTestTag: String,
+    step: Int = 1,
+    valueLabel: (Int) -> String = { it.toString() }
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Text(label)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconButton(
+                onClick = { onValueChange(value - step) },
+                modifier = Modifier.testTag(decreaseTestTag)
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = "Decrease $label")
+            }
+            Text(
+                text = valueLabel(value),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.testTag(valueTestTag)
+            )
+            IconButton(
+                onClick = { onValueChange(value + step) },
+                modifier = Modifier.testTag(increaseTestTag)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Increase $label")
+            }
+        }
+    }
+}
+
+private fun formatHour(hour: Int): String {
+    val normalized = hour.mod(24)
+    val hour12 = if (normalized % 12 == 0) 12 else normalized % 12
+    val suffix = if (normalized < 12) "AM" else "PM"
+    return "$hour12:00 $suffix"
 }
 
 @Composable
@@ -207,6 +422,17 @@ private fun SettingsScreenPreview() {
             onThemeModeChange = {},
             onShowPitchAccentChange = {},
             onAutoplayPronunciationAudioChange = {},
+            onNotificationsEnabledChange = {},
+            onReviewsAvailableEnabledChange = {},
+            onReviewsBacklogEnabledChange = {},
+            onBacklogThresholdChange = {},
+            onLessonsAvailableEnabledChange = {},
+            onDailyReminderEnabledChange = {},
+            onDailyReminderHourChange = {},
+            onMilestonesEnabledChange = {},
+            onQuietHoursEnabledChange = {},
+            onQuietHoursStartHourChange = {},
+            onQuietHoursEndHourChange = {},
             onBack = {}
         )
     }
