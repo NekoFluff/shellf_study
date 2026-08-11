@@ -31,9 +31,5 @@ class FakeNotificationCoordinator : NotificationCoordinator {
 
     override suspend fun evaluateReviewsAndBacklog() = Unit
 
-    override suspend fun evaluateLessons() = Unit
-
-    override suspend fun evaluateMilestones() = Unit
-
     override suspend fun evaluateStudyReminder() = Unit
 }

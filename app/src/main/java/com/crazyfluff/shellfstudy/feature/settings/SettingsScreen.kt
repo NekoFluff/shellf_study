@@ -65,12 +65,10 @@ object SettingsScreenTestTags {
     const val BACKLOG_THRESHOLD_DECREASE = "settings_backlog_threshold_decrease"
     const val BACKLOG_THRESHOLD_INCREASE = "settings_backlog_threshold_increase"
     const val BACKLOG_THRESHOLD_VALUE = "settings_backlog_threshold_value"
-    const val LESSONS_AVAILABLE_TOGGLE = "settings_lessons_available_toggle"
     const val DAILY_REMINDER_TOGGLE = "settings_daily_reminder_toggle"
     const val DAILY_REMINDER_HOUR_DECREASE = "settings_daily_reminder_hour_decrease"
     const val DAILY_REMINDER_HOUR_INCREASE = "settings_daily_reminder_hour_increase"
     const val DAILY_REMINDER_HOUR_VALUE = "settings_daily_reminder_hour_value"
-    const val MILESTONES_TOGGLE = "settings_milestones_toggle"
     const val QUIET_HOURS_TOGGLE = "settings_quiet_hours_toggle"
     const val QUIET_HOURS_START_DECREASE = "settings_quiet_hours_start_decrease"
     const val QUIET_HOURS_START_INCREASE = "settings_quiet_hours_start_increase"
@@ -110,10 +108,8 @@ fun SettingsRoute(
         onReviewsAvailableEnabledChange = viewModel::onReviewsAvailableEnabledChange,
         onReviewsBacklogEnabledChange = viewModel::onReviewsBacklogEnabledChange,
         onBacklogThresholdChange = viewModel::onBacklogThresholdChange,
-        onLessonsAvailableEnabledChange = viewModel::onLessonsAvailableEnabledChange,
         onDailyReminderEnabledChange = viewModel::onDailyReminderEnabledChange,
         onDailyReminderHourChange = viewModel::onDailyReminderHourChange,
-        onMilestonesEnabledChange = viewModel::onMilestonesEnabledChange,
         onQuietHoursEnabledChange = viewModel::onQuietHoursEnabledChange,
         onQuietHoursStartHourChange = viewModel::onQuietHoursStartHourChange,
         onQuietHoursEndHourChange = viewModel::onQuietHoursEndHourChange,
@@ -133,10 +129,8 @@ fun SettingsScreen(
     onReviewsAvailableEnabledChange: (Boolean) -> Unit,
     onReviewsBacklogEnabledChange: (Boolean) -> Unit,
     onBacklogThresholdChange: (Int) -> Unit,
-    onLessonsAvailableEnabledChange: (Boolean) -> Unit,
     onDailyReminderEnabledChange: (Boolean) -> Unit,
     onDailyReminderHourChange: (Int) -> Unit,
-    onMilestonesEnabledChange: (Boolean) -> Unit,
     onQuietHoursEnabledChange: (Boolean) -> Unit,
     onQuietHoursStartHourChange: (Int) -> Unit,
     onQuietHoursEndHourChange: (Int) -> Unit,
@@ -162,12 +156,6 @@ fun SettingsScreen(
                 .padding(24.dp)
         ) {
             SectionCard(title = "Daily lesson goal", icon = Icons.Default.MenuBook) {
-                Text(
-                    text = "How many new lessons the dashboard's ring badge counts toward each day.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -244,7 +232,7 @@ fun SettingsScreen(
             SectionCard(title = "Notifications", icon = Icons.Default.Notifications) {
                 ToggleRow(
                     label = "Enable notifications",
-                    description = "Master switch for every alert below. Turning this off cancels all pending notifications.",
+                    description = "Turn on to receive the alerts below.",
                     checked = uiState.notificationsEnabled,
                     onCheckedChange = onNotificationsEnabledChange,
                     testTag = SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE
@@ -253,9 +241,10 @@ fun SettingsScreen(
                 if (uiState.notificationsEnabled) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+                    NotificationGroupLabel("Reviews")
                     ToggleRow(
                         label = "Reviews available",
-                        description = "Alerts you the moment new reviews become due — timed to when they actually unlock, not on a fixed schedule.",
+                        description = "Notifies you as soon as new reviews are ready.",
                         checked = uiState.reviewsAvailableEnabled,
                         onCheckedChange = onReviewsAvailableEnabledChange,
                         testTag = SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE
@@ -278,13 +267,10 @@ fun SettingsScreen(
                             step = 5
                         )
                     }
-                    ToggleRow(
-                        label = "Lessons available",
-                        description = "Alerts you when new lessons unlock for the first time.",
-                        checked = uiState.lessonsAvailableEnabled,
-                        onCheckedChange = onLessonsAvailableEnabledChange,
-                        testTag = SettingsScreenTestTags.LESSONS_AVAILABLE_TOGGLE
-                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    NotificationGroupLabel("Reminders")
                     ToggleRow(
                         label = "Daily study reminder",
                         description = "A one-time nudge at the hour below, sent only if you haven't studied yet that day.",
@@ -303,16 +289,13 @@ fun SettingsScreen(
                             valueLabel = { formatHour(it) }
                         )
                     }
-                    ToggleRow(
-                        label = "Milestones",
-                        description = "Celebrates leveling up and every 10 items you burn.",
-                        checked = uiState.milestonesEnabled,
-                        onCheckedChange = onMilestonesEnabledChange,
-                        testTag = SettingsScreenTestTags.MILESTONES_TOGGLE
-                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    NotificationGroupLabel("Quiet hours")
                     ToggleRow(
                         label = "Quiet hours",
-                        description = "Holds back reviews/lessons/milestone alerts during the window below and delivers them right after it ends. The daily reminder is skipped instead of delayed.",
+                        description = "Holds back review/backlog alerts during the window below and delivers them right after it ends. The daily reminder is skipped instead of delayed.",
                         checked = uiState.quietHoursEnabled,
                         onCheckedChange = onQuietHoursEnabledChange,
                         testTag = SettingsScreenTestTags.QUIET_HOURS_TOGGLE
@@ -367,6 +350,17 @@ private fun SectionCard(
             content()
         }
     }
+}
+
+/** Small caption splitting the Notifications card into Reviews/Reminders/Quiet hours groups. */
+@Composable
+private fun NotificationGroupLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(bottom = 4.dp)
+    )
 }
 
 @Composable
@@ -481,10 +475,8 @@ private fun SettingsScreenPreview() {
             onReviewsAvailableEnabledChange = {},
             onReviewsBacklogEnabledChange = {},
             onBacklogThresholdChange = {},
-            onLessonsAvailableEnabledChange = {},
             onDailyReminderEnabledChange = {},
             onDailyReminderHourChange = {},
-            onMilestonesEnabledChange = {},
             onQuietHoursEnabledChange = {},
             onQuietHoursStartHourChange = {},
             onQuietHoursEndHourChange = {},

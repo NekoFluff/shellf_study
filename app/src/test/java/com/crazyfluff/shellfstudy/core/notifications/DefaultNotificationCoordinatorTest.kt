@@ -8,7 +8,6 @@ import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.StatsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
-import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationPoster
@@ -85,22 +84,6 @@ class DefaultNotificationCoordinatorTest {
     private suspend fun enableNotifications() {
         settingsRepository.setNotificationsEnabled(true)
     }
-
-    private fun subject(id: Long, type: String = "vocabulary", level: Int = 1) =
-        SubjectEntity(
-            id = id,
-            subjectType = type,
-            level = level,
-            characters = "字",
-            slug = "test-$id",
-            documentUrl = null,
-            meaningMnemonic = "",
-            readingMnemonic = "",
-            meanings = emptyList(),
-            readings = emptyList(),
-            characterImageUrl = null,
-            searchTarget = "字"
-        )
 
     private fun assignment(
         id: Long,
@@ -216,34 +199,6 @@ class DefaultNotificationCoordinatorTest {
     }
 
     @Test
-    fun `posts a lessons-available notification when new lessons unlock`() = runTest {
-        enableNotifications()
-        settingsRepository.setQuietHoursEnabled(false)
-        subjectDao.upsertAll(listOf(subject(1)))
-        assignmentDao.upsertAll(listOf(assignment(1, 1, unlockedAt = "2020-01-01T00:00:00Z", startedAt = null)))
-
-        coordinator.evaluateLessons()
-
-        assertThat(notificationPoster.posted).hasSize(1)
-        assertThat(notificationPoster.posted.first().channelId).isEqualTo(NotificationChannels.LESSONS_AVAILABLE)
-    }
-
-    @Test
-    fun `posts a burn milestone once burned count crosses a step boundary`() = runTest {
-        enableNotifications()
-        settingsRepository.setQuietHoursEnabled(false)
-        subjectDao.upsertAll((1..10L).map { subject(it) })
-        // First evaluation establishes baseline (no message), per milestonesInitialized guard.
-        coordinator.evaluateMilestones()
-        assertThat(notificationPoster.posted).isEmpty()
-
-        assignmentDao.upsertAll((1..10L).map { assignment(it, it, srsStage = 9, startedAt = "2020-01-01T00:00:00Z") })
-        coordinator.evaluateMilestones()
-
-        assertThat(notificationPoster.posted.map { it.channelId }).contains(NotificationChannels.MILESTONES)
-    }
-
-    @Test
     fun `onLogin schedules future work without posting anything`() = runTest {
         enableNotifications()
 
@@ -262,7 +217,7 @@ class DefaultNotificationCoordinatorTest {
         coordinator.onLogout()
 
         assertThat(notificationScheduler.cancelAllCallCount).isEqualTo(1)
-        assertThat(notificationPoster.cancelled).hasSize(5)
+        assertThat(notificationPoster.cancelled).hasSize(3)
         assertThat(notificationStateRepository.state.first().lastNotifiedReviewCount).isEqualTo(0)
     }
 }

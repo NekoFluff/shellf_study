@@ -20,8 +20,6 @@ class SyncWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = when (syncOrchestrator.syncAll(force = false)) {
         is ApiResult.Success -> {
             notificationCoordinator.evaluateReviewsAndBacklog()
-            notificationCoordinator.evaluateLessons()
-            notificationCoordinator.evaluateMilestones()
             notificationCoordinator.rescheduleNextReviewCheck()
             Result.success()
         }

@@ -34,16 +34,13 @@ class NotificationStateRepositoryTest {
     }
 
     @Test
-    fun `updateReviewWatermark and updateLessonWatermark persist independently`() = runTest {
+    fun `updateReviewWatermark persists`() = runTest {
         val repository = createRepository()
 
         repository.updateReviewWatermark(12)
-        repository.updateLessonWatermark(3)
 
         repository.state.test {
-            val state = awaitItem()
-            assertThat(state.lastNotifiedReviewCount).isEqualTo(12)
-            assertThat(state.lastNotifiedLessonCount).isEqualTo(3)
+            assertThat(awaitItem().lastNotifiedReviewCount).isEqualTo(12)
         }
     }
 
@@ -56,24 +53,6 @@ class NotificationStateRepositoryTest {
 
         repository.state.test {
             assertThat(awaitItem().lastBacklogNotifiedAt).isEqualTo(now)
-        }
-    }
-
-    @Test
-    fun `updateMilestoneWatermark clears the level when null and marks initialized`() = runTest {
-        val repository = createRepository()
-
-        repository.updateMilestoneWatermark(level = 10, burnedCount = 25)
-        repository.state.test {
-            val state = awaitItem()
-            assertThat(state.lastNotifiedLevel).isEqualTo(10)
-            assertThat(state.lastNotifiedBurnedCount).isEqualTo(25)
-            assertThat(state.milestonesInitialized).isTrue()
-        }
-
-        repository.updateMilestoneWatermark(level = null, burnedCount = 25)
-        repository.state.test {
-            assertThat(awaitItem().lastNotifiedLevel).isNull()
         }
     }
 
@@ -93,9 +72,7 @@ class NotificationStateRepositoryTest {
     fun `clear resets all fields back to defaults`() = runTest {
         val repository = createRepository()
         repository.updateReviewWatermark(12)
-        repository.updateLessonWatermark(3)
         repository.recordBacklogNotified(Instant.now())
-        repository.updateMilestoneWatermark(level = 10, burnedCount = 25)
         repository.recordStreakReminderSent(LocalDate.now())
 
         repository.clear()

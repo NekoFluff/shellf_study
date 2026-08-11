@@ -24,10 +24,8 @@ class SettingsScreenTest {
         onReviewsAvailableEnabledChange: (Boolean) -> Unit = {},
         onReviewsBacklogEnabledChange: (Boolean) -> Unit = {},
         onBacklogThresholdChange: (Int) -> Unit = {},
-        onLessonsAvailableEnabledChange: (Boolean) -> Unit = {},
         onDailyReminderEnabledChange: (Boolean) -> Unit = {},
         onDailyReminderHourChange: (Int) -> Unit = {},
-        onMilestonesEnabledChange: (Boolean) -> Unit = {},
         onQuietHoursEnabledChange: (Boolean) -> Unit = {},
         onQuietHoursStartHourChange: (Int) -> Unit = {},
         onQuietHoursEndHourChange: (Int) -> Unit = {},
@@ -44,10 +42,8 @@ class SettingsScreenTest {
                 onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
                 onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
                 onBacklogThresholdChange = onBacklogThresholdChange,
-                onLessonsAvailableEnabledChange = onLessonsAvailableEnabledChange,
                 onDailyReminderEnabledChange = onDailyReminderEnabledChange,
                 onDailyReminderHourChange = onDailyReminderHourChange,
-                onMilestonesEnabledChange = onMilestonesEnabledChange,
                 onQuietHoursEnabledChange = onQuietHoursEnabledChange,
                 onQuietHoursStartHourChange = onQuietHoursStartHourChange,
                 onQuietHoursEndHourChange = onQuietHoursEndHourChange,
@@ -155,9 +151,7 @@ class SettingsScreenTest {
         setContent(uiState = SettingsUiState(notificationsEnabled = true))
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.LESSONS_AVAILABLE_TOGGLE).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_TOGGLE).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.MILESTONES_TOGGLE).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_TOGGLE).assertIsDisplayed()
     }
 

@@ -153,7 +153,7 @@ class StatsRepository @Inject constructor(
             startedAtRaw?.let { (ChronoUnit.DAYS.between(Instant.parse(it), Instant.now()) + 1).toInt() }
         }
 
-    /** The level currently being studied (highest not-yet-passed level), for milestone notifications. */
+    /** The level currently being studied (highest not-yet-passed level). */
     fun observeCurrentLevel(): Flow<Int?> =
         levelProgressionDao.observeAll().map { progressions -> currentLevelProgression(progressions)?.level }
 

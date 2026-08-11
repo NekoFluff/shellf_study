@@ -42,15 +42,6 @@ class NotificationBuilderTest {
     }
 
     @Test
-    fun `lessonsAvailable targets the lesson channel and destination`() {
-        val spec = NotificationBuilder.lessonsAvailable(newCount = 3, totalLessons = 3)
-        assertThat(spec.id).isEqualTo(NotificationIds.LESSONS_AVAILABLE)
-        assertThat(spec.channelId).isEqualTo(NotificationChannels.LESSONS_AVAILABLE)
-        assertThat(spec.destination).isEqualTo(NotificationDeepLink.DESTINATION_LESSON)
-        assertThat(spec.title).isEqualTo("3 new lessons are ready")
-    }
-
-    @Test
     fun `studyReminder mentions the current streak when active`() {
         val spec = NotificationBuilder.studyReminder(currentStreakDays = 12)
         assertThat(spec.channelId).isEqualTo(NotificationChannels.STUDY_REMINDER)
@@ -64,10 +55,4 @@ class NotificationBuilderTest {
         assertThat(spec.body).isEqualTo("You haven't studied today yet.")
     }
 
-    @Test
-    fun `milestone carries the given text through to the body`() {
-        val spec = NotificationBuilder.milestone("You reached Level 10!")
-        assertThat(spec.channelId).isEqualTo(NotificationChannels.MILESTONES)
-        assertThat(spec.body).isEqualTo("You reached Level 10!")
-    }
 }

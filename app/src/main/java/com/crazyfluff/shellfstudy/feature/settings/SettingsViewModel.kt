@@ -22,11 +22,9 @@ data class SettingsUiState(
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
-    val backlogThreshold: Int = 50,
-    val lessonsAvailableEnabled: Boolean = true,
+    val backlogThreshold: Int = 100,
     val dailyReminderEnabled: Boolean = true,
     val dailyReminderHour: Int = 20,
-    val milestonesEnabled: Boolean = true,
     val quietHoursEnabled: Boolean = true,
     val quietHoursStartHour: Int = 22,
     val quietHoursEndHour: Int = 7
@@ -52,10 +50,8 @@ class SettingsViewModel @Inject constructor(
             reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
             reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
             backlogThreshold = notif.backlogThreshold,
-            lessonsAvailableEnabled = notif.lessonsAvailableEnabled,
             dailyReminderEnabled = notif.dailyReminderEnabled,
             dailyReminderHour = notif.dailyReminderHour,
-            milestonesEnabled = notif.milestonesEnabled,
             quietHoursEnabled = notif.quietHoursEnabled,
             quietHoursStartHour = notif.quietHoursStartHour,
             quietHoursEndHour = notif.quietHoursEndHour
@@ -107,10 +103,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setBacklogThreshold(threshold) }
     }
 
-    fun onLessonsAvailableEnabledChange(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setLessonsAvailableEnabled(enabled) }
-    }
-
     fun onDailyReminderEnabledChange(enabled: Boolean) = viewModelScope.launch {
         settingsRepository.setDailyReminderEnabled(enabled)
         notificationCoordinator.rescheduleDailyReminder()
@@ -119,10 +111,6 @@ class SettingsViewModel @Inject constructor(
     fun onDailyReminderHourChange(hour: Int) = viewModelScope.launch {
         settingsRepository.setDailyReminderHour(hour)
         notificationCoordinator.rescheduleDailyReminder()
-    }
-
-    fun onMilestonesEnabledChange(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setMilestonesEnabled(enabled) }
     }
 
     fun onQuietHoursEnabledChange(enabled: Boolean) {

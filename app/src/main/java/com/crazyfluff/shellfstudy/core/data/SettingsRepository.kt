@@ -26,11 +26,9 @@ data class NotificationSettings(
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
-    val backlogThreshold: Int = 50,
-    val lessonsAvailableEnabled: Boolean = true,
+    val backlogThreshold: Int = 100,
     val dailyReminderEnabled: Boolean = true,
     val dailyReminderHour: Int = 20,
-    val milestonesEnabled: Boolean = true,
     val quietHoursEnabled: Boolean = true,
     val quietHoursStartHour: Int = 22,
     val quietHoursEndHour: Int = 7
@@ -49,10 +47,8 @@ class SettingsRepository @Inject constructor(
     private val reviewsAvailableEnabledKey = booleanPreferencesKey("notif_reviews_available_enabled")
     private val reviewsBacklogEnabledKey = booleanPreferencesKey("notif_reviews_backlog_enabled")
     private val backlogThresholdKey = intPreferencesKey("notif_backlog_threshold")
-    private val lessonsAvailableEnabledKey = booleanPreferencesKey("notif_lessons_available_enabled")
     private val dailyReminderEnabledKey = booleanPreferencesKey("notif_daily_reminder_enabled")
     private val dailyReminderHourKey = intPreferencesKey("notif_daily_reminder_hour")
-    private val milestonesEnabledKey = booleanPreferencesKey("notif_milestones_enabled")
     private val quietHoursEnabledKey = booleanPreferencesKey("notif_quiet_hours_enabled")
     private val quietHoursStartHourKey = intPreferencesKey("notif_quiet_hours_start_hour")
     private val quietHoursEndHourKey = intPreferencesKey("notif_quiet_hours_end_hour")
@@ -74,10 +70,8 @@ class SettingsRepository @Inject constructor(
             reviewsAvailableEnabled = prefs[reviewsAvailableEnabledKey] ?: defaults.reviewsAvailableEnabled,
             reviewsBacklogEnabled = prefs[reviewsBacklogEnabledKey] ?: defaults.reviewsBacklogEnabled,
             backlogThreshold = prefs[backlogThresholdKey] ?: defaults.backlogThreshold,
-            lessonsAvailableEnabled = prefs[lessonsAvailableEnabledKey] ?: defaults.lessonsAvailableEnabled,
             dailyReminderEnabled = prefs[dailyReminderEnabledKey] ?: defaults.dailyReminderEnabled,
             dailyReminderHour = prefs[dailyReminderHourKey] ?: defaults.dailyReminderHour,
-            milestonesEnabled = prefs[milestonesEnabledKey] ?: defaults.milestonesEnabled,
             quietHoursEnabled = prefs[quietHoursEnabledKey] ?: defaults.quietHoursEnabled,
             quietHoursStartHour = prefs[quietHoursStartHourKey] ?: defaults.quietHoursStartHour,
             quietHoursEndHour = prefs[quietHoursEndHourKey] ?: defaults.quietHoursEndHour
@@ -116,20 +110,12 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[backlogThresholdKey] = threshold.coerceIn(5, 500) }
     }
 
-    suspend fun setLessonsAvailableEnabled(enabled: Boolean) {
-        dataStore.edit { it[lessonsAvailableEnabledKey] = enabled }
-    }
-
     suspend fun setDailyReminderEnabled(enabled: Boolean) {
         dataStore.edit { it[dailyReminderEnabledKey] = enabled }
     }
 
     suspend fun setDailyReminderHour(hour: Int) {
         dataStore.edit { it[dailyReminderHourKey] = hour.coerceIn(0, 23) }
-    }
-
-    suspend fun setMilestonesEnabled(enabled: Boolean) {
-        dataStore.edit { it[milestonesEnabledKey] = enabled }
     }
 
     suspend fun setQuietHoursEnabled(enabled: Boolean) {

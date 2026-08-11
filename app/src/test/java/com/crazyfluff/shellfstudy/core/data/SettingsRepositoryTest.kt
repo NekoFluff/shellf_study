@@ -89,11 +89,9 @@ class SettingsRepositoryTest {
             assertThat(settings.notificationsEnabled).isFalse()
             assertThat(settings.reviewsAvailableEnabled).isTrue()
             assertThat(settings.reviewsBacklogEnabled).isTrue()
-            assertThat(settings.backlogThreshold).isEqualTo(50)
-            assertThat(settings.lessonsAvailableEnabled).isTrue()
+            assertThat(settings.backlogThreshold).isEqualTo(100)
             assertThat(settings.dailyReminderEnabled).isTrue()
             assertThat(settings.dailyReminderHour).isEqualTo(20)
-            assertThat(settings.milestonesEnabled).isTrue()
             assertThat(settings.quietHoursEnabled).isTrue()
             assertThat(settings.quietHoursStartHour).isEqualTo(22)
             assertThat(settings.quietHoursEndHour).isEqualTo(7)
@@ -113,17 +111,13 @@ class SettingsRepositoryTest {
 
         repository.setReviewsAvailableEnabled(false)
         repository.setReviewsBacklogEnabled(false)
-        repository.setLessonsAvailableEnabled(false)
         repository.setDailyReminderEnabled(false)
-        repository.setMilestonesEnabled(false)
 
         repository.notificationSettings.test {
             val settings = awaitItem()
             assertThat(settings.reviewsAvailableEnabled).isFalse()
             assertThat(settings.reviewsBacklogEnabled).isFalse()
-            assertThat(settings.lessonsAvailableEnabled).isFalse()
             assertThat(settings.dailyReminderEnabled).isFalse()
-            assertThat(settings.milestonesEnabled).isFalse()
         }
     }
 

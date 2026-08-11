@@ -36,18 +36,6 @@ object NotificationBuilder {
         priority = NotificationCompat.PRIORITY_HIGH
     )
 
-    fun lessonsAvailable(newCount: Int, totalLessons: Int): NotificationSpec = NotificationSpec(
-        id = NotificationIds.LESSONS_AVAILABLE,
-        channelId = NotificationChannels.LESSONS_AVAILABLE,
-        title = if (newCount == 1) "1 new lesson is ready" else "$newCount new lessons are ready",
-        body = if (totalLessons == newCount) {
-            "Start whenever you're ready."
-        } else {
-            "$totalLessons lessons waiting in total."
-        },
-        destination = NotificationDeepLink.DESTINATION_LESSON
-    )
-
     fun studyReminder(currentStreakDays: Int): NotificationSpec = NotificationSpec(
         id = NotificationIds.STUDY_REMINDER,
         channelId = NotificationChannels.STUDY_REMINDER,
@@ -58,14 +46,5 @@ object NotificationBuilder {
             "You haven't studied today yet."
         },
         destination = NotificationDeepLink.DESTINATION_DASHBOARD
-    )
-
-    fun milestone(text: String): NotificationSpec = NotificationSpec(
-        id = NotificationIds.MILESTONES,
-        channelId = NotificationChannels.MILESTONES,
-        title = "Milestone reached",
-        body = text,
-        destination = NotificationDeepLink.DESTINATION_DASHBOARD,
-        priority = NotificationCompat.PRIORITY_LOW
     )
 }

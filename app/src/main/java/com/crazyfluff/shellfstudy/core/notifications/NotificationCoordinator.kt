@@ -32,12 +32,6 @@ interface NotificationCoordinator {
     suspend fun evaluateReviewsAndBacklog()
 
     /** Posts. Background-only callers (workers). */
-    suspend fun evaluateLessons()
-
-    /** Posts. Background-only callers (workers). */
-    suspend fun evaluateMilestones()
-
-    /** Posts. Background-only callers (workers). */
     suspend fun evaluateStudyReminder()
 }
 
@@ -61,9 +55,7 @@ class DefaultNotificationCoordinator @Inject constructor(
         listOf(
             NotificationIds.REVIEWS_AVAILABLE,
             NotificationIds.REVIEWS_BACKLOG,
-            NotificationIds.LESSONS_AVAILABLE,
-            NotificationIds.STUDY_REMINDER,
-            NotificationIds.MILESTONES
+            NotificationIds.STUDY_REMINDER
         ).forEach(notificationPoster::cancel)
         notificationStateRepository.clear()
     }
@@ -129,65 +121,6 @@ class DefaultNotificationCoordinator @Inject constructor(
         }
     }
 
-    override suspend fun evaluateLessons() {
-        val settings = settingsRepository.notificationSettings.first()
-        if (!settings.notificationsEnabled || !settings.lessonsAvailableEnabled) return
-        val lessonCount = assignmentRepository.observeLessonQueue().first().size
-        val state = notificationStateRepository.state.first()
-        val now = Instant.now()
-
-        when (val decision = WatermarkPolicy.decide(lessonCount, state.lastNotifiedLessonCount)) {
-            is WatermarkDecision.Notify -> {
-                if (isQuiet(settings, now)) {
-                    notificationScheduler.scheduleDeferredNotification(DeferredNotificationCategory.LESSONS, quietHoursEnd(settings, now))
-                } else {
-                    notificationPoster.post(NotificationBuilder.lessonsAvailable(decision.delta, lessonCount))
-                    notificationStateRepository.updateLessonWatermark(decision.newWatermark)
-                }
-            }
-            is WatermarkDecision.ResetWatermark -> notificationStateRepository.updateLessonWatermark(decision.newWatermark)
-            WatermarkDecision.NoChange -> Unit
-        }
-    }
-
-    override suspend fun evaluateMilestones() {
-        val settings = settingsRepository.notificationSettings.first()
-        if (!settings.notificationsEnabled || !settings.milestonesEnabled) return
-        val level = statsRepository.observeCurrentLevel().first()
-        val burnedCount = assignmentRepository.observeSrsItemSpread().first().burnedCount
-        val state = notificationStateRepository.state.first()
-        val now = Instant.now()
-
-        if (!state.milestonesInitialized) {
-            // First-ever evaluation: just record a baseline, nothing to compare against yet.
-            notificationStateRepository.updateMilestoneWatermark(level, burnedCount)
-            return
-        }
-
-        val messages = buildList {
-            if (level != null && (state.lastNotifiedLevel == null || level > state.lastNotifiedLevel)) {
-                add("You reached Level $level!")
-            }
-            val previousMilestone = state.lastNotifiedBurnedCount / BURN_MILESTONE_STEP
-            val currentMilestone = burnedCount / BURN_MILESTONE_STEP
-            if (currentMilestone > previousMilestone) {
-                add("You've burned $burnedCount items!")
-            }
-        }
-
-        if (messages.isEmpty()) {
-            notificationStateRepository.updateMilestoneWatermark(level, burnedCount)
-            return
-        }
-
-        if (isQuiet(settings, now)) {
-            notificationScheduler.scheduleDeferredNotification(DeferredNotificationCategory.MILESTONES, quietHoursEnd(settings, now))
-            return
-        }
-        notificationPoster.post(NotificationBuilder.milestone(messages.joinToString(" ")))
-        notificationStateRepository.updateMilestoneWatermark(level, burnedCount)
-    }
-
     override suspend fun evaluateStudyReminder() {
         val settings = settingsRepository.notificationSettings.first()
         if (!settings.notificationsEnabled || !settings.dailyReminderEnabled) return
@@ -226,6 +159,5 @@ class DefaultNotificationCoordinator @Inject constructor(
 
     private companion object {
         val BACKLOG_COOLDOWN: Duration = Duration.ofHours(6)
-        const val BURN_MILESTONE_STEP = 10
     }
 }

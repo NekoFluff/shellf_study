@@ -19,10 +19,8 @@ private const val DEFERRED_WORK_NAME_PREFIX = "deferred_notification_"
 /** Categories that can be deferred past quiet hours via [NotificationScheduler.scheduleDeferredNotification]. */
 object DeferredNotificationCategory {
     const val BACKLOG = "backlog"
-    const val LESSONS = "lessons"
-    const val MILESTONES = "milestones"
 
-    val ALL = listOf(BACKLOG, LESSONS, MILESTONES)
+    val ALL = listOf(BACKLOG)
 }
 
 /**
