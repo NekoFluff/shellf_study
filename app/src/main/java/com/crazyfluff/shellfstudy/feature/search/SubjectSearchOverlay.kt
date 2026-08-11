@@ -87,9 +87,9 @@ fun SubjectSearchOverlay(
         if (active) queryFocusRequester.requestFocus()
     }
 
-    // This is a plain inline overlay, not a Dialog, so — unlike SubjectDetailSheet — it shares the
-    // host Activity's OnBackPressedDispatcher and a top-level BackHandler is enough to intercept
-    // system back while open.
+    // This is a plain inline overlay, not a Dialog, so it shares the host Activity's
+    // OnBackPressedDispatcher and a top-level BackHandler is enough to intercept system back while
+    // open.
     BackHandler(enabled = active) {
         onActiveChange(false)
     }

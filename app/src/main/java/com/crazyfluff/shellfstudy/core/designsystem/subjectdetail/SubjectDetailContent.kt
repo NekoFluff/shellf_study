@@ -18,16 +18,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
@@ -75,27 +69,6 @@ fun SubjectDetailContent(
     val hasReadings = detail.readings.isNotEmpty()
     val isVocabulary = detail.subjectType == SubjectType.VOCABULARY || detail.subjectType == SubjectType.KANA_VOCABULARY
 
-    // Absorbs whatever this column's own scroll can't consume once it hits its top or bottom bound
-    // — both leftover drag delta (onPostScroll) and leftover fling velocity (onPostFling) — before
-    // either reaches the enclosing ModalBottomSheet's nested scroll connection. Two distinct bugs
-    // showed up without this: (1) a fast fling that runs out of content (e.g. flinging back up to
-    // the top) handed its leftover velocity to the sheet as a swipe-to-dismiss fling, closing the
-    // sheet on a scroll gesture that never touched it; (2) a plain drag that hit a scroll bound
-    // handed its leftover delta to the sheet's own drag state, which — combined with
-    // rememberReluctantDismissSheetState's oversized thresholds — could settle a hair off its
-    // Expanded anchor rather than exactly at rest, after which the sheet kept intercepting every
-    // later scroll gesture trying to finish that settle, making the content look permanently
-    // unscrollable no matter how many times you retried. Consuming both right here, at the boundary
-    // closest to the scroll itself, means neither kind of leftover ever leaves this column's subtree.
-    val scrollBoundaryConnection = remember {
-        object : NestedScrollConnection {
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
-                available
-
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity = available
-        }
-    }
-
     // Reset (not just remembered fresh) so navigating deeper into a related subject scrolls back
     // to the top of its own content, instead of inheriting whatever offset the previous subject was
     // scrolled to — an effect-driven reset animates cleanly rather than discarding in-flight gesture
@@ -108,7 +81,6 @@ fun SubjectDetailContent(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .nestedScroll(scrollBoundaryConnection)
             .verticalScroll(scrollState)
             .testTag(SubjectDetailTestTags.CONTENT_ROOT),
         verticalArrangement = Arrangement.spacedBy(16.dp)

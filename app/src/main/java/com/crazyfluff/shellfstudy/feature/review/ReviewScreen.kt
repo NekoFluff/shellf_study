@@ -72,8 +72,8 @@ import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.feature.search.SubjectSearchOverlay
-import com.crazyfluff.shellfstudy.feature.subjectdetail.DetailPeekHandleHeight
-import com.crazyfluff.shellfstudy.feature.subjectdetail.DetailPeekSheet
+import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailHandleHeight
+import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
 
@@ -300,7 +300,7 @@ fun ReviewScreen(
         // non-interactive bar taking up space and inviting a swipe that does nothing. Stays composed
         // (collapsed to just the handle) for as long as feedback is showing, not only while expanded,
         // so the same AnchoredDraggableState-driven handle is always there to grab — see
-        // DetailPeekSheet for why this single drag state is what makes the swipe feel connected to
+        // SubjectDetailSheet for why this single drag state is what makes the swipe feel connected to
         // the sheet opening, rather than a drag on a separate handle merely toggling a boolean that a
         // different, independently-animating sheet then reacts to.
         val detailItem = uiState.currentItem
@@ -312,7 +312,7 @@ fun ReviewScreen(
             modifier = Modifier.fillMaxSize()
         ) {
             if (detailItem != null && detailQuestionType != null) {
-                DetailPeekSheet(
+                SubjectDetailSheet(
                     subjectId = detailItem.subjectId,
                     expanded = uiState.isDetailsExpanded,
                     onToggle = onToggleDetails,
@@ -494,10 +494,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
 
         // Reserves room so the swipe-up handle — pinned to the true bottom of the screen as its
         // own overlay in ReviewScreen's outer Box, not laid out inline here — doesn't cover this
-        // content. See DetailPeekSheet for why it lives outside this Column. The extra 24dp covers
-        // the handle's own navigationBarsPadding, which grows its footprint on devices with a
-        // gesture pill or 3-button nav bar.
-        Spacer(modifier = Modifier.height(16.dp + DetailPeekHandleHeight + 24.dp))
+        // content. See SubjectDetailSheet for why it lives outside this Column. The extra 24dp
+        // covers the handle's own navigationBarsPadding, which grows its footprint on devices with
+        // a gesture pill or 3-button nav bar.
+        Spacer(modifier = Modifier.height(16.dp + SubjectDetailHandleHeight + 24.dp))
     }
 }
 

@@ -1,27 +1,40 @@
 package com.crazyfluff.shellfstudy.feature.subjectdetail
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetState
-import androidx.compose.material3.SheetValue
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,179 +42,348 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectDetailContent
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectDetailTestTags
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+/** Height of the always-present grab strip in its collapsed "peek" state — labeled with "Swipe up
+ *  for details" so the affordance is discoverable. Purely the handle's own content height —
+ *  system-bar clearance is handled separately by padding the sheet as a whole, not baked in here. */
+val SubjectDetailHandleHeight = 56.dp
+
+/** Height of the same grab strip once the sheet is open — just a plain drag pill at that point, no
+ *  label needed (the close (X) button in the content header already reads as "dismiss"), so it can
+ *  be shorter and hand the reclaimed space to the content underneath. */
+private val SubjectDetailOpenHandleHeight = 32.dp
+
+private enum class SheetAnchor { Collapsed, Open }
 
 /**
- * Presents the shared subject detail view as a [ModalBottomSheet]. Related-subject tiles drill
- * further into the sheet (back button + system back pop the internal stack) rather than dismissing
- * it — see [SubjectDetailViewModel].
+ * The shared "everything about this subject" sheet. One implementation, two callers: Review's
+ * swipe-up-for-details panel (mounted for the whole question, driven by [expanded]/[onToggle]
+ * toggling between peeking and open) and the "look something up" sheet from Dashboard, Lesson, and
+ * search (mounted only while showing — see [SubjectDetailSheetHost] — which starts it already
+ * [expanded] and tears it down once a close settles it back to collapsed). Both get the exact same
+ * gesture and the exact same animation.
+ *
+ * Hosted directly in the caller's own window, not a separate Dialog, so a single
+ * [AnchoredDraggableState] drives both the always-visible handle bar and the sheet's open/closed
+ * position together — a genuine single drag gesture takes it from "peeking" to "open," rather than
+ * a drag on a separate handle merely toggling a boolean that a different, independently-animating
+ * sheet then reacts to.
+ *
+ * The handle is the only draggable surface. Once open, the content column underneath scrolls
+ * completely normally — there's no nested-scroll bridging back into the drag state, so scrolling
+ * through a long subject's mnemonics can never accidentally start closing the sheet. The trade-off
+ * is that closing requires grabbing the handle again (or the close button, or back, or tapping
+ * outside) rather than overscrolling the content — an intentional, predictable limitation.
+ *
+ * [expanded] is the source of truth; this composable is a controlled component that keeps its own
+ * gesture-driven [AnchoredDraggableState] in sync with it in both directions — external changes
+ * animate the drag position to match, and a user's drag/fling that settles somewhere other than
+ * what [expanded] currently says calls [onToggle]. That sync reacts to
+ * [AnchoredDraggableState.settledValue], not [AnchoredDraggableState.currentValue] or
+ * [AnchoredDraggableState.targetValue] — both of the latter can flip to the opposite anchor well
+ * before the user actually lets go (as soon as a drag crosses the anchors' midpoint), which would
+ * otherwise tear the content down mid-drag, well before any close animation had actually played.
+ * settledValue only moves once a release's fling/animateTo has genuinely finished, so content (and
+ * the dim scrim) stay visible through the whole close gesture and its animation, never disappearing
+ * until the sheet has truly come to rest.
+ *
+ * [SubjectDetailViewModel] (and the network/DB work behind it) is only ever created once the sheet
+ * has actually been asked to open — see [SubjectDetailBody] — not merely because this handle exists,
+ * so answering a question you never peek at never pays for a subject-detail fetch.
+ *
+ * [dismissesFully] controls what "collapsed" settles at. Review keeps this composable mounted the
+ * whole time and wants a real resting state to peek from — the default `false` collapses only as
+ * far as the handle bar, leaving it visible. [SubjectDetailSheetHost] instead mounts this fresh each
+ * time and tears it down the moment it collapses, so there's no peek bar left to rest at — `true`
+ * collapses all the way past the bottom of the screen, so the close animation reads as the whole
+ * sheet sliding away rather than shrinking down to a bar that then vanishes.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubjectDetailSheet(
-    initialSubjectId: Long,
+    subjectId: Long,
+    expanded: Boolean,
+    onToggle: () -> Unit,
     revealMode: DetailRevealMode,
     isAnswered: Boolean,
     questionType: DetailQuestionType?,
-    onDismiss: () -> Unit,
-    viewModel: SubjectDetailViewModel = hiltViewModel()
+    modifier: Modifier = Modifier,
+    handleTestTag: String = SubjectDetailTestTags.PEEK_HANDLE,
+    dismissesFully: Boolean = false
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val sheetState = rememberReluctantDismissSheetState()
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(initialSubjectId) {
-        viewModel.open(initialSubjectId)
+    // navigationBarsPadding on the Surface below already reserves the bottom system-bar clearance,
+    // so it's subtracted here too, otherwise the sheet would be pushed that same amount past the
+    // top of the screen.
+    val sheetHeightDp = rememberNearFullScreenSheetHeightDp()
+    val sheetHeightPx = with(density) { sheetHeightDp.toPx() }
+    val handleHeightPx = with(density) { SubjectDetailHandleHeight.toPx() }
+    val collapsedOffsetPx = if (dismissesFully) {
+        sheetHeightPx
+    } else {
+        (sheetHeightPx - handleHeightPx).coerceAtLeast(0f)
     }
 
-    // Stops audio the moment the sheet leaves composition, regardless of which screen hosts it.
-    DisposableEffect(Unit) {
-        onDispose { viewModel.stopPlayback() }
+    // Always starts Collapsed regardless of the incoming `expanded` — so a caller that mounts this
+    // already-expanded (SubjectDetailSheetHost) still gets the same slide-up-from-the-handle open
+    // animation via the LaunchedEffect below, instead of just popping in fully open.
+    val dragState = remember {
+        AnchoredDraggableState(initialValue = SheetAnchor.Collapsed).apply {
+            updateAnchors(
+                DraggableAnchors {
+                    SheetAnchor.Open at 0f
+                    SheetAnchor.Collapsed at collapsedOffsetPx
+                }
+            )
+        }
     }
 
-    // ModalBottomSheet only calls onDismissRequest once its hide animation finishes, but its
-    // full-screen scrim keeps swallowing taps for that entire window. sheetState.targetValue flips
-    // to Hidden as soon as the drag/fling commits to dismissing (well before the animation settles),
-    // so react to that instead — it removes this composable (and its Dialog/scrim) immediately,
-    // rather than leaving it around to steal a fast tap on whatever is underneath (e.g. the search
-    // bar) and reopen it.
-    LaunchedEffect(sheetState) {
-        var hasAppeared = false
-        snapshotFlow { sheetState.targetValue }.collect { target ->
-            if (target != SheetValue.Hidden) {
-                hasAppeared = true
-            } else if (hasAppeared) {
-                onDismiss()
+    val collapse: () -> Unit = { scope.launch { dragState.animateTo(SheetAnchor.Collapsed) } }
+
+    // External (non-gesture) changes to `expanded` — the initial swipe/tap that first reveals this
+    // composable, SubjectDetailSheetHost mounting it already expanded, or a future caller-driven
+    // close — animate the drag position to match. Keyed on expanded itself, so this restarts (and
+    // reads the fresh value) on every change; no staleness concern here the way there is below.
+    LaunchedEffect(expanded) {
+        val target = if (expanded) SheetAnchor.Open else SheetAnchor.Collapsed
+        if (dragState.targetValue != target) {
+            dragState.animateTo(target)
+        }
+    }
+
+    // A user's drag/fling settling somewhere other than what `expanded` says is the gesture telling
+    // the caller to update — for Review that flips isDetailsExpanded back to false; for the look-up
+    // sheet (SubjectDetailSheetHost) it dismisses the sheet entirely. This effect is keyed on
+    // `dragState` (a stable, never-changing reference), so it launches exactly once and keeps
+    // running for this composable's whole lifetime — which means the `expanded`/`onToggle` captured
+    // in its closure would otherwise be frozen at whatever they were on that first launch, causing a
+    // spurious extra toggle the first time the state actually changes. rememberUpdatedState gives
+    // the long-running collector a live reference instead. drop(1) discards snapshotFlow's synthetic
+    // first emission (the just-mounted resting value, not a real settle event) — without it, a
+    // caller that mounts already expanded would see settledValue's initial Collapsed not match
+    // `expanded = true` and fire onToggle before the open animation even starts.
+    val currentExpanded by rememberUpdatedState(expanded)
+    val currentOnToggle by rememberUpdatedState(onToggle)
+    LaunchedEffect(dragState) {
+        snapshotFlow { dragState.settledValue }
+            .drop(1)
+            .collect { settled ->
+                val settledExpanded = settled == SheetAnchor.Open
+                if (settledExpanded != currentExpanded) currentOnToggle()
             }
-        }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        modifier = Modifier.testTag(SubjectDetailTestTags.SHEET_ROOT)
-    ) {
-        // Must live inside the sheet's content, not before ModalBottomSheet(...): the sheet
-        // renders in its own dialog window with its own OnBackPressedDispatcher, so a BackHandler
-        // registered outside never sees back-button events while the sheet has focus — the
-        // sheet's own predictive-back-to-dismiss handling intercepts them first instead.
-        BackHandler(enabled = uiState.backStack.isNotEmpty()) {
-            viewModel.goBack()
+    // currentValue/targetValue track the nearest anchor while a drag is still in progress, so a
+    // decisive downward drag can flip both to Collapsed well before the user actually lets go.
+    // settledValue doesn't move until a release's fling/animateTo has fully finished, so including
+    // it here keeps the content (and the dim scrim) visible through the whole close gesture and its
+    // animation, only dropping them once the sheet has genuinely come to rest collapsed.
+    val isOpenIsh = dragState.targetValue == SheetAnchor.Open ||
+        dragState.currentValue == SheetAnchor.Open ||
+        dragState.settledValue == SheetAnchor.Open
+
+    // Starting the stroke-order playback before the drag has genuinely settled would make it
+    // compete with this sheet's own open animation for frame budget; settledValue is the precise
+    // "has it stopped moving" signal for that, same reasoning as isOpenIsh above.
+    val strokeOrderSettled = dragState.settledValue == SheetAnchor.Open
+
+    Box(modifier = modifier.fillMaxSize().testTag(SubjectDetailTestTags.SHEET_ROOT)) {
+        // Dims the rest of the screen only while meaningfully open — never while merely peeking, so
+        // the collapsed handle bar behaves passively and doesn't steal touches from what's behind
+        // it. Tapping it collapses the sheet the same animated way as dragging the handle down.
+        if (isOpenIsh) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.32f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = collapse
+                    )
+            )
         }
 
-        // Drilling into a related radical/kanji/vocab is meant to show everything about it
-        // regardless of what the original triggering question was gating — the restriction only
-        // makes sense for the root subject actually being quizzed. A "Show all" override lifts the
-        // same restriction on the root subject itself, for a user who just wants to peek.
-        val canShowAll = revealMode == DetailRevealMode.HIDE_UNTIL_ANSWERED &&
-            uiState.backStack.isEmpty() &&
-            !uiState.forceRevealAll
-        val effectiveRevealMode = if (uiState.forceRevealAll || uiState.backStack.isNotEmpty()) {
-            DetailRevealMode.FULL
-        } else {
-            revealMode
-        }
-
-        // A fixed height here — rather than sizing to content — keeps ModalBottomSheet's measured
-        // anchor stable across the loading -> loaded swap and the later stroke-order/writing-practice
-        // pop-in for kanji/radicals; both used to force a visible re-settle mid-open-animation.
-        // Mirrors DetailPeekSheet's identical fixed-height contract (see
-        // rememberNearFullScreenSheetHeightDp below) — content that grows/shrinks inside just
-        // scrolls within this fixed frame via SubjectDetailContent's own verticalScroll.
-        Column(modifier = Modifier.height(rememberNearFullScreenSheetHeightDp())) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-            ) {
-                if (uiState.backStack.isNotEmpty()) {
-                    IconButton(onClick = { viewModel.goBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                if (canShowAll) {
-                    TextButton(onClick = viewModel::toggleForceReveal) {
-                        Text("Show all")
-                    }
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close")
-                }
-            }
-
-            val detail = uiState.detail
-            if (uiState.isLoading || detail == null) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().weight(1f).padding(32.dp),
-                    contentAlignment = Alignment.Center
+        Surface(
+            tonalElevation = 3.dp,
+            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            modifier = Modifier
+                // Outermost, so it shifts the sheet's whole footprint — handle included — clear of
+                // the system nav bar, rather than being absorbed into the handle's own fixed height
+                // and squeezing/hiding its content (see SubjectDetailHandleHeight's doc comment).
+                .navigationBarsPadding()
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(sheetHeightDp)
+                .offset { IntOffset(0, dragState.requireOffset().roundToInt()) }
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (isOpenIsh) SubjectDetailOpenHandleHeight else SubjectDetailHandleHeight)
+                        .anchoredDraggable(dragState, Orientation.Vertical)
+                        .clickable(onClick = onToggle)
+                        .testTag(handleTestTag)
                 ) {
-                    CircularProgressIndicator()
+                    if (isOpenIsh) {
+                        // Just a plain drag pill once open — the close (X) button in the content
+                        // header below already says "dismiss", so a second labeled "Hide details"
+                        // control here would be redundant chrome eating into content space.
+                        Spacer(modifier = Modifier.weight(1f))
+                        Box(
+                            modifier = Modifier
+                                .width(32.dp)
+                                .height(4.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                    RoundedCornerShape(2.dp)
+                                )
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                    } else {
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Icon(
+                            Icons.Filled.KeyboardArrowUp,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Swipe up for details",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
-            } else {
-                // The stroke-order playback inside SubjectDetailContent is a second, independent
-                // animation system; starting it before the sheet itself has settled makes two
-                // Canvas-driven animations fight for the same frame budget right when the sheet is
-                // trying to look smooth. isAnimationRunning stays true for an animateTo call's
-                // entire duration (unlike currentValue, which can flip to the destination anchor
-                // partway through, once the drag crosses the anchors' midpoint) — so this is a
-                // precise "has it stopped moving" signal, not polling or a timer.
-                val strokeOrderSettled = sheetState.isVisible && !sheetState.isAnimationRunning
-                SubjectDetailContent(
-                    detail = detail,
-                    relatedSubjects = uiState.relatedSubjects,
-                    revealMode = effectiveRevealMode,
-                    isAnswered = isAnswered,
-                    questionType = questionType,
-                    onRelatedSubjectClick = viewModel::navigateToRelated,
-                    modifier = Modifier.weight(1f).padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
-                    showPitchAccent = uiState.showPitchAccent,
-                    onPlayReading = viewModel::playReading,
-                    strokeOrder = uiState.strokeOrder,
-                    autoPlayStrokeOrder = strokeOrderSettled
-                )
+
+                if (isOpenIsh) {
+                    SubjectDetailBody(
+                        subjectId = subjectId,
+                        revealMode = revealMode,
+                        isAnswered = isAnswered,
+                        questionType = questionType,
+                        onCollapse = collapse,
+                        autoPlayStrokeOrder = strokeOrderSettled
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * Material3's default swipe-to-dismiss thresholds (56dp positional / 125dp-per-second fling) are
- * easy to trigger by accident — e.g. overshooting while scrolling long content back up to the top.
- * [rememberModalBottomSheetState] doesn't expose threshold tuning, so this builds [SheetState]
- * directly (its constructor does) with much larger thresholds, requiring a real deliberate drag —
- * or a fast intentional fling — to dismiss. The close button, back gesture, and tapping outside the
- * sheet are untouched by this and stay instant.
+ * The actual subject-detail content, plus its back/drill-down handling and the close (X) button —
+ * split out from [SubjectDetailSheet] so [hiltViewModel] (and the [SubjectDetailViewModel] fetch it
+ * triggers) is only ever invoked once the sheet is genuinely open, not merely because the
+ * always-present handle bar exists.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun rememberReluctantDismissSheetState(): SheetState {
-    val density = LocalDensity.current
-    val positionalThresholdPx = { with(density) { 200.dp.toPx() } }
-    val velocityThresholdPx = { with(density) { 1000.dp.toPx() } }
-    return rememberSaveable(
-        saver = SheetState.Saver(true, positionalThresholdPx, velocityThresholdPx, { true }, false)
+private fun ColumnScope.SubjectDetailBody(
+    subjectId: Long,
+    revealMode: DetailRevealMode,
+    isAnswered: Boolean,
+    questionType: DetailQuestionType?,
+    onCollapse: () -> Unit,
+    autoPlayStrokeOrder: Boolean,
+    viewModel: SubjectDetailViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(subjectId) { viewModel.open(subjectId) }
+    DisposableEffect(Unit) { onDispose { viewModel.stopPlayback() } }
+
+    // A plain BackHandler works here (unlike the old ModalBottomSheet-hosted version) because this
+    // sheet lives directly in the caller's own window and shares its Activity's single
+    // OnBackPressedDispatcher — no separate dialog window with its own dispatcher to worry about.
+    BackHandler(enabled = uiState.backStack.isNotEmpty()) { viewModel.goBack() }
+    BackHandler(enabled = uiState.backStack.isEmpty(), onBack = onCollapse)
+
+    // Drilling into a related radical/kanji/vocab is meant to show everything about it regardless
+    // of what the original triggering question was gating — the restriction only makes sense for
+    // the root subject actually being quizzed. A "Show all" override lifts the same restriction on
+    // the root subject itself, for a user who just wants to peek.
+    val canShowAll = revealMode == DetailRevealMode.HIDE_UNTIL_ANSWERED &&
+        uiState.backStack.isEmpty() &&
+        !uiState.forceRevealAll
+    val effectiveRevealMode = if (uiState.forceRevealAll || uiState.backStack.isNotEmpty()) {
+        DetailRevealMode.FULL
+    } else {
+        revealMode
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
     ) {
-        SheetState(true, positionalThresholdPx, velocityThresholdPx, SheetValue.Hidden)
+        if (uiState.backStack.isNotEmpty()) {
+            IconButton(onClick = { viewModel.goBack() }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        if (canShowAll) {
+            TextButton(onClick = viewModel::toggleForceReveal) {
+                Text("Show all")
+            }
+        }
+        IconButton(onClick = onCollapse) {
+            Icon(Icons.Filled.Close, contentDescription = "Close")
+        }
+    }
+
+    val detail = uiState.detail
+    if (uiState.isLoading || detail == null) {
+        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    } else {
+        SubjectDetailContent(
+            detail = detail,
+            relatedSubjects = uiState.relatedSubjects,
+            revealMode = effectiveRevealMode,
+            isAnswered = isAnswered,
+            questionType = questionType,
+            onRelatedSubjectClick = viewModel::navigateToRelated,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
+            showPitchAccent = uiState.showPitchAccent,
+            onPlayReading = viewModel::playReading,
+            strokeOrder = uiState.strokeOrder,
+            autoPlayStrokeOrder = autoPlayStrokeOrder
+        )
     }
 }
 
 /**
  * Reaches almost to the top of the screen — just enough gap below the status bar to read as a
- * sheet, not a full-screen takeover — rather than sizing to content, so callers get a stable
- * height regardless of what's inside. [DetailPeekSheet] reuses this same calculation for its own
- * fixed-height panel.
+ * sheet, not a full-screen takeover — rather than sizing to content, so callers get a stable height
+ * regardless of what's inside.
  */
 @Composable
 internal fun rememberNearFullScreenSheetHeightDp(): Dp {

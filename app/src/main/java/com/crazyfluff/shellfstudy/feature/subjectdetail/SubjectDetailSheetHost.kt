@@ -30,18 +30,25 @@ fun rememberSubjectDetailSheetState(): SubjectDetailSheetState = remember { Subj
  * Hosts the shared "look something up" [SubjectDetailSheet] (always [DetailRevealMode.FULL],
  * answered, ungated) for any screen that just wants tapping a subject to show its detail —
  * Dashboard's search bar and Level Progress card, Review's search bar, Lesson's related-subject
- * tiles. Not for Review's mid-quiz [DetailPeekSheet], which is gated by the current question and
- * keeps its own separate state ([com.crazyfluff.shellfstudy.feature.review.ReviewUiState.isDetailsExpanded]).
+ * tiles. Mounted only while [state] has a subject, and starts already expanded — [SubjectDetailSheet]
+ * still plays its usual slide-up open animation on mount (see its own doc comment), and once a
+ * close (drag, tap outside, back, or the X button) settles it collapsed, that's reported back here
+ * as a toggle away from expanded, which tears the composable down. Not for Review's mid-quiz sheet,
+ * which is gated by the current question and keeps its own separate state
+ * ([com.crazyfluff.shellfstudy.feature.review.ReviewUiState.isDetailsExpanded]), staying mounted
+ * (collapsed to just the handle) between questions instead of unmounting.
  */
 @Composable
 fun SubjectDetailSheetHost(state: SubjectDetailSheetState) {
     state.subjectId?.let { id ->
         SubjectDetailSheet(
-            initialSubjectId = id,
+            subjectId = id,
+            expanded = true,
+            onToggle = { state.dismiss() },
             revealMode = DetailRevealMode.FULL,
             isAnswered = true,
             questionType = null,
-            onDismiss = { state.dismiss() }
+            dismissesFully = true
         )
     }
 }
