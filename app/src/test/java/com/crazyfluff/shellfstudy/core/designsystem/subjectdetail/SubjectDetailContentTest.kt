@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.PronunciationAudio
@@ -135,8 +136,11 @@ class SubjectDetailContentTest {
 
         composeTestRule.onNodeWithText("On'yomi").assertIsDisplayed()
         composeTestRule.onNodeWithText("スイ").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Kun'yomi").assertIsDisplayed()
-        composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+        // Reading now sits below the meaning card (including its mnemonic prose), so on a
+        // Robolectric-sized window these rows can land past the fold — scroll them into view first,
+        // same as a real user would.
+        composeTestRule.onNodeWithText("Kun'yomi").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("みず").performScrollTo().assertIsDisplayed()
     }
 
     @Test
