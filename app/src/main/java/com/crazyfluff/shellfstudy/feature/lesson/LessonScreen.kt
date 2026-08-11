@@ -31,12 +31,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -60,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
@@ -70,14 +71,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SectionEyebrow
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
-import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet
 import kotlinx.coroutines.flow.collect
 import kotlin.math.roundToInt
 
@@ -100,7 +102,6 @@ object LessonScreenTestTags {
     const val STUDY_PAGER = "lesson_study_pager"
     const val STUDY_CHARACTERS = "lesson_study_characters"
     const val STUDY_PROGRESS_COUNT = "lesson_study_progress_count"
-    const val STUDY_DETAILS_BUTTON = "lesson_study_details_button"
     const val STUDY_NEXT_BUTTON = "lesson_study_next_button"
     const val STUDY_PREVIOUS_BUTTON = "lesson_study_previous_button"
     const val START_QUIZ_BUTTON = "lesson_start_quiz_button"
@@ -282,7 +283,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     val currentItem = uiState.studyItems.getOrNull(uiState.studyIndex) ?: return
     val isLastCard = uiState.studyIndex == uiState.studyItems.lastIndex
     val accentColor = subjectColor(currentItem.subjectType)
-    var detailSubjectId by remember { mutableStateOf<Long?>(null) }
 
     val pagerState = rememberPagerState(initialPage = uiState.studyIndex) { uiState.studyItems.size }
 
@@ -318,51 +318,37 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
             .testTag(LessonScreenTestTags.STUDY_PAGER)
     ) { page ->
         val item = uiState.studyItems[page]
-        val pageAccentColor = subjectColor(item.subjectType)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = item.characters ?: item.meanings.firstOrNull() ?: "?",
-                    style = MaterialTheme.typography.displayLarge,
-                    color = pageAccentColor,
-                    modifier = Modifier.align(Alignment.Center).testTag(LessonScreenTestTags.STUDY_CHARACTERS)
+            // Headline: glyph + level/type subtitle as one tight cluster, mirroring the subject
+            // detail view's headline — see SubjectDetailContent.kt.
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SubjectGlyph(
+                    characters = item.characters ?: item.meanings.firstOrNull(),
+                    characterImageUrl = null,
+                    subjectType = item.subjectType,
+                    size = 96.dp,
+                    modifier = Modifier.testTag(LessonScreenTestTags.STUDY_CHARACTERS)
                 )
-                IconButton(
-                    onClick = { detailSubjectId = item.subjectId },
-                    modifier = Modifier.align(Alignment.CenterEnd).testTag(LessonScreenTestTags.STUDY_DETAILS_BUTTON)
-                ) {
-                    Icon(Icons.Default.Info, contentDescription = "View details")
-                }
+                Text(
+                    text = "Level ${item.level} · ${subjectTypeLabel(item.subjectType)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            Text(
-                text = "Level ${item.level} · ${subjectTypeLabel(item.subjectType)}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(modifier = Modifier.height(16.dp))
 
             LessonDetailSection(title = "Meaning", primary = item.meanings.joinToString(", "), mnemonic = item.meaningMnemonic)
 
             if (item.readings.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
                 LessonDetailSection(title = "Reading", primary = item.readings.joinToString(", "), mnemonic = item.readingMnemonic)
             }
         }
-    }
-
-    detailSubjectId?.let { id ->
-        SubjectDetailSheet(
-            initialSubjectId = id,
-            revealMode = DetailRevealMode.FULL,
-            isAnswered = true,
-            questionType = null,
-            onDismiss = { detailSubjectId = null }
-        )
     }
 
     Row(
@@ -622,12 +608,16 @@ private fun LessonGlyphTile(
 
 @Composable
 private fun LessonDetailSection(title: String, primary: String, mnemonic: String?) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Text(primary, style = MaterialTheme.typography.bodyLarge)
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(primary, style = MaterialTheme.typography.bodyLarge)
+        }
         if (!mnemonic.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(mnemonic, style = MaterialTheme.typography.bodyMedium)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SectionEyebrow("$title mnemonic")
+                WkMnemonicText(mnemonic, style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }

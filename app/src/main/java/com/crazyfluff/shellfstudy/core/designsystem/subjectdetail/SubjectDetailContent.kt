@@ -142,7 +142,7 @@ fun SubjectDetailContent(
         // one standing out from the other. Plain sections (no card) keep them visually lightweight
         // for a view learners scroll through constantly; a divider between them is enough separation.
         if (showMeaningZone) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = "Meaning",
@@ -173,7 +173,7 @@ fun SubjectDetailContent(
 
         if (showReadingZone) {
             if (showMeaningZone) HorizontalDivider()
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = "Reading",
@@ -264,7 +264,7 @@ private fun componentsLabel(type: SubjectType): String = when (type) {
 
 /** A small uppercase, letter-spaced label for secondary sections (mnemonics, context sentences) — kept visually quieter than the primary "Meaning"/"Reading" headers so the two hierarchy tiers are easy to tell apart while scanning. */
 @Composable
-private fun SectionEyebrow(text: String) {
+fun SectionEyebrow(text: String) {
     Text(
         text = text.uppercase(),
         style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.8.sp),
