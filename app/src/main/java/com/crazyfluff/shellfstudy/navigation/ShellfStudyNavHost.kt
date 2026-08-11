@@ -14,8 +14,10 @@ import com.crazyfluff.shellfstudy.feature.dashboard.DashboardRoute
 import com.crazyfluff.shellfstudy.feature.lesson.LessonRoute
 import com.crazyfluff.shellfstudy.feature.review.ReviewRoute
 import com.crazyfluff.shellfstudy.feature.settings.SettingsRoute
+import com.crazyfluff.shellfstudy.feature.splash.SplashRoute
 
 object ShellfStudyDestinations {
+    const val SPLASH = "splash"
     const val AUTH = "auth"
     const val DASHBOARD = "dashboard"
     const val REVIEW = "review"
@@ -37,7 +39,9 @@ fun ShellfStudyNavHost(
     LaunchedEffect(pendingDestination, currentBackStackEntry) {
         if (pendingDestination == null) return@LaunchedEffect
         val currentRoute = currentBackStackEntry?.destination?.route ?: return@LaunchedEffect
-        if (currentRoute == ShellfStudyDestinations.AUTH) return@LaunchedEffect
+        if (currentRoute == ShellfStudyDestinations.AUTH || currentRoute == ShellfStudyDestinations.SPLASH) {
+            return@LaunchedEffect
+        }
 
         val targetRoute = when (pendingDestination) {
             NotificationDeepLink.DESTINATION_REVIEW -> ShellfStudyDestinations.REVIEW
@@ -50,7 +54,21 @@ fun ShellfStudyNavHost(
         onPendingDestinationConsumed()
     }
 
-    NavHost(navController = navController, startDestination = ShellfStudyDestinations.AUTH) {
+    NavHost(navController = navController, startDestination = ShellfStudyDestinations.SPLASH) {
+        composable(ShellfStudyDestinations.SPLASH) {
+            SplashRoute(
+                onNavigateToAuth = {
+                    navController.navigateSafely(ShellfStudyDestinations.AUTH) {
+                        popUpTo(ShellfStudyDestinations.SPLASH) { inclusive = true }
+                    }
+                },
+                onNavigateToDashboard = {
+                    navController.navigateSafely(ShellfStudyDestinations.DASHBOARD) {
+                        popUpTo(ShellfStudyDestinations.SPLASH) { inclusive = true }
+                    }
+                }
+            )
+        }
         composable(ShellfStudyDestinations.AUTH) {
             AuthRoute(
                 onAuthenticated = {

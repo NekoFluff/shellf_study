@@ -149,16 +149,38 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `shows an error message when the user fetch fails`() = runTest {
+    fun `shows an error message and keeps the token when the user fetch fails with a network error`() = runTest {
         dispatchByPath(emptyResponse(500), jsonResponse(summaryJson()))
+        tokenRepository.saveToken("some-token")
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
             assertThat(state.errorMessage).isNotNull()
+            assertThat(state.isLoggedOut).isFalse()
             cancelAndIgnoreRemainingEvents()
         }
+        tokenRepository.tokenFlow.test { assertThat(awaitItem()).isEqualTo("some-token") }
+    }
+
+    @Test
+    fun `a confirmed 401 on the user fetch clears the token and returns to the login flow`() = runTest {
+        dispatchByPath(emptyResponse(401), jsonResponse(summaryJson()))
+        tokenRepository.saveToken("stale-token")
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (!state.isLoggedOut) state = awaitItem()
+            assertThat(state.isLoggedOut).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
+        assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
+        assertThat(pitchAccentScrapeScheduler.cancelCallCount).isEqualTo(1)
+        assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
     }
 
     @Test

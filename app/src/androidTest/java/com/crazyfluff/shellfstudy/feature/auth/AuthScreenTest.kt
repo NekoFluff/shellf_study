@@ -3,10 +3,8 @@ package com.crazyfluff.shellfstudy.feature.auth
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -23,7 +21,7 @@ class AuthScreenTest {
     fun showsTokenFieldAndSubmitButton_whenNotLoading() {
         composeTestRule.setContent {
             AuthScreen(
-                uiState = AuthUiState(isCheckingStoredToken = false),
+                uiState = AuthUiState(),
                 onTokenInputChange = {},
                 onSubmit = {}
             )
@@ -34,25 +32,11 @@ class AuthScreenTest {
     }
 
     @Test
-    fun showsLoadingIndicator_andHidesForm_whileCheckingStoredToken() {
-        composeTestRule.setContent {
-            AuthScreen(
-                uiState = AuthUiState(isCheckingStoredToken = true),
-                onTokenInputChange = {},
-                onSubmit = {}
-            )
-        }
-
-        composeTestRule.onNodeWithTag(AuthScreenTestTags.LOADING_INDICATOR).assertIsDisplayed()
-        composeTestRule.onAllNodesWithTag(AuthScreenTestTags.TOKEN_FIELD).assertCountEquals(0)
-    }
-
-    @Test
     fun typingIntoTokenField_invokesCallbackWithTypedText() {
         var lastValue = ""
         composeTestRule.setContent {
             AuthScreen(
-                uiState = AuthUiState(isCheckingStoredToken = false),
+                uiState = AuthUiState(),
                 onTokenInputChange = { lastValue = it },
                 onSubmit = {}
             )
@@ -68,7 +52,7 @@ class AuthScreenTest {
         var submitted = false
         composeTestRule.setContent {
             AuthScreen(
-                uiState = AuthUiState(isCheckingStoredToken = false, tokenInput = "abc123"),
+                uiState = AuthUiState(tokenInput = "abc123"),
                 onTokenInputChange = {},
                 onSubmit = { submitted = true }
             )
@@ -90,7 +74,7 @@ class AuthScreenTest {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalUriHandler provides fakeUriHandler) {
                 AuthScreen(
-                    uiState = AuthUiState(isCheckingStoredToken = false),
+                    uiState = AuthUiState(),
                     onTokenInputChange = {},
                     onSubmit = {}
                 )
@@ -108,7 +92,7 @@ class AuthScreenTest {
     fun showsErrorMessage_whenPresent() {
         composeTestRule.setContent {
             AuthScreen(
-                uiState = AuthUiState(isCheckingStoredToken = false, errorMessage = "Invalid API token."),
+                uiState = AuthUiState(errorMessage = "Invalid API token."),
                 onTokenInputChange = {},
                 onSubmit = {}
             )

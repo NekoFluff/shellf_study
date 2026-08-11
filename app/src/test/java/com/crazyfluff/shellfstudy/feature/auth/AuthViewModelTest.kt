@@ -62,54 +62,10 @@ class AuthViewModelTest {
         AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler, pitchAccentScrapeScheduler, notificationCoordinator)
 
     @Test
-    fun `with no stored token, finishes the check unauthenticated`() = runTest {
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isCheckingStoredToken) state = awaitItem()
-            assertThat(state.isAuthenticated).isFalse()
-        }
-    }
-
-    @Test
-    fun `with a valid stored token, auto-authenticates and schedules background sync`() = runTest {
-        tokenRepository.saveToken("stored-token")
-        server.enqueue(jsonResponse(userJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isCheckingStoredToken) state = awaitItem()
-            assertThat(state.isAuthenticated).isTrue()
-        }
-        assertThat(syncScheduler.scheduleCallCount).isEqualTo(1)
-        assertThat(notificationCoordinator.onLoginCallCount).isEqualTo(1)
-    }
-
-    @Test
-    fun `with an invalid stored token, clears it and stays unauthenticated`() = runTest {
-        tokenRepository.saveToken("stale-token")
-        server.enqueue(emptyResponse(401))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isCheckingStoredToken) state = awaitItem()
-            assertThat(state.isAuthenticated).isFalse()
-        }
-        tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
-        assertThat(syncScheduler.scheduleCallCount).isEqualTo(0)
-    }
-
-    @Test
     fun `submitting a blank token shows a validation error and makes no request`() = runTest {
         val viewModel = createViewModel()
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isCheckingStoredToken) state = awaitItem()
+            awaitItem()
 
             viewModel.submitToken()
 
@@ -126,8 +82,7 @@ class AuthViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isCheckingStoredToken) state = awaitItem()
+            awaitItem()
 
             viewModel.onTokenInputChange("new-token")
             awaitItem() // input change emission
@@ -147,8 +102,7 @@ class AuthViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isCheckingStoredToken) state = awaitItem()
+            awaitItem()
 
             viewModel.onTokenInputChange("bad-token")
             awaitItem()
@@ -159,6 +113,25 @@ class AuthViewModelTest {
             assertThat(afterSubmit.isAuthenticated).isFalse()
             assertThat(afterSubmit.errorMessage).contains("Invalid API token")
         }
+    }
+
+    @Test
+    fun `submitting a token that fails with a network error keeps it stored`() = runTest {
+        server.enqueue(emptyResponse(500))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitItem()
+
+            viewModel.onTokenInputChange("new-token")
+            awaitItem()
+            viewModel.submitToken()
+
+            var afterSubmit = awaitItem()
+            while (afterSubmit.isSubmitting) afterSubmit = awaitItem()
+            assertThat(afterSubmit.isAuthenticated).isFalse()
+        }
+        tokenRepository.tokenFlow.test { assertThat(awaitItem()).isEqualTo("new-token") }
     }
 
     private fun userJson() = """

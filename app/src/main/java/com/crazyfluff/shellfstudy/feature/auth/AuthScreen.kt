@@ -22,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
@@ -101,58 +100,50 @@ fun AuthScreen(
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            if (uiState.isCheckingStoredToken) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .testTag(AuthScreenTestTags.LOADING_INDICATOR)
-                )
-            } else {
-                OutlinedTextField(
-                    value = uiState.tokenInput,
-                    onValueChange = onTokenInputChange,
-                    label = { Text("WaniKani API token") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done
-                    ),
-                    isError = uiState.errorMessage != null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(AuthScreenTestTags.TOKEN_FIELD)
-                )
+            OutlinedTextField(
+                value = uiState.tokenInput,
+                onValueChange = onTokenInputChange,
+                label = { Text("WaniKani API token") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done
+                ),
+                isError = uiState.errorMessage != null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(AuthScreenTestTags.TOKEN_FIELD)
+            )
 
-                uiState.errorMessage?.let { message ->
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = message,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.testTag(AuthScreenTestTags.ERROR_TEXT)
+            uiState.errorMessage?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag(AuthScreenTestTags.ERROR_TEXT)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = onSubmit,
+                enabled = !uiState.isSubmitting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(AuthScreenTestTags.SUBMIT_BUTTON)
+            ) {
+                if (uiState.isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .testTag(AuthScreenTestTags.LOADING_INDICATOR),
+                        color = LocalContentColor.current,
+                        strokeWidth = 2.dp
                     )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
-                    onClick = onSubmit,
-                    enabled = !uiState.isSubmitting,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(AuthScreenTestTags.SUBMIT_BUTTON)
-                ) {
-                    if (uiState.isSubmitting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .testTag(AuthScreenTestTags.LOADING_INDICATOR),
-                            color = LocalContentColor.current,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("Log in")
-                    }
+                } else {
+                    Text("Log in")
                 }
             }
         }
@@ -163,6 +154,6 @@ fun AuthScreen(
 @Composable
 private fun AuthScreenPreview() {
     ShellfStudyTheme {
-        AuthScreen(uiState = AuthUiState(isCheckingStoredToken = false), onTokenInputChange = {}, onSubmit = {})
+        AuthScreen(uiState = AuthUiState(), onTokenInputChange = {}, onSubmit = {})
     }
 }

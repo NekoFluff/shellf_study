@@ -10,6 +10,7 @@ import com.crazyfluff.shellfstudy.core.data.StatsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.core.data.isAuthError
 import com.crazyfluff.shellfstudy.core.data.model.CompletionProjection
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
@@ -106,7 +107,15 @@ class DashboardViewModel @Inject constructor(
             val summaryResult = waniKaniRepository.fetchDashboardSummary()
 
             if (userResult is ApiResult.Error) {
-                _dashboardData.update { it.copy(isLoading = false, errorMessage = userResult.message) }
+                if (userResult.isAuthError) {
+                    tokenRepository.clearToken()
+                    syncScheduler.cancelPeriodicSync()
+                    pitchAccentScrapeScheduler.cancelPeriodicScrape()
+                    notificationCoordinator.onLogout()
+                    _dashboardData.update { it.copy(isLoading = false, isLoggedOut = true) }
+                } else {
+                    _dashboardData.update { it.copy(isLoading = false, errorMessage = userResult.message) }
+                }
                 return@launch
             }
             if (summaryResult is ApiResult.Error) {
