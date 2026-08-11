@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -28,6 +31,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -183,15 +187,28 @@ fun ReviewScreen(
                         ) {
                             Icon(Icons.Default.MoreVert, contentDescription = "More options")
                         }
-                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
                             DropdownMenuItem(
                                 text = { Text("Wrap up") },
+                                leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
                                 enabled = !uiState.isWrappingUp,
                                 onClick = { menuExpanded = false; onWrapUp() },
                                 modifier = Modifier.testTag(ReviewScreenTestTags.WRAP_UP_MENU_ITEM)
                             )
+                            HorizontalDivider()
                             DropdownMenuItem(
-                                text = { Text("Abandon session") },
+                                text = { Text("Abandon session", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                },
                                 onClick = { menuExpanded = false; showAbandonConfirm = true },
                                 modifier = Modifier.testTag(ReviewScreenTestTags.ABANDON_MENU_ITEM)
                             )
