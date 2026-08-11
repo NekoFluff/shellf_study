@@ -1,8 +1,12 @@
 package com.crazyfluff.shellfstudy.feature.review
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -20,6 +25,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
@@ -53,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
@@ -60,6 +68,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
@@ -67,6 +76,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformat
 import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
+import com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.core.network.SubjectType
@@ -480,14 +490,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
                 )
             }
             uiState.rankChange?.let { rankChange ->
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${if (rankChange.isRankUp) "Rank up" else "Rank down"}: " +
-                        "${rankChange.from.displayName} → ${rankChange.to.displayName}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.testTag(ReviewScreenTestTags.RANK_CHANGE_TEXT)
-                )
+                Spacer(modifier = Modifier.height(8.dp))
+                RankChangeChip(rankChange, modifier = Modifier.testTag(ReviewScreenTestTags.RANK_CHANGE_TEXT))
             }
             Spacer(modifier = Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -504,6 +508,37 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         // covers the handle's own navigationBarsPadding, which grows its footprint on devices with
         // a gesture pill or 3-button nav bar.
         Spacer(modifier = Modifier.height(16.dp + SubjectDetailHandleHeight + 24.dp))
+    }
+}
+
+@Composable
+private fun RankChangeChip(rankChange: RankChange, modifier: Modifier = Modifier) {
+    val fromColor = srsStageColor(rankChange.from)
+    val toColor = srsStageColor(rankChange.to)
+    var targetColor by remember(rankChange) { mutableStateOf(fromColor) }
+    LaunchedEffect(rankChange) { targetColor = toColor }
+    val animatedColor by animateColorAsState(targetValue = targetColor, animationSpec = tween(500), label = "rankChangeColor")
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(animatedColor.copy(alpha = 0.15f))
+            .border(1.dp, animatedColor, RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    ) {
+        Icon(
+            imageVector = if (rankChange.isRankUp) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+            contentDescription = if (rankChange.isRankUp) "Rank up" else "Rank down",
+            tint = animatedColor,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = rankChange.to.displayName,
+            color = animatedColor,
+            style = MaterialTheme.typography.labelLarge
+        )
     }
 }
 
