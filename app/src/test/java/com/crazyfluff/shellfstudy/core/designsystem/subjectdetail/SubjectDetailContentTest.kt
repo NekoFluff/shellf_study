@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.PronunciationAudio
+import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
@@ -321,7 +322,9 @@ class SubjectDetailContentTest {
                 isAnswered = true,
                 questionType = null,
                 onRelatedSubjectClick = {},
-                strokeOrder = StrokeOrderUiState.Available(listOf("M10,10L90,90"))
+                strokeOrder = StrokeOrderUiState.Available(
+                    listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f))
+                )
             )
         }
 

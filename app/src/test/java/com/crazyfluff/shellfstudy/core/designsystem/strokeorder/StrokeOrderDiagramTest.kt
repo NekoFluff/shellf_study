@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,12 +21,15 @@ class StrokeOrderDiagramTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private val twoStrokes = listOf("M10,10L90,10", "M10,50L90,50")
+    private val twoStrokes = listOf(
+        StrokeOrderStroke(pathData = "M10,10L90,10", labelX = 5f, labelY = 5f),
+        StrokeOrderStroke(pathData = "M10,50L90,50", labelX = 5f, labelY = 45f)
+    )
 
     @Test
     fun `renders and plays its draw-in animation without crashing`() {
         composeTestRule.setContent {
-            StrokeOrderDiagram(strokePaths = twoStrokes)
+            StrokeOrderDiagram(strokes = twoStrokes)
         }
 
         composeTestRule.onNodeWithTag(StrokeOrderTestTags.DIAGRAM).assertIsDisplayed()
@@ -34,7 +38,7 @@ class StrokeOrderDiagramTest {
     @Test
     fun `tapping replay restarts the animation without crashing`() {
         composeTestRule.setContent {
-            StrokeOrderDiagram(strokePaths = twoStrokes)
+            StrokeOrderDiagram(strokes = twoStrokes)
         }
 
         composeTestRule.onNodeWithTag(StrokeOrderTestTags.REPLAY_BUTTON).performClick()

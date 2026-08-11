@@ -21,7 +21,17 @@ class AndroidStrokeOrderRepositoryTest {
 
         assertThat(strokes).isNotNull()
         assertThat(strokes).isNotEmpty()
-        assertThat(strokes!!.all { it.startsWith("M") }).isTrue()
+        assertThat(strokes!!.all { it.pathData.startsWith("M") }).isTrue()
+    }
+
+    @Test
+    fun `getStrokeOrder reuses KanjiVG's own curated stroke-number label positions`() = runTest {
+        val strokes = repository.getStrokeOrder('水')!!
+
+        // From KanjiVG's own StrokeNumbers_6c34 group ("1" at matrix(1 0 0 1 43.75 15.38)") —
+        // a curated position, not one computed from the stroke's own start point.
+        assertThat(strokes.first().labelX).isEqualTo(43.75f)
+        assertThat(strokes.first().labelY).isEqualTo(15.38f)
     }
 
     @Test

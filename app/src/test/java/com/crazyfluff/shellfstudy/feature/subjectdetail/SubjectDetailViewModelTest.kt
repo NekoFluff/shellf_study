@@ -8,6 +8,7 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
+import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.network.MeaningData
 import com.crazyfluff.shellfstudy.core.network.PronunciationAudioData
@@ -67,7 +68,9 @@ class SubjectDetailViewModelTest {
         )
         settingsRepository = SettingsRepository(dataStore)
         audioPlayer = FakePronunciationAudioPlayer()
-        strokeOrderRepository = FakeStrokeOrderRepository(mapOf('水' to listOf("M10,10L90,90")))
+        strokeOrderRepository = FakeStrokeOrderRepository(
+            mapOf('水' to listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f)))
+        )
         viewModel = SubjectDetailViewModel(repositories.subjectRepository, settingsRepository, audioPlayer, strokeOrderRepository)
     }
 
@@ -163,7 +166,9 @@ class SubjectDetailViewModelTest {
             viewModel.open(1)
             val loaded = awaitSettled(1)
 
-            assertThat(loaded.strokeOrder).isEqualTo(StrokeOrderUiState.Available(listOf("M10,10L90,90")))
+            assertThat(loaded.strokeOrder).isEqualTo(
+                StrokeOrderUiState.Available(listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f)))
+            )
         }
     }
 

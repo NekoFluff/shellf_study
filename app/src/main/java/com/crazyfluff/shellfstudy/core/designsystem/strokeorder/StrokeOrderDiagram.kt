@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import kotlinx.coroutines.delay
@@ -46,7 +47,7 @@ import kotlinx.coroutines.delay
 sealed interface StrokeOrderUiState {
     data object Loading : StrokeOrderUiState
     data object Unavailable : StrokeOrderUiState
-    data class Available(val strokePaths: List<String>) : StrokeOrderUiState
+    data class Available(val strokes: List<StrokeOrderStroke>) : StrokeOrderUiState
 }
 
 object StrokeOrderTestTags {
@@ -62,7 +63,6 @@ private const val KANJIVG_UNITS = 109f
 private const val STROKE_WIDTH_UNITS = 3f
 private const val PEN_TIP_RADIUS_UNITS = 2.5f
 private const val NUMBER_FONT_SIZE_UNITS = 9f
-private const val NUMBER_OFFSET_UNITS = -5f
 private const val STROKE_DURATION_MS = 350
 private const val INTER_STROKE_DELAY_MS = 120L
 
@@ -80,7 +80,7 @@ fun StrokeOrderSection(state: StrokeOrderUiState, modifier: Modifier = Modifier)
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text("Stroke order", style = MaterialTheme.typography.titleSmall)
-        StrokeOrderDiagram(strokePaths = state.strokePaths)
+        StrokeOrderDiagram(strokes = state.strokes)
         Text(
             text = "Stroke data © KanjiVG contributors, CC BY-SA",
             style = MaterialTheme.typography.labelSmall,
@@ -96,28 +96,31 @@ fun StrokeOrderSection(state: StrokeOrderUiState, modifier: Modifier = Modifier)
  */
 @Composable
 fun StrokeOrderDiagram(
-    strokePaths: List<String>,
+    strokes: List<StrokeOrderStroke>,
     modifier: Modifier = Modifier,
     size: Dp = 120.dp,
     strokeColor: Color = subjectColor(SubjectType.KANJI),
     ghostColor: Color = MaterialTheme.colorScheme.outlineVariant
 ) {
-    val paths = remember(strokePaths) { strokePaths.map { PathParser().parsePathString(it).toPath() } }
+    val paths = remember(strokes) { strokes.map { PathParser().parsePathString(it.pathData).toPath() } }
     val pathMeasures = remember(paths) { paths.map { PathMeasure().apply { setPath(it, false) } } }
     val segmentPath = remember { Path() }
     val numberPaint = remember {
         NativePaint().apply {
             isAntiAlias = true
             textSize = NUMBER_FONT_SIZE_UNITS
-            textAlign = NativePaint.Align.CENTER
+            // KanjiVG's own <text> elements left-align from their transform's x,y (the default SVG
+            // text-anchor), which is what those coordinates were curated against — Align.LEFT
+            // reproduces that placement exactly instead of re-centering it around a different point.
+            textAlign = NativePaint.Align.LEFT
         }
     }
 
-    var playedCount by remember(strokePaths) { mutableIntStateOf(0) }
-    val currentProgress = remember(strokePaths) { Animatable(0f) }
+    var playedCount by remember(strokes) { mutableIntStateOf(0) }
+    val currentProgress = remember(strokes) { Animatable(0f) }
     var replayTrigger by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(strokePaths, replayTrigger) {
+    LaunchedEffect(strokes, replayTrigger) {
         playedCount = 0
         currentProgress.snapTo(0f)
         paths.indices.forEach { index ->
@@ -143,7 +146,7 @@ fun StrokeOrderDiagram(
 
                 for (index in 0 until playedCount) {
                     drawPath(paths[index], color = strokeColor, style = strokeStyle)
-                    drawStrokeNumber(numberPaint, strokeColorArgb, pathMeasures[index], index + 1)
+                    drawStrokeNumber(numberPaint, strokeColorArgb, strokes[index], index + 1)
                 }
 
                 if (playedCount < paths.size) {
@@ -155,7 +158,7 @@ fun StrokeOrderDiagram(
                     if (currentProgress.value > 0f) {
                         drawCircle(color = strokeColor, radius = PEN_TIP_RADIUS_UNITS, center = measure.getPosition(distance))
                     }
-                    drawStrokeNumber(numberPaint, strokeColorArgb, measure, playedCount + 1)
+                    drawStrokeNumber(numberPaint, strokeColorArgb, strokes[playedCount], playedCount + 1)
                 }
             }
         }
@@ -171,15 +174,9 @@ fun StrokeOrderDiagram(
 private fun DrawScope.drawStrokeNumber(
     paint: NativePaint,
     colorArgb: Int,
-    measure: PathMeasure,
+    stroke: StrokeOrderStroke,
     number: Int
 ) {
     paint.color = colorArgb
-    val start = measure.getPosition(0f)
-    drawContext.canvas.nativeCanvas.drawText(
-        number.toString(),
-        start.x + NUMBER_OFFSET_UNITS,
-        start.y + NUMBER_OFFSET_UNITS,
-        paint
-    )
+    drawContext.canvas.nativeCanvas.drawText(number.toString(), stroke.labelX, stroke.labelY, paint)
 }

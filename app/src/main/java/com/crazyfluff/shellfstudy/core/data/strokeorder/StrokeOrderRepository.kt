@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.core.data.strokeorder
 
 import android.content.Context
 import com.crazyfluff.shellfstudy.R
+import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -12,12 +13,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Looks up a character's stroke-order data: an ordered list of SVG path "d" strings (KanjiVG's
- * native 109x109 unit square), one per stroke. Returns null if the character has none (e.g. most
- * WaniKani radicals, which have no real Unicode glyph, or any character outside KanjiVG's set).
+ * Looks up a character's stroke-order data: an ordered list of [StrokeOrderStroke], one per
+ * stroke. Returns null if the character has none (e.g. most WaniKani radicals, which have no
+ * real Unicode glyph, or any character outside KanjiVG's set).
  */
 interface StrokeOrderRepository {
-    suspend fun getStrokeOrder(character: Char): List<String>?
+    suspend fun getStrokeOrder(character: Char): List<StrokeOrderStroke>?
 }
 
 /**
@@ -45,18 +46,18 @@ class AndroidStrokeOrderRepository @Inject constructor(
 ) : StrokeOrderRepository {
 
     private val mutex = Mutex()
-    private var cache: Map<String, List<String>>? = null
+    private var cache: Map<String, List<StrokeOrderStroke>>? = null
 
-    override suspend fun getStrokeOrder(character: Char): List<String>? =
+    override suspend fun getStrokeOrder(character: Char): List<StrokeOrderStroke>? =
         loadAll()[character.toString()]
 
-    private suspend fun loadAll(): Map<String, List<String>> {
+    private suspend fun loadAll(): Map<String, List<StrokeOrderStroke>> {
         cache?.let { return it }
         return mutex.withLock {
             cache ?: withContext(Dispatchers.IO) {
                 context.resources.openRawResource(R.raw.stroke_data).use { it.readBytes() }
                     .toString(Charsets.UTF_8)
-                    .let { Json.decodeFromString<Map<String, List<String>>>(it) }
+                    .let { Json.decodeFromString<Map<String, List<StrokeOrderStroke>>>(it) }
             }.also { cache = it }
         }
     }
