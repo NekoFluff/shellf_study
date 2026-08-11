@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -69,12 +70,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
+import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet
 import kotlinx.coroutines.flow.collect
 import kotlin.math.roundToInt
 
@@ -96,10 +99,13 @@ object LessonScreenTestTags {
     fun levelGroupToggleTag(level: Int) = "lesson_level_toggle_$level"
     const val STUDY_PAGER = "lesson_study_pager"
     const val STUDY_CHARACTERS = "lesson_study_characters"
+    const val STUDY_PROGRESS_COUNT = "lesson_study_progress_count"
+    const val STUDY_DETAILS_BUTTON = "lesson_study_details_button"
     const val STUDY_NEXT_BUTTON = "lesson_study_next_button"
     const val STUDY_PREVIOUS_BUTTON = "lesson_study_previous_button"
     const val START_QUIZ_BUTTON = "lesson_start_quiz_button"
     const val QUIZ_CHARACTERS = "lesson_quiz_characters"
+    const val QUIZ_PROGRESS_COUNT = "lesson_quiz_progress_count"
     const val ANSWER_FIELD = "lesson_answer_field"
     const val SUBMIT_BUTTON = "lesson_submit_button"
     const val DONT_KNOW_BUTTON = "lesson_dont_know_button"
@@ -276,6 +282,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     val currentItem = uiState.studyItems.getOrNull(uiState.studyIndex) ?: return
     val isLastCard = uiState.studyIndex == uiState.studyItems.lastIndex
     val accentColor = subjectColor(currentItem.subjectType)
+    var detailSubjectId by remember { mutableStateOf<Long?>(null) }
 
     val pagerState = rememberPagerState(initialPage = uiState.studyIndex) { uiState.studyItems.size }
 
@@ -289,6 +296,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
             .collect { page -> onSwiped(page) }
     }
 
+    Text(
+        text = "${uiState.studyIndex + 1} / ${uiState.studyItems.size}",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+            .testTag(LessonScreenTestTags.STUDY_PROGRESS_COUNT)
+    )
     LinearProgressIndicator(
         progress = { (uiState.studyIndex + 1).toFloat() / uiState.studyItems.size },
         modifier = Modifier.fillMaxWidth(),
@@ -312,12 +326,20 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = item.characters ?: item.meanings.firstOrNull() ?: "?",
-                style = MaterialTheme.typography.displayLarge,
-                color = pageAccentColor,
-                modifier = Modifier.testTag(LessonScreenTestTags.STUDY_CHARACTERS)
-            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = item.characters ?: item.meanings.firstOrNull() ?: "?",
+                    style = MaterialTheme.typography.displayLarge,
+                    color = pageAccentColor,
+                    modifier = Modifier.align(Alignment.Center).testTag(LessonScreenTestTags.STUDY_CHARACTERS)
+                )
+                IconButton(
+                    onClick = { detailSubjectId = item.subjectId },
+                    modifier = Modifier.align(Alignment.CenterEnd).testTag(LessonScreenTestTags.STUDY_DETAILS_BUTTON)
+                ) {
+                    Icon(Icons.Default.Info, contentDescription = "View details")
+                }
+            }
             Text(
                 text = "Level ${item.level} · ${subjectTypeLabel(item.subjectType)}",
                 style = MaterialTheme.typography.bodyMedium
@@ -331,6 +353,16 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 LessonDetailSection(title = "Reading", primary = item.readings.joinToString(", "), mnemonic = item.readingMnemonic)
             }
         }
+    }
+
+    detailSubjectId?.let { id ->
+        SubjectDetailSheet(
+            initialSubjectId = id,
+            revealMode = DetailRevealMode.FULL,
+            isAnswered = true,
+            questionType = null,
+            onDismiss = { detailSubjectId = null }
+        )
     }
 
     Row(
@@ -615,6 +647,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
         (uiState.totalQuizCount - uiState.remainingQuizCount).toFloat() / uiState.totalQuizCount
     val accentColor = subjectColor(item.subjectType)
 
+    Text(
+        text = "${uiState.totalQuizCount - uiState.remainingQuizCount} / ${uiState.totalQuizCount}",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+            .testTag(LessonScreenTestTags.QUIZ_PROGRESS_COUNT)
+    )
     LinearProgressIndicator(
         progress = { progress },
         modifier = Modifier.fillMaxWidth(),
@@ -678,7 +717,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             }
         } else {
             Text(
-                text = if (feedback.isCorrect) "Correct!" else "Incorrect — answer: ${feedback.correctAnswer}",
+                text = if (feedback.isCorrect) "Correct!" else "Incorrect: ${feedback.correctAnswer}",
                 color = if (feedback.isCorrect) SrsStageColors.Enlightened else MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.testTag(LessonScreenTestTags.FEEDBACK_TEXT)

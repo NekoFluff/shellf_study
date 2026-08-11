@@ -180,7 +180,8 @@ class AssignmentRepository @Inject constructor(
                         subjectId = row.subjectId,
                         subjectType = type,
                         display = row.characters ?: row.slug,
-                        passed = row.passedAt != null
+                        passed = row.passedAt != null,
+                        characterImageUrl = row.characterImageUrl
                     )
                 }
                 SubjectTypeProgress(subjectType = type, items = items)

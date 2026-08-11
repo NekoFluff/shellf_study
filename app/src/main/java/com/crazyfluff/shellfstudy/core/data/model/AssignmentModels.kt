@@ -30,7 +30,9 @@ data class LevelItem(
     val subjectType: SubjectType,
     /** Characters when the subject has a glyph, otherwise its slug (WaniKani's own fallback for image-only radicals). */
     val display: String,
-    val passed: Boolean
+    val passed: Boolean,
+    /** PNG image URL for radicals that have no unicode glyph — preferred over [display]'s slug fallback when present. */
+    val characterImageUrl: String? = null
 )
 
 data class SubjectTypeProgress(

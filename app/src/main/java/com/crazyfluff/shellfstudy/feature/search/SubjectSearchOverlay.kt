@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,7 +73,8 @@ fun SubjectSearchOverlay(
     onActiveChange: (Boolean) -> Unit,
     uiState: SearchUiState,
     onQueryChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onSubjectClick: (Long) -> Unit = {}
 ) {
     AnimatedVisibility(
         visible = active,
@@ -194,7 +196,7 @@ fun SubjectSearchOverlay(
                         Column(modifier = Modifier.fillMaxSize()) {
                             LazyColumn(modifier = Modifier.weight(1f)) {
                                 items(uiState.results, key = { it.subjectId }) { subject ->
-                                    SubjectResultRow(subject)
+                                    SubjectResultRow(subject, onSubjectClick)
                                 }
                             }
                             if (uiState.totalMatchCount > uiState.results.size) {
@@ -217,10 +219,11 @@ fun SubjectSearchOverlay(
 }
 
 @Composable
-private fun SubjectResultRow(subject: SubjectSummary) {
+private fun SubjectResultRow(subject: SubjectSummary, onClick: (Long) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onClick(subject.subjectId) }
             .padding(horizontal = 16.dp, vertical = 12.dp)
             .testTag(SearchOverlayTestTags.RESULT_ROW_PREFIX + subject.subjectId),
         verticalAlignment = Alignment.CenterVertically,

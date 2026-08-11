@@ -63,14 +63,17 @@ data class SubjectData(
     @SerialName("reading_hint") val readingHint: String? = null,
     @SerialName("component_subject_ids") val componentSubjectIds: List<Long> = emptyList(),
     @SerialName("amalgamation_subject_ids") val amalgamationSubjectIds: List<Long> = emptyList(),
-    @SerialName("parts_of_speech") val partsOfSpeech: List<String> = emptyList()
+    @SerialName("visually_similar_subject_ids") val visuallySimilarSubjectIds: List<Long> = emptyList(),
+    @SerialName("parts_of_speech") val partsOfSpeech: List<String> = emptyList(),
+    @SerialName("context_sentences") val contextSentences: List<ContextSentenceData> = emptyList(),
+    @SerialName("character_images") val characterImages: List<CharacterImageData> = emptyList()
 )
 
 @Serializable
 data class MeaningData(
     val meaning: String,
     val primary: Boolean = false,
-    @SerialName("accepted_meaning") val acceptedMeaning: Boolean = true
+    @SerialName("accepted_answer") val acceptedMeaning: Boolean = true
 )
 
 @Serializable
@@ -80,10 +83,30 @@ data class AuxiliaryMeaningData(
 )
 
 @Serializable
+data class ContextSentenceData(
+    val en: String,
+    val ja: String
+)
+
+@Serializable
+data class CharacterImageData(
+    val url: String,
+    @SerialName("content_type") val contentType: String,
+    val metadata: CharacterImageMetadataData? = null
+)
+
+@Serializable
+data class CharacterImageMetadataData(
+    val style: String? = null
+)
+
+@Serializable
 data class ReadingData(
     val reading: String,
     val primary: Boolean = false,
-    @SerialName("accepted_reading") val acceptedReading: Boolean = true
+    @SerialName("accepted_answer") val acceptedReading: Boolean = true,
+    /** Kanji-only: "onyomi" | "kunyomi" | "nanori". Absent on vocabulary/radical readings. */
+    val type: String? = null
 )
 
 @Serializable

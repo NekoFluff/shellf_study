@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.crazyfluff.shellfstudy.core.network.AuxiliaryMeaningData
+import com.crazyfluff.shellfstudy.core.network.ContextSentenceData
 import com.crazyfluff.shellfstudy.core.network.MeaningData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
 
@@ -14,6 +15,7 @@ data class SubjectEntity(
     val level: Int,
     val slug: String,
     val characters: String?,
+    val characterImageUrl: String? = null,
     val meanings: List<MeaningData>,
     val readings: List<ReadingData>,
     val auxiliaryMeanings: List<AuxiliaryMeaningData> = emptyList(),
@@ -26,7 +28,9 @@ data class SubjectEntity(
     val srsSystemId: Long = 0,
     val componentSubjectIds: List<Long> = emptyList(),
     val amalgamationSubjectIds: List<Long> = emptyList(),
+    val visuallySimilarSubjectIds: List<Long> = emptyList(),
     val partsOfSpeech: List<String> = emptyList(),
+    val contextSentences: List<ContextSentenceData> = emptyList(),
     val hiddenAt: String? = null,
     /** Precomputed lowercase concat of characters+slug+meanings+readings, for LIKE search. */
     val searchTarget: String = ""

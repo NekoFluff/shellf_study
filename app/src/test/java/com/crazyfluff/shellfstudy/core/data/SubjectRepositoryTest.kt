@@ -66,6 +66,71 @@ class SubjectRepositoryTest {
         }
     }
 
+    @Test
+    fun `syncSubjects preserves raw WK markup instead of stripping it, for colored mnemonic rendering`() = runTest {
+        server.enqueue(jsonResponse(SUBJECTS_JSON))
+        repository.syncSubjects(force = true)
+
+        repository.observeSubjectDetail(440).test {
+            val detail = awaitItem()
+            assertThat(detail?.meaningMnemonic).isEqualTo("Looks like <radical>water</radical> flowing.")
+        }
+    }
+
+    @Test
+    fun `syncSubjects maps context sentences and visually similar ids into the cached subject`() = runTest {
+        server.enqueue(jsonResponse(SUBJECTS_JSON))
+        repository.syncSubjects(force = true)
+
+        repository.observeSubjectDetail(440).test {
+            val detail = awaitItem()
+            assertThat(detail?.contextSentences).hasSize(1)
+            assertThat(detail?.contextSentences?.first()?.japanese).isEqualTo("水を飲みます。")
+            assertThat(detail?.contextSentences?.first()?.english).isEqualTo("I drink water.")
+            assertThat(detail?.visuallySimilarSubjectIds).containsExactly(441L)
+        }
+    }
+
+    @Test
+    fun `syncSubjects groups kanji readings into onyomi and kunyomi`() = runTest {
+        server.enqueue(jsonResponse(SUBJECTS_JSON))
+        repository.syncSubjects(force = true)
+
+        repository.observeSubjectDetail(440).test {
+            val detail = awaitItem()
+            assertThat(detail?.onyomiReadings).containsExactly("スイ")
+            assertThat(detail?.kunyomiReadings).containsExactly("みず")
+            assertThat(detail?.nanoriReadings).isEmpty()
+            assertThat(detail?.readings).containsExactly("スイ", "みず")
+        }
+    }
+
+    @Test
+    fun `syncSubjects captures every kunyomi reading for a kanji with many, not just the primary one`() = runTest {
+        // Mirrors real data for 生, a kanji WaniKani lists with several onyomi and many kunyomi.
+        server.enqueue(jsonResponse(MANY_KUNYOMI_SUBJECT_JSON))
+        repository.syncSubjects(force = true)
+
+        repository.observeSubjectDetail(550).test {
+            val detail = awaitItem()
+            assertThat(detail?.onyomiReadings).containsExactly("セイ", "ショウ")
+            assertThat(detail?.kunyomiReadings).containsExactly("い", "う", "は", "き", "なま")
+            assertThat(detail?.nanoriReadings).containsExactly("ふ")
+        }
+    }
+
+    @Test
+    fun `observeSubjectSummaries resolves a batch of subject ids into tiles`() = runTest {
+        server.enqueue(jsonResponse(SUBJECTS_JSON))
+        repository.syncSubjects(force = true)
+
+        repository.observeSubjectSummaries(listOf(440)).test {
+            val summaries = awaitItem()
+            assertThat(summaries).hasSize(1)
+            assertThat(summaries.first().meanings).containsExactly("Water")
+        }
+    }
+
     private companion object {
         val SUBJECTS_JSON = """
             {
@@ -83,8 +148,48 @@ class SubjectRepositoryTest {
                     "level": 3,
                     "slug": "水",
                     "characters": "水",
-                    "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
-                    "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}]
+                    "meanings": [{"meaning": "Water", "primary": true, "accepted_answer": true}],
+                    "readings": [
+                        {"reading": "スイ", "primary": true, "accepted_answer": true, "type": "onyomi"},
+                        {"reading": "みず", "primary": true, "accepted_answer": true, "type": "kunyomi"}
+                    ],
+                    "meaning_mnemonic": "Looks like <radical>water</radical> flowing.",
+                    "visually_similar_subject_ids": [441],
+                    "context_sentences": [{"en": "I drink water.", "ja": "水を飲みます。"}]
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val MANY_KUNYOMI_SUBJECT_JSON = """
+            {
+              "object": "collection",
+              "url": "https://api.wanikani.com/v2/subjects",
+              "total_count": 1,
+              "data": [
+                {
+                  "id": 550,
+                  "object": "kanji",
+                  "url": "https://api.wanikani.com/v2/subjects/550",
+                  "data_updated_at": "2026-01-01T00:00:00.000000Z",
+                  "data": {
+                    "created_at": "2020-01-01T00:00:00.000000Z",
+                    "level": 1,
+                    "slug": "生",
+                    "characters": "生",
+                    "meanings": [{"meaning": "Life", "primary": true, "accepted_answer": true}],
+                    "readings": [
+                        {"reading": "セイ", "primary": true, "accepted_answer": true, "type": "onyomi"},
+                        {"reading": "ショウ", "primary": false, "accepted_answer": false, "type": "onyomi"},
+                        {"reading": "い", "primary": false, "accepted_answer": false, "type": "kunyomi"},
+                        {"reading": "う", "primary": false, "accepted_answer": false, "type": "kunyomi"},
+                        {"reading": "は", "primary": false, "accepted_answer": false, "type": "kunyomi"},
+                        {"reading": "き", "primary": false, "accepted_answer": false, "type": "kunyomi"},
+                        {"reading": "なま", "primary": false, "accepted_answer": false, "type": "kunyomi"},
+                        {"reading": "ふ", "primary": false, "accepted_answer": false, "type": "nanori"}
+                    ],
+                    "meaning_mnemonic": "A single stroke sprouting from the ground."
                   }
                 }
               ]

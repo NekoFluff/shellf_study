@@ -77,6 +77,7 @@ class FakeAssignmentDao(
                     subjectId = assignment.subjectId,
                     subjectType = assignment.subjectType,
                     characters = subject?.characters,
+                    characterImageUrl = subject?.characterImageUrl,
                     slug = subject?.slug.orEmpty(),
                     passedAt = assignment.passedAt
                 )

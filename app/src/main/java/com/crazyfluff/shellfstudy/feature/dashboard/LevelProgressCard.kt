@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -64,6 +65,7 @@ fun LevelProgressCard(
     progress: LevelProgress?,
     maxLevel: Int? = null,
     onLevelChange: (Int) -> Unit = {},
+    onSubjectClick: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (progress == null) return
@@ -107,7 +109,7 @@ fun LevelProgressCard(
             }
             Spacer(modifier = Modifier.height(8.dp))
             progress.breakdown.forEach { entry ->
-                SubjectTypeProgressRow(entry, showDetail = expanded)
+                SubjectTypeProgressRow(entry, showDetail = expanded, onSubjectClick = onSubjectClick)
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
@@ -115,7 +117,7 @@ fun LevelProgressCard(
 }
 
 @Composable
-private fun SubjectTypeProgressRow(entry: SubjectTypeProgress, showDetail: Boolean) {
+private fun SubjectTypeProgressRow(entry: SubjectTypeProgress, showDetail: Boolean, onSubjectClick: (Long) -> Unit) {
     val fraction = if (entry.totalCount > 0) (entry.passedCount.toFloat() / entry.totalCount).coerceIn(0f, 1f) else 0f
     Column(modifier = Modifier.testTag(LevelProgressTestTags.ROW_PREFIX + entry.subjectType.name)) {
         Text(
@@ -141,7 +143,7 @@ private fun SubjectTypeProgressRow(entry: SubjectTypeProgress, showDetail: Boole
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxWidth().testTag(LevelProgressTestTags.DETAIL_PREFIX + entry.subjectType.name)
                 ) {
-                    entry.items.forEach { item -> LevelItemChip(item) }
+                    entry.items.forEach { item -> LevelItemChip(item, onClick = onSubjectClick) }
                 }
             }
         }
@@ -150,7 +152,7 @@ private fun SubjectTypeProgressRow(entry: SubjectTypeProgress, showDetail: Boole
 
 /** One kanji/radical/vocab item, filled when passed and outlined when not — same idea as WaniKani's own item grids. */
 @Composable
-private fun LevelItemChip(item: LevelItem) {
+private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
     val accent = subjectColor(item.subjectType)
     val backgroundModifier = if (item.passed) {
         Modifier.background(accent, RoundedCornerShape(8.dp))
@@ -168,6 +170,7 @@ private fun LevelItemChip(item: LevelItem) {
         modifier = Modifier
             .defaultMinSize(minWidth = 48.dp)
             .then(backgroundModifier)
+            .clickable { onClick(item.subjectId) }
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .testTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + item.subjectId)
     )

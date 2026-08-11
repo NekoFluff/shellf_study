@@ -78,6 +78,19 @@ class LevelProgressCardTest {
     }
 
     @Test
+    fun tappingItemChip_invokesOnSubjectClickWithItsSubjectId() {
+        var clickedSubjectId: Long? = null
+        composeTestRule.setContent {
+            LevelProgressCard(progress = sampleProgress, onSubjectClick = { clickedSubjectId = it })
+        }
+
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.EXPAND_TOGGLE_BUTTON).performClick()
+        composeTestRule.onNodeWithText("KANJI1").performClick()
+
+        assert(clickedSubjectId == SubjectType.KANJI.ordinal * 1000L + 1)
+    }
+
+    @Test
     fun nextLevelButton_invokesOnLevelChangeWithLevelPlusOne() {
         var requestedLevel: Int? = null
         composeTestRule.setContent {

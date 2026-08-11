@@ -57,5 +57,6 @@ data class SubjectSummary(
     val level: Int,
     val meanings: List<String>,
     val readings: List<String>,
-    val srsStage: Int? = null
+    val srsStage: Int? = null,
+    val characterImageUrl: String? = null
 )

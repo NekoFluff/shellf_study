@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.core.database
 
 import androidx.room.TypeConverter
 import com.crazyfluff.shellfstudy.core.network.AuxiliaryMeaningData
+import com.crazyfluff.shellfstudy.core.network.ContextSentenceData
 import com.crazyfluff.shellfstudy.core.network.MeaningData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
 import com.crazyfluff.shellfstudy.core.network.SrsStageData
@@ -37,6 +38,13 @@ class Converters {
 
     @TypeConverter
     fun srsStagesFromJson(value: String): List<SrsStageData> =
+        json.decodeFromString(value)
+
+    @TypeConverter
+    fun contextSentencesToJson(sentences: List<ContextSentenceData>): String = json.encodeToString(sentences)
+
+    @TypeConverter
+    fun contextSentencesFromJson(value: String): List<ContextSentenceData> =
         json.decodeFromString(value)
 
     @TypeConverter

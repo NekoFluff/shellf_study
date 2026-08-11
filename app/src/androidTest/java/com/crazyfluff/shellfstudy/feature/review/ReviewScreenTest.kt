@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.feature.search.SearchOverlayTestTags
@@ -136,7 +138,7 @@ class ReviewScreenTest {
     }
 
     @Test
-    fun undoMenuItem_enabledOnIncorrectFeedback_andInvokesCallback() {
+    fun undoIcon_enabledOnIncorrectFeedback_andInvokesCallback() {
         var undone = false
         setScreen(
             ReviewUiState(
@@ -147,14 +149,14 @@ class ReviewScreenTest {
             onUndo = { undone = true }
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.OVERFLOW_MENU).performClick()
+        // Lives on the answer field itself now, not the overflow menu.
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.UNDO_BUTTON).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.UNDO_BUTTON).performClick()
         assert(undone)
     }
 
     @Test
-    fun undoMenuItem_disabledWithoutIncorrectFeedback() {
+    fun undoIcon_disabledWithoutIncorrectFeedback() {
         setScreen(
             ReviewUiState(
                 isLoading = false, totalCount = 1, remainingCount = 1,
@@ -163,24 +165,32 @@ class ReviewScreenTest {
             )
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.OVERFLOW_MENU).performClick()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.UNDO_BUTTON).assertIsNotEnabled()
     }
 
     @Test
-    fun detailsToggle_disabledBeforeTheQuestionIsAnswered() {
-        var toggled = false
+    fun undoIcon_absentBeforeAnswering() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING, feedback = null
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.UNDO_BUTTON).assertCountEquals(0)
+    }
+
+    @Test
+    fun detailsToggle_absentBeforeTheQuestionIsAnswered() {
+        // Nothing to toggle yet — the handle isn't just disabled, it isn't composed at all.
         setScreen(
             ReviewUiState(
                 isLoading = false, totalCount = 1, remainingCount = 1,
                 currentItem = sampleItem, currentQuestionType = QuestionType.READING, feedback = null
-            ),
-            onToggleDetails = { toggled = true }
+            )
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.DETAILS_TOGGLE).assertIsNotEnabled()
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.DETAILS_TOGGLE).performClick()
-        assert(!toggled)
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.DETAILS_TOGGLE).assertCountEquals(0)
     }
 
     @Test
@@ -198,6 +208,23 @@ class ReviewScreenTest {
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.DETAILS_TOGGLE).performClick()
         assert(toggled)
     }
+
+    @Test
+    fun detailsHandle_swipingUp_invokesCallback_onceAnswered() {
+        var toggled = false
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.READING,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず")
+            ),
+            onToggleDetails = { toggled = true }
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.DETAILS_TOGGLE).performTouchInput { swipeUp() }
+        assert(toggled)
+    }
+
 
     @Test
     fun dontKnowButton_isDisplayedBeforeAnswering_andInvokesCallback() {
@@ -228,18 +255,22 @@ class ReviewScreenTest {
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.DONT_KNOW_BUTTON).assertCountEquals(0)
     }
 
+    // Coverage for what the expanded-details panel actually shows moved to
+    // SubjectDetailContentTest — once expanded, ReviewScreen delegates to the shared
+    // SubjectDetailSheet, which requires a Hilt-injected ViewModel to render (this test class
+    // isn't Hilt-aware, so it can no longer render the sheet's content directly).
+
     @Test
-    fun expandedDetails_showsMeaningHint_whenReadingIsBeingTested() {
+    fun progressCount_reflectsAnsweredVsTotal() {
         setScreen(
             ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.READING,
-                isDetailsExpanded = true
+                isLoading = false, totalCount = 5, remainingCount = 3,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING
             )
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.DETAILS_PANEL).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Meaning hint: Water").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.PROGRESS_COUNT).assertIsDisplayed()
+        composeTestRule.onNodeWithText("2 / 5").assertIsDisplayed()
     }
 
     @Test

@@ -14,7 +14,7 @@ import androidx.room.TypeConverters
         LevelProgressionEntity::class,
         SyncStateEntity::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
