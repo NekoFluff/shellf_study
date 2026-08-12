@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,6 +35,9 @@ class DashboardCacheRepository @Inject constructor(
     private val reviewCountKey = intPreferencesKey("dashboard_cache_review_count")
     private val lastSyncedAtKey = longPreferencesKey("dashboard_cache_last_synced_at")
 
+    // dataStore is shared app-wide (see TokenRepository.tokenFlow for the fuller account), so
+    // distinctUntilChanged() keeps an unrelated write elsewhere from re-triggering this flow's
+    // collectors.
     val cachedSummary: Flow<CachedDashboardSummary?> = dataStore.data.map { prefs ->
         val username = prefs[usernameKey] ?: return@map null
         val level = prefs[levelKey] ?: return@map null
@@ -45,7 +49,7 @@ class DashboardCacheRepository @Inject constructor(
             reviewCount = prefs[reviewCountKey] ?: 0,
             lastSyncedAtMillis = lastSyncedAt
         )
-    }
+    }.distinctUntilChanged()
 
     suspend fun save(username: String, level: Int, lessonCount: Int, reviewCount: Int, syncedAtMillis: Long) {
         dataStore.edit { prefs ->

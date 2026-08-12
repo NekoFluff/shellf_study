@@ -2,14 +2,8 @@ package com.crazyfluff.shellfstudy.core.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,23 +34,18 @@ data class PersistedReviewSession(
  */
 @Singleton
 class ReviewSessionRepository @Inject constructor(
-    private val dataStore: DataStore<Preferences>,
-    private val json: Json
+    dataStore: DataStore<Preferences>,
+    json: Json
 ) {
-    private val sessionKey = stringPreferencesKey("persisted_review_session")
+    private val store = JsonPreferenceStore(
+        dataStore, json, "persisted_review_session", PersistedReviewSession.serializer()
+    )
 
-    val hasActiveSession: Flow<Boolean> = dataStore.data.map { it[sessionKey] != null }
+    val hasActiveSession: Flow<Boolean> = store.exists
 
-    suspend fun save(session: PersistedReviewSession) {
-        dataStore.edit { prefs -> prefs[sessionKey] = json.encodeToString(session) }
-    }
+    suspend fun save(session: PersistedReviewSession) = store.save(session)
 
-    suspend fun load(): PersistedReviewSession? {
-        val raw = dataStore.data.first()[sessionKey] ?: return null
-        return runCatching { json.decodeFromString<PersistedReviewSession>(raw) }.getOrNull()
-    }
+    suspend fun load(): PersistedReviewSession? = store.load()
 
-    suspend fun clear() {
-        dataStore.edit { prefs -> prefs.remove(sessionKey) }
-    }
+    suspend fun clear() = store.clear()
 }

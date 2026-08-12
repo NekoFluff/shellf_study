@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.time.Duration
-import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -47,13 +46,10 @@ class SubjectRepository @Inject constructor(
     private val _isSyncingSubjectLibrary = MutableStateFlow(false)
     fun observeIsSyncingSubjectLibrary(): Flow<Boolean> = _isSyncingSubjectLibrary.asStateFlow()
 
-    suspend fun syncSubjects(force: Boolean = false): ApiResult<Unit> {
-        if (!shouldSync(syncStateDao, RESOURCE_SUBJECTS, force, SUBJECTS_STALENESS)) return ApiResult.Success(Unit)
-        return safeApiCall {
+    suspend fun syncSubjects(force: Boolean = false): ApiResult<Unit> =
+        runSync(syncStateDao, RESOURCE_SUBJECTS, force, SUBJECTS_STALENESS) { cursor ->
             _isSyncingSubjectLibrary.value = true
             try {
-                val cursor = syncCursor(syncStateDao, RESOURCE_SUBJECTS)
-                val startedAt = Instant.now().toString()
                 val items = collectAllPages(
                     firstPage = { api.getSubjects(updatedAfter = cursor) },
                     nextPage = { url -> api.getSubjectsPage(url) }
@@ -94,18 +90,13 @@ class SubjectRepository @Inject constructor(
                         )
                     }
                 )
-                recordSyncSuccess(syncStateDao, RESOURCE_SUBJECTS, cursor = startedAt)
             } finally {
                 _isSyncingSubjectLibrary.value = false
             }
         }
-    }
 
-    suspend fun syncSrsSystems(force: Boolean = false): ApiResult<Unit> {
-        if (!shouldSync(syncStateDao, RESOURCE_SRS_SYSTEMS, force, SUBJECTS_STALENESS)) return ApiResult.Success(Unit)
-        return safeApiCall {
-            val cursor = syncCursor(syncStateDao, RESOURCE_SRS_SYSTEMS)
-            val startedAt = Instant.now().toString()
+    suspend fun syncSrsSystems(force: Boolean = false): ApiResult<Unit> =
+        runSync(syncStateDao, RESOURCE_SRS_SYSTEMS, force, SUBJECTS_STALENESS) { cursor ->
             val response = api.getSpacedRepetitionSystems(updatedAfter = cursor)
             srsSystemDao.upsertAll(
                 response.data.map { item ->
@@ -120,15 +111,10 @@ class SubjectRepository @Inject constructor(
                     )
                 }
             )
-            recordSyncSuccess(syncStateDao, RESOURCE_SRS_SYSTEMS, cursor = startedAt)
         }
-    }
 
-    suspend fun syncStudyMaterials(force: Boolean = false): ApiResult<Unit> {
-        if (!shouldSync(syncStateDao, RESOURCE_STUDY_MATERIALS, force, STUDY_MATERIALS_STALENESS)) return ApiResult.Success(Unit)
-        return safeApiCall {
-            val cursor = syncCursor(syncStateDao, RESOURCE_STUDY_MATERIALS)
-            val startedAt = Instant.now().toString()
+    suspend fun syncStudyMaterials(force: Boolean = false): ApiResult<Unit> =
+        runSync(syncStateDao, RESOURCE_STUDY_MATERIALS, force, STUDY_MATERIALS_STALENESS) { cursor ->
             val items = collectAllPages(
                 firstPage = { api.getStudyMaterials(updatedAfter = cursor) },
                 nextPage = { url -> api.getStudyMaterialsPage(url) }
@@ -146,9 +132,7 @@ class SubjectRepository @Inject constructor(
                     )
                 }
             )
-            recordSyncSuccess(syncStateDao, RESOURCE_STUDY_MATERIALS, cursor = startedAt)
         }
-    }
 
     fun observeSearch(query: String): Flow<List<SubjectSummary>> =
         subjectDao.observeSearch(query.lowercase()).map { entities -> entities.map { it.toSubjectSummary() } }

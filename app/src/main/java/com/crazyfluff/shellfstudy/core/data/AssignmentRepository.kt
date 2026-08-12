@@ -61,19 +61,14 @@ class AssignmentRepository @Inject constructor(
     private val subjectRepository: SubjectRepository,
     private val srsSystemDao: SrsSystemDao
 ) {
-    suspend fun syncAssignments(force: Boolean = false): ApiResult<Unit> {
-        if (!shouldSync(syncStateDao, RESOURCE_ASSIGNMENTS, force, ASSIGNMENTS_STALENESS)) return ApiResult.Success(Unit)
-        return safeApiCall {
-            val cursor = syncCursor(syncStateDao, RESOURCE_ASSIGNMENTS)
-            val startedAt = Instant.now().toString()
+    suspend fun syncAssignments(force: Boolean = false): ApiResult<Unit> =
+        runSync(syncStateDao, RESOURCE_ASSIGNMENTS, force, ASSIGNMENTS_STALENESS) { cursor ->
             val items = collectAllPages(
                 firstPage = { api.getAssignments(updatedAfter = cursor) },
                 nextPage = { url -> api.getAssignmentsPage(url) }
             )
             assignmentDao.upsertAll(items.map { it.toEntity() })
-            recordSyncSuccess(syncStateDao, RESOURCE_ASSIGNMENTS, cursor = startedAt)
         }
-    }
 
     /**
      * Ensures assignments and subjects are up to date before starting a review/lesson session —

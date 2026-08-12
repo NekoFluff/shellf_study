@@ -33,11 +33,8 @@ class StatsRepository @Inject constructor(
     private val studyActivityDao: StudyActivityDao,
     private val syncStateDao: SyncStateDao
 ) {
-    suspend fun syncReviewStatistics(force: Boolean = false): ApiResult<Unit> {
-        if (!shouldSync(syncStateDao, RESOURCE_REVIEW_STATISTICS, force, STALENESS)) return ApiResult.Success(Unit)
-        return safeApiCall {
-            val cursor = syncCursor(syncStateDao, RESOURCE_REVIEW_STATISTICS)
-            val startedAt = Instant.now().toString()
+    suspend fun syncReviewStatistics(force: Boolean = false): ApiResult<Unit> =
+        runSync(syncStateDao, RESOURCE_REVIEW_STATISTICS, force, STALENESS) { cursor ->
             val items = collectAllPages(
                 firstPage = { api.getReviewStatistics(updatedAfter = cursor) },
                 nextPage = { url -> api.getReviewStatisticsPage(url) }
@@ -61,14 +58,11 @@ class StatsRepository @Inject constructor(
                     )
                 }
             )
-            recordSyncSuccess(syncStateDao, RESOURCE_REVIEW_STATISTICS, cursor = startedAt)
         }
-    }
 
     /** level_progressions has no documented updated_after filter — always a full (small) refetch. */
-    suspend fun syncLevelProgressions(force: Boolean = false): ApiResult<Unit> {
-        if (!shouldSync(syncStateDao, RESOURCE_LEVEL_PROGRESSIONS, force, STALENESS)) return ApiResult.Success(Unit)
-        return safeApiCall {
+    suspend fun syncLevelProgressions(force: Boolean = false): ApiResult<Unit> =
+        runSync(syncStateDao, RESOURCE_LEVEL_PROGRESSIONS, force, STALENESS, useCursor = false) {
             val response = api.getLevelProgressions()
             levelProgressionDao.upsertAll(
                 response.data.map { item ->
@@ -84,9 +78,7 @@ class StatsRepository @Inject constructor(
                     )
                 }
             )
-            recordSyncSuccess(syncStateDao, RESOURCE_LEVEL_PROGRESSIONS)
         }
-    }
 
     /** Marks today as an active study day — local-only, never gated on network (there's nothing to
      *  sync, this data has no server counterpart), called directly from the review-grading path so

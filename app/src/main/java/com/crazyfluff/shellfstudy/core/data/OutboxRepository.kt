@@ -11,6 +11,7 @@ import com.crazyfluff.shellfstudy.core.database.outbox.PendingReviewSubmissionEn
 import com.crazyfluff.shellfstudy.core.sync.OutboxSyncScheduler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import javax.inject.Inject
@@ -56,8 +57,9 @@ class OutboxRepository @Inject constructor(
 
     /** True once the sync worker has seen a confirmed 401 — pending rows are left untouched, this
      *  just signals the UI that sync is paused until re-auth (see DashboardViewModel's own 401
-     *  handling, which is what actually logs the user out). */
-    val blockedOnAuth: Flow<Boolean> = dataStore.data.map { it[BLOCKED_ON_AUTH_KEY] ?: false }
+     *  handling, which is what actually logs the user out). distinctUntilChanged() because
+     *  dataStore is shared app-wide, so this would otherwise re-emit on every unrelated write. */
+    val blockedOnAuth: Flow<Boolean> = dataStore.data.map { it[BLOCKED_ON_AUTH_KEY] ?: false }.distinctUntilChanged()
 
     suspend fun setBlockedOnAuth(blocked: Boolean) {
         dataStore.edit { prefs -> prefs[BLOCKED_ON_AUTH_KEY] = blocked }
