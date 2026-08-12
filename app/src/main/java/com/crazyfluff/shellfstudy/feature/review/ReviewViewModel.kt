@@ -6,6 +6,7 @@ import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.containsKana
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.core.data.PersistedQuestion
@@ -53,7 +54,8 @@ data class ReviewUiState(
     val isWrappingUp: Boolean = false,
     val isDetailsExpanded: Boolean = false,
     val sessionItemsReviewed: Int = 0,
-    val sessionItemsCorrectFirstTry: Int = 0
+    val sessionItemsCorrectFirstTry: Int = 0,
+    val answerTypeMismatchCount: Int = 0
 )
 
 private data class PendingQuestion(val item: ReviewItem, val type: QuestionType)
@@ -195,10 +197,22 @@ class ReviewViewModel @Inject constructor(
                 // A small typo is graded as correct but flagged, rather than a flat miss — readings
                 // stay exact-match, matching WaniKani's own convention for kana.
                 val match = CloseEnoughMatcher.match(state.answerInput, candidates)
+                // Typing a reading into a meaning answer is a habit slip, not a genuine miss — reject
+                // it outright rather than spending an SRS attempt on it.
+                if (!match.isMatch && state.answerInput.containsKana()) {
+                    _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
+                    return@launch
+                }
                 gradeAnswer(item, type, match.isMatch, candidates, expandDetails = false, wasCloseMatch = match.isMatch && !match.isExact)
             } else {
                 val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
                 val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
+                // Same idea in reverse: a wrong reading that closely matches this item's own meaning
+                // is almost certainly the other question type typed by habit, not a real miss.
+                if (!isCorrect && CloseEnoughMatcher.match(state.answerInput, candidatesFor(item, QuestionType.MEANING)).isMatch) {
+                    _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
+                    return@launch
+                }
                 gradeAnswer(item, type, isCorrect, candidates, expandDetails = false)
             }
         }

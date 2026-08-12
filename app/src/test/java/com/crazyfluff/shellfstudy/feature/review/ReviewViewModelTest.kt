@@ -218,6 +218,74 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `submitting a reading into a meaning question rejects it instead of grading a miss`() = runTest {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.currentQuestionType).isEqualTo(QuestionType.MEANING)
+
+            viewModel.onAnswerInputChange("くち")
+            awaitItem()
+            viewModel.submitAnswer()
+            val mismatchState = awaitItem()
+            assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
+            // Rejected outright, not graded as a miss — feedback stays null and the question isn't
+            // consumed (remainingCount unchanged, no requeue).
+            assertThat(mismatchState.feedback).isNull()
+            assertThat(mismatchState.remainingCount).isEqualTo(1)
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat(correctState.feedback?.isCorrect).isTrue()
+        }
+    }
+
+    @Test
+    fun `submitting a meaning into a reading question rejects it instead of grading a miss`() = runTest {
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            // Queue order is shuffled — answer meaning questions correctly until reading comes up.
+            while (state.currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange("Water")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+            // Captured before the mismatch submission — if the reading question happened to be
+            // drawn first, the meaning question is still outstanding, so this is 2, not 1.
+            val remainingBeforeMismatch = state.remainingCount
+
+            viewModel.onAnswerInputChange("Water")
+            awaitItem()
+            viewModel.submitAnswer()
+            val mismatchState = awaitItem()
+            assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
+            assertThat(mismatchState.feedback).isNull()
+            // Rejected outright, not graded as a miss — the queue is untouched.
+            assertThat(mismatchState.remainingCount).isEqualTo(remainingBeforeMismatch)
+
+            viewModel.onAnswerInputChange("mizu")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat(correctState.feedback?.isCorrect).isTrue()
+        }
+    }
+
+    @Test
     fun `dontKnowAnswer grades as incorrect, requeues, and expands details`() = runTest {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 

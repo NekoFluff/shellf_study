@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.feature.review
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,6 +71,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
@@ -91,6 +94,7 @@ import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailHandleHeigh
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
+import kotlin.math.roundToInt
 
 object ReviewScreenTestTags {
     const val LOADING_INDICATOR = "review_loading_indicator"
@@ -118,6 +122,7 @@ object ReviewScreenTestTags {
     const val ABANDON_MENU_ITEM = "review_abandon_menu_item"
     const val ABANDON_CONFIRM_BUTTON = "review_abandon_confirm_button"
     const val DETAILS_TOGGLE = "review_details_toggle"
+    const val TYPE_MISMATCH_TEXT = "review_type_mismatch_text"
 }
 
 @Composable
@@ -373,6 +378,19 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         answerFocusRequester.requestFocus()
     }
 
+    val shakeOffset = remember { Animatable(0f) }
+    var showTypeMismatchWarning by remember(uiState.currentItem, uiState.currentQuestionType) { mutableStateOf(false) }
+    // Keyed on the count (not a boolean) so back-to-back identical mistakes still retrigger the
+    // shake — a plain boolean wouldn't change value between two consecutive "wrong type" submits.
+    LaunchedEffect(uiState.answerTypeMismatchCount) {
+        if (uiState.answerTypeMismatchCount == 0) return@LaunchedEffect
+        showTypeMismatchWarning = true
+        shakeOffset.snapTo(0f)
+        listOf(-12f, 12f, -8f, 8f, -4f, 0f).forEach { target ->
+            shakeOffset.animateTo(target, animationSpec = tween(durationMillis = 40))
+        }
+    }
+
     val progress = if (uiState.totalCount == 0) 0f else
         (uiState.totalCount - uiState.remainingCount).toFloat() / uiState.totalCount
     val accentColor = subjectColor(item.subjectType)
@@ -423,7 +441,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             .padding(horizontal = 24.dp)
     ) {
         Text(
-            text = if (questionType == QuestionType.MEANING) "What is the meaning?" else "What is the reading?",
+            text = "What is the ${questionType.label}?",
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.testTag(ReviewScreenTestTags.QUESTION_LABEL)
         )
@@ -432,7 +450,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         val canUndo = feedbackForField != null && !feedbackForField.isCorrect
         OutlinedTextField(
             value = uiState.answerInput,
-            onValueChange = onAnswerInputChange,
+            onValueChange = {
+                showTypeMismatchWarning = false
+                onAnswerInputChange(it)
+            },
             label = { Text("答え") },
             singleLine = true,
             enabled = uiState.feedback == null,
@@ -452,9 +473,19 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
                     }
                 }
             } else null,
+            supportingText = if (showTypeMismatchWarning) {
+                {
+                    Text(
+                        text = "Expecting the ${questionType.label}",
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT)
+                    )
+                }
+            } else null,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { if (uiState.feedback == null) onSubmit() }),
             modifier = Modifier.fillMaxWidth()
+                .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
                 .focusRequester(answerFocusRequester)
                 .testTag(ReviewScreenTestTags.ANSWER_FIELD)
         )
@@ -588,6 +619,11 @@ private fun feedbackDetailPrefix(feedback: AnswerFeedback): String? = when {
 private fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
     QuestionType.MEANING -> DetailQuestionType.MEANING
     QuestionType.READING -> DetailQuestionType.READING
+}
+
+private val QuestionType.label: String get() = when (this) {
+    QuestionType.MEANING -> "meaning"
+    QuestionType.READING -> "reading"
 }
 
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)

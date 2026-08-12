@@ -182,6 +182,61 @@ class ReviewScreenTest {
     }
 
     @Test
+    fun typeMismatchWarning_showsExpectingMeaning_forMeaningQuestion() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                answerTypeMismatchCount = 1
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Expecting the meaning").assertIsDisplayed()
+    }
+
+    @Test
+    fun typeMismatchWarning_showsExpectingReading_forReadingQuestion() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.READING,
+                answerTypeMismatchCount = 1
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Expecting the reading").assertIsDisplayed()
+    }
+
+    @Test
+    fun typeMismatchWarning_absentBeforeAnyMismatch() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT).assertCountEquals(0)
+    }
+
+    @Test
+    fun typeMismatchWarning_clearsOnceUserEditsTheAnswer() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                answerTypeMismatchCount = 1
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).performTextInput("W")
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT).assertCountEquals(0)
+    }
+
+    @Test
     fun detailsToggle_absentBeforeTheQuestionIsAnswered() {
         // Nothing to toggle yet — the handle isn't just disabled, it isn't composed at all.
         setScreen(

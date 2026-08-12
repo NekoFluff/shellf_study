@@ -24,4 +24,29 @@ class KanaUtilsTest {
     fun `toKatakana handles mixed hiragana and non-kana input`() {
         assertThat("お土産".toKatakana()).isEqualTo("オ土産")
     }
+
+    @Test
+    fun `containsKana is true for hiragana`() {
+        assertThat("みず".containsKana()).isTrue()
+    }
+
+    @Test
+    fun `containsKana is true for katakana`() {
+        assertThat("ミズ".containsKana()).isTrue()
+    }
+
+    @Test
+    fun `containsKana is true when kana is mixed with other characters`() {
+        assertThat("Water みず".containsKana()).isTrue()
+    }
+
+    @Test
+    fun `containsKana is false for plain English`() {
+        assertThat("Water".containsKana()).isFalse()
+    }
+
+    @Test
+    fun `containsKana is false for kanji without any kana`() {
+        assertThat("水".containsKana()).isFalse()
+    }
 }
