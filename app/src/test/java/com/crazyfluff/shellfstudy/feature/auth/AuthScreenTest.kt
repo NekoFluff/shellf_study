@@ -9,9 +9,18 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
+/**
+ * Runs under Robolectric (JVM) — this screen is driven purely by state, no device features needed.
+ * Pinned to SDK 35: Robolectric 4.15.1 doesn't yet have shadows for this project's targetSdk (37).
+ */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class AuthScreenTest {
 
     @get:Rule

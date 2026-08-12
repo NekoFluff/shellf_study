@@ -6,10 +6,19 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.core.data.ThemeMode
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
+/**
+ * Runs under Robolectric (JVM) — this screen is driven purely by state, no device features needed.
+ * Pinned to SDK 35: Robolectric 4.15.1 doesn't yet have shadows for this project's targetSdk (37).
+ */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35], qualifiers = "w411dp-h891dp")
 class SettingsScreenTest {
 
     @get:Rule
@@ -157,7 +166,7 @@ class SettingsScreenTest {
             onShowSubjectTypeLabelChange = { showLabel = it }
         )
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE).performScrollTo().performClick()
         assert(showLabel == true)
     }
 
@@ -169,7 +178,7 @@ class SettingsScreenTest {
             onShowReviewTimerChange = { showTimer = it }
         )
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_REVIEW_TIMER_TOGGLE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_REVIEW_TIMER_TOGGLE).performScrollTo().performClick()
         assert(showTimer == true)
     }
 
@@ -190,7 +199,7 @@ class SettingsScreenTest {
             onNotificationsEnabledChange = { enabled = it }
         )
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE).performScrollTo().performClick()
         assert(enabled == true)
     }
 
