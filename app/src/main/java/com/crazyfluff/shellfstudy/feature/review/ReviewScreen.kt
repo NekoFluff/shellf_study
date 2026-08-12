@@ -2,9 +2,12 @@ package com.crazyfluff.shellfstudy.feature.review
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -398,6 +401,19 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             color = accentColor,
             modifier = Modifier.testTag(ReviewScreenTestTags.CHARACTERS)
         )
+        AnimatedVisibility(
+            visible = uiState.rankChange != null,
+            enter = scaleIn(
+                initialScale = 0.6f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+            ) + fadeIn(animationSpec = tween(200))
+        ) {
+            val rankChange = uiState.rankChange
+            if (rankChange != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                RankChangeChip(rankChange, modifier = Modifier.testTag(ReviewScreenTestTags.RANK_CHANGE_TEXT))
+            }
+        }
     }
 
     Column(
@@ -488,10 +504,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
                             }
                         )
                 )
-            }
-            uiState.rankChange?.let { rankChange ->
-                Spacer(modifier = Modifier.height(8.dp))
-                RankChangeChip(rankChange, modifier = Modifier.testTag(ReviewScreenTestTags.RANK_CHANGE_TEXT))
             }
             Spacer(modifier = Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
