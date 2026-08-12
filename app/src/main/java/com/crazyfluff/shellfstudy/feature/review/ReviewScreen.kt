@@ -3,7 +3,6 @@ package com.crazyfluff.shellfstudy.feature.review
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -33,8 +32,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -78,7 +75,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.feedbackDetailPrefix
@@ -86,9 +82,9 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestion
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
 import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
+import com.crazyfluff.shellfstudy.core.designsystem.theme.RankChangeChip
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
-import com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
@@ -621,37 +617,6 @@ private fun SessionTimerText(startTimeMs: Long, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.titleMedium,
         modifier = modifier
     )
-}
-
-@Composable
-private fun RankChangeChip(rankChange: RankChange, modifier: Modifier = Modifier) {
-    val fromColor = srsStageColor(rankChange.from)
-    val toColor = srsStageColor(rankChange.to)
-    var targetColor by remember(rankChange) { mutableStateOf(fromColor) }
-    LaunchedEffect(rankChange) { targetColor = toColor }
-    val animatedColor by animateColorAsState(targetValue = targetColor, animationSpec = tween(500), label = "rankChangeColor")
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(animatedColor.copy(alpha = 0.15f))
-            .border(1.dp, animatedColor, RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-    ) {
-        Icon(
-            imageVector = if (rankChange.isRankUp) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-            contentDescription = if (rankChange.isRankUp) "Rank up" else "Rank down",
-            tint = animatedColor,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = rankChange.to.displayName,
-            color = animatedColor,
-            style = MaterialTheme.typography.labelLarge
-        )
-    }
 }
 
 @Composable

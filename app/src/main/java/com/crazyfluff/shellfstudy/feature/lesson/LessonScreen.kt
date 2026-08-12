@@ -87,6 +87,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.VocabReadingRo
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.componentsLabel
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
+import com.crazyfluff.shellfstudy.core.designsystem.theme.RankChangeChip
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
@@ -913,12 +914,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             }
             uiState.rankChange?.let { rankChange ->
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Now: ${rankChange.to.displayName}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.testTag(LessonScreenTestTags.RANK_CHANGE_TEXT)
-                )
+                RankChangeChip(rankChange, modifier = Modifier.testTag(LessonScreenTestTags.RANK_CHANGE_TEXT))
             }
             Spacer(modifier = Modifier.height(16.dp))
             GatedContinueButton(
