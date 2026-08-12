@@ -19,6 +19,11 @@ import javax.inject.Singleton
  */
 interface StrokeOrderRepository {
     suspend fun getStrokeOrder(character: Char): List<StrokeOrderStroke>?
+
+    /** Parses and caches the bundled dictionary ahead of the first real lookup, so opening a
+     *  subject detail sheet doesn't pay for it inline. Safe to call repeatedly — subsequent calls
+     *  are no-ops once cached. */
+    suspend fun preload()
 }
 
 /**
@@ -50,6 +55,10 @@ class AndroidStrokeOrderRepository @Inject constructor(
 
     override suspend fun getStrokeOrder(character: Char): List<StrokeOrderStroke>? =
         loadAll()[character.toString()]
+
+    override suspend fun preload() {
+        loadAll()
+    }
 
     private suspend fun loadAll(): Map<String, List<StrokeOrderStroke>> {
         cache?.let { return it }

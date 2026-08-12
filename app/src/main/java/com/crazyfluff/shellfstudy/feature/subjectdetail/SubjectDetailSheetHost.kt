@@ -30,20 +30,23 @@ fun rememberSubjectDetailSheetState(): SubjectDetailSheetState = remember { Subj
  * Hosts the shared "look something up" [SubjectDetailSheet] (always [DetailRevealMode.FULL],
  * answered, ungated) for any screen that just wants tapping a subject to show its detail —
  * Dashboard's search bar and Level Progress card, Review's search bar, Lesson's related-subject
- * tiles. Mounted only while [state] has a subject, and starts already expanded — [SubjectDetailSheet]
- * still plays its usual slide-up open animation on mount (see its own doc comment), and once a
- * close (drag, tap outside, back, or the X button) settles it collapsed, that's reported back here
- * as a toggle away from expanded, which tears the composable down. Not for Review's mid-quiz sheet,
- * which is gated by the current question and keeps its own separate state
- * ([com.crazyfluff.shellfstudy.feature.review.ReviewUiState.isDetailsExpanded]), staying mounted
- * (collapsed to just the handle) between questions instead of unmounting.
+ * tiles. Stays mounted (collapsed off the bottom of the screen, per `dismissesFully = true`) once
+ * the first subject has ever been shown — mirroring Review's always-mounted mid-quiz sheet — so
+ * browsing several subjects in one visit reuses the same [SubjectDetailSheet] instance (its
+ * `remember`ed drag state, Surface, etc.) instead of paying first-mount composition cost on every
+ * open. [SubjectDetailSheet] still plays its usual slide-up open animation each time (see its own
+ * doc comment), and once a close (drag, tap outside, back, or the X button) settles it collapsed,
+ * that's reported back here as a toggle away from expanded.
  */
 @Composable
 fun SubjectDetailSheetHost(state: SubjectDetailSheetState) {
-    state.subjectId?.let { id ->
+    var lastShownSubjectId by remember { mutableStateOf<Long?>(null) }
+    state.subjectId?.let { lastShownSubjectId = it }
+
+    lastShownSubjectId?.let { id ->
         SubjectDetailSheet(
             subjectId = id,
-            expanded = true,
+            expanded = state.subjectId != null,
             onToggle = { state.dismiss() },
             revealMode = DetailRevealMode.FULL,
             isAnswered = true,

@@ -8,4 +8,6 @@ class FakeStrokeOrderRepository(
     private val strokesByCharacter: Map<Char, List<StrokeOrderStroke>> = emptyMap()
 ) : StrokeOrderRepository {
     override suspend fun getStrokeOrder(character: Char): List<StrokeOrderStroke>? = strokesByCharacter[character]
+
+    override suspend fun preload() = Unit
 }
