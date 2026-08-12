@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
+import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.containsKana
@@ -21,6 +22,7 @@ import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,7 +88,8 @@ class ReviewViewModel @Inject constructor(
     private val statsRepository: StatsRepository,
     private val reviewSessionRepository: ReviewSessionRepository,
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    @ApplicationScope private val applicationScope: CoroutineScope
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReviewUiState())
@@ -372,7 +375,7 @@ class ReviewViewModel @Inject constructor(
             answeredQuestions.removeLastOrNull()
             questionShownAtMs = System.currentTimeMillis()
 
-            persistCurrentState()
+            applicationScope.launch { persistCurrentState() }.join()
             // undoCounter changes even though currentItem/currentQuestionType don't — this is what
             // the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't change
             // either of those but still needs to refocus the field the user just tapped away from.
@@ -399,7 +402,7 @@ class ReviewViewModel @Inject constructor(
             queue.addAll(rest)
             totalQuestions = queue.size + completedQuestionCount()
 
-            persistCurrentState()
+            applicationScope.launch { persistCurrentState() }.join()
             _uiState.update { it.copy(isWrappingUp = true, totalCount = totalQuestions, remainingCount = queue.size) }
         }
     }
@@ -452,7 +455,7 @@ class ReviewViewModel @Inject constructor(
     private suspend fun advanceToNextQuestion() {
         val next = queue.firstOrNull()
         if (next == null) {
-            reviewSessionRepository.clear()
+            applicationScope.launch { reviewSessionRepository.clear() }.join()
             val summary = sessionSummary()
             _uiState.update {
                 it.copy(
@@ -509,13 +512,14 @@ class ReviewViewModel @Inject constructor(
         persistSnapshot(currentPersistSnapshot())
     }
 
-    /** Fires the post-grading durability writes (outbox enqueue, study-streak mark, session
-     *  persistence) as their own child coroutine, detached from [gradeAnswer]'s own suspend chain
-     *  — none of it needs to complete before the caller (submitAnswer/dontKnowAnswer) considers
-     *  grading "done" and clears [isGrading], so the UI unlocks the instant feedback is visible
-     *  rather than waiting on bookkeeping the user never sees. */
-    private fun persistDurabilityWork(grade: ReviewGrade?, item: ReviewItem, snapshot: PersistedReviewSession) {
-        viewModelScope.launch {
+    /** Runs the post-grading durability writes (outbox enqueue, study-streak mark, session
+     *  persistence) on [applicationScope] rather than [viewModelScope] — this ViewModel is
+     *  cleared the instant the user navigates off the screen, and back-navigation is never gated
+     *  on grading, so a write parented to viewModelScope can be cancelled mid-flight. Awaiting the
+     *  join here (rather than fire-and-forget) still lets submitAnswer/dontKnowAnswer's own
+     *  suspend chain observe completion; it's just no longer *cancellable* by leaving the screen. */
+    private suspend fun persistDurabilityWork(grade: ReviewGrade?, item: ReviewItem, snapshot: PersistedReviewSession) {
+        applicationScope.launch {
             if (grade != null) {
                 // The actual DB write of the new SRS stage — already reflected in the UI via the
                 // synchronous computeReviewRankChange prediction above, so this just makes the
@@ -526,6 +530,6 @@ class ReviewViewModel @Inject constructor(
                 statsRepository.markStudyActivityToday()
             }
             persistSnapshot(snapshot)
-        }
+        }.join()
     }
 }

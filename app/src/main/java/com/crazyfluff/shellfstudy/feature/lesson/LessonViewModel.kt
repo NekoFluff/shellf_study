@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.feature.lesson
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
@@ -21,6 +22,7 @@ import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,7 +81,8 @@ class LessonViewModel @Inject constructor(
     private val pitchAccentRepository: PitchAccentRepository,
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
-    private val strokeOrderRepository: StrokeOrderRepository
+    private val strokeOrderRepository: StrokeOrderRepository,
+    @ApplicationScope private val applicationScope: CoroutineScope
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LessonUiState())
@@ -287,7 +290,7 @@ class LessonViewModel @Inject constructor(
         if (state.phase != LessonPhase.STUDY) return
         val nextIndex = state.studyIndex + 1
         if (nextIndex >= state.studyItems.size) {
-            beginQuiz(state.studyItems)
+            viewModelScope.launch { beginQuiz(state.studyItems) }
         } else {
             _uiState.update { it.copy(studyIndex = nextIndex) }
         }
@@ -299,7 +302,7 @@ class LessonViewModel @Inject constructor(
         _uiState.update { it.copy(studyIndex = state.studyIndex - 1) }
     }
 
-    private fun beginQuiz(items: List<LessonItem>) {
+    private suspend fun beginQuiz(items: List<LessonItem>) {
         quizQueue.clear()
         items.forEach { item ->
             questionTypesFor(item).forEach { type -> quizQueue.add(PendingLessonQuestion(item, type)) }
@@ -319,7 +322,7 @@ class LessonViewModel @Inject constructor(
                 isSessionComplete = next == null
             )
         }
-        viewModelScope.launch { persistCurrentState() }
+        applicationScope.launch { persistCurrentState() }.join()
     }
 
     private fun questionTypesFor(item: LessonItem): List<LessonQuestionType> =
@@ -452,13 +455,14 @@ class LessonViewModel @Inject constructor(
         persistSnapshot(currentPersistSnapshot())
     }
 
-    /** Fires the post-grading durability writes (outbox enqueue, session persistence) as their
-     *  own child coroutine, detached from [gradeAnswer]'s own suspend chain — none of it needs to
-     *  complete before the caller (submitAnswer/dontKnowAnswer) considers grading "done" and
-     *  clears [isGrading], so the UI unlocks the instant feedback is visible rather than waiting
-     *  on bookkeeping the user never sees. */
-    private fun persistDurabilityWork(isNewlyStarted: Boolean, item: LessonItem, snapshot: PersistedLessonSession) {
-        viewModelScope.launch {
+    /** Runs the post-grading durability writes (outbox enqueue, session persistence) on
+     *  [applicationScope] rather than [viewModelScope] — this ViewModel is cleared the instant the
+     *  user navigates off the screen, and back-navigation is never gated on grading, so a write
+     *  parented to viewModelScope can be cancelled mid-flight. Awaiting the join here (rather than
+     *  fire-and-forget) still lets submitAnswer/dontKnowAnswer's own suspend chain observe
+     *  completion; it's just no longer *cancellable* by leaving the screen. */
+    private suspend fun persistDurabilityWork(isNewlyStarted: Boolean, item: LessonItem, snapshot: PersistedLessonSession) {
+        applicationScope.launch {
             if (isNewlyStarted) {
                 // The actual DB write of the new SRS stage — already reflected in the UI via the
                 // synchronous computeLessonStartRankChange prediction above, so this just makes
@@ -467,17 +471,17 @@ class LessonViewModel @Inject constructor(
                 outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
             }
             persistSnapshot(snapshot)
-        }
+        }.join()
     }
 
     fun onContinue() {
-        advanceQuiz()
+        viewModelScope.launch { advanceQuiz() }
     }
 
-    private fun advanceQuiz() {
+    private suspend fun advanceQuiz() {
         val next = quizQueue.firstOrNull()
         if (next == null) {
-            viewModelScope.launch { lessonSessionRepository.clear() }
+            applicationScope.launch { lessonSessionRepository.clear() }.join()
             _uiState.update {
                 it.copy(isSessionComplete = true, currentQuizItem = null, currentQuestionType = null, rankChange = null)
             }

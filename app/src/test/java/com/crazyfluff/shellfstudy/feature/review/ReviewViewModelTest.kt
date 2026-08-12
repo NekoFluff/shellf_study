@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.feature.review
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.audio.PlaybackState
@@ -20,6 +21,8 @@ import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import mockwebserver3.Dispatcher
@@ -75,8 +78,9 @@ class ReviewViewModelTest {
         server.shutdown()
     }
 
-    private fun createViewModel() = ReviewViewModel(
-        assignmentRepository, outboxRepository, statsRepository, reviewSessionRepository, pronunciationAudioPlayer, settingsRepository
+    private fun TestScope.createViewModel() = ReviewViewModel(
+        assignmentRepository, outboxRepository, statsRepository, reviewSessionRepository, pronunciationAudioPlayer, settingsRepository,
+        backgroundScope
     )
 
     /** Routes by path — refreshing the review queue now syncs subjects and assignments, in either order. */
@@ -180,6 +184,38 @@ class ReviewViewModelTest {
         // No POST /reviews should ever have been made from the ViewModel path — the network call is
         // now exclusively the background sync worker's job.
         assertThat(server.requestCount).isAtMost(2) // just the assignments + subjects sync
+    }
+
+    @Test
+    fun `clearing the ViewModel immediately after grading does not lose the durable write`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test for durability writes (outbox enqueue, SRS patch, session snapshot)
+        // being parented to an application-scoped CoroutineScope instead of viewModelScope: a rushed
+        // back-press clears the ViewModel (cancelling viewModelScope) the instant feedback is shown,
+        // and that must not be able to cancel the write. viewModelScope.cancel() here simulates
+        // exactly what ViewModel.clear() does to viewModelScope when the screen is left.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            var settled = awaitItem()
+            while (settled.feedback == null) settled = awaitItem()
+
+            viewModel.viewModelScope.cancel()
+        }
+
+        val queued = repositories.outboxDao.allReviewSubmissions()
+        assertThat(queued).hasSize(1)
+        assertThat(queued.first().assignmentId).isEqualTo(101L)
+        // The session snapshot persisted at grading time is durability bookkeeping too, and must
+        // equally survive the cancellation — this item's progress must be recorded, not lost.
+        assertThat(reviewSessionRepository.load()?.progress?.single()?.meaningDone).isTrue()
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.feature.lesson
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
@@ -21,6 +22,8 @@ import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import mockwebserver3.Dispatcher
@@ -74,9 +77,9 @@ class LessonViewModelTest {
         server.shutdown()
     }
 
-    private fun createViewModel() = LessonViewModel(
+    private fun TestScope.createViewModel() = LessonViewModel(
         assignmentRepository, outboxRepository, lessonSessionRepository, pitchAccentRepository, settingsRepository,
-        subjectRepository, strokeOrderRepository
+        subjectRepository, strokeOrderRepository, backgroundScope
     )
 
     /** Routes by path — refreshing the lesson queue now syncs subjects and assignments, in either order. */
@@ -319,6 +322,41 @@ class LessonViewModelTest {
         assertThat(queued).hasSize(1)
         assertThat(queued.first().assignmentId).isEqualTo(101L)
         assertThat(repositories.outboxSyncScheduler.requestCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `clearing the ViewModel immediately after grading does not lose the durable write`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test for durability writes (outbox enqueue, SRS patch, session snapshot)
+        // being parented to an application-scoped CoroutineScope instead of viewModelScope: a rushed
+        // back-press clears the ViewModel (cancelling viewModelScope) the instant feedback is shown,
+        // and that must not be able to cancel the write. viewModelScope.cancel() here simulates
+        // exactly what ViewModel.clear() does to viewModelScope when the screen is left.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+
+            viewModel.viewModelScope.cancel()
+        }
+
+        val queued = repositories.outboxDao.allLessonStarts()
+        assertThat(queued).hasSize(1)
+        assertThat(queued.first().assignmentId).isEqualTo(101L)
     }
 
     @Test
