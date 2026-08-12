@@ -426,23 +426,24 @@ class ReviewViewModel @Inject constructor(
 
     /** Items reviewed, how many were correct without ever missing, which were missed at least once,
      *  and timing — total session time, average time per item reviewed, and the slowest answers.
-     *  The average divides all time spent answering (every submission, correct or not) by the
-     *  count of distinct items, not by correct-answer count — a couple of wrong tries on one item
-     *  shouldn't be excluded from that item's own time. */
+     *  The average divides total wall-clock session time (start to finish, including feedback
+     *  screens and rank-change animations between questions) by the count of distinct items
+     *  reviewed — that's what a user actually means by "average time per item." */
     private fun sessionSummary(): SessionSummary {
         val itemsReviewed = progressByAssignmentId.size
         val correctFirstTry = progressByAssignmentId.values.count { !it.hadIncorrectMeaning && !it.hadIncorrectReading }
         val missedItems = progressByAssignmentId.values
             .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
             .map { it.item }
-        val averageTimePerItemMs = if (itemsReviewed == 0) 0L else answeredQuestions.sumOf { it.elapsedMs } / itemsReviewed
+        val totalElapsedMs = System.currentTimeMillis() - sessionStartTimeMs
+        val averageTimePerItemMs = if (itemsReviewed == 0) 0L else totalElapsedMs / itemsReviewed
         val slowestAnswers = answeredQuestions.sortedByDescending { it.elapsedMs }.take(5)
             .map { SlowAnswer(it.item, it.type, it.elapsedMs, it.isCorrect) }
         return SessionSummary(
             itemsReviewed = itemsReviewed,
             correctFirstTry = correctFirstTry,
             missedItems = missedItems,
-            totalElapsedMs = System.currentTimeMillis() - sessionStartTimeMs,
+            totalElapsedMs = totalElapsedMs,
             averageTimePerItemMs = averageTimePerItemMs,
             slowestAnswers = slowestAnswers
         )

@@ -848,7 +848,7 @@ private fun SessionMissedItemsCard(items: List<ReviewItem>, onSubjectClick: (Lon
                         Text(
                             text = item.characters ?: item.meanings.firstOrNull() ?: "?",
                             color = color,
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.headlineSmall
                         )
                     }
                 }
