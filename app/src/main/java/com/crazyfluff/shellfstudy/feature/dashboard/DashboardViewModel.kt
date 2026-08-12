@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.StatsRepository
@@ -46,6 +47,8 @@ data class DashboardUiState(
     val reviewCount: Int = 0,
     val errorMessage: String? = null,
     val isOffline: Boolean = false,
+    val pendingSyncCount: Int = 0,
+    val syncBlockedOnAuth: Boolean = false,
     val lastSyncedAtMillis: Long? = null,
     val isLoggedOut: Boolean = false,
     val hasActiveReviewSession: Boolean = false,
@@ -70,6 +73,7 @@ class DashboardViewModel @Inject constructor(
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
     private val dashboardCacheRepository: DashboardCacheRepository,
+    private val outboxRepository: OutboxRepository,
     private val syncOrchestrator: SyncOrchestrator,
     private val syncScheduler: SyncScheduler,
     private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,
@@ -93,6 +97,8 @@ class DashboardViewModel @Inject constructor(
         }
 
         observe(reviewSessionRepository.hasActiveSession) { copy(hasActiveReviewSession = it) }
+        observe(outboxRepository.observePendingCount()) { copy(pendingSyncCount = it) }
+        observe(outboxRepository.blockedOnAuth) { copy(syncBlockedOnAuth = it) }
         observe(settingsRepository.settings) { copy(dailyLessonGoal = it.dailyLessonGoal) }
         observe(assignmentRepository.observeLessonsCompletedToday()) { copy(lessonsCompletedToday = it) }
         observe(statsRepository.observeDaysOnCurrentLevel()) { copy(daysOnCurrentLevel = it) }

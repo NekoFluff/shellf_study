@@ -14,9 +14,9 @@ import com.crazyfluff.shellfstudy.fakes.FakeNotificationPoster
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationScheduler
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentBundledSource
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentCacheDao
-import com.crazyfluff.shellfstudy.fakes.FakeReviewLogDao
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeSrsSystemDao
+import com.crazyfluff.shellfstudy.fakes.FakeStudyActivityDao
 import com.crazyfluff.shellfstudy.fakes.FakeStudyMaterialDao
 import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncStateDao
@@ -56,9 +56,10 @@ class DefaultNotificationCoordinatorTest {
         val pitchAccentRepository = PitchAccentRepository(
             FakePitchAccentBundledSource(emptyMap()), FakePitchAccentCacheDao(), FakeWeblioApi(), WeblioPitchAccentParser()
         )
-        val subjectRepository = SubjectRepository(api, subjectDao, FakeSrsSystemDao(), FakeStudyMaterialDao(), syncStateDao, pitchAccentRepository)
-        assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository)
-        statsRepository = StatsRepository(api, FakeReviewStatisticDao(), FakeLevelProgressionDao(), FakeReviewLogDao(), syncStateDao)
+        val srsSystemDao = FakeSrsSystemDao()
+        val subjectRepository = SubjectRepository(api, subjectDao, srsSystemDao, FakeStudyMaterialDao(), syncStateDao, pitchAccentRepository)
+        assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao)
+        statsRepository = StatsRepository(api, FakeReviewStatisticDao(), FakeLevelProgressionDao(), FakeStudyActivityDao(), syncStateDao)
 
         val settingsDataStore: DataStore<Preferences> =
             PreferenceDataStoreFactory.create(produceFile = { tempFolder.newFile("settings.preferences_pb") })

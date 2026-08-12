@@ -6,16 +6,16 @@ import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.core.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.core.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
-import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.core.data.StatsRepository
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
@@ -68,8 +68,9 @@ private class ItemProgress {
 
 @HiltViewModel
 class ReviewViewModel @Inject constructor(
-    private val waniKaniRepository: WaniKaniRepository,
     private val assignmentRepository: AssignmentRepository,
+    private val outboxRepository: OutboxRepository,
+    private val statsRepository: StatsRepository,
     private val reviewSessionRepository: ReviewSessionRepository,
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val settingsRepository: SettingsRepository
@@ -240,8 +241,13 @@ class ReviewViewModel @Inject constructor(
             queue.addLast(PendingQuestion(item, type))
         }
 
-        if (isCorrect && isFullyDone(item, itemProgress)) {
+        // Computed before the uiState update (not in a separate launch) so the rank-change and the
+        // feedback land in one emission — with the local write being fully synchronous now (no
+        // network), a decoupled launch would just add a same-tick second emission for no benefit.
+        val newRankChange = if (isCorrect && isFullyDone(item, itemProgress)) {
             submitReviewResult(item, itemProgress)
+        } else {
+            null
         }
 
         persistCurrentState()
@@ -249,7 +255,8 @@ class ReviewViewModel @Inject constructor(
             it.copy(
                 feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
                 remainingCount = queue.size,
-                isDetailsExpanded = it.isDetailsExpanded || expandDetails
+                isDetailsExpanded = it.isDetailsExpanded || expandDetails,
+                rankChange = newRankChange ?: it.rankChange
             )
         }
 
@@ -290,23 +297,20 @@ class ReviewViewModel @Inject constructor(
         }
     }
 
-    private fun submitReviewResult(item: ReviewItem, progress: ItemProgress) {
-        viewModelScope.launch {
-            val result = waniKaniRepository.submitReview(
-                item.assignmentId,
-                ReviewGrade(
-                    meaningCorrect = !progress.hadIncorrectMeaning,
-                    readingCorrect = !progress.hadIncorrectReading
-                )
-            )
-            if (result is ApiResult.Success && result.data.startingSrsStage != result.data.endingSrsStage) {
-                val rankChange = RankChange(
-                    from = SrsStage.fromRaw(result.data.startingSrsStage),
-                    to = SrsStage.fromRaw(result.data.endingSrsStage)
-                )
-                _uiState.update { it.copy(rankChange = rankChange) }
-            }
-        }
+    /**
+     * Local-write-first: durably records the grade and patches the SRS stage optimistically, then
+     * queues the actual network submission for the background sync worker — no network call (and
+     * so nothing to fail) happens on this path, which is what makes grading work fully offline.
+     */
+    private suspend fun submitReviewResult(item: ReviewItem, progress: ItemProgress): RankChange? {
+        val grade = ReviewGrade(
+            meaningCorrect = !progress.hadIncorrectMeaning,
+            readingCorrect = !progress.hadIncorrectReading
+        )
+        val rankChange = assignmentRepository.applyOptimisticReviewResult(item.assignmentId, grade)
+        outboxRepository.enqueueReviewSubmission(item.assignmentId, item.subjectId, grade)
+        statsRepository.markStudyActivityToday()
+        return rankChange?.takeIf { it.from != it.to }
     }
 
     private fun isFullyDone(item: ReviewItem, progress: ItemProgress): Boolean {

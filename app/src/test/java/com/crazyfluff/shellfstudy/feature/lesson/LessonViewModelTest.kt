@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
+import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
@@ -13,10 +15,12 @@ import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
+import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -26,7 +30,6 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.util.concurrent.TimeUnit
 
 class LessonViewModelTest {
 
@@ -37,7 +40,10 @@ class LessonViewModelTest {
     val tempFolder = TemporaryFolder()
 
     private lateinit var server: MockWebServer
+    private lateinit var repositories: TestRepositories
     private lateinit var assignmentRepository: AssignmentRepository
+    private lateinit var outboxRepository: OutboxRepository
+    private lateinit var lessonSessionRepository: LessonSessionRepository
     private lateinit var pitchAccentRepository: PitchAccentRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var subjectRepository: SubjectRepository
@@ -51,11 +57,13 @@ class LessonViewModelTest {
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         settingsRepository = SettingsRepository(dataStore)
-        val repositories = buildTestRepositories(server.url("/").toString())
+        repositories = buildTestRepositories(server.url("/").toString())
         assignmentRepository = repositories.assignmentRepository
         pitchAccentRepository = repositories.pitchAccentRepository
         subjectRepository = repositories.subjectRepository
         strokeOrderRepository = FakeStrokeOrderRepository()
+        outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
+        lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
     }
 
     @After
@@ -63,8 +71,10 @@ class LessonViewModelTest {
         server.shutdown()
     }
 
-    private fun createViewModel() =
-        LessonViewModel(assignmentRepository, pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository)
+    private fun createViewModel() = LessonViewModel(
+        assignmentRepository, outboxRepository, lessonSessionRepository, pitchAccentRepository, settingsRepository,
+        subjectRepository, strokeOrderRepository
+    )
 
     /** Routes by path — refreshing the lesson queue now syncs subjects and assignments, in either order. */
     private fun dispatch(
@@ -286,11 +296,12 @@ class LessonViewModelTest {
             assertThat(finalState.isSessionComplete).isTrue()
         }
 
-        val startRequest = generateSequence { server.takeRequest(1, TimeUnit.SECONDS) }
-            .firstOrNull { it.path?.contains("/start") == true }
-        assertThat(startRequest).isNotNull()
-        assertThat(startRequest?.method).isEqualTo("PUT")
-        assertThat(startRequest?.path).contains("/assignments/101/start")
+        // Local-write-first: no network call happens from the ViewModel path at all — the lesson
+        // start is durably queued for the background sync worker instead.
+        val queued = repositories.outboxDao.allLessonStarts()
+        assertThat(queued).hasSize(1)
+        assertThat(queued.first().assignmentId).isEqualTo(101L)
+        assertThat(repositories.outboxSyncScheduler.requestCount).isEqualTo(1)
     }
 
     @Test

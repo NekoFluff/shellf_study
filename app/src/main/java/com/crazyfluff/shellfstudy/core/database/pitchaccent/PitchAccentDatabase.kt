@@ -6,7 +6,7 @@ import androidx.room.TypeConverters
 
 /**
  * Isolated from [com.crazyfluff.shellfstudy.core.database.AppDatabase] for the same reason as
- * `reviewhistory`, but the opposite motivation: this holds scraped pitch-accent data that IS
+ * `studyactivity`, but the opposite motivation: this holds scraped pitch-accent data that IS
  * re-derivable (by re-scraping weblio.jp), but re-scraping is slow, rate-limit-sensitive, and
  * courteous to avoid repeating unnecessarily. Keeping it out of the disposable subject cache means
  * a schema bump there doesn't force every word to be re-scraped.

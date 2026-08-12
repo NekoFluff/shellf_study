@@ -59,6 +59,8 @@ class FakeAssignmentDao(
         this.assignments.value = this.assignments.value + assignments.associateBy { it.id }
     }
 
+    override suspend fun getById(id: Long): AssignmentEntity? = assignments.value[id]
+
     override fun observeDueForReview(nowIso: String): Flow<List<AssignmentEntity>> = assignments.map { map ->
         map.values.filter { !it.hidden && it.availableAt != null && it.availableAt <= nowIso }
     }

@@ -15,3 +15,8 @@ inline fun <T, R> ApiResult<T>.map(transform: (T) -> R): ApiResult<R> = when (th
 /** True only for a confirmed 401 — distinguishes an actually-invalid token from a network/server hiccup. */
 val ApiResult.Error.isAuthError: Boolean
     get() = (throwable as? HttpException)?.code() == 401
+
+/** A definitive 4xx rejection (e.g. 422 — already recorded elsewhere) that will never succeed on
+ *  retry, as opposed to a transient network/5xx failure that's worth retrying. */
+val ApiResult.Error.isTerminalRejection: Boolean
+    get() = (throwable as? HttpException)?.code()?.let { it in 400..499 && it != 401 } ?: false

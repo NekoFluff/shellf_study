@@ -70,6 +70,8 @@ object DashboardScreenTestTags {
     const val LOADING_INDICATOR = "dashboard_loading_indicator"
     const val REFRESHING_BANNER = "dashboard_refreshing_banner"
     const val OFFLINE_BANNER = "dashboard_offline_banner"
+    const val SYNC_BLOCKED_BANNER = "dashboard_sync_blocked_banner"
+    const val PENDING_SYNC_BANNER = "dashboard_pending_sync_banner"
     const val ERROR_TEXT = "dashboard_error_text"
     const val LESSON_COUNT = "dashboard_lesson_count"
     const val REVIEW_COUNT = "dashboard_review_count"
@@ -231,6 +233,8 @@ fun DashboardScreen(
                             DashboardStatusBanner(
                                 isRefreshing = uiState.isRefreshing,
                                 isOffline = uiState.isOffline,
+                                syncBlockedOnAuth = uiState.syncBlockedOnAuth,
+                                pendingSyncCount = uiState.pendingSyncCount,
                                 lastSyncedAtMillis = uiState.lastSyncedAtMillis,
                                 onRetry = onRefresh
                             )
@@ -398,18 +402,42 @@ private fun SummaryCard(
 
 /**
  * Sits above the welcome message instead of blocking the screen: a slim "Refreshing…" bar while a
- * sync is in flight, or an offline notice (with the age of the data on screen and a tap-to-retry)
- * when the last attempt failed but there's still content to show. Renders nothing the rest of the
- * time, so it takes up no space when the dashboard is idle and up to date.
+ * sync is in flight, an offline notice (with the age of the data on screen and a tap-to-retry)
+ * when the last attempt failed but there's still content to show, or a note about queued
+ * reviews/lessons waiting to sync in the background. Renders nothing the rest of the time, so it
+ * takes up no space when the dashboard is idle and up to date. At most one banner shows at a time,
+ * in priority order: sync-blocked-on-auth (needs the user to act) > offline (connectivity) >
+ * pending-sync-count (informational, expected offline-first behavior) > refreshing.
  */
 @Composable
 private fun DashboardStatusBanner(
     isRefreshing: Boolean,
     isOffline: Boolean,
+    syncBlockedOnAuth: Boolean,
+    pendingSyncCount: Int,
     lastSyncedAtMillis: Long?,
     onRetry: () -> Unit
 ) {
     when {
+        syncBlockedOnAuth -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .testTag(DashboardScreenTestTags.SYNC_BLOCKED_BANNER),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sync paused — check your API token.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         isOffline -> {
             Row(
                 modifier = Modifier
@@ -425,6 +453,26 @@ private fun DashboardStatusBanner(
                     text = "You're offline — showing data from ${formatRelativeSyncTime(lastSyncedAtMillis)}. Tap to retry.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        pendingSyncCount > 0 -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .testTag(DashboardScreenTestTags.PENDING_SYNC_BANNER),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val noun = if (pendingSyncCount == 1) "item" else "items"
+                Text(
+                    text = "$pendingSyncCount $noun waiting to sync.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))

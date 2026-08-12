@@ -6,18 +6,24 @@ import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.LevelItem
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
+import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
+import com.crazyfluff.shellfstudy.core.data.model.SrsStageCalculator
 import com.crazyfluff.shellfstudy.core.data.model.SubjectTypeProgress
 import com.crazyfluff.shellfstudy.core.data.model.toPronunciationAudios
 import com.crazyfluff.shellfstudy.core.database.AssignmentDao
 import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
+import com.crazyfluff.shellfstudy.core.database.SrsSystemDao
+import com.crazyfluff.shellfstudy.core.database.SrsSystemEntity
 import com.crazyfluff.shellfstudy.core.database.SubjectDao
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.database.SyncStateDao
 import com.crazyfluff.shellfstudy.core.network.AssignmentData
+import com.crazyfluff.shellfstudy.core.network.ReviewResultData
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.core.network.WkResourceItem
@@ -51,7 +57,8 @@ class AssignmentRepository @Inject constructor(
     private val assignmentDao: AssignmentDao,
     private val subjectDao: SubjectDao,
     private val syncStateDao: SyncStateDao,
-    private val subjectRepository: SubjectRepository
+    private val subjectRepository: SubjectRepository,
+    private val srsSystemDao: SrsSystemDao
 ) {
     suspend fun syncAssignments(force: Boolean = false): ApiResult<Unit> {
         if (!shouldSync(syncStateDao, RESOURCE_ASSIGNMENTS, force, ASSIGNMENTS_STALENESS)) return ApiResult.Success(Unit)
@@ -88,6 +95,55 @@ class AssignmentRepository @Inject constructor(
         val response = api.startAssignment(assignmentId)
         assignmentDao.upsertAll(listOf(response.toEntity()))
     }
+
+    /**
+     * Immediately patches the local assignment cache to reflect a review grade, before any network
+     * call — the dashboard/review queue reflect progress instantly regardless of connectivity. Only
+     * ever a prediction (see [SrsStageCalculator]); [reconcileAfterReviewResult] overwrites it with
+     * the server-confirmed value once the real submission syncs. Returns null if the assignment or
+     * its SRS system isn't cached yet (e.g. SRS systems haven't synced since install) — the caller
+     * just won't see a rank-change animation until the next successful sync catches this up.
+     */
+    suspend fun applyOptimisticReviewResult(assignmentId: Long, grade: ReviewGrade): RankChange? {
+        val assignment = assignmentDao.getById(assignmentId) ?: return null
+        val srsSystem = srsSystemFor(assignment.subjectId) ?: return null
+        val nextStage = if (grade.isFullyCorrect) {
+            SrsStageCalculator.nextStageOnCorrect(assignment.srsStage, srsSystem)
+        } else {
+            SrsStageCalculator.nextStageOnIncorrect(assignment.srsStage, srsSystem)
+        }
+        assignmentDao.upsertAll(listOf(assignment.withStageTransition(nextStage, srsSystem, Instant.now())))
+        return RankChange(SrsStage.fromRaw(assignment.srsStage), SrsStage.fromRaw(nextStage))
+    }
+
+    /** Same idea as [applyOptimisticReviewResult] but for starting a lesson — every lesson item
+     *  starts the same way (locked straight to the SRS system's starting stage), so no grade input
+     *  is needed to know the target stage, only whether the assignment/SRS-system data is cached. */
+    suspend fun applyOptimisticLessonStart(assignmentId: Long): RankChange? {
+        val assignment = assignmentDao.getById(assignmentId) ?: return null
+        val srsSystem = srsSystemFor(assignment.subjectId) ?: return null
+        assignmentDao.upsertAll(listOf(assignment.withStageTransition(srsSystem.startingStagePosition, srsSystem, Instant.now())))
+        return RankChange(SrsStage.LOCKED, SrsStage.fromRaw(srsSystem.startingStagePosition))
+    }
+
+    /** Reconciles the assignment with the WK-confirmed result once a queued review submission
+     *  actually syncs — the server's value always wins over the local prediction. */
+    suspend fun reconcileAfterReviewResult(result: ReviewResultData) {
+        val assignment = assignmentDao.getById(result.assignmentId) ?: return
+        val srsSystem = srsSystemFor(assignment.subjectId) ?: return
+        assignmentDao.upsertAll(listOf(assignment.withStageTransition(result.endingSrsStage, srsSystem, Instant.now())))
+    }
+
+    /** Targeted single-assignment refetch — used when a pending outbox mutation is terminally
+     *  rejected (e.g. HTTP 422, already recorded elsewhere) and there's no authoritative response
+     *  to reconcile with locally, so the only way back to server truth is to just re-fetch it. */
+    suspend fun refetchAssignment(assignmentId: Long): ApiResult<Unit> = safeApiCall {
+        val response = api.getAssignment(assignmentId)
+        assignmentDao.upsertAll(listOf(response.toEntity()))
+    }
+
+    private suspend fun srsSystemFor(subjectId: Long): SrsSystemEntity? =
+        subjectDao.getById(subjectId)?.srsSystemId?.let { srsSystemDao.getById(it) }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeReviewQueue(): Flow<List<ReviewItem>> =
@@ -248,6 +304,21 @@ private fun SubjectEntity.acceptedGradableReadings(): List<String> =
  *  decoys never meant to be treated as correct. */
 private fun SubjectEntity.whitelistAuxiliaryMeanings(): List<String> =
     auxiliaryMeanings.filter { it.type == "whitelist" }.map { it.meaning }
+
+/** Derives availableAt/passedAt/burnedAt from a target SRS stage — shared by every "patch this
+ *  assignment to stage X" call site (optimistic review grade, optimistic lesson start, and
+ *  post-sync reconciliation), so they can't drift out of sync with each other. */
+private fun AssignmentEntity.withStageTransition(newStage: Int, srsSystem: SrsSystemEntity, now: Instant): AssignmentEntity {
+    val nowIso = now.toString()
+    val availableAt = SrsStageCalculator.availableAtFor(newStage, srsSystem, now)?.toString()
+    return copy(
+        srsStage = newStage,
+        startedAt = startedAt ?: nowIso,
+        availableAt = availableAt,
+        passedAt = passedAt ?: if (newStage >= srsSystem.passingStagePosition) nowIso else null,
+        burnedAt = burnedAt ?: if (newStage >= srsSystem.burningStagePosition) nowIso else null
+    )
+}
 
 private fun WkResourceItem<AssignmentData>.toEntity(): AssignmentEntity = AssignmentEntity(
     id = id,

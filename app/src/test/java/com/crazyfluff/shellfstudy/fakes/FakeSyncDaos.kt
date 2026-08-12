@@ -10,9 +10,12 @@ import com.crazyfluff.shellfstudy.core.database.StudyMaterialDao
 import com.crazyfluff.shellfstudy.core.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.core.database.SyncStateDao
 import com.crazyfluff.shellfstudy.core.database.SyncStateEntity
-import com.crazyfluff.shellfstudy.core.database.reviewhistory.DailyReviewCount
-import com.crazyfluff.shellfstudy.core.database.reviewhistory.ReviewLogDao
-import com.crazyfluff.shellfstudy.core.database.reviewhistory.ReviewLogEntity
+import com.crazyfluff.shellfstudy.core.database.outbox.OutboxDao
+import com.crazyfluff.shellfstudy.core.database.outbox.OutboxStatus
+import com.crazyfluff.shellfstudy.core.database.outbox.PendingLessonStartEntity
+import com.crazyfluff.shellfstudy.core.database.outbox.PendingReviewSubmissionEntity
+import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDao
+import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDayEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -25,6 +28,14 @@ class FakeSrsSystemDao : SrsSystemDao {
     }
 
     override fun observeAll(): Flow<List<SrsSystemEntity>> = systems.map { it.values.toList() }
+
+    override suspend fun getById(id: Long): SrsSystemEntity? = systems.value[id]
+
+    /** Test-only synchronous seed helper — avoids every call site needing `runTest`/suspend just to
+     *  set up SRS system fixtures before exercising optimistic-grading logic. */
+    fun seed(vararg entities: SrsSystemEntity) {
+        systems.value = systems.value + entities.associateBy { it.id }
+    }
 }
 
 class FakeReviewStatisticDao : ReviewStatisticDao {
@@ -73,23 +84,65 @@ class FakeSyncStateDao : SyncStateDao {
     }
 }
 
-class FakeReviewLogDao : ReviewLogDao {
-    private val entries = MutableStateFlow<List<ReviewLogEntity>>(emptyList())
+class FakeStudyActivityDao : StudyActivityDao {
+    private val activeDays = MutableStateFlow<Set<String>>(emptySet())
 
-    override suspend fun insert(entry: ReviewLogEntity) {
-        entries.value = entries.value + entry.copy(id = entries.value.size + 1L)
+    override suspend fun markActive(entity: StudyActivityDayEntity) {
+        activeDays.value = activeDays.value + entity.date
     }
 
-    override fun observeDailyCounts(sinceIso: String): Flow<List<DailyReviewCount>> = entries.map { list ->
-        list.filter { it.reviewedAt >= sinceIso }
-            .groupingBy { it.reviewedAt.substring(0, 10) }
-            .eachCount()
-            .map { (day, count) -> DailyReviewCount(day, count) }
+    override fun observeActiveDays(): Flow<List<String>> = activeDays.map { it.sortedDescending() }
+}
+
+class FakeOutboxDao : OutboxDao {
+    private val reviewSubmissions = MutableStateFlow<Map<Long, PendingReviewSubmissionEntity>>(emptyMap())
+    private val lessonStarts = MutableStateFlow<Map<Long, PendingLessonStartEntity>>(emptyMap())
+    private var nextReviewId = 1L
+    private var nextLessonId = 1L
+
+    override suspend fun insertReviewSubmission(entity: PendingReviewSubmissionEntity): Long {
+        val id = nextReviewId++
+        reviewSubmissions.value = reviewSubmissions.value + (id to entity.copy(id = id))
+        return id
     }
 
-    override fun observeCountSince(sinceIso: String): Flow<Int> = entries.map { list ->
-        list.count { it.reviewedAt >= sinceIso }
+    override suspend fun insertLessonStart(entity: PendingLessonStartEntity): Long {
+        val id = nextLessonId++
+        lessonStarts.value = lessonStarts.value + (id to entity.copy(id = id))
+        return id
     }
 
-    override fun observeTotalCount(): Flow<Int> = entries.map { it.size }
+    override suspend fun getPendingReviewSubmissions(): List<PendingReviewSubmissionEntity> =
+        reviewSubmissions.value.values.filter { it.status == OutboxStatus.PENDING.name }.sortedBy { it.id }
+
+    override suspend fun getPendingLessonStarts(): List<PendingLessonStartEntity> =
+        lessonStarts.value.values.filter { it.status == OutboxStatus.PENDING.name }.sortedBy { it.id }
+
+    override suspend fun deleteReviewSubmission(entity: PendingReviewSubmissionEntity) {
+        reviewSubmissions.value = reviewSubmissions.value - entity.id
+    }
+
+    override suspend fun deleteLessonStart(entity: PendingLessonStartEntity) {
+        lessonStarts.value = lessonStarts.value - entity.id
+    }
+
+    override suspend fun markReviewSubmissionTerminal(id: Long, message: String?) {
+        val entity = reviewSubmissions.value[id] ?: return
+        reviewSubmissions.value = reviewSubmissions.value + (id to entity.copy(status = OutboxStatus.FAILED_TERMINAL.name, lastErrorMessage = message))
+    }
+
+    override suspend fun markLessonStartTerminal(id: Long, message: String?) {
+        val entity = lessonStarts.value[id] ?: return
+        lessonStarts.value = lessonStarts.value + (id to entity.copy(status = OutboxStatus.FAILED_TERMINAL.name, lastErrorMessage = message))
+    }
+
+    override fun observePendingReviewSubmissionCount(): Flow<Int> =
+        reviewSubmissions.map { map -> map.values.count { it.status == OutboxStatus.PENDING.name } }
+
+    override fun observePendingLessonStartCount(): Flow<Int> =
+        lessonStarts.map { map -> map.values.count { it.status == OutboxStatus.PENDING.name } }
+
+    /** Test-only: every row regardless of status, for asserting on terminal/deleted state. */
+    fun allReviewSubmissions(): List<PendingReviewSubmissionEntity> = reviewSubmissions.value.values.sortedBy { it.id }
+    fun allLessonStarts(): List<PendingLessonStartEntity> = lessonStarts.value.values.sortedBy { it.id }
 }

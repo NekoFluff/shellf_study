@@ -1,11 +1,14 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
+import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.network.MeaningData
 import com.crazyfluff.shellfstudy.core.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.core.network.PronunciationAudioMetadataData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
+import com.crazyfluff.shellfstudy.core.network.ReviewResultData
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
@@ -132,6 +135,94 @@ class AssignmentRepositoryTest {
         assertThat(request.method).isEqualTo("PUT")
         assertThat(request.path).contains("/assignments/777/start")
     }
+
+    @Test
+    fun `applyOptimisticReviewResult patches the cached stage without any network call`() = runTest {
+        seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
+        repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 3)))
+
+        val rankChange = repository.applyOptimisticReviewResult(101, ReviewGrade(meaningCorrect = true, readingCorrect = true))
+
+        assertThat(server.requestCount).isEqualTo(0)
+        assertThat(rankChange?.from?.raw).isEqualTo(3)
+        assertThat(rankChange?.to?.raw).isEqualTo(4)
+        assertThat(repositories.assignmentDao.getById(101)?.srsStage).isEqualTo(4)
+    }
+
+    @Test
+    fun `applyOptimisticReviewResult demotes the stage on an incorrect answer`() = runTest {
+        seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
+        repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 6)))
+
+        val rankChange = repository.applyOptimisticReviewResult(101, ReviewGrade(meaningCorrect = false, readingCorrect = true))
+
+        assertThat(rankChange?.to?.raw).isEqualTo(4)
+        assertThat(repositories.assignmentDao.getById(101)?.srsStage).isEqualTo(4)
+    }
+
+    @Test
+    fun `applyOptimisticReviewResult returns null when the assignment isn't cached yet`() = runTest {
+        val rankChange = repository.applyOptimisticReviewResult(999, ReviewGrade(meaningCorrect = true, readingCorrect = true))
+
+        assertThat(rankChange).isNull()
+    }
+
+    @Test
+    fun `applyOptimisticLessonStart patches from locked to the srs system's starting stage`() = runTest {
+        seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
+        repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 0)))
+
+        val rankChange = repository.applyOptimisticLessonStart(101)
+
+        assertThat(rankChange?.from?.raw).isEqualTo(0)
+        assertThat(rankChange?.to?.raw).isEqualTo(1)
+        assertThat(repositories.assignmentDao.getById(101)?.srsStage).isEqualTo(1)
+    }
+
+    @Test
+    fun `reconcileAfterReviewResult overwrites the local prediction with the server-confirmed stage`() = runTest {
+        seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
+        repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 4)))
+        // Pretend a concurrent submission elsewhere already advanced this further than our own
+        // local prediction would have — the server's value must win regardless.
+        repository.reconcileAfterReviewResult(
+            ReviewResultData(
+                assignmentId = 101, subjectId = 1, startingSrsStage = 4, endingSrsStage = 6,
+                incorrectMeaningAnswers = 0, incorrectReadingAnswers = 0, createdAt = "2026-01-01T00:00:00.000000Z"
+            )
+        )
+
+        assertThat(repositories.assignmentDao.getById(101)?.srsStage).isEqualTo(6)
+    }
+
+    @Test
+    fun `refetchAssignment re-fetches and upserts a single assignment from the network`() = runTest {
+        repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 2)))
+        server.enqueue(
+            jsonResponse(
+                """
+                {
+                  "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
+                  "data_updated_at": "2026-01-01T00:00:00.000000Z",
+                  "data": {
+                    "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "radical",
+                    "srs_stage": 5, "hidden": false
+                  }
+                }
+                """.trimIndent()
+            )
+        )
+
+        val result = repository.refetchAssignment(101)
+
+        assertThat(result).isInstanceOf(ApiResult.Success::class.java)
+        assertThat(repositories.assignmentDao.getById(101)?.srsStage).isEqualTo(5)
+    }
+
+    private fun seedAssignment(id: Long, subjectId: Long, srsStage: Int) = AssignmentEntity(
+        id = id, subjectId = subjectId, subjectType = "radical", srsStage = srsStage,
+        createdAt = "2026-01-01T00:00:00.000000Z", hidden = false
+    )
 
     @Test
     fun `observeLessonsCompletedToday counts assignments started today`() = runTest {

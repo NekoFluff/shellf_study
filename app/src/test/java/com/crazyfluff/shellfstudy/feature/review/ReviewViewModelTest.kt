@@ -7,12 +7,14 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.audio.PlaybackState
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
-import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.core.data.StatsRepository
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
@@ -37,23 +39,26 @@ class ReviewViewModelTest {
     val tempFolder = TemporaryFolder()
 
     private lateinit var server: MockWebServer
-    private lateinit var waniKaniRepository: WaniKaniRepository
     private lateinit var assignmentRepository: AssignmentRepository
+    private lateinit var outboxRepository: OutboxRepository
+    private lateinit var statsRepository: StatsRepository
     private lateinit var reviewSessionRepository: ReviewSessionRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var pronunciationAudioPlayer: FakePronunciationAudioPlayer
+    private lateinit var repositories: TestRepositories
 
     @Before
     fun setUp() {
         server = MockWebServer()
         server.start()
-        val repositories = buildTestRepositories(server.url("/").toString())
-        waniKaniRepository = repositories.waniKaniRepository
+        repositories = buildTestRepositories(server.url("/").toString())
         assignmentRepository = repositories.assignmentRepository
+        statsRepository = repositories.statsRepository
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+        outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         val settingsDataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
             produceFile = { tempFolder.newFile("settings.preferences_pb") }
         )
@@ -67,7 +72,7 @@ class ReviewViewModelTest {
     }
 
     private fun createViewModel() = ReviewViewModel(
-        waniKaniRepository, assignmentRepository, reviewSessionRepository, pronunciationAudioPlayer, settingsRepository
+        assignmentRepository, outboxRepository, statsRepository, reviewSessionRepository, pronunciationAudioPlayer, settingsRepository
     )
 
     /** Routes by path — refreshing the review queue now syncs subjects and assignments, in either order. */
@@ -117,7 +122,7 @@ class ReviewViewModelTest {
 
     @Test
     fun `a rank change from completing an item surfaces once and clears on continue`() = runTest {
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()), jsonResponse(reviewResultJsonWithRankChange()))
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
@@ -129,19 +134,48 @@ class ReviewViewModelTest {
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            // The rank change arrives asynchronously — submitReview is a separate network call not
-            // strictly ordered against the feedback update, so wait until both have landed rather
-            // than assuming a fixed number of emissions.
+            // The rank change arrives asynchronously — the optimistic patch runs in its own
+            // coroutine, not strictly ordered against the feedback update, so wait until both have
+            // landed rather than assuming a fixed number of emissions.
             var settled = awaitItem()
             while (settled.feedback == null || settled.rankChange == null) settled = awaitItem()
             assertThat(settled.feedback?.isCorrect).isTrue()
-            assertThat(settled.rankChange).isEqualTo(RankChange(SrsStage.APPRENTICE_3, SrsStage.GURU_1))
+            // radicalAssignmentsJson fixes the cached assignment at srs_stage 1 (Apprentice I); the
+            // optimistic local prediction is one stage up on a correct answer.
+            assertThat(settled.rankChange).isEqualTo(RankChange(SrsStage.APPRENTICE_1, SrsStage.APPRENTICE_2))
 
             viewModel.onContinue()
             val finalState = awaitItem()
             assertThat(finalState.isSessionComplete).isTrue()
             assertThat(finalState.rankChange).isNull()
         }
+    }
+
+    @Test
+    fun `completing a review durably queues the submission in the outbox instead of calling the network`() = runTest {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            var settled = awaitItem()
+            while (settled.feedback == null) settled = awaitItem()
+        }
+
+        val queued = repositories.outboxDao.allReviewSubmissions()
+        assertThat(queued).hasSize(1)
+        assertThat(queued.first().assignmentId).isEqualTo(101L)
+        assertThat(queued.first().incorrectMeaningAnswers).isEqualTo(0)
+        assertThat(repositories.outboxSyncScheduler.requestCount).isEqualTo(1)
+        // No POST /reviews should ever have been made from the ViewModel path — the network call is
+        // now exclusively the background sync worker's job.
+        assertThat(server.requestCount).isAtMost(2) // just the assignments + subjects sync
     }
 
     @Test
@@ -600,26 +634,15 @@ class ReviewViewModelTest {
         {"object": "collection", "url": "https://api.wanikani.com/v2/x", "total_count": 0, "data": []}
     """.trimIndent()
 
-    /** Same stage in and out — no rank-change emission, so tests unrelated to that feature don't
-     *  need to account for an extra uiState update. See [reviewResultJsonWithRankChange] for that. */
+    /** The ViewModel no longer calls POST /reviews at all (that's the background sync worker's
+     *  job), so this response is never actually consumed — it just needs to exist as the
+     *  dispatcher's fallback branch for that path. */
     private fun reviewResultJson() = """
         {
           "id": 1, "object": "review", "url": "https://api.wanikani.com/v2/reviews/1",
           "data_updated_at": "2026-01-01T00:00:00.000000Z",
           "data": {
             "assignment_id": 555, "subject_id": 440, "starting_srs_stage": 3, "ending_srs_stage": 3,
-            "incorrect_meaning_answers": 0, "incorrect_reading_answers": 0,
-            "created_at": "2026-01-01T00:00:00.000000Z"
-          }
-        }
-    """.trimIndent()
-
-    private fun reviewResultJsonWithRankChange() = """
-        {
-          "id": 1, "object": "review", "url": "https://api.wanikani.com/v2/reviews/1",
-          "data_updated_at": "2026-01-01T00:00:00.000000Z",
-          "data": {
-            "assignment_id": 555, "subject_id": 440, "starting_srs_stage": 3, "ending_srs_stage": 5,
             "incorrect_meaning_answers": 0, "incorrect_reading_answers": 0,
             "created_at": "2026-01-01T00:00:00.000000Z"
           }

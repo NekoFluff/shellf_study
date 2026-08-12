@@ -77,6 +77,41 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun showsPendingSyncBanner_whenReviewsAreQueuedButOnline() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(
+                    isRefreshing = false, pendingSyncCount = 3,
+                    username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
+                ),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.LOADING_INDICATOR).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.OFFLINE_BANNER).assertCountEquals(0)
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.PENDING_SYNC_BANNER).assertIsDisplayed()
+        composeTestRule.onNodeWithText("3 items waiting to sync.").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsSyncBlockedBanner_insteadOfOfflineOrPendingSync_whenBothApply() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(
+                    isRefreshing = false, isOffline = true, pendingSyncCount = 2, syncBlockedOnAuth = true,
+                    username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
+                ),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_BLOCKED_BANNER).assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.OFFLINE_BANNER).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.PENDING_SYNC_BANNER).assertCountEquals(0)
+    }
+
+    @Test
     fun showsUserInfoAndCounts_whenLoaded() {
         composeTestRule.setContent {
             DashboardScreen(

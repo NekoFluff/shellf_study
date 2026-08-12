@@ -26,6 +26,9 @@ interface AssignmentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(assignments: List<AssignmentEntity>)
 
+    @Query("SELECT * FROM assignments WHERE id = :id")
+    suspend fun getById(id: Long): AssignmentEntity?
+
     /** Reviews available right now: unlocked, started, and past their SRS-scheduled availableAt. */
     @Query("SELECT * FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt <= :nowIso ORDER BY availableAt ASC")
     fun observeDueForReview(nowIso: String): Flow<List<AssignmentEntity>>

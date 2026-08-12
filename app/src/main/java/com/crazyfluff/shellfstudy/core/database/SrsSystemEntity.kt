@@ -27,4 +27,7 @@ interface SrsSystemDao {
 
     @Query("SELECT * FROM srs_systems")
     fun observeAll(): Flow<List<SrsSystemEntity>>
+
+    @Query("SELECT * FROM srs_systems WHERE id = :id")
+    suspend fun getById(id: Long): SrsSystemEntity?
 }

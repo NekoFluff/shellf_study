@@ -88,4 +88,9 @@ interface WaniKaniApi {
         @Path("id") assignmentId: Long,
         @Body request: StartAssignmentRequest = StartAssignmentRequest()
     ): WkResourceItem<AssignmentData>
+
+    /** Targeted single-assignment refetch — used to reconcile local state after a pending outbox
+     *  mutation is terminally rejected and there's no authoritative response to patch in locally. */
+    @GET("assignments/{id}")
+    suspend fun getAssignment(@Path("id") assignmentId: Long): WkResourceItem<AssignmentData>
 }

@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
-import com.crazyfluff.shellfstudy.core.network.ReviewResultData
+import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDayEntity
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
@@ -11,9 +11,7 @@ import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 
 class StatsRepositoryTest {
 
@@ -78,22 +76,22 @@ class StatsRepositoryTest {
     }
 
     @Test
-    fun `logReviewEvent then observeReviewsCompletedStats reflects the logged review`() = runTest {
-        repository.logReviewEvent(reviewResult(createdAt = Instant.now().toString()))
+    fun `markStudyActivityToday marks today active exactly once even if called twice`() = runTest {
+        repository.markStudyActivityToday()
+        repository.markStudyActivityToday()
 
-        repository.observeReviewsCompletedStats().test {
-            val stats = awaitItem()
-            assertThat(stats.today).isEqualTo(1)
-            assertThat(stats.allTime).isEqualTo(1)
+        repository.observeStudyStreak().test {
+            val streak = awaitItem()
+            assertThat(streak.isActiveToday).isTrue()
+            assertThat(streak.currentStreakDays).isEqualTo(1)
         }
     }
 
     @Test
     fun `study streak counts consecutive days ending today`() = runTest {
-        val zone = ZoneId.systemDefault()
         val today = LocalDate.now()
-        repository.logReviewEvent(reviewResult(createdAt = today.atStartOfDay(zone).toInstant().toString()))
-        repository.logReviewEvent(reviewResult(createdAt = today.minusDays(1).atStartOfDay(zone).toInstant().toString()))
+        repositories.studyActivityDao.markActive(StudyActivityDayEntity(today.toString()))
+        repositories.studyActivityDao.markActive(StudyActivityDayEntity(today.minusDays(1).toString()))
 
         repository.observeStudyStreak().test {
             val streak = awaitItem()
@@ -102,15 +100,18 @@ class StatsRepositoryTest {
         }
     }
 
-    private fun reviewResult(createdAt: String) = ReviewResultData(
-        assignmentId = 1,
-        subjectId = 440,
-        startingSrsStage = 3,
-        endingSrsStage = 4,
-        incorrectMeaningAnswers = 0,
-        incorrectReadingAnswers = 0,
-        createdAt = createdAt
-    )
+    @Test
+    fun `study streak is broken by a gap, even if today is active`() = runTest {
+        val today = LocalDate.now()
+        repositories.studyActivityDao.markActive(StudyActivityDayEntity(today.toString()))
+        repositories.studyActivityDao.markActive(StudyActivityDayEntity(today.minusDays(2).toString()))
+
+        repository.observeStudyStreak().test {
+            val streak = awaitItem()
+            assertThat(streak.isActiveToday).isTrue()
+            assertThat(streak.currentStreakDays).isEqualTo(1)
+        }
+    }
 
     private fun levelProgressionsJson(startedAt: String) = """
         {

@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
+import com.crazyfluff.shellfstudy.core.data.OutboxRepository
+import com.crazyfluff.shellfstudy.core.data.PersistedLessonQuestion
+import com.crazyfluff.shellfstudy.core.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
@@ -11,7 +15,6 @@ import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.network.SubjectType
@@ -70,6 +73,8 @@ private data class PendingLessonQuestion(val item: LessonItem, val type: LessonQ
 @HiltViewModel
 class LessonViewModel @Inject constructor(
     private val assignmentRepository: AssignmentRepository,
+    private val outboxRepository: OutboxRepository,
+    private val lessonSessionRepository: LessonSessionRepository,
     private val pitchAccentRepository: PitchAccentRepository,
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
@@ -81,9 +86,10 @@ class LessonViewModel @Inject constructor(
 
     private val quizQueue = ArrayDeque<PendingLessonQuestion>()
     private val startedAssignmentIds = mutableSetOf<Long>()
+    private var totalQuizCount = 0
 
     init {
-        load()
+        loadOrResume()
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
                 _uiState.update { it.copy(showPitchAccent = settings.showPitchAccent) }
@@ -91,31 +97,82 @@ class LessonViewModel @Inject constructor(
         }
     }
 
+    /** Explicit fresh fetch — bound to the error screen's retry action, so it always discards any
+     *  persisted quiz-in-progress rather than resuming a session that may be what's broken. */
     fun load() {
         viewModelScope.launch {
             _uiState.update { LessonUiState(isLoading = true) }
-            quizQueue.clear()
-            startedAssignmentIds.clear()
+            lessonSessionRepository.clear()
+            fetchFreshQueue()
+        }
+    }
 
-            when (val result = assignmentRepository.refreshLessonQueue()) {
-                is ApiResult.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
-                is ApiResult.Success -> {
-                    val items = assignmentRepository.observeLessonQueue().first()
-                        .sortedWith(compareBy({ it.level }, { it.subjectType.ordinal }, { it.assignmentId }))
-                    if (items.isEmpty()) {
-                        _uiState.update { it.copy(isLoading = false, hasNoLessonsAvailable = true) }
-                    } else {
-                        val defaultSelection = items.take(DEFAULT_LESSON_SELECTION_SIZE)
-                            .map { it.assignmentId }
-                            .toSet()
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                phase = LessonPhase.SELECT,
-                                availableLessons = items,
-                                selectedAssignmentIds = defaultSelection
-                            )
-                        }
+    /** Resumes a persisted in-progress quiz if one exists, otherwise fetches a fresh queue. */
+    private fun loadOrResume() {
+        viewModelScope.launch {
+            _uiState.update { LessonUiState(isLoading = true) }
+            val persisted = lessonSessionRepository.load()
+            if (persisted != null) {
+                resumeFromPersisted(persisted)
+            } else {
+                fetchFreshQueue()
+            }
+        }
+    }
+
+    private suspend fun resumeFromPersisted(persisted: PersistedLessonSession) {
+        val itemsById = assignmentRepository.observeLessonQueue().first().associateBy { it.assignmentId }
+
+        // The cache backing this persisted session is gone (e.g. app storage was cleared) — fall
+        // back to a fresh fetch rather than show a broken quiz.
+        if (persisted.quizQueue.any { it.assignmentId !in itemsById }) {
+            lessonSessionRepository.clear()
+            fetchFreshQueue()
+            return
+        }
+
+        quizQueue.clear()
+        persisted.quizQueue.forEach { entry ->
+            quizQueue.add(PendingLessonQuestion(itemsById.getValue(entry.assignmentId), LessonQuestionType.valueOf(entry.questionType)))
+        }
+        startedAssignmentIds.clear()
+        totalQuizCount = persisted.totalQuizCount
+        val next = quizQueue.firstOrNull()
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                phase = LessonPhase.QUIZ,
+                totalQuizCount = totalQuizCount,
+                remainingQuizCount = quizQueue.size,
+                currentQuizItem = next?.item,
+                currentQuestionType = next?.type,
+                isSessionComplete = next == null
+            )
+        }
+    }
+
+    private suspend fun fetchFreshQueue() {
+        quizQueue.clear()
+        startedAssignmentIds.clear()
+
+        when (val result = assignmentRepository.refreshLessonQueue()) {
+            is ApiResult.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
+            is ApiResult.Success -> {
+                val items = assignmentRepository.observeLessonQueue().first()
+                    .sortedWith(compareBy({ it.level }, { it.subjectType.ordinal }, { it.assignmentId }))
+                if (items.isEmpty()) {
+                    _uiState.update { it.copy(isLoading = false, hasNoLessonsAvailable = true) }
+                } else {
+                    val defaultSelection = items.take(DEFAULT_LESSON_SELECTION_SIZE)
+                        .map { it.assignmentId }
+                        .toSet()
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            phase = LessonPhase.SELECT,
+                            availableLessons = items,
+                            selectedAssignmentIds = defaultSelection
+                        )
                     }
                 }
             }
@@ -235,13 +292,13 @@ class LessonViewModel @Inject constructor(
             questionTypesFor(item).forEach { type -> quizQueue.add(PendingLessonQuestion(item, type)) }
         }
         quizQueue.shuffle()
-        val total = quizQueue.size
+        totalQuizCount = quizQueue.size
         val next = quizQueue.firstOrNull()
         _uiState.update {
             it.copy(
                 phase = LessonPhase.QUIZ,
-                totalQuizCount = total,
-                remainingQuizCount = total,
+                totalQuizCount = totalQuizCount,
+                remainingQuizCount = totalQuizCount,
                 currentQuizItem = next?.item,
                 currentQuestionType = next?.type,
                 answerInput = "",
@@ -249,6 +306,7 @@ class LessonViewModel @Inject constructor(
                 isSessionComplete = next == null
             )
         }
+        viewModelScope.launch { persistCurrentState() }
     }
 
     private fun questionTypesFor(item: LessonItem): List<LessonQuestionType> =
@@ -274,14 +332,16 @@ class LessonViewModel @Inject constructor(
         val type = state.currentQuestionType ?: return
         if (state.answerInput.isBlank()) return
 
-        val candidates = candidatesFor(item, type)
-        if (type == LessonQuestionType.MEANING) {
-            val match = CloseEnoughMatcher.match(state.answerInput, candidates)
-            gradeAnswer(item, type, match.isMatch, candidates, wasCloseMatch = match.isMatch && !match.isExact)
-        } else {
-            val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
-            val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
-            gradeAnswer(item, type, isCorrect, candidates)
+        viewModelScope.launch {
+            val candidates = candidatesFor(item, type)
+            if (type == LessonQuestionType.MEANING) {
+                val match = CloseEnoughMatcher.match(state.answerInput, candidates)
+                gradeAnswer(item, type, match.isMatch, candidates, wasCloseMatch = match.isMatch && !match.isExact)
+            } else {
+                val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
+                val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
+                gradeAnswer(item, type, isCorrect, candidates)
+            }
         }
     }
 
@@ -300,10 +360,10 @@ class LessonViewModel @Inject constructor(
         val item = state.currentQuizItem ?: return
         val type = state.currentQuestionType ?: return
         val candidates = candidatesFor(item, type)
-        gradeAnswer(item, type, isCorrect = false, candidates)
+        viewModelScope.launch { gradeAnswer(item, type, isCorrect = false, candidates) }
     }
 
-    private fun gradeAnswer(
+    private suspend fun gradeAnswer(
         item: LessonItem,
         type: LessonQuestionType,
         isCorrect: Boolean,
@@ -311,33 +371,49 @@ class LessonViewModel @Inject constructor(
         wasCloseMatch: Boolean = false
     ) {
         quizQueue.removeFirstOrNull()
-        if (!isCorrect) {
+        val justCompletedItem = if (!isCorrect) {
             quizQueue.addLast(PendingLessonQuestion(item, type))
-        } else if (quizQueue.none { it.item.assignmentId == item.assignmentId }) {
+            false
+        } else {
             // No more pending questions for this item — it's been answered correctly on every
             // question type it has, so the lesson for it is done.
-            markStarted(item)
+            quizQueue.none { it.item.assignmentId == item.assignmentId }
         }
+
+        // Computed before the uiState update (not in a separate launch) so the rank-change and the
+        // feedback land in one emission — with the local write being fully synchronous now (no
+        // network), a decoupled launch would just add a same-tick second emission for no benefit.
+        val newRankChange = if (justCompletedItem) markStarted(item) else null
 
         _uiState.update {
             it.copy(
                 feedback = LessonAnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
-                remainingQuizCount = quizQueue.size
+                remainingQuizCount = quizQueue.size,
+                rankChange = newRankChange ?: it.rankChange
             )
         }
+        persistCurrentState()
     }
 
-    private fun markStarted(item: LessonItem) {
-        if (!startedAssignmentIds.add(item.assignmentId)) return
-        viewModelScope.launch {
-            val result = assignmentRepository.startAssignment(item.assignmentId)
-            if (result is ApiResult.Success) {
-                // Every lesson item starts the same way — locked/unstarted straight to Apprentice I —
-                // so unlike a review's SRS-stage change, no server round-trip data is needed to know
-                // the transition; only whether it actually succeeded.
-                _uiState.update { it.copy(rankChange = RankChange(SrsStage.LOCKED, SrsStage.APPRENTICE_1)) }
-            }
-        }
+    /**
+     * Local-write-first, same idea as [com.crazyfluff.shellfstudy.feature.review.ReviewViewModel.submitReviewResult]:
+     * durably queues the start and patches the SRS stage optimistically, no network call (and so
+     * nothing to fail) on this path.
+     */
+    private suspend fun markStarted(item: LessonItem): RankChange? {
+        if (!startedAssignmentIds.add(item.assignmentId)) return null
+        val rankChange = assignmentRepository.applyOptimisticLessonStart(item.assignmentId)
+        outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
+        return rankChange?.takeIf { it.from != it.to }
+    }
+
+    private suspend fun persistCurrentState() {
+        lessonSessionRepository.save(
+            PersistedLessonSession(
+                quizQueue = quizQueue.map { PersistedLessonQuestion(it.item.assignmentId, it.type.name) },
+                totalQuizCount = totalQuizCount
+            )
+        )
     }
 
     fun onContinue() {
@@ -347,6 +423,7 @@ class LessonViewModel @Inject constructor(
     private fun advanceQuiz() {
         val next = quizQueue.firstOrNull()
         if (next == null) {
+            viewModelScope.launch { lessonSessionRepository.clear() }
             _uiState.update {
                 it.copy(isSessionComplete = true, currentQuizItem = null, currentQuestionType = null, rankChange = null)
             }

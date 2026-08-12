@@ -1,6 +1,5 @@
 package com.crazyfluff.shellfstudy.core.data
 
-import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
@@ -79,14 +78,15 @@ class WaniKaniRepositoryTest {
     }
 
     @Test
-    fun `submitReview appends the result to the local review log`() = runTest {
+    fun `submitReview returns the parsed result without any local DB side effect`() = runTest {
         server.enqueue(jsonResponse(REVIEW_RESULT_JSON))
 
-        repository.submitReview(assignmentId = 555, grade = ReviewGrade(meaningCorrect = true, readingCorrect = false))
+        val result = repository.submitReview(assignmentId = 555, grade = ReviewGrade(meaningCorrect = true, readingCorrect = false))
 
-        repositories.statsRepository.observeReviewsCompletedStats().test {
-            assertThat(awaitItem().allTime).isEqualTo(1)
-        }
+        assertThat(result).isInstanceOf(ApiResult.Success::class.java)
+        val data = (result as ApiResult.Success).data
+        assertThat(data.assignmentId).isEqualTo(555)
+        assertThat(data.endingSrsStage).isEqualTo(2)
     }
 
     private companion object {

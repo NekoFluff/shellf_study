@@ -13,8 +13,7 @@ import javax.inject.Singleton
 /** Account/session facade — user profile, dashboard summary counts, and review submission. */
 @Singleton
 class WaniKaniRepository @Inject constructor(
-    private val api: WaniKaniApi,
-    private val statsRepository: StatsRepository
+    private val api: WaniKaniApi
 ) {
     suspend fun fetchUser(): ApiResult<WaniKaniUser> = safeApiCall {
         val response = api.getUser()
@@ -33,8 +32,10 @@ class WaniKaniRepository @Inject constructor(
         )
     }
 
+    /** Network-only — no local DB side effects. Only called by [com.crazyfluff.shellfstudy.core.sync.OutboxSyncWorker];
+     *  the UI path writes to the outbox instead (see [OutboxRepository]) and never calls this directly. */
     suspend fun submitReview(assignmentId: Long, grade: ReviewGrade): ApiResult<ReviewResultData> = safeApiCall {
-        val result = api.submitReview(
+        api.submitReview(
             ReviewSubmissionRequest(
                 ReviewSubmissionBody(
                     assignmentId = assignmentId,
@@ -43,7 +44,5 @@ class WaniKaniRepository @Inject constructor(
                 )
             )
         ).data
-        statsRepository.logReviewEvent(result)
-        result
     }
 }

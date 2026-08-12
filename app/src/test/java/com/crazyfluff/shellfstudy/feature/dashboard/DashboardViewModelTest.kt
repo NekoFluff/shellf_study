@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
@@ -102,6 +103,7 @@ class DashboardViewModelTest {
                     assignmentRepository = repositories.assignmentRepository,
                     statsRepository = repositories.statsRepository,
                     dashboardCacheRepository = dashboardCacheRepository,
+                    outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore),
                     syncOrchestrator = repositories.syncOrchestrator,
                     syncScheduler = syncScheduler,
                     pitchAccentScrapeScheduler = pitchAccentScrapeScheduler,

@@ -15,4 +15,7 @@ abstract class SyncModule {
     abstract fun bindPitchAccentScrapeScheduler(
         impl: WorkManagerPitchAccentScrapeScheduler
     ): PitchAccentScrapeScheduler
+
+    @Binds
+    abstract fun bindOutboxSyncScheduler(impl: WorkManagerOutboxSyncScheduler): OutboxSyncScheduler
 }

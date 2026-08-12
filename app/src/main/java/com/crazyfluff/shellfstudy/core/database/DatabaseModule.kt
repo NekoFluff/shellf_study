@@ -2,10 +2,13 @@ package com.crazyfluff.shellfstudy.core.database
 
 import android.content.Context
 import androidx.room.Room
+import com.crazyfluff.shellfstudy.core.database.outbox.OutboxDao
+import com.crazyfluff.shellfstudy.core.database.outbox.OutboxDatabase
 import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentCacheDao
 import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentDatabase
-import com.crazyfluff.shellfstudy.core.database.reviewhistory.ReviewHistoryDatabase
-import com.crazyfluff.shellfstudy.core.database.reviewhistory.ReviewLogDao
+import com.crazyfluff.shellfstudy.core.database.studyactivity.STUDY_ACTIVITY_MIGRATION_1_2
+import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDao
+import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -50,14 +53,28 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideReviewHistoryDatabase(@ApplicationContext context: Context): ReviewHistoryDatabase =
-        // Not destructive — this is the only local record of review history and can't be
-        // re-fetched from the API (see ReviewHistoryDatabase's doc comment).
-        Room.databaseBuilder(context, ReviewHistoryDatabase::class.java, "review_history.db")
+    fun provideStudyActivityDatabase(@ApplicationContext context: Context): StudyActivityDatabase =
+        // Not destructive — this is the only local record of study activity and can't be
+        // re-fetched from the API (see StudyActivityDatabase's doc comment). Physical file name is
+        // unchanged from this database's original review-history-log incarnation, so the
+        // Migration(1, 2) that shrinks it runs in place rather than needing a cross-file move.
+        Room.databaseBuilder(context, StudyActivityDatabase::class.java, "review_history.db")
+            .addMigrations(STUDY_ACTIVITY_MIGRATION_1_2)
             .build()
 
     @Provides
-    fun provideReviewLogDao(db: ReviewHistoryDatabase): ReviewLogDao = db.reviewLogDao()
+    fun provideStudyActivityDao(db: StudyActivityDatabase): StudyActivityDao = db.studyActivityDao()
+
+    @Provides
+    @Singleton
+    fun provideOutboxDatabase(@ApplicationContext context: Context): OutboxDatabase =
+        // Not destructive — pending mutations must survive a schema bump (see OutboxDatabase's doc
+        // comment). Version 1 has no back-compat burden yet, so no Migration is needed.
+        Room.databaseBuilder(context, OutboxDatabase::class.java, "outbox.db")
+            .build()
+
+    @Provides
+    fun provideOutboxDao(db: OutboxDatabase): OutboxDao = db.outboxDao()
 
     @Provides
     @Singleton

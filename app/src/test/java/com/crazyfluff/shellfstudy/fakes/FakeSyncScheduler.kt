@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.fakes
 
+import com.crazyfluff.shellfstudy.core.sync.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
 
 /** No-op stand-in for [SyncScheduler] — the real one needs WorkManager/a real Context to run. */
@@ -15,5 +16,15 @@ class FakeSyncScheduler : SyncScheduler {
 
     override fun cancelPeriodicSync() {
         cancelCallCount++
+    }
+}
+
+/** No-op stand-in for [OutboxSyncScheduler] — the real one needs WorkManager/a real Context to run. */
+class FakeOutboxSyncScheduler : OutboxSyncScheduler {
+    var requestCount = 0
+        private set
+
+    override fun requestSync() {
+        requestCount++
     }
 }
