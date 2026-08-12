@@ -80,6 +80,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
@@ -91,6 +93,8 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
@@ -138,6 +142,21 @@ object ReviewScreenTestTags {
     const val SESSION_TIMER_TEXT = "review_session_timer_text"
 }
 
+sealed interface ReviewScreenEvent {
+    data class AnswerInputChange(val value: String) : ReviewScreenEvent
+    data object Submit : ReviewScreenEvent
+    data object DontKnow : ReviewScreenEvent
+    data object Continue : ReviewScreenEvent
+    data object Undo : ReviewScreenEvent
+    data object ToggleDetails : ReviewScreenEvent
+    data object Retry : ReviewScreenEvent
+    data object WrapUp : ReviewScreenEvent
+    data object Abandon : ReviewScreenEvent
+    data object Done : ReviewScreenEvent
+    data object Back : ReviewScreenEvent
+    data class SearchQueryChange(val query: String) : ReviewScreenEvent
+}
+
 @Composable
 fun ReviewRoute(
     onSessionComplete: () -> Unit,
@@ -154,19 +173,23 @@ fun ReviewRoute(
 
     ReviewScreen(
         uiState = uiState,
-        onAnswerInputChange = viewModel::onAnswerInputChange,
-        onSubmit = viewModel::submitAnswer,
-        onDontKnow = viewModel::dontKnowAnswer,
-        onContinue = viewModel::onContinue,
-        onUndo = viewModel::undoLastAnswer,
-        onToggleDetails = viewModel::toggleDetails,
-        onRetry = viewModel::loadOrResume,
-        onWrapUp = viewModel::wrapUp,
-        onAbandon = viewModel::abandonSession,
-        onDone = onSessionComplete,
-        onBack = onBack,
-        searchUiState = searchUiState,
-        onSearchQueryChange = searchViewModel::onQueryChange
+        onEvent = { event ->
+            when (event) {
+                is ReviewScreenEvent.AnswerInputChange -> viewModel.onAnswerInputChange(event.value)
+                ReviewScreenEvent.Submit -> viewModel.submitAnswer()
+                ReviewScreenEvent.DontKnow -> viewModel.dontKnowAnswer()
+                ReviewScreenEvent.Continue -> viewModel.onContinue()
+                ReviewScreenEvent.Undo -> viewModel.undoLastAnswer()
+                ReviewScreenEvent.ToggleDetails -> viewModel.toggleDetails()
+                ReviewScreenEvent.Retry -> viewModel.loadOrResume()
+                ReviewScreenEvent.WrapUp -> viewModel.wrapUp()
+                ReviewScreenEvent.Abandon -> viewModel.abandonSession()
+                ReviewScreenEvent.Done -> onSessionComplete()
+                ReviewScreenEvent.Back -> onBack()
+                is ReviewScreenEvent.SearchQueryChange -> searchViewModel.onQueryChange(event.query)
+            }
+        },
+        searchUiState = searchUiState
     )
 }
 
@@ -174,20 +197,22 @@ fun ReviewRoute(
 @Composable
 fun ReviewScreen(
     uiState: ReviewUiState,
-    onAnswerInputChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onDontKnow: () -> Unit,
-    onContinue: () -> Unit,
-    onUndo: () -> Unit,
-    onToggleDetails: () -> Unit,
-    onRetry: () -> Unit,
-    onWrapUp: () -> Unit,
-    onAbandon: () -> Unit,
-    onDone: () -> Unit,
-    onBack: () -> Unit,
-    searchUiState: SearchUiState = SearchUiState(),
-    onSearchQueryChange: (String) -> Unit = {}
+    onEvent: (ReviewScreenEvent) -> Unit,
+    searchUiState: SearchUiState = SearchUiState()
 ) {
+    val onAnswerInputChange: (String) -> Unit = { onEvent(ReviewScreenEvent.AnswerInputChange(it)) }
+    val onSubmit = { onEvent(ReviewScreenEvent.Submit) }
+    val onDontKnow = { onEvent(ReviewScreenEvent.DontKnow) }
+    val onContinue = { onEvent(ReviewScreenEvent.Continue) }
+    val onUndo = { onEvent(ReviewScreenEvent.Undo) }
+    val onToggleDetails = { onEvent(ReviewScreenEvent.ToggleDetails) }
+    val onRetry = { onEvent(ReviewScreenEvent.Retry) }
+    val onWrapUp = { onEvent(ReviewScreenEvent.WrapUp) }
+    val onAbandon = { onEvent(ReviewScreenEvent.Abandon) }
+    val onDone = { onEvent(ReviewScreenEvent.Done) }
+    val onBack = { onEvent(ReviewScreenEvent.Back) }
+    val onSearchQueryChange: (String) -> Unit = { onEvent(ReviewScreenEvent.SearchQueryChange(it)) }
+
     var menuExpanded by remember { mutableStateOf(false) }
     var showAbandonConfirm by remember { mutableStateOf(false) }
     var isSearchActive by remember { mutableStateOf(false) }
@@ -563,7 +588,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            GatedContinueButton(feedback = feedback, onContinue = onContinue, modifier = Modifier.fillMaxWidth())
+            GatedContinueButton(
+                feedback = feedback,
+                onContinue = onContinue,
+                continueButtonTestTag = ReviewScreenTestTags.CONTINUE_BUTTON,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         // Reserves room so the swipe-up handle — pinned to the true bottom of the screen as its
@@ -621,46 +651,6 @@ private fun RankChangeChip(rankChange: RankChange, modifier: Modifier = Modifier
             color = animatedColor,
             style = MaterialTheme.typography.labelLarge
         )
-    }
-}
-
-/** Time an incorrect answer's Continue button stays disabled for, so a reflexive fast tap can't
- *  blow past feedback before it's been registered. Correct answers never lock. */
-private const val ContinueLockMs = 1200
-
-@Composable
-private fun GatedContinueButton(feedback: AnswerFeedback, onContinue: () -> Unit, modifier: Modifier = Modifier) {
-    // Drives the fill directly (rather than deriving it from a separately-toggled "unlocked"
-    // boolean) so the bar actually animates 0->1 while it's visible, and unlocking happens in
-    // sync with it visually finishing — not the instant before it, which just hid a bar stuck at 0.
-    val lockProgress = remember(feedback) { Animatable(if (feedback.isCorrect) 1f else 0f) }
-    val continueUnlocked = feedback.isCorrect || lockProgress.value >= 1f
-    LaunchedEffect(feedback) {
-        if (!feedback.isCorrect) {
-            lockProgress.snapTo(0f)
-            lockProgress.animateTo(1f, animationSpec = tween(ContinueLockMs))
-        }
-    }
-
-    Box(modifier = modifier) {
-        Button(
-            onClick = onContinue,
-            enabled = continueUnlocked,
-            modifier = Modifier.fillMaxWidth().testTag(ReviewScreenTestTags.CONTINUE_BUTTON)
-        ) { Text("Continue") }
-        if (!continueUnlocked) {
-            LinearProgressIndicator(
-                progress = { lockProgress.value },
-                color = MaterialTheme.colorScheme.onPrimary,
-                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
-                drawStopIndicator = {},
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp))
-            )
-        }
     }
 }
 
@@ -864,16 +854,6 @@ private fun formatDuration(ms: Long): String {
     return if (minutes > 0) "%d:%02d".format(minutes, seconds) else "${seconds}s"
 }
 
-/** Label for the small secondary line under the Correct!/Incorrect headline — kept short (capped
- *  candidate list, single line with ellipsis, tap-to-expand for the rest — see [formatAnswerList])
- *  so an item with lots of synonyms doesn't push the Continue button down or crowd out the
- *  swipe-up handle. Null means nothing to show below the headline. */
-private fun feedbackDetailPrefix(feedback: AnswerFeedback): String? = when {
-    !feedback.isCorrect -> "Answer:"
-    feedback.wasCloseMatch -> "Close to:"
-    feedback.answerCount > 1 -> "Also accepted:"
-    else -> null
-}
 
 private fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
     QuestionType.MEANING -> DetailQuestionType.MEANING
@@ -906,17 +886,7 @@ private fun ReviewScreenPreview() {
                 ),
                 currentQuestionType = QuestionType.MEANING
             ),
-            onAnswerInputChange = {},
-            onSubmit = {},
-            onDontKnow = {},
-            onContinue = {},
-            onUndo = {},
-            onToggleDetails = {},
-            onRetry = {},
-            onWrapUp = {},
-            onAbandon = {},
-            onDone = {},
-            onBack = {}
+            onEvent = {}
         )
     }
 }
@@ -952,17 +922,7 @@ private fun ReviewScreenSessionCompletePreview() {
                 ),
                 sessionMissedItems = listOf(water, fire)
             ),
-            onAnswerInputChange = {},
-            onSubmit = {},
-            onDontKnow = {},
-            onContinue = {},
-            onUndo = {},
-            onToggleDetails = {},
-            onRetry = {},
-            onWrapUp = {},
-            onAbandon = {},
-            onDone = {},
-            onBack = {}
+            onEvent = {}
         )
     }
 }

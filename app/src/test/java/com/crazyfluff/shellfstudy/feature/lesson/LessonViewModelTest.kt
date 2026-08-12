@@ -15,6 +15,7 @@ import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
@@ -240,7 +241,7 @@ class LessonViewModelTest {
             viewModel.nextStudyCard()
             val quizState = awaitItem()
             assertThat(quizState.phase).isEqualTo(LessonPhase.QUIZ)
-            assertThat(quizState.currentQuestionType).isEqualTo(LessonQuestionType.MEANING)
+            assertThat(quizState.currentQuestionType).isEqualTo(QuestionType.MEANING)
             assertThat(quizState.totalQuizCount).isEqualTo(1)
         }
     }
@@ -385,7 +386,7 @@ class LessonViewModelTest {
             viewModel.onContinue()
             val requeuedState = awaitItem()
             assertThat(requeuedState.isSessionComplete).isFalse()
-            assertThat(requeuedState.currentQuestionType).isEqualTo(LessonQuestionType.MEANING)
+            assertThat(requeuedState.currentQuestionType).isEqualTo(QuestionType.MEANING)
         }
     }
 

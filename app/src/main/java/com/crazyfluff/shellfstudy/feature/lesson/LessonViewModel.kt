@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.feature.lesson
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
+import com.crazyfluff.shellfstudy.core.coroutines.runDurably
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
@@ -19,8 +20,15 @@ import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.core.quiz.QuestionType
+import com.crazyfluff.shellfstudy.core.quiz.PendingQuestion
+import com.crazyfluff.shellfstudy.core.quiz.QuizGradingGuard
+import com.crazyfluff.shellfstudy.core.quiz.QuizQueue
+import com.crazyfluff.shellfstudy.core.quiz.candidatesFor
+import com.crazyfluff.shellfstudy.core.quiz.convertReadingSafely
+import com.crazyfluff.shellfstudy.core.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
-import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -38,14 +46,6 @@ import javax.inject.Inject
 private const val DEFAULT_LESSON_SELECTION_SIZE = 5
 
 enum class LessonPhase { SELECT, STUDY, QUIZ }
-enum class LessonQuestionType { MEANING, READING }
-
-data class LessonAnswerFeedback(
-    val isCorrect: Boolean,
-    val correctAnswer: String,
-    val wasCloseMatch: Boolean = false,
-    val answerCount: Int = 1
-)
 
 data class LessonUiState(
     val isLoading: Boolean = true,
@@ -57,9 +57,9 @@ data class LessonUiState(
     val studyItems: List<LessonItem> = emptyList(),
     val studyIndex: Int = 0,
     val currentQuizItem: LessonItem? = null,
-    val currentQuestionType: LessonQuestionType? = null,
+    val currentQuestionType: QuestionType? = null,
     val answerInput: String = "",
-    val feedback: LessonAnswerFeedback? = null,
+    val feedback: AnswerFeedback? = null,
     val rankChange: RankChange? = null,
     val totalQuizCount: Int = 0,
     val remainingQuizCount: Int = 0,
@@ -70,8 +70,6 @@ data class LessonUiState(
     val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
     val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
 )
-
-private data class PendingLessonQuestion(val item: LessonItem, val type: LessonQuestionType)
 
 @HiltViewModel
 class LessonViewModel @Inject constructor(
@@ -88,14 +86,11 @@ class LessonViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
 
-    private val quizQueue = ArrayDeque<PendingLessonQuestion>()
+    private val quizQueue = QuizQueue<LessonItem>()
     private val startedAssignmentIds = mutableSetOf<Long>()
     private var totalQuizCount = 0
 
-    // Set synchronously (not via _uiState) so a second rapid tap is rejected immediately, before
-    // the first submission's suspend work has had a chance to land feedback in state — see
-    // ReviewViewModel.isGrading for the full race this closes.
-    private var isGrading = false
+    private val gradingGuard = QuizGradingGuard(viewModelScope)
 
     init {
         loadOrResume()
@@ -147,13 +142,14 @@ class LessonViewModel @Inject constructor(
             return
         }
 
-        quizQueue.clear()
-        persisted.quizQueue.forEach { entry ->
-            quizQueue.add(PendingLessonQuestion(itemsById.getValue(entry.assignmentId), LessonQuestionType.valueOf(entry.questionType)))
-        }
+        quizQueue.restore(
+            persisted.quizQueue.map { entry ->
+                PendingQuestion(itemsById.getValue(entry.assignmentId), QuestionType.valueOf(entry.questionType))
+            }
+        )
         startedAssignmentIds.clear()
         totalQuizCount = persisted.totalQuizCount
-        val next = quizQueue.firstOrNull()
+        val next = quizQueue.current
         _uiState.update {
             it.copy(
                 isLoading = false,
@@ -303,13 +299,9 @@ class LessonViewModel @Inject constructor(
     }
 
     private suspend fun beginQuiz(items: List<LessonItem>) {
-        quizQueue.clear()
-        items.forEach { item ->
-            questionTypesFor(item).forEach { type -> quizQueue.add(PendingLessonQuestion(item, type)) }
-        }
-        quizQueue.shuffle()
+        quizQueue.build(items, typesFor = { item -> questionTypesFor(item.subjectType) })
         totalQuizCount = quizQueue.size
-        val next = quizQueue.firstOrNull()
+        val next = quizQueue.current
         _uiState.update {
             it.copy(
                 phase = LessonPhase.QUIZ,
@@ -322,90 +314,60 @@ class LessonViewModel @Inject constructor(
                 isSessionComplete = next == null
             )
         }
-        applicationScope.launch { persistCurrentState() }.join()
+        applicationScope.runDurably { persistCurrentState() }
     }
-
-    private fun questionTypesFor(item: LessonItem): List<LessonQuestionType> =
-        if (item.subjectType == SubjectType.RADICAL) {
-            listOf(LessonQuestionType.MEANING)
-        } else {
-            listOf(LessonQuestionType.MEANING, LessonQuestionType.READING)
-        }
 
     fun onAnswerInputChange(value: String) {
         _uiState.update { it.copy(answerInput = value) }
     }
 
-    /** Meaning answers pool the primary meanings with WaniKani's own whitelist synonyms — both are
-     *  equally acceptable. Reading answers stay exact-match-only, so no auxiliary readings exist. */
-    private fun candidatesFor(item: LessonItem, type: LessonQuestionType): List<String> =
-        if (type == LessonQuestionType.MEANING) item.meanings + item.auxiliaryMeanings else item.readings
-
     fun submitAnswer() {
         val state = _uiState.value
-        if (state.feedback != null || isGrading) return
+        if (state.feedback != null) return
         val item = state.currentQuizItem ?: return
         val type = state.currentQuestionType ?: return
         if (state.answerInput.isBlank()) return
 
-        isGrading = true
-        viewModelScope.launch {
-            try {
-                val candidates = candidatesFor(item, type)
-                if (type == LessonQuestionType.MEANING) {
-                    val match = CloseEnoughMatcher.match(state.answerInput, candidates)
-                    gradeAnswer(item, type, match.isMatch, candidates, wasCloseMatch = match.isMatch && !match.isExact)
-                } else {
-                    val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
-                    val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
-                    gradeAnswer(item, type, isCorrect, candidates)
-                }
-            } finally {
-                isGrading = false
+        gradingGuard.launchIfIdle {
+            val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
+            if (type == QuestionType.MEANING) {
+                val match = CloseEnoughMatcher.match(state.answerInput, candidates)
+                gradeAnswer(item, type, match.isMatch, candidates, wasCloseMatch = match.isMatch && !match.isExact)
+            } else {
+                val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
+                val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
+                gradeAnswer(item, type, isCorrect, candidates)
             }
         }
     }
 
-    /** Never lets a malformed answer crash grading — falls back to the raw (untranslated) text. */
-    private fun convertReadingSafely(rawAnswer: String): String =
-        try {
-            RomajiConverter.toHiragana(rawAnswer)
-        } catch (e: Exception) {
-            rawAnswer
-        }
-
     /** Gives up on the current question — treated the same as a wrong answer, requeued for another pass. */
     fun dontKnowAnswer() {
         val state = _uiState.value
-        if (state.feedback != null || isGrading) return
+        if (state.feedback != null) return
         val item = state.currentQuizItem ?: return
         val type = state.currentQuestionType ?: return
-        val candidates = candidatesFor(item, type)
-        isGrading = true
-        viewModelScope.launch {
-            try {
-                gradeAnswer(item, type, isCorrect = false, candidates)
-            } finally {
-                isGrading = false
-            }
+        val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
+        gradingGuard.launchIfIdle {
+            gradeAnswer(item, type, isCorrect = false, candidates)
         }
     }
 
     private suspend fun gradeAnswer(
         item: LessonItem,
-        type: LessonQuestionType,
+        type: QuestionType,
         isCorrect: Boolean,
         candidates: List<String>,
         wasCloseMatch: Boolean = false
     ) {
-        quizQueue.removeFirstOrNull()
+        quizQueue.removeCurrent()
         val justCompletedItem = if (!isCorrect) {
-            quizQueue.addLast(PendingLessonQuestion(item, type))
+            quizQueue.requeue(PendingQuestion(item, type))
             false
         } else {
             // No more pending questions for this item — it's been answered correctly on every
             // question type it has, so the lesson for it is done.
-            quizQueue.none { it.item.assignmentId == item.assignmentId }
+            quizQueue.noneMatches { it.item.assignmentId == item.assignmentId }
         }
 
         // Snapshotted synchronously, right after mutating quizQueue above, so the detached
@@ -430,7 +392,7 @@ class LessonViewModel @Inject constructor(
 
         _uiState.update {
             it.copy(
-                feedback = LessonAnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
+                feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
                 remainingQuizCount = quizQueue.size,
                 rankChange = newRankChange ?: it.rankChange
             )
@@ -443,7 +405,7 @@ class LessonViewModel @Inject constructor(
      *  across a suspension point even if the live quizQueue is mutated by something else
      *  afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). */
     private fun currentPersistSnapshot(): PersistedLessonSession = PersistedLessonSession(
-        quizQueue = quizQueue.map { PersistedLessonQuestion(it.item.assignmentId, it.type.name) },
+        quizQueue = quizQueue.toList().map { PersistedLessonQuestion(it.item.assignmentId, it.type.name) },
         totalQuizCount = totalQuizCount
     )
 
@@ -455,14 +417,10 @@ class LessonViewModel @Inject constructor(
         persistSnapshot(currentPersistSnapshot())
     }
 
-    /** Runs the post-grading durability writes (outbox enqueue, session persistence) on
-     *  [applicationScope] rather than [viewModelScope] — this ViewModel is cleared the instant the
-     *  user navigates off the screen, and back-navigation is never gated on grading, so a write
-     *  parented to viewModelScope can be cancelled mid-flight. Awaiting the join here (rather than
-     *  fire-and-forget) still lets submitAnswer/dontKnowAnswer's own suspend chain observe
-     *  completion; it's just no longer *cancellable* by leaving the screen. */
+    /** Runs the post-grading durability writes (outbox enqueue, session persistence) — see
+     *  [runDurably] for why this needs [applicationScope] rather than `viewModelScope`. */
     private suspend fun persistDurabilityWork(isNewlyStarted: Boolean, item: LessonItem, snapshot: PersistedLessonSession) {
-        applicationScope.launch {
+        applicationScope.runDurably {
             if (isNewlyStarted) {
                 // The actual DB write of the new SRS stage — already reflected in the UI via the
                 // synchronous computeLessonStartRankChange prediction above, so this just makes
@@ -471,7 +429,7 @@ class LessonViewModel @Inject constructor(
                 outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
             }
             persistSnapshot(snapshot)
-        }.join()
+        }
     }
 
     fun onContinue() {
@@ -479,9 +437,9 @@ class LessonViewModel @Inject constructor(
     }
 
     private suspend fun advanceQuiz() {
-        val next = quizQueue.firstOrNull()
+        val next = quizQueue.current
         if (next == null) {
-            applicationScope.launch { lessonSessionRepository.clear() }.join()
+            applicationScope.runDurably { lessonSessionRepository.clear() }
             _uiState.update {
                 it.copy(isSessionComplete = true, currentQuizItem = null, currentQuestionType = null, rankChange = null)
             }

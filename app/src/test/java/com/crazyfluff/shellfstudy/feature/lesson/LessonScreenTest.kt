@@ -18,6 +18,8 @@ import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -79,21 +81,25 @@ class LessonScreenTest {
         composeTestRule.setContent {
             LessonScreen(
                 uiState = uiState,
-                onToggleLessonSelection = onToggleLessonSelection,
-                onSelectFirst = onSelectFirst,
-                onSelectAll = onSelectAll,
-                onSelectNone = onSelectNone,
-                onStartSelectedLessons = onStartSelectedLessons,
-                onStudyCardSwiped = onStudyCardSwiped,
-                onNextStudyCard = onNextStudyCard,
-                onPreviousStudyCard = onPreviousStudyCard,
-                onAnswerInputChange = onAnswerInputChange,
-                onSubmit = onSubmit,
-                onDontKnow = onDontKnow,
-                onContinue = onContinue,
-                onRetry = onRetry,
-                onDone = onDone,
-                onBack = onBack
+                onEvent = { event ->
+                    when (event) {
+                        is LessonScreenEvent.ToggleLessonSelection -> onToggleLessonSelection(event.assignmentId)
+                        is LessonScreenEvent.SelectFirst -> onSelectFirst(event.count)
+                        LessonScreenEvent.SelectAll -> onSelectAll()
+                        LessonScreenEvent.SelectNone -> onSelectNone()
+                        LessonScreenEvent.StartSelectedLessons -> onStartSelectedLessons()
+                        is LessonScreenEvent.StudyCardSwiped -> onStudyCardSwiped(event.index)
+                        LessonScreenEvent.NextStudyCard -> onNextStudyCard()
+                        LessonScreenEvent.PreviousStudyCard -> onPreviousStudyCard()
+                        is LessonScreenEvent.AnswerInputChange -> onAnswerInputChange(event.value)
+                        LessonScreenEvent.Submit -> onSubmit()
+                        LessonScreenEvent.DontKnow -> onDontKnow()
+                        LessonScreenEvent.Continue -> onContinue()
+                        LessonScreenEvent.Retry -> onRetry()
+                        LessonScreenEvent.Done -> onDone()
+                        LessonScreenEvent.Back -> onBack()
+                    }
+                }
             )
         }
     }
@@ -340,7 +346,7 @@ class LessonScreenTest {
         setScreen(
             LessonUiState(
                 isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 answerInput = "Mouth"
             ),
             onSubmit = { submitted = true }
@@ -356,7 +362,7 @@ class LessonScreenTest {
         setScreen(
             LessonUiState(
                 isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING
             ),
             onAnswerInputChange = { typed = it }
         )
@@ -371,8 +377,8 @@ class LessonScreenTest {
         setScreen(
             LessonUiState(
                 isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING,
-                feedback = LessonAnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
             ),
             onContinue = { continued = true }
         )
@@ -387,7 +393,7 @@ class LessonScreenTest {
         setScreen(
             LessonUiState(
                 isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 showSubjectTypeLabel = true
             )
         )
@@ -401,7 +407,7 @@ class LessonScreenTest {
         setScreen(
             LessonUiState(
                 isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 showSubjectTypeLabel = false
             )
         )
@@ -415,8 +421,8 @@ class LessonScreenTest {
         setScreen(
             LessonUiState(
                 isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING,
-                feedback = LessonAnswerFeedback(isCorrect = false, correctAnswer = "Mouth")
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Mouth")
             )
         )
 
@@ -432,8 +438,8 @@ class LessonScreenTest {
         setScreen(
             LessonUiState(
                 isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING,
-                feedback = LessonAnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
             )
         )
 

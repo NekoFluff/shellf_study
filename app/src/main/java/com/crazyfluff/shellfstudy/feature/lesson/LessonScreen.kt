@@ -75,6 +75,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.ReadingTypeRow
@@ -91,6 +93,8 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
@@ -134,6 +138,24 @@ object LessonScreenTestTags {
     const val DONE_BUTTON = "lesson_done_button"
 }
 
+sealed interface LessonScreenEvent {
+    data class ToggleLessonSelection(val assignmentId: Long) : LessonScreenEvent
+    data class SelectFirst(val count: Int) : LessonScreenEvent
+    data object SelectAll : LessonScreenEvent
+    data object SelectNone : LessonScreenEvent
+    data object StartSelectedLessons : LessonScreenEvent
+    data class StudyCardSwiped(val index: Int) : LessonScreenEvent
+    data object NextStudyCard : LessonScreenEvent
+    data object PreviousStudyCard : LessonScreenEvent
+    data class AnswerInputChange(val value: String) : LessonScreenEvent
+    data object Submit : LessonScreenEvent
+    data object DontKnow : LessonScreenEvent
+    data object Continue : LessonScreenEvent
+    data object Retry : LessonScreenEvent
+    data object Done : LessonScreenEvent
+    data object Back : LessonScreenEvent
+}
+
 @Composable
 fun LessonRoute(
     onSessionComplete: () -> Unit,
@@ -144,21 +166,25 @@ fun LessonRoute(
 
     LessonScreen(
         uiState = uiState,
-        onToggleLessonSelection = viewModel::toggleLessonSelection,
-        onSelectFirst = viewModel::selectFirst,
-        onSelectAll = viewModel::selectAll,
-        onSelectNone = viewModel::selectNone,
-        onStartSelectedLessons = viewModel::startSelectedLessons,
-        onStudyCardSwiped = viewModel::onStudyCardSwiped,
-        onNextStudyCard = viewModel::nextStudyCard,
-        onPreviousStudyCard = viewModel::previousStudyCard,
-        onAnswerInputChange = viewModel::onAnswerInputChange,
-        onSubmit = viewModel::submitAnswer,
-        onDontKnow = viewModel::dontKnowAnswer,
-        onContinue = viewModel::onContinue,
-        onRetry = viewModel::load,
-        onDone = onSessionComplete,
-        onBack = onBack
+        onEvent = { event ->
+            when (event) {
+                is LessonScreenEvent.ToggleLessonSelection -> viewModel.toggleLessonSelection(event.assignmentId)
+                is LessonScreenEvent.SelectFirst -> viewModel.selectFirst(event.count)
+                LessonScreenEvent.SelectAll -> viewModel.selectAll()
+                LessonScreenEvent.SelectNone -> viewModel.selectNone()
+                LessonScreenEvent.StartSelectedLessons -> viewModel.startSelectedLessons()
+                is LessonScreenEvent.StudyCardSwiped -> viewModel.onStudyCardSwiped(event.index)
+                LessonScreenEvent.NextStudyCard -> viewModel.nextStudyCard()
+                LessonScreenEvent.PreviousStudyCard -> viewModel.previousStudyCard()
+                is LessonScreenEvent.AnswerInputChange -> viewModel.onAnswerInputChange(event.value)
+                LessonScreenEvent.Submit -> viewModel.submitAnswer()
+                LessonScreenEvent.DontKnow -> viewModel.dontKnowAnswer()
+                LessonScreenEvent.Continue -> viewModel.onContinue()
+                LessonScreenEvent.Retry -> viewModel.load()
+                LessonScreenEvent.Done -> onSessionComplete()
+                LessonScreenEvent.Back -> onBack()
+            }
+        }
     )
 }
 
@@ -166,22 +192,24 @@ fun LessonRoute(
 @Composable
 fun LessonScreen(
     uiState: LessonUiState,
-    onToggleLessonSelection: (Long) -> Unit = {},
-    onSelectFirst: (Int) -> Unit = {},
-    onSelectAll: () -> Unit = {},
-    onSelectNone: () -> Unit = {},
-    onStartSelectedLessons: () -> Unit = {},
-    onStudyCardSwiped: (Int) -> Unit = {},
-    onNextStudyCard: () -> Unit,
-    onPreviousStudyCard: () -> Unit,
-    onAnswerInputChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onDontKnow: () -> Unit,
-    onContinue: () -> Unit,
-    onRetry: () -> Unit,
-    onDone: () -> Unit,
-    onBack: () -> Unit
+    onEvent: (LessonScreenEvent) -> Unit
 ) {
+    val onToggleLessonSelection: (Long) -> Unit = { onEvent(LessonScreenEvent.ToggleLessonSelection(it)) }
+    val onSelectFirst: (Int) -> Unit = { onEvent(LessonScreenEvent.SelectFirst(it)) }
+    val onSelectAll = { onEvent(LessonScreenEvent.SelectAll) }
+    val onSelectNone = { onEvent(LessonScreenEvent.SelectNone) }
+    val onStartSelectedLessons = { onEvent(LessonScreenEvent.StartSelectedLessons) }
+    val onStudyCardSwiped: (Int) -> Unit = { onEvent(LessonScreenEvent.StudyCardSwiped(it)) }
+    val onNextStudyCard = { onEvent(LessonScreenEvent.NextStudyCard) }
+    val onPreviousStudyCard = { onEvent(LessonScreenEvent.PreviousStudyCard) }
+    val onAnswerInputChange: (String) -> Unit = { onEvent(LessonScreenEvent.AnswerInputChange(it)) }
+    val onSubmit = { onEvent(LessonScreenEvent.Submit) }
+    val onDontKnow = { onEvent(LessonScreenEvent.DontKnow) }
+    val onContinue = { onEvent(LessonScreenEvent.Continue) }
+    val onRetry = { onEvent(LessonScreenEvent.Retry) }
+    val onDone = { onEvent(LessonScreenEvent.Done) }
+    val onBack = { onEvent(LessonScreenEvent.Back) }
+
     val detailSheetState = rememberSubjectDetailSheetState()
 
     Scaffold(
@@ -819,7 +847,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             .padding(horizontal = 24.dp)
     ) {
         Text(
-            text = if (questionType == LessonQuestionType.MEANING) "What is the meaning?" else "What is the reading?",
+            text = if (questionType == QuestionType.MEANING) "What is the meaning?" else "What is the reading?",
             style = MaterialTheme.typography.bodyLarge
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -829,7 +857,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             label = { Text("答え") },
             singleLine = true,
             enabled = uiState.feedback == null,
-            visualTransformation = if (questionType == LessonQuestionType.READING) {
+            visualTransformation = if (questionType == QuestionType.READING) {
                 RomajiVisualTransformation
             } else {
                 VisualTransformation.None
@@ -893,61 +921,16 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            GatedContinueButton(feedback = feedback, onContinue = onContinue, modifier = Modifier.fillMaxWidth())
-        }
-    }
-}
-
-/** Time an incorrect answer's Continue button stays disabled for, so a reflexive fast tap can't
- *  blow past feedback before it's been registered. Correct answers never lock. */
-private const val ContinueLockMs = 1200
-
-@Composable
-private fun GatedContinueButton(feedback: LessonAnswerFeedback, onContinue: () -> Unit, modifier: Modifier = Modifier) {
-    // Drives the fill directly (rather than deriving it from a separately-toggled "unlocked"
-    // boolean) so the bar actually animates 0->1 while it's visible, and unlocking happens in
-    // sync with it visually finishing — not the instant before it, which just hid a bar stuck at 0.
-    val lockProgress = remember(feedback) { Animatable(if (feedback.isCorrect) 1f else 0f) }
-    val continueUnlocked = feedback.isCorrect || lockProgress.value >= 1f
-    LaunchedEffect(feedback) {
-        if (!feedback.isCorrect) {
-            lockProgress.snapTo(0f)
-            lockProgress.animateTo(1f, animationSpec = tween(ContinueLockMs))
-        }
-    }
-
-    Box(modifier = modifier) {
-        Button(
-            onClick = onContinue,
-            enabled = continueUnlocked,
-            modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.CONTINUE_BUTTON)
-        ) { Text("Continue") }
-        if (!continueUnlocked) {
-            LinearProgressIndicator(
-                progress = { lockProgress.value },
-                color = MaterialTheme.colorScheme.onPrimary,
-                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
-                drawStopIndicator = {},
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp))
+            GatedContinueButton(
+                feedback = feedback,
+                onContinue = onContinue,
+                continueButtonTestTag = LessonScreenTestTags.CONTINUE_BUTTON,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
 }
 
-/** Label for the small secondary line under the Correct!/Incorrect headline — kept short (capped
- *  candidate list, single line with ellipsis, tap-to-expand for the rest — see [formatAnswerList])
- *  so an item with lots of synonyms doesn't push the Continue button down. Null means nothing to
- *  show below the headline. */
-private fun feedbackDetailPrefix(feedback: LessonAnswerFeedback): String? = when {
-    !feedback.isCorrect -> "Answer:"
-    feedback.wasCloseMatch -> "Close to:"
-    feedback.answerCount > 1 -> "Also accepted:"
-    else -> null
-}
 
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)
 @Composable
@@ -972,15 +955,7 @@ private fun LessonScreenStudyPreview() {
                 ),
                 studyIndex = 0
             ),
-            onNextStudyCard = {},
-            onPreviousStudyCard = {},
-            onAnswerInputChange = {},
-            onSubmit = {},
-            onDontKnow = {},
-            onContinue = {},
-            onRetry = {},
-            onDone = {},
-            onBack = {}
+            onEvent = {}
         )
     }
 }

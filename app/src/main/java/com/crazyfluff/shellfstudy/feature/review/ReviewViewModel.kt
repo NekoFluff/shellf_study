@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
+import com.crazyfluff.shellfstudy.core.coroutines.runDurably
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.containsKana
@@ -19,8 +20,15 @@ import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.core.quiz.QuestionType
+import com.crazyfluff.shellfstudy.core.quiz.PendingQuestion
+import com.crazyfluff.shellfstudy.core.quiz.QuizGradingGuard
+import com.crazyfluff.shellfstudy.core.quiz.QuizQueue
+import com.crazyfluff.shellfstudy.core.quiz.candidatesFor
+import com.crazyfluff.shellfstudy.core.quiz.convertReadingSafely
+import com.crazyfluff.shellfstudy.core.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
-import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,15 +38,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-enum class QuestionType { MEANING, READING }
-
-data class AnswerFeedback(
-    val isCorrect: Boolean,
-    val correctAnswer: String,
-    val wasCloseMatch: Boolean = false,
-    val answerCount: Int = 1
-)
 
 data class ReviewUiState(
     val isLoading: Boolean = true,
@@ -69,8 +68,6 @@ data class ReviewUiState(
 
 data class SlowAnswer(val item: ReviewItem, val type: QuestionType, val elapsedMs: Long, val isCorrect: Boolean)
 
-private data class PendingQuestion(val item: ReviewItem, val type: QuestionType)
-
 private class ItemProgress(val item: ReviewItem) {
     var meaningDone = false
     var readingDone = false
@@ -95,15 +92,11 @@ class ReviewViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ReviewUiState())
     val uiState: StateFlow<ReviewUiState> = _uiState.asStateFlow()
 
-    private val queue = ArrayDeque<PendingQuestion>()
+    private val queue = QuizQueue<ReviewItem>()
     private val progressByAssignmentId = mutableMapOf<Long, ItemProgress>()
     private var totalQuestions = 0
 
-    // Set synchronously (not via _uiState) so a second rapid tap is rejected immediately, before
-    // the first submission's suspend work (grading, optimistic SRS write, outbox enqueue) has had
-    // a chance to land feedback in state — otherwise both submissions race gradeAnswer, double the
-    // queue mutation, and the loser's stale rank change flashes on screen before the winner's.
-    private var isGrading = false
+    private val gradingGuard = QuizGradingGuard(viewModelScope)
 
     private val answeredQuestions = mutableListOf<AnsweredQuestionRecord>()
     // In-memory only, matching the rest of this session-stat tracking — a process death mid-session
@@ -161,10 +154,11 @@ class ReviewViewModel @Inject constructor(
             return
         }
 
-        queue.clear()
-        persisted.queue.forEach { entry ->
-            queue.add(PendingQuestion(itemsById.getValue(entry.assignmentId), QuestionType.valueOf(entry.questionType)))
-        }
+        queue.restore(
+            persisted.queue.map { entry ->
+                PendingQuestion(itemsById.getValue(entry.assignmentId), QuestionType.valueOf(entry.questionType))
+            }
+        )
         progressByAssignmentId.clear()
         persisted.progress.forEach { p ->
             progressByAssignmentId[p.assignmentId] = ItemProgress(itemsById.getValue(p.assignmentId)).apply {
@@ -186,35 +180,17 @@ class ReviewViewModel @Inject constructor(
         answeredQuestions.clear()
         sessionStartTimeMs = System.currentTimeMillis()
 
-        items.forEach { item ->
-            progressByAssignmentId[item.assignmentId] = ItemProgress(item)
-            questionTypesFor(item).forEach { type -> queue.add(PendingQuestion(item, type)) }
-        }
-        queue.shuffle()
+        items.forEach { item -> progressByAssignmentId[item.assignmentId] = ItemProgress(item) }
+        queue.build(items, typesFor = { item -> questionTypesFor(item.subjectType) })
         totalQuestions = queue.size
 
-        if (queue.isEmpty()) {
+        if (queue.isEmpty) {
             _uiState.update { it.copy(isLoading = false, isSessionComplete = true, totalCount = 0, remainingCount = 0) }
         } else {
             persistCurrentState()
             advanceToNextQuestion()
         }
     }
-
-    /** Never lets a malformed answer crash grading — falls back to the raw (untranslated) text. */
-    private fun convertReadingSafely(rawAnswer: String): String =
-        try {
-            RomajiConverter.toHiragana(rawAnswer)
-        } catch (e: Exception) {
-            rawAnswer
-        }
-
-    private fun questionTypesFor(item: ReviewItem): List<QuestionType> =
-        if (item.subjectType == SubjectType.RADICAL) {
-            listOf(QuestionType.MEANING)
-        } else {
-            listOf(QuestionType.MEANING, QuestionType.READING)
-        }
 
     fun onAnswerInputChange(value: String) {
         _uiState.update { it.copy(answerInput = value) }
@@ -224,46 +200,36 @@ class ReviewViewModel @Inject constructor(
         _uiState.update { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
     }
 
-    /** Meaning answers pool the primary meanings with WaniKani's own whitelist synonyms — both are
-     *  equally acceptable. Reading answers stay exact-match-only, so no auxiliary readings exist. */
-    private fun candidatesFor(item: ReviewItem, type: QuestionType): List<String> =
-        if (type == QuestionType.MEANING) item.meanings + item.auxiliaryMeanings else item.readings
-
     fun submitAnswer() {
         val state = _uiState.value
-        if (state.feedback != null || isGrading) return
+        if (state.feedback != null) return
         val item = state.currentItem ?: return
         val type = state.currentQuestionType ?: return
         if (state.answerInput.isBlank()) return
 
-        isGrading = true
-        viewModelScope.launch {
-            try {
-                val candidates = candidatesFor(item, type)
-                if (type == QuestionType.MEANING) {
-                    // A small typo is graded as correct but flagged, rather than a flat miss — readings
-                    // stay exact-match, matching WaniKani's own convention for kana.
-                    val match = CloseEnoughMatcher.match(state.answerInput, candidates)
-                    // Typing a reading into a meaning answer is a habit slip, not a genuine miss — reject
-                    // it outright rather than spending an SRS attempt on it.
-                    if (!match.isMatch && state.answerInput.containsKana()) {
-                        _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
-                        return@launch
-                    }
-                    gradeAnswer(item, type, match.isMatch, candidates, expandDetails = false, wasCloseMatch = match.isMatch && !match.isExact)
-                } else {
-                    val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
-                    val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
-                    // Same idea in reverse: a wrong reading that closely matches this item's own meaning
-                    // is almost certainly the other question type typed by habit, not a real miss.
-                    if (!isCorrect && CloseEnoughMatcher.match(state.answerInput, candidatesFor(item, QuestionType.MEANING)).isMatch) {
-                        _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
-                        return@launch
-                    }
-                    gradeAnswer(item, type, isCorrect, candidates, expandDetails = false)
+        gradingGuard.launchIfIdle {
+            val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
+            if (type == QuestionType.MEANING) {
+                // A small typo is graded as correct but flagged, rather than a flat miss — readings
+                // stay exact-match, matching WaniKani's own convention for kana.
+                val match = CloseEnoughMatcher.match(state.answerInput, candidates)
+                // Typing a reading into a meaning answer is a habit slip, not a genuine miss — reject
+                // it outright rather than spending an SRS attempt on it.
+                if (!match.isMatch && state.answerInput.containsKana()) {
+                    _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
+                    return@launchIfIdle
                 }
-            } finally {
-                isGrading = false
+                gradeAnswer(item, type, match.isMatch, candidates, expandDetails = false, wasCloseMatch = match.isMatch && !match.isExact)
+            } else {
+                val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
+                val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
+                // Same idea in reverse: a wrong reading that closely matches this item's own meaning
+                // is almost certainly the other question type typed by habit, not a real miss.
+                if (!isCorrect && CloseEnoughMatcher.match(state.answerInput, candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, QuestionType.MEANING)).isMatch) {
+                    _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
+                    return@launchIfIdle
+                }
+                gradeAnswer(item, type, isCorrect, candidates, expandDetails = false)
             }
         }
     }
@@ -271,18 +237,13 @@ class ReviewViewModel @Inject constructor(
     /** Gives up on the current question — grades it as a miss without requiring a typed guess. */
     fun dontKnowAnswer() {
         val state = _uiState.value
-        if (state.feedback != null || isGrading) return
+        if (state.feedback != null) return
         val item = state.currentItem ?: return
         val type = state.currentQuestionType ?: return
 
-        isGrading = true
-        viewModelScope.launch {
-            try {
-                val candidates = candidatesFor(item, type)
-                gradeAnswer(item, type, isCorrect = false, candidates, expandDetails = true)
-            } finally {
-                isGrading = false
-            }
+        gradingGuard.launchIfIdle {
+            val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
+            gradeAnswer(item, type, isCorrect = false, candidates, expandDetails = true)
         }
     }
 
@@ -297,7 +258,7 @@ class ReviewViewModel @Inject constructor(
         val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress(item) }
         answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, System.currentTimeMillis() - questionShownAtMs))
 
-        queue.removeFirstOrNull()
+        queue.removeCurrent()
         if (isCorrect) {
             when (type) {
                 QuestionType.MEANING -> itemProgress.meaningDone = true
@@ -308,7 +269,7 @@ class ReviewViewModel @Inject constructor(
                 QuestionType.MEANING -> itemProgress.hadIncorrectMeaning = true
                 QuestionType.READING -> itemProgress.hadIncorrectReading = true
             }
-            queue.addLast(PendingQuestion(item, type))
+            queue.requeue(PendingQuestion(item, type))
         }
 
         // Snapshotted synchronously, right after mutating the queue/progress above, so the
@@ -364,18 +325,17 @@ class ReviewViewModel @Inject constructor(
                 QuestionType.MEANING -> itemProgress.hadIncorrectMeaning = false
                 QuestionType.READING -> itemProgress.hadIncorrectReading = false
             }
-            // The wrong submission moved this question to the back of the queue via addLast;
-            // move it back to the front so it stays "current" (queue.first() == currentItem is
+            // The wrong submission moved this question to the back of the queue via requeue();
+            // move it back to the front so it stays "current" (queue.current == currentItem is
             // the invariant advanceToNextQuestion relies on), rather than dropping it entirely.
-            val requeuedIndex = queue.indexOfLast { it.item.assignmentId == item.assignmentId && it.type == type }
-            if (requeuedIndex >= 0) queue.addFirst(queue.removeAt(requeuedIndex))
+            queue.moveMatchingToFront { it.item.assignmentId == item.assignmentId && it.type == type }
 
             // Undo removes the incorrect attempt just recorded by gradeAnswer, and restarts this
             // question's clock so the retry's timing doesn't inherit time spent before the undo.
             answeredQuestions.removeLastOrNull()
             questionShownAtMs = System.currentTimeMillis()
 
-            applicationScope.launch { persistCurrentState() }.join()
+            applicationScope.runDurably { persistCurrentState() }
             // undoCounter changes even though currentItem/currentQuestionType don't — this is what
             // the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't change
             // either of those but still needs to refocus the field the user just tapped away from.
@@ -395,14 +355,10 @@ class ReviewViewModel @Inject constructor(
     /** Stops introducing brand-new items; only the current item and ones already attempted remain. */
     fun wrapUp() {
         viewModelScope.launch {
-            val current = queue.firstOrNull()
-            val rest = queue.drop(1).filter { progressByAssignmentId[it.item.assignmentId]?.hasAnyProgress == true }
-            queue.clear()
-            current?.let(queue::add)
-            queue.addAll(rest)
+            queue.retainCurrentAndMatching { progressByAssignmentId[it.item.assignmentId]?.hasAnyProgress == true }
             totalQuestions = queue.size + completedQuestionCount()
 
-            applicationScope.launch { persistCurrentState() }.join()
+            applicationScope.runDurably { persistCurrentState() }
             _uiState.update { it.copy(isWrappingUp = true, totalCount = totalQuestions, remainingCount = queue.size) }
         }
     }
@@ -453,9 +409,9 @@ class ReviewViewModel @Inject constructor(
     }
 
     private suspend fun advanceToNextQuestion() {
-        val next = queue.firstOrNull()
+        val next = queue.current
         if (next == null) {
-            applicationScope.launch { reviewSessionRepository.clear() }.join()
+            applicationScope.runDurably { reviewSessionRepository.clear() }
             val summary = sessionSummary()
             _uiState.update {
                 it.copy(
@@ -497,7 +453,7 @@ class ReviewViewModel @Inject constructor(
      *  across a suspension point even if the live queue/progressByAssignmentId are mutated by
      *  something else afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). */
     private fun currentPersistSnapshot(): PersistedReviewSession = PersistedReviewSession(
-        queue = queue.map { PersistedQuestion(it.item.assignmentId, it.type.name) },
+        queue = queue.toList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
         progress = progressByAssignmentId.map { (id, p) ->
             PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },
@@ -513,13 +469,10 @@ class ReviewViewModel @Inject constructor(
     }
 
     /** Runs the post-grading durability writes (outbox enqueue, study-streak mark, session
-     *  persistence) on [applicationScope] rather than [viewModelScope] — this ViewModel is
-     *  cleared the instant the user navigates off the screen, and back-navigation is never gated
-     *  on grading, so a write parented to viewModelScope can be cancelled mid-flight. Awaiting the
-     *  join here (rather than fire-and-forget) still lets submitAnswer/dontKnowAnswer's own
-     *  suspend chain observe completion; it's just no longer *cancellable* by leaving the screen. */
+     *  persistence) — see [runDurably] for why this needs [applicationScope] rather than
+     *  `viewModelScope`. */
     private suspend fun persistDurabilityWork(grade: ReviewGrade?, item: ReviewItem, snapshot: PersistedReviewSession) {
-        applicationScope.launch {
+        applicationScope.runDurably {
             if (grade != null) {
                 // The actual DB write of the new SRS stage — already reflected in the UI via the
                 // synchronous computeReviewRankChange prediction above, so this just makes the
@@ -530,6 +483,6 @@ class ReviewViewModel @Inject constructor(
                 statsRepository.markStudyActivityToday()
             }
             persistSnapshot(snapshot)
-        }.join()
+        }
     }
 }

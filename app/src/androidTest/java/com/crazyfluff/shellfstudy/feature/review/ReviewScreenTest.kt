@@ -15,6 +15,8 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.feature.search.SearchOverlayTestTags
 import org.junit.Rule
 import org.junit.Test
@@ -52,17 +54,22 @@ class ReviewScreenTest {
         composeTestRule.setContent {
             ReviewScreen(
                 uiState = uiState,
-                onAnswerInputChange = onAnswerInputChange,
-                onSubmit = onSubmit,
-                onDontKnow = onDontKnow,
-                onContinue = onContinue,
-                onUndo = onUndo,
-                onToggleDetails = onToggleDetails,
-                onRetry = onRetry,
-                onWrapUp = onWrapUp,
-                onAbandon = onAbandon,
-                onDone = onDone,
-                onBack = onBack
+                onEvent = { event ->
+                    when (event) {
+                        is ReviewScreenEvent.AnswerInputChange -> onAnswerInputChange(event.value)
+                        ReviewScreenEvent.Submit -> onSubmit()
+                        ReviewScreenEvent.DontKnow -> onDontKnow()
+                        ReviewScreenEvent.Continue -> onContinue()
+                        ReviewScreenEvent.Undo -> onUndo()
+                        ReviewScreenEvent.ToggleDetails -> onToggleDetails()
+                        ReviewScreenEvent.Retry -> onRetry()
+                        ReviewScreenEvent.WrapUp -> onWrapUp()
+                        ReviewScreenEvent.Abandon -> onAbandon()
+                        ReviewScreenEvent.Done -> onDone()
+                        ReviewScreenEvent.Back -> onBack()
+                        is ReviewScreenEvent.SearchQueryChange -> Unit
+                    }
+                }
             )
         }
     }
