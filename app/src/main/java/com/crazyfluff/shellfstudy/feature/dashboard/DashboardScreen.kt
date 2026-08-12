@@ -60,6 +60,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
+import com.crazyfluff.shellfstudy.core.notifications.NotificationDeepLink
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.feature.search.SubjectSearchOverlay
@@ -90,6 +91,8 @@ fun DashboardRoute(
     onStartLesson: () -> Unit,
     onOpenSettings: () -> Unit,
     onLoggedOut: () -> Unit,
+    pendingDestination: String? = null,
+    onPendingDestinationConsumed: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
     searchViewModel: SearchViewModel = hiltViewModel()
 ) {
@@ -104,8 +107,20 @@ fun DashboardRoute(
     // rebuilds it on the way back (the ViewModel instance itself survives via the nav-graph-scoped
     // ViewModelStore, but its init{} doesn't rerun) — so this is what actually catches "returning
     // to the dashboard" and refreshes lesson/review counts, without needing a lifecycle observer.
+    // It's also what catches the very first appearance (cold start / post-login), which is why
+    // onDashboardResumed() itself forces a full sync the first time it's called.
     LaunchedEffect(Unit) {
         viewModel.onDashboardResumed()
+    }
+
+    // Tapping the daily study-reminder notification while already sitting on the dashboard
+    // wouldn't otherwise trigger anything — unlike Review/Lesson, navigating there doesn't create
+    // a fresh ViewModel, so there's no init{} to piggyback on. This is the explicit fallback.
+    LaunchedEffect(pendingDestination) {
+        if (pendingDestination == NotificationDeepLink.DESTINATION_DASHBOARD) {
+            viewModel.refresh()
+            onPendingDestinationConsumed()
+        }
     }
 
     DashboardScreen(

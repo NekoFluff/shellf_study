@@ -103,7 +103,9 @@ fun ShellfStudyNavHost(
                     navController.navigateSafely(ShellfStudyDestination.Auth) {
                         popUpTo<ShellfStudyDestination.Dashboard> { inclusive = true }
                     }
-                }
+                },
+                pendingDestination = pendingDestination,
+                onPendingDestinationConsumed = onPendingDestinationConsumed
             )
         }
         composable<ShellfStudyDestination.Review> {

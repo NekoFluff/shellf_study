@@ -141,9 +141,12 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `loads user and summary on init`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `loads user and summary when the dashboard first appears`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         val viewModel = createViewModel()
+        // Simulates DashboardRoute's LaunchedEffect(Unit) — construction alone (init{} now only
+        // seeds from cache) no longer triggers a network fetch on its own.
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -159,12 +162,34 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `the first dashboard appearance fetches user and summary exactly once, not twice`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isRefreshing) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        // Previously init{} launched its own refresh() racing against onDashboardResumed(), so the
+        // very first appearance fetched user/summary twice. Draining every recorded request and
+        // counting by path (rather than server.requestCount, which also counts sync's
+        // assignments/subjects/level_progressions calls) confirms that's fixed.
+        val requests = generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
+        assertThat(requests.count { it.path.orEmpty().startsWith("/user") }).isEqualTo(1)
+        assertThat(requests.count { it.path.orEmpty().startsWith("/summary") }).isEqualTo(1)
+    }
+
+    @Test
     fun `seeds cached username and counts before the network refresh resolves, then updates them once it does`() = runTest(mainDispatcherRule.dispatcher) {
         dashboardCacheRepository.save(
             username = "cached_user", level = 1, lessonCount = 9, reviewCount = 9, syncedAtMillis = 1_000L
         )
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -187,6 +212,7 @@ class DashboardViewModelTest {
         )
         dispatchByPath(emptyResponse(500), jsonResponse(summaryJson()))
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -204,6 +230,7 @@ class DashboardViewModelTest {
     fun `writes the fetched summary to the cache repository on a successful refresh`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -226,6 +253,7 @@ class DashboardViewModelTest {
         dispatchByPath(emptyResponse(500), jsonResponse(summaryJson()))
         tokenRepository.saveToken("some-token")
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -242,6 +270,7 @@ class DashboardViewModelTest {
         dispatchByPath(emptyResponse(401), jsonResponse(summaryJson()))
         tokenRepository.saveToken("stale-token")
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -261,6 +290,7 @@ class DashboardViewModelTest {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         tokenRepository.saveToken("stale-token")
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -292,6 +322,7 @@ class DashboardViewModelTest {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         tokenRepository.saveToken("some-token")
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -317,6 +348,7 @@ class DashboardViewModelTest {
             assignmentsResponse = jsonResponse(startedTodayAssignmentsJson(count = 4))
         )
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -334,6 +366,7 @@ class DashboardViewModelTest {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         settingsRepository.setDailyLessonGoal(5)
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -353,6 +386,7 @@ class DashboardViewModelTest {
             levelProgressionsResponse = jsonResponse(levelProgressionsJson())
         )
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -376,6 +410,7 @@ class DashboardViewModelTest {
             subjectsResponse = jsonResponse(levelUpSubjectsJson(includeOtherLevel = true))
         )
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -403,6 +438,7 @@ class DashboardViewModelTest {
             subjectsResponse = jsonResponse(levelUpSubjectsJson())
         )
         val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
 
         viewModel.uiState.test {
             var state = awaitItem()

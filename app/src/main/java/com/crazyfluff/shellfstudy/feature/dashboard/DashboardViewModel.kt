@@ -124,13 +124,20 @@ class DashboardViewModel @Inject constructor(
     // automatically; once they page to a different level it's pinned until changed again.
     private val selectedProgressLevel = MutableStateFlow<Int?>(null)
 
+    // Guards the very first dashboard appearance in this ViewModel's lifetime: that call goes
+    // through onDashboardResumed() (driven by the Route's LaunchedEffect(Unit), which fires on
+    // first composition too) rather than a separate init{}-launched refresh(), so cold start does
+    // one fetch instead of two racing ones. See onDashboardResumed() for the forced/staleness-gated
+    // split this flag drives.
+    private var hasCompletedInitialSync = false
+
     init {
-        // Awaiting the (fast, local) cache read before kicking off refresh() guarantees any cached
-        // content is on screen before the network round trip starts, and avoids a race where a
-        // slow cache read could otherwise land after refresh() and clobber fresher network data.
+        // Awaiting the (fast, local) cache read guarantees any cached content is on screen before
+        // DashboardRoute's LaunchedEffect(Unit) kicks off the first onDashboardResumed() network
+        // round trip, and avoids a race where a slow cache read could otherwise land after it and
+        // clobber fresher network data.
         viewModelScope.launch {
             seedFromCache()
-            refresh()
         }
 
         observe(reviewSessionRepository.hasActiveSession) { copy(hasActiveReviewSession = it) }
@@ -184,74 +191,93 @@ class DashboardViewModel @Inject constructor(
      * sets [DashboardUiState.isOffline] instead, which the screen renders as a small banner.
      */
     fun refresh() {
-        viewModelScope.launch {
-            _dashboardData.update { it.copy(isRefreshing = true, errorMessage = null, isOffline = false) }
+        viewModelScope.launch { performForcedRefresh() }
+    }
 
-            syncOrchestrator.syncAll(force = true)
+    /**
+     * The forced-sync path shared by [refresh] (explicit pull-to-refresh) and the very first
+     * [onDashboardResumed] call in this ViewModel's lifetime (cold start / right after login) —
+     * see [hasCompletedInitialSync]. Always syncs with `force = true` and uses the "full" error
+     * handling: an auth error logs the user out, any other failure either flags
+     * [DashboardUiState.isOffline] (if content is already on screen) or sets
+     * [DashboardUiState.errorMessage] (if not).
+     */
+    private suspend fun performForcedRefresh() {
+        _dashboardData.update { it.copy(isRefreshing = true, errorMessage = null, isOffline = false) }
 
-            val (userResult, summaryResult) = fetchUserAndSummary()
-            val hasContent = _dashboardData.value.username != null
+        syncOrchestrator.syncAll(force = true)
 
-            if (userResult is ApiResult.Error) {
-                if (userResult.isAuthError) {
-                    tokenRepository.clearToken()
-                    syncScheduler.cancelPeriodicSync()
-                    pitchAccentScrapeScheduler.cancelPeriodicScrape()
-                    notificationCoordinator.onLogout()
-                    _dashboardData.update { it.copy(isRefreshing = false, isLoggedOut = true) }
-                } else if (hasContent) {
-                    _dashboardData.update { it.copy(isRefreshing = false, isOffline = true) }
-                } else {
-                    _dashboardData.update { it.copy(isRefreshing = false, errorMessage = userResult.message) }
-                }
-                return@launch
+        val (userResult, summaryResult) = fetchUserAndSummary()
+        val hasContent = _dashboardData.value.username != null
+
+        if (userResult is ApiResult.Error) {
+            if (userResult.isAuthError) {
+                tokenRepository.clearToken()
+                syncScheduler.cancelPeriodicSync()
+                pitchAccentScrapeScheduler.cancelPeriodicScrape()
+                notificationCoordinator.onLogout()
+                _dashboardData.update { it.copy(isRefreshing = false, isLoggedOut = true) }
+            } else if (hasContent) {
+                _dashboardData.update { it.copy(isRefreshing = false, isOffline = true) }
+            } else {
+                _dashboardData.update { it.copy(isRefreshing = false, errorMessage = userResult.message) }
             }
-            if (summaryResult is ApiResult.Error) {
-                if (hasContent) {
-                    _dashboardData.update { it.copy(isRefreshing = false, isOffline = true) }
-                } else {
-                    _dashboardData.update { it.copy(isRefreshing = false, errorMessage = summaryResult.message) }
-                }
-                return@launch
+            return
+        }
+        if (summaryResult is ApiResult.Error) {
+            if (hasContent) {
+                _dashboardData.update { it.copy(isRefreshing = false, isOffline = true) }
+            } else {
+                _dashboardData.update { it.copy(isRefreshing = false, errorMessage = summaryResult.message) }
             }
+            return
+        }
 
-            val user = (userResult as ApiResult.Success).data
-            val summary = (summaryResult as ApiResult.Success).data
-            val syncedAtMillis = System.currentTimeMillis()
-            dashboardCacheRepository.save(
+        val user = (userResult as ApiResult.Success).data
+        val summary = (summaryResult as ApiResult.Success).data
+        val syncedAtMillis = System.currentTimeMillis()
+        dashboardCacheRepository.save(
+            username = user.username,
+            level = user.level,
+            lessonCount = summary.lessonCount,
+            reviewCount = summary.reviewCount,
+            syncedAtMillis = syncedAtMillis
+        )
+        _dashboardData.update {
+            it.copy(
+                isRefreshing = false,
+                isOffline = false,
                 username = user.username,
                 level = user.level,
                 lessonCount = summary.lessonCount,
                 reviewCount = summary.reviewCount,
-                syncedAtMillis = syncedAtMillis
+                lastSyncedAtMillis = syncedAtMillis
             )
-            _dashboardData.update {
-                it.copy(
-                    isRefreshing = false,
-                    isOffline = false,
-                    username = user.username,
-                    level = user.level,
-                    lessonCount = summary.lessonCount,
-                    reviewCount = summary.reviewCount,
-                    lastSyncedAtMillis = syncedAtMillis
-                )
-            }
         }
     }
 
     /**
      * Called whenever the dashboard becomes visible again (e.g. returning from a finished
-     * review/lesson session), so lesson/review counts don't sit stale until the next hourly
-     * background sync or a manual pull-to-refresh. Deliberately lighter than [refresh]: reuses
-     * [SyncOrchestrator]'s own per-resource staleness gate (`force = false`) rather than forcing a
-     * full resync of everything, and never touches [DashboardUiState.isRefreshing] or
-     * [DashboardUiState.errorMessage] — most calls will be near-instant no-ops, and a transient
-     * failure here shouldn't blank out an already-populated dashboard, just flag it as
-     * [DashboardUiState.isOffline]. A confirmed auth error is the one exception: same as [refresh],
-     * it logs the user out rather than being treated as merely offline.
+     * review/lesson session, or the Route's first composition — see [hasCompletedInitialSync]),
+     * so lesson/review counts don't sit stale until the next hourly background sync or a manual
+     * pull-to-refresh. The very first call in this ViewModel's lifetime is indistinguishable from
+     * a cold start, so it forces a full sync via [performForcedRefresh] just like [refresh] would;
+     * every call after that is deliberately lighter, reusing [SyncOrchestrator]'s own per-resource
+     * staleness gate (`force = false`) rather than forcing a full resync of everything, and never
+     * touching [DashboardUiState.isRefreshing] or [DashboardUiState.errorMessage] — most calls will
+     * be near-instant no-ops, and a transient failure here shouldn't blank out an already-populated
+     * dashboard, just flag it as [DashboardUiState.isOffline]. A confirmed auth error is the one
+     * exception even in the lighter path: same as [refresh], it logs the user out rather than being
+     * treated as merely offline.
      */
     fun onDashboardResumed() {
         viewModelScope.launch {
+            if (!hasCompletedInitialSync) {
+                hasCompletedInitialSync = true
+                performForcedRefresh()
+                return@launch
+            }
+
             syncOrchestrator.syncAll(force = false)
 
             val (userResult, summaryResult) = fetchUserAndSummary()
