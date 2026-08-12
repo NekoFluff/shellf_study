@@ -15,7 +15,7 @@ import androidx.navigation.NavOptionsBuilder
 private fun NavController.isCurrentDestinationResumed() =
     currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED
 
-fun NavController.navigateSafely(route: String, builder: NavOptionsBuilder.() -> Unit = {}) {
+fun <T : Any> NavController.navigateSafely(route: T, builder: NavOptionsBuilder.() -> Unit = {}) {
     if (isCurrentDestinationResumed()) navigate(route, builder)
 }
 

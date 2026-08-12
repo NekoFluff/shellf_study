@@ -203,10 +203,10 @@ fun DashboardScreen(
                         .padding(24.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    when {
+                    when (val contentState = uiState.contentState) {
                         // Nothing cached yet to show while the very first fetch is in flight — the
                         // only case that still blocks on a full-screen placeholder.
-                        uiState.isRefreshing && uiState.username == null -> {
+                        DashboardContentState.Loading -> {
                             DashboardLoadingSkeleton(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -214,9 +214,9 @@ fun DashboardScreen(
                             )
                         }
 
-                        uiState.errorMessage != null -> {
+                        is DashboardContentState.FullScreenError -> {
                             Text(
-                                text = uiState.errorMessage,
+                                text = contentState.message,
                                 color = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.testTag(DashboardScreenTestTags.ERROR_TEXT)
                             )
@@ -229,13 +229,9 @@ fun DashboardScreen(
                             }
                         }
 
-                        else -> {
+                        DashboardContentState.Content -> {
                             DashboardStatusBanner(
-                                isRefreshing = uiState.isRefreshing,
-                                isOffline = uiState.isOffline,
-                                syncBlockedOnAuth = uiState.syncBlockedOnAuth,
-                                pendingSyncCount = uiState.pendingSyncCount,
-                                lastSyncedAtMillis = uiState.lastSyncedAtMillis,
+                                bannerState = uiState.bannerState,
                                 onRetry = onRefresh
                             )
                             Text(
@@ -410,16 +406,11 @@ private fun SummaryCard(
  * pending-sync-count (informational, expected offline-first behavior) > refreshing.
  */
 @Composable
-private fun DashboardStatusBanner(
-    isRefreshing: Boolean,
-    isOffline: Boolean,
-    syncBlockedOnAuth: Boolean,
-    pendingSyncCount: Int,
-    lastSyncedAtMillis: Long?,
-    onRetry: () -> Unit
-) {
-    when {
-        syncBlockedOnAuth -> {
+private fun DashboardStatusBanner(bannerState: DashboardBannerState, onRetry: () -> Unit) {
+    when (bannerState) {
+        DashboardBannerState.None -> Unit
+
+        DashboardBannerState.SyncBlockedOnAuth -> {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -438,7 +429,7 @@ private fun DashboardStatusBanner(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        isOffline -> {
+        is DashboardBannerState.Offline -> {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -450,7 +441,7 @@ private fun DashboardStatusBanner(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "You're offline — showing data from ${formatRelativeSyncTime(lastSyncedAtMillis)}. Tap to retry.",
+                    text = "You're offline — showing data from ${formatRelativeSyncTime(bannerState.lastSyncedAtMillis)}. Tap to retry.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
@@ -458,7 +449,7 @@ private fun DashboardStatusBanner(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        pendingSyncCount > 0 -> {
+        is DashboardBannerState.PendingSync -> {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -468,9 +459,9 @@ private fun DashboardStatusBanner(
                     .testTag(DashboardScreenTestTags.PENDING_SYNC_BANNER),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val noun = if (pendingSyncCount == 1) "item" else "items"
+                val noun = if (bannerState.count == 1) "item" else "items"
                 Text(
-                    text = "$pendingSyncCount $noun waiting to sync.",
+                    text = "${bannerState.count} $noun waiting to sync.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -478,7 +469,7 @@ private fun DashboardStatusBanner(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        isRefreshing -> {
+        DashboardBannerState.Refreshing -> {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

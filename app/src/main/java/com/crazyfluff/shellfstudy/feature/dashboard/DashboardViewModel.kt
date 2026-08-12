@@ -14,9 +14,11 @@ import com.crazyfluff.shellfstudy.core.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.core.data.isAuthError
 import com.crazyfluff.shellfstudy.core.data.model.CompletionProjection
+import com.crazyfluff.shellfstudy.core.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.core.data.model.WaniKaniUser
 import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
@@ -61,7 +63,42 @@ data class DashboardUiState(
     val levelProgress: LevelProgress? = null,
     val itemSpread: ItemSpread? = null,
     val completionProjection: CompletionProjection? = null
-)
+) {
+    /** Which status banner takes priority — same order [DashboardStatusBanner] used to hand-derive
+     *  from these same flags, now computed once here as the single source of truth. */
+    val bannerState: DashboardBannerState
+        get() = when {
+            syncBlockedOnAuth -> DashboardBannerState.SyncBlockedOnAuth
+            isOffline -> DashboardBannerState.Offline(lastSyncedAtMillis)
+            pendingSyncCount > 0 -> DashboardBannerState.PendingSync(pendingSyncCount)
+            isRefreshing -> DashboardBannerState.Refreshing
+            else -> DashboardBannerState.None
+        }
+
+    /** Which of the screen's three top-level content regions to render. [isLoggedOut] deliberately
+     *  stays outside this — it's a one-shot navigation trigger consumed via `LaunchedEffect`, not
+     *  a render state. */
+    val contentState: DashboardContentState
+        get() = when {
+            isRefreshing && username == null -> DashboardContentState.Loading
+            errorMessage != null -> DashboardContentState.FullScreenError(errorMessage)
+            else -> DashboardContentState.Content
+        }
+}
+
+sealed interface DashboardBannerState {
+    data object None : DashboardBannerState
+    data object SyncBlockedOnAuth : DashboardBannerState
+    data class Offline(val lastSyncedAtMillis: Long?) : DashboardBannerState
+    data class PendingSync(val count: Int) : DashboardBannerState
+    data object Refreshing : DashboardBannerState
+}
+
+sealed interface DashboardContentState {
+    data object Loading : DashboardContentState
+    data class FullScreenError(val message: String) : DashboardContentState
+    data object Content : DashboardContentState
+}
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
@@ -152,8 +189,7 @@ class DashboardViewModel @Inject constructor(
 
             syncOrchestrator.syncAll(force = true)
 
-            val userResult = waniKaniRepository.fetchUser()
-            val summaryResult = waniKaniRepository.fetchDashboardSummary()
+            val (userResult, summaryResult) = fetchUserAndSummary()
             val hasContent = _dashboardData.value.username != null
 
             if (userResult is ApiResult.Error) {
@@ -211,14 +247,26 @@ class DashboardViewModel @Inject constructor(
      * full resync of everything, and never touches [DashboardUiState.isRefreshing] or
      * [DashboardUiState.errorMessage] — most calls will be near-instant no-ops, and a transient
      * failure here shouldn't blank out an already-populated dashboard, just flag it as
-     * [DashboardUiState.isOffline].
+     * [DashboardUiState.isOffline]. A confirmed auth error is the one exception: same as [refresh],
+     * it logs the user out rather than being treated as merely offline.
      */
     fun onDashboardResumed() {
         viewModelScope.launch {
             syncOrchestrator.syncAll(force = false)
 
-            val user = (waniKaniRepository.fetchUser() as? ApiResult.Success)?.data
-            val summary = (waniKaniRepository.fetchDashboardSummary() as? ApiResult.Success)?.data
+            val (userResult, summaryResult) = fetchUserAndSummary()
+
+            if (userResult is ApiResult.Error && userResult.isAuthError) {
+                tokenRepository.clearToken()
+                syncScheduler.cancelPeriodicSync()
+                pitchAccentScrapeScheduler.cancelPeriodicScrape()
+                notificationCoordinator.onLogout()
+                _dashboardData.update { it.copy(isLoggedOut = true) }
+                return@launch
+            }
+
+            val user = (userResult as? ApiResult.Success)?.data
+            val summary = (summaryResult as? ApiResult.Success)?.data
             val fetchFailed = user == null || summary == null
             val syncedAtMillis = System.currentTimeMillis()
 
@@ -247,6 +295,16 @@ class DashboardViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** The one fetch [refresh] and [onDashboardResumed] share — deliberately just the raw pair of
+     *  results, not a collapsed outcome: the two callers apply genuinely different interpretation
+     *  policies on top (refresh() is all-or-nothing; onDashboardResumed() resolves each field
+     *  independently so a lone summary failure doesn't discard an otherwise-successful user fetch). */
+    private suspend fun fetchUserAndSummary(): Pair<ApiResult<WaniKaniUser>, ApiResult<DashboardSummary>> {
+        val userResult = waniKaniRepository.fetchUser()
+        val summaryResult = waniKaniRepository.fetchDashboardSummary()
+        return userResult to summaryResult
     }
 
     fun logOut() {

@@ -257,6 +257,37 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `a confirmed 401 discovered on onDashboardResumed also logs out, not just isOffline`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        tokenRepository.saveToken("stale-token")
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isRefreshing) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        // A token revoked after the initial load — the resume path (not just manual refresh) must
+        // also detect this rather than falling through to the generic isOffline treatment.
+        dispatchByPath(emptyResponse(401), jsonResponse(summaryJson()))
+
+        viewModel.uiState.test {
+            viewModel.onDashboardResumed()
+            var state = awaitItem()
+            while (!state.isLoggedOut) state = awaitItem()
+            assertThat(state.isLoggedOut).isTrue()
+            assertThat(state.isOffline).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
+        assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
+        assertThat(pitchAccentScrapeScheduler.cancelCallCount).isEqualTo(1)
+        assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
+    }
+
+    @Test
     fun `logOut clears the stored token, cancels background sync, and marks state logged out`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         tokenRepository.saveToken("some-token")

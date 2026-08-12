@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -15,14 +16,29 @@ import com.crazyfluff.shellfstudy.feature.lesson.LessonRoute
 import com.crazyfluff.shellfstudy.feature.review.ReviewRoute
 import com.crazyfluff.shellfstudy.feature.settings.SettingsRoute
 import com.crazyfluff.shellfstudy.feature.splash.SplashRoute
+import kotlinx.serialization.Serializable
 
-object ShellfStudyDestinations {
-    const val SPLASH = "splash"
-    const val AUTH = "auth"
-    const val DASHBOARD = "dashboard"
-    const val REVIEW = "review"
-    const val LESSON = "lesson"
-    const val SETTINGS = "settings"
+/** Type-safe Navigation-Compose routes. Named `ShellfStudyDestination`, not `XRoute`, to avoid
+ *  colliding with the `@Composable fun XRoute(...)` entry points this same file calls by simple
+ *  name (`AuthRoute`, `DashboardRoute`, etc.) — those are unrelated, feature-owned composables. */
+sealed interface ShellfStudyDestination {
+    @Serializable
+    data object Splash : ShellfStudyDestination
+
+    @Serializable
+    data object Auth : ShellfStudyDestination
+
+    @Serializable
+    data object Dashboard : ShellfStudyDestination
+
+    @Serializable
+    data object Review : ShellfStudyDestination
+
+    @Serializable
+    data object Lesson : ShellfStudyDestination
+
+    @Serializable
+    data object Settings : ShellfStudyDestination
 }
 
 @Composable
@@ -38,71 +54,71 @@ fun ShellfStudyNavHost(
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     LaunchedEffect(pendingDestination, currentBackStackEntry) {
         if (pendingDestination == null) return@LaunchedEffect
-        val currentRoute = currentBackStackEntry?.destination?.route ?: return@LaunchedEffect
-        if (currentRoute == ShellfStudyDestinations.AUTH || currentRoute == ShellfStudyDestinations.SPLASH) {
+        val destination = currentBackStackEntry?.destination ?: return@LaunchedEffect
+        if (destination.hasRoute<ShellfStudyDestination.Auth>() || destination.hasRoute<ShellfStudyDestination.Splash>()) {
             return@LaunchedEffect
         }
 
-        val targetRoute = when (pendingDestination) {
-            NotificationDeepLink.DESTINATION_REVIEW -> ShellfStudyDestinations.REVIEW
-            NotificationDeepLink.DESTINATION_LESSON -> ShellfStudyDestinations.LESSON
+        val targetDestination = when (pendingDestination) {
+            NotificationDeepLink.DESTINATION_REVIEW -> ShellfStudyDestination.Review
+            NotificationDeepLink.DESTINATION_LESSON -> ShellfStudyDestination.Lesson
             else -> null
         }
-        if (targetRoute != null && targetRoute != currentRoute) {
-            navController.navigateSafely(targetRoute)
+        if (targetDestination != null && !destination.hasRoute(targetDestination::class)) {
+            navController.navigateSafely(targetDestination)
         }
         onPendingDestinationConsumed()
     }
 
-    NavHost(navController = navController, startDestination = ShellfStudyDestinations.SPLASH) {
-        composable(ShellfStudyDestinations.SPLASH) {
+    NavHost(navController = navController, startDestination = ShellfStudyDestination.Splash) {
+        composable<ShellfStudyDestination.Splash> {
             SplashRoute(
                 onNavigateToAuth = {
-                    navController.navigateSafely(ShellfStudyDestinations.AUTH) {
-                        popUpTo(ShellfStudyDestinations.SPLASH) { inclusive = true }
+                    navController.navigateSafely(ShellfStudyDestination.Auth) {
+                        popUpTo<ShellfStudyDestination.Splash> { inclusive = true }
                     }
                 },
                 onNavigateToDashboard = {
-                    navController.navigateSafely(ShellfStudyDestinations.DASHBOARD) {
-                        popUpTo(ShellfStudyDestinations.SPLASH) { inclusive = true }
+                    navController.navigateSafely(ShellfStudyDestination.Dashboard) {
+                        popUpTo<ShellfStudyDestination.Splash> { inclusive = true }
                     }
                 }
             )
         }
-        composable(ShellfStudyDestinations.AUTH) {
+        composable<ShellfStudyDestination.Auth> {
             AuthRoute(
                 onAuthenticated = {
-                    navController.navigateSafely(ShellfStudyDestinations.DASHBOARD) {
-                        popUpTo(ShellfStudyDestinations.AUTH) { inclusive = true }
+                    navController.navigateSafely(ShellfStudyDestination.Dashboard) {
+                        popUpTo<ShellfStudyDestination.Auth> { inclusive = true }
                     }
                 }
             )
         }
-        composable(ShellfStudyDestinations.DASHBOARD) {
+        composable<ShellfStudyDestination.Dashboard> {
             DashboardRoute(
-                onStartReview = { navController.navigateSafely(ShellfStudyDestinations.REVIEW) },
-                onStartLesson = { navController.navigateSafely(ShellfStudyDestinations.LESSON) },
-                onOpenSettings = { navController.navigateSafely(ShellfStudyDestinations.SETTINGS) },
+                onStartReview = { navController.navigateSafely(ShellfStudyDestination.Review) },
+                onStartLesson = { navController.navigateSafely(ShellfStudyDestination.Lesson) },
+                onOpenSettings = { navController.navigateSafely(ShellfStudyDestination.Settings) },
                 onLoggedOut = {
-                    navController.navigateSafely(ShellfStudyDestinations.AUTH) {
-                        popUpTo(ShellfStudyDestinations.DASHBOARD) { inclusive = true }
+                    navController.navigateSafely(ShellfStudyDestination.Auth) {
+                        popUpTo<ShellfStudyDestination.Dashboard> { inclusive = true }
                     }
                 }
             )
         }
-        composable(ShellfStudyDestinations.REVIEW) {
+        composable<ShellfStudyDestination.Review> {
             ReviewRoute(
                 onSessionComplete = { navController.popBackStackSafely() },
                 onBack = { navController.popBackStackSafely() }
             )
         }
-        composable(ShellfStudyDestinations.LESSON) {
+        composable<ShellfStudyDestination.Lesson> {
             LessonRoute(
                 onSessionComplete = { navController.popBackStackSafely() },
                 onBack = { navController.popBackStackSafely() }
             )
         }
-        composable(ShellfStudyDestinations.SETTINGS) {
+        composable<ShellfStudyDestination.Settings> {
             SettingsRoute(onBack = { navController.popBackStackSafely() })
         }
     }
