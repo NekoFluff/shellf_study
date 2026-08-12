@@ -1,7 +1,9 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
+import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.network.MeaningData
@@ -9,6 +11,7 @@ import com.crazyfluff.shellfstudy.core.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.core.network.PronunciationAudioMetadataData
 import com.crazyfluff.shellfstudy.core.network.ReadingData
 import com.crazyfluff.shellfstudy.core.network.ReviewResultData
+import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
@@ -141,7 +144,7 @@ class AssignmentRepositoryTest {
         seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
         repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 3)))
 
-        val rankChange = repository.applyOptimisticReviewResult(101, ReviewGrade(meaningCorrect = true, readingCorrect = true))
+        val rankChange = repository.applyOptimisticReviewResult(101, 0, ReviewGrade(meaningCorrect = true, readingCorrect = true))
 
         assertThat(server.requestCount).isEqualTo(0)
         assertThat(rankChange?.from?.raw).isEqualTo(3)
@@ -154,7 +157,7 @@ class AssignmentRepositoryTest {
         seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
         repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 6)))
 
-        val rankChange = repository.applyOptimisticReviewResult(101, ReviewGrade(meaningCorrect = false, readingCorrect = true))
+        val rankChange = repository.applyOptimisticReviewResult(101, 0, ReviewGrade(meaningCorrect = false, readingCorrect = true))
 
         assertThat(rankChange?.to?.raw).isEqualTo(4)
         assertThat(repositories.assignmentDao.getById(101)?.srsStage).isEqualTo(4)
@@ -162,7 +165,7 @@ class AssignmentRepositoryTest {
 
     @Test
     fun `applyOptimisticReviewResult returns null when the assignment isn't cached yet`() = runTest {
-        val rankChange = repository.applyOptimisticReviewResult(999, ReviewGrade(meaningCorrect = true, readingCorrect = true))
+        val rankChange = repository.applyOptimisticReviewResult(999, 0, ReviewGrade(meaningCorrect = true, readingCorrect = true))
 
         assertThat(rankChange).isNull()
     }
@@ -172,11 +175,55 @@ class AssignmentRepositoryTest {
         seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
         repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 0)))
 
-        val rankChange = repository.applyOptimisticLessonStart(101)
+        val rankChange = repository.applyOptimisticLessonStart(101, 0)
 
         assertThat(rankChange?.from?.raw).isEqualTo(0)
         assertThat(rankChange?.to?.raw).isEqualTo(1)
         assertThat(repositories.assignmentDao.getById(101)?.srsStage).isEqualTo(1)
+    }
+
+    @Test
+    fun `computeReviewRankChange predicts the same result as applyOptimisticReviewResult, with no DB write`() = runTest {
+        seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
+        repository.warmSrsSystemCache()
+        val item = ReviewItem(
+            assignmentId = 101, subjectId = 1, subjectType = SubjectType.RADICAL, characters = "口",
+            level = 3, srsStage = 3, meanings = listOf("Mouth"), readings = listOf("くち"), srsSystemId = 0
+        )
+
+        val rankChange = repository.computeReviewRankChange(item, ReviewGrade(meaningCorrect = true, readingCorrect = true))
+
+        assertThat(rankChange?.from?.raw).isEqualTo(3)
+        assertThat(rankChange?.to?.raw).isEqualTo(4)
+        // Purely a synchronous prediction — nothing was actually persisted.
+        assertThat(repositories.assignmentDao.getById(101)).isNull()
+    }
+
+    @Test
+    fun `computeReviewRankChange returns null before the cache is warmed`() = runTest {
+        val item = ReviewItem(
+            assignmentId = 101, subjectId = 1, subjectType = SubjectType.RADICAL, characters = "口",
+            level = 3, srsStage = 3, meanings = listOf("Mouth"), readings = emptyList(), srsSystemId = 0
+        )
+
+        val rankChange = repository.computeReviewRankChange(item, ReviewGrade(meaningCorrect = true, readingCorrect = true))
+
+        assertThat(rankChange).isNull()
+    }
+
+    @Test
+    fun `computeLessonStartRankChange predicts locked to the srs system's starting stage`() = runTest {
+        repository.warmSrsSystemCache()
+        val item = LessonItem(
+            assignmentId = 101, subjectId = 1, subjectType = SubjectType.RADICAL, characters = "口",
+            level = 3, meanings = listOf("Mouth"), readings = listOf("くち"),
+            meaningMnemonic = null, readingMnemonic = null, srsSystemId = 0
+        )
+
+        val rankChange = repository.computeLessonStartRankChange(item)
+
+        assertThat(rankChange?.from?.raw).isEqualTo(0)
+        assertThat(rankChange?.to?.raw).isEqualTo(1)
     }
 
     @Test

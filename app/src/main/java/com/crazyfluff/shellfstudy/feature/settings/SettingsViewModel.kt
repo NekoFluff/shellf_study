@@ -20,6 +20,8 @@ data class SettingsUiState(
     val showPitchAccent: Boolean = true,
     val autoplayPronunciationAudio: Boolean = true,
     val restrictAudioToMp3: Boolean = false,
+    val showSubjectTypeLabel: Boolean = false,
+    val showReviewTimer: Boolean = false,
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
@@ -48,6 +50,8 @@ class SettingsViewModel @Inject constructor(
             showPitchAccent = app.showPitchAccent,
             autoplayPronunciationAudio = app.autoplayPronunciationAudio,
             restrictAudioToMp3 = app.restrictAudioToMp3,
+            showSubjectTypeLabel = app.showSubjectTypeLabel,
+            showReviewTimer = app.showReviewTimer,
             notificationsEnabled = notif.notificationsEnabled,
             reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
             reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
@@ -78,6 +82,14 @@ class SettingsViewModel @Inject constructor(
 
     fun onRestrictAudioToMp3Change(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setRestrictAudioToMp3(enabled) }
+    }
+
+    fun onShowSubjectTypeLabelChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowSubjectTypeLabel(enabled) }
+    }
+
+    fun onShowReviewTimerChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowReviewTimer(enabled) }
     }
 
     /**

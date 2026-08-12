@@ -11,6 +11,8 @@ import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
@@ -33,6 +35,7 @@ class SplashViewModelTest {
     @Before
     fun setUp() {
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
@@ -45,7 +48,7 @@ class SplashViewModelTest {
         SplashViewModel(tokenRepository, syncScheduler, pitchAccentScrapeScheduler, notificationCoordinator)
 
     @Test
-    fun `with no stored token, routes to auth without touching background sync`() = runTest {
+    fun `with no stored token, routes to auth without touching background sync`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
@@ -58,7 +61,7 @@ class SplashViewModelTest {
     }
 
     @Test
-    fun `with a stored token, routes to dashboard and schedules background sync without any network call`() = runTest {
+    fun `with a stored token, routes to dashboard and schedules background sync without any network call`() = runTest(mainDispatcherRule.dispatcher) {
         tokenRepository.saveToken("stored-token")
         val viewModel = createViewModel()
 

@@ -63,6 +63,7 @@ data class LessonUiState(
     val remainingQuizCount: Int = 0,
     val isSessionComplete: Boolean = false,
     val showPitchAccent: Boolean = true,
+    val showSubjectTypeLabel: Boolean = false,
     val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
     val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
     val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
@@ -88,11 +89,18 @@ class LessonViewModel @Inject constructor(
     private val startedAssignmentIds = mutableSetOf<Long>()
     private var totalQuizCount = 0
 
+    // Set synchronously (not via _uiState) so a second rapid tap is rejected immediately, before
+    // the first submission's suspend work has had a chance to land feedback in state — see
+    // ReviewViewModel.isGrading for the full race this closes.
+    private var isGrading = false
+
     init {
         loadOrResume()
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
-                _uiState.update { it.copy(showPitchAccent = settings.showPitchAccent) }
+                _uiState.update {
+                    it.copy(showPitchAccent = settings.showPitchAccent, showSubjectTypeLabel = settings.showSubjectTypeLabel)
+                }
             }
         }
     }
@@ -102,6 +110,7 @@ class LessonViewModel @Inject constructor(
     fun load() {
         viewModelScope.launch {
             _uiState.update { LessonUiState(isLoading = true) }
+            assignmentRepository.warmSrsSystemCache()
             lessonSessionRepository.clear()
             fetchFreshQueue()
         }
@@ -111,6 +120,10 @@ class LessonViewModel @Inject constructor(
     private fun loadOrResume() {
         viewModelScope.launch {
             _uiState.update { LessonUiState(isLoading = true) }
+            // Warmed once here, during the loading spinner, so every item started during this
+            // session can compute its rank change synchronously — see
+            // AssignmentRepository.computeLessonStartRankChange.
+            assignmentRepository.warmSrsSystemCache()
             val persisted = lessonSessionRepository.load()
             if (persisted != null) {
                 resumeFromPersisted(persisted)
@@ -327,20 +340,25 @@ class LessonViewModel @Inject constructor(
 
     fun submitAnswer() {
         val state = _uiState.value
-        if (state.feedback != null) return
+        if (state.feedback != null || isGrading) return
         val item = state.currentQuizItem ?: return
         val type = state.currentQuestionType ?: return
         if (state.answerInput.isBlank()) return
 
+        isGrading = true
         viewModelScope.launch {
-            val candidates = candidatesFor(item, type)
-            if (type == LessonQuestionType.MEANING) {
-                val match = CloseEnoughMatcher.match(state.answerInput, candidates)
-                gradeAnswer(item, type, match.isMatch, candidates, wasCloseMatch = match.isMatch && !match.isExact)
-            } else {
-                val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
-                val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
-                gradeAnswer(item, type, isCorrect, candidates)
+            try {
+                val candidates = candidatesFor(item, type)
+                if (type == LessonQuestionType.MEANING) {
+                    val match = CloseEnoughMatcher.match(state.answerInput, candidates)
+                    gradeAnswer(item, type, match.isMatch, candidates, wasCloseMatch = match.isMatch && !match.isExact)
+                } else {
+                    val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
+                    val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
+                    gradeAnswer(item, type, isCorrect, candidates)
+                }
+            } finally {
+                isGrading = false
             }
         }
     }
@@ -356,11 +374,18 @@ class LessonViewModel @Inject constructor(
     /** Gives up on the current question — treated the same as a wrong answer, requeued for another pass. */
     fun dontKnowAnswer() {
         val state = _uiState.value
-        if (state.feedback != null) return
+        if (state.feedback != null || isGrading) return
         val item = state.currentQuizItem ?: return
         val type = state.currentQuestionType ?: return
         val candidates = candidatesFor(item, type)
-        viewModelScope.launch { gradeAnswer(item, type, isCorrect = false, candidates) }
+        isGrading = true
+        viewModelScope.launch {
+            try {
+                gradeAnswer(item, type, isCorrect = false, candidates)
+            } finally {
+                isGrading = false
+            }
+        }
     }
 
     private suspend fun gradeAnswer(
@@ -380,10 +405,25 @@ class LessonViewModel @Inject constructor(
             quizQueue.none { it.item.assignmentId == item.assignmentId }
         }
 
-        // Computed before the uiState update (not in a separate launch) so the rank-change and the
-        // feedback land in one emission — with the local write being fully synchronous now (no
-        // network), a decoupled launch would just add a same-tick second emission for no benefit.
-        val newRankChange = if (justCompletedItem) markStarted(item) else null
+        // Snapshotted synchronously, right after mutating quizQueue above, so the detached
+        // durability write below can safely run concurrently with the next question's own
+        // grading/advance — quizQueue is a plain, non-thread-safe collection, and once feedback
+        // is visible the user is free to act immediately.
+        val snapshot = currentPersistSnapshot()
+
+        // startedAssignmentIds.add(...) is the idempotency guard (an item should only ever be
+        // marked started once) — computed once so both the optimistic patch below and the outbox
+        // enqueue afterward agree on whether this is really a first-time completion.
+        val isNewlyStarted = justCompletedItem && startedAssignmentIds.add(item.assignmentId)
+        // Computed synchronously against AssignmentRepository's in-memory SRS-system cache
+        // (warmed once when the queue loaded) — zero DB access on this critical path at all now.
+        // The actual DB write is durability bookkeeping the user never waits on, so it's launched
+        // as its own detached coroutine below instead of awaited inline.
+        val newRankChange = if (isNewlyStarted) {
+            assignmentRepository.computeLessonStartRankChange(item)?.takeIf { it.from != it.to }
+        } else {
+            null
+        }
 
         _uiState.update {
             it.copy(
@@ -392,28 +432,42 @@ class LessonViewModel @Inject constructor(
                 rankChange = newRankChange ?: it.rankChange
             )
         }
-        persistCurrentState()
+
+        persistDurabilityWork(isNewlyStarted, item, snapshot)
     }
 
-    /**
-     * Local-write-first, same idea as [com.crazyfluff.shellfstudy.feature.review.ReviewViewModel.submitReviewResult]:
-     * durably queues the start and patches the SRS stage optimistically, no network call (and so
-     * nothing to fail) on this path.
-     */
-    private suspend fun markStarted(item: LessonItem): RankChange? {
-        if (!startedAssignmentIds.add(item.assignmentId)) return null
-        val rankChange = assignmentRepository.applyOptimisticLessonStart(item.assignmentId)
-        outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
-        return rankChange?.takeIf { it.from != it.to }
+    /** Captures the current quiz queue as an immutable, ready-to-persist value — safe to hold
+     *  across a suspension point even if the live quizQueue is mutated by something else
+     *  afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). */
+    private fun currentPersistSnapshot(): PersistedLessonSession = PersistedLessonSession(
+        quizQueue = quizQueue.map { PersistedLessonQuestion(it.item.assignmentId, it.type.name) },
+        totalQuizCount = totalQuizCount
+    )
+
+    private suspend fun persistSnapshot(snapshot: PersistedLessonSession) {
+        lessonSessionRepository.save(snapshot)
     }
 
     private suspend fun persistCurrentState() {
-        lessonSessionRepository.save(
-            PersistedLessonSession(
-                quizQueue = quizQueue.map { PersistedLessonQuestion(it.item.assignmentId, it.type.name) },
-                totalQuizCount = totalQuizCount
-            )
-        )
+        persistSnapshot(currentPersistSnapshot())
+    }
+
+    /** Fires the post-grading durability writes (outbox enqueue, session persistence) as their
+     *  own child coroutine, detached from [gradeAnswer]'s own suspend chain — none of it needs to
+     *  complete before the caller (submitAnswer/dontKnowAnswer) considers grading "done" and
+     *  clears [isGrading], so the UI unlocks the instant feedback is visible rather than waiting
+     *  on bookkeeping the user never sees. */
+    private fun persistDurabilityWork(isNewlyStarted: Boolean, item: LessonItem, snapshot: PersistedLessonSession) {
+        viewModelScope.launch {
+            if (isNewlyStarted) {
+                // The actual DB write of the new SRS stage — already reflected in the UI via the
+                // synchronous computeLessonStartRankChange prediction above, so this just makes
+                // the local cache catch up.
+                assignmentRepository.applyOptimisticLessonStart(item.assignmentId, item.srsSystemId)
+                outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
+            }
+            persistSnapshot(snapshot)
+        }
     }
 
     fun onContinue() {

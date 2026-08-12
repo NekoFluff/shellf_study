@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,6 +59,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -91,6 +94,7 @@ import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlin.math.roundToInt
 
@@ -124,6 +128,7 @@ object LessonScreenTestTags {
     const val FEEDBACK_TEXT = "lesson_feedback_text"
     const val ANSWER_DETAIL_TEXT = "lesson_answer_detail_text"
     const val RANK_CHANGE_TEXT = "lesson_rank_change_text"
+    const val QUIZ_SUBJECT_TYPE_LABEL = "lesson_quiz_subject_type_label"
     const val CONTINUE_BUTTON = "lesson_continue_button"
     const val SESSION_COMPLETE = "lesson_session_complete"
     const val DONE_BUTTON = "lesson_done_button"
@@ -797,6 +802,14 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             color = accentColor,
             modifier = Modifier.testTag(LessonScreenTestTags.QUIZ_CHARACTERS)
         )
+        if (uiState.showSubjectTypeLabel) {
+            Text(
+                text = subjectTypeLabel(item.subjectType),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL)
+            )
+        }
     }
 
     Column(
@@ -880,10 +893,47 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onContinue,
-                modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.CONTINUE_BUTTON)
-            ) { Text("Continue") }
+            GatedContinueButton(feedback = feedback, onContinue = onContinue, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/** Time an incorrect answer's Continue button stays disabled for, so a reflexive fast tap can't
+ *  blow past feedback before it's been registered. Correct answers never lock. */
+private const val ContinueLockMs = 1200
+
+@Composable
+private fun GatedContinueButton(feedback: LessonAnswerFeedback, onContinue: () -> Unit, modifier: Modifier = Modifier) {
+    // Drives the fill directly (rather than deriving it from a separately-toggled "unlocked"
+    // boolean) so the bar actually animates 0->1 while it's visible, and unlocking happens in
+    // sync with it visually finishing — not the instant before it, which just hid a bar stuck at 0.
+    val lockProgress = remember(feedback) { Animatable(if (feedback.isCorrect) 1f else 0f) }
+    val continueUnlocked = feedback.isCorrect || lockProgress.value >= 1f
+    LaunchedEffect(feedback) {
+        if (!feedback.isCorrect) {
+            lockProgress.snapTo(0f)
+            lockProgress.animateTo(1f, animationSpec = tween(ContinueLockMs))
+        }
+    }
+
+    Box(modifier = modifier) {
+        Button(
+            onClick = onContinue,
+            enabled = continueUnlocked,
+            modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.CONTINUE_BUTTON)
+        ) { Text("Continue") }
+        if (!continueUnlocked) {
+            LinearProgressIndicator(
+                progress = { lockProgress.value },
+                color = MaterialTheme.colorScheme.onPrimary,
+                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
+                drawStopIndicator = {},
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp))
+            )
         }
     }
 }

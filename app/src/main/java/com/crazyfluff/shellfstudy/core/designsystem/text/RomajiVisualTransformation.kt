@@ -22,7 +22,9 @@ import com.crazyfluff.shellfstudy.core.util.RomajiConverter
  */
 object RomajiVisualTransformation : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
-        val conversion = RomajiConverter.convert(text.text)
+        // isComplete = false: the user may still be typing, so a trailing "n" with nothing after
+        // it stays a bare "n" rather than eagerly guessing ん — see RomajiConverter.convert's doc.
+        val conversion = RomajiConverter.convert(text.text, isComplete = false)
         val offsetMapping = object : OffsetMapping {
             override fun originalToTransformed(offset: Int): Int =
                 mapOffset(offset, conversion.rawBoundaries, conversion.hiraganaBoundaries)

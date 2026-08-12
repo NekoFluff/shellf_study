@@ -18,6 +18,8 @@ import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockWebServer
 import org.junit.After
@@ -41,7 +43,7 @@ class SubjectDetailViewModelTest {
     private lateinit var strokeOrderRepository: FakeStrokeOrderRepository
 
     @Before
-    fun setUp() = runTest {
+    fun setUp() = runTest(mainDispatcherRule.dispatcher) {
         server = MockWebServer()
         server.start()
         val repositories = buildTestRepositories(server.url("/").toString())
@@ -93,6 +95,7 @@ class SubjectDetailViewModelTest {
             )
         )
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         settingsRepository = SettingsRepository(dataStore)
@@ -127,7 +130,7 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
-    fun `open loads the subject and resolves its component as a related tile`() = runTest {
+    fun `open loads the subject and resolves its component as a related tile`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             awaitNotLoading()
 
@@ -141,7 +144,7 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
-    fun `navigateToRelated pushes current subject onto the back stack and loads the target`() = runTest {
+    fun `navigateToRelated pushes current subject onto the back stack and loads the target`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             awaitNotLoading()
 
@@ -156,7 +159,7 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
-    fun `goBack pops the stack and returns false once empty`() = runTest {
+    fun `goBack pops the stack and returns false once empty`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             awaitNotLoading()
 
@@ -175,7 +178,7 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
-    fun `uiState reflects showPitchAccent from settings and updates when it changes`() = runTest {
+    fun `uiState reflects showPitchAccent from settings and updates when it changes`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             val state = awaitNotLoading()
             assertThat(state.showPitchAccent).isTrue()
@@ -188,7 +191,7 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
-    fun `uiState resolves stroke order for a kanji with bundled data`() = runTest {
+    fun `uiState resolves stroke order for a kanji with bundled data`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             awaitNotLoading()
 
@@ -202,7 +205,7 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
-    fun `uiState has no stroke order for a radical with no matching character`() = runTest {
+    fun `uiState has no stroke order for a radical with no matching character`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             awaitNotLoading()
 
@@ -234,7 +237,7 @@ class SubjectDetailViewModelTest {
     )
 
     @Test
-    fun `playReading plays the audio matching the requested reading`() = runTest {
+    fun `playReading plays the audio matching the requested reading`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             awaitNotLoading()
 
@@ -249,7 +252,7 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
-    fun `playReading is a no-op when the subject has no pronunciation audio`() = runTest {
+    fun `playReading is a no-op when the subject has no pronunciation audio`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             awaitNotLoading()
 
@@ -263,7 +266,7 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
-    fun `playReading picks the mp3 clip when restrictAudioToMp3 is enabled`() = runTest {
+    fun `playReading picks the mp3 clip when restrictAudioToMp3 is enabled`() = runTest(mainDispatcherRule.dispatcher) {
         settingsRepository.setRestrictAudioToMp3(true)
 
         viewModel.uiState.test {
@@ -281,7 +284,7 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
-    fun `playReading is a no-op when restrictAudioToMp3 is enabled and only an ogg clip exists`() = runTest {
+    fun `playReading is a no-op when restrictAudioToMp3 is enabled and only an ogg clip exists`() = runTest(mainDispatcherRule.dispatcher) {
         settingsRepository.setRestrictAudioToMp3(true)
 
         viewModel.uiState.test {

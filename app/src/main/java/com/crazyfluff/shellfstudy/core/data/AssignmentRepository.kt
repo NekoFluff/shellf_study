@@ -31,6 +31,7 @@ import com.crazyfluff.shellfstudy.core.network.collectAllPages
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -100,13 +101,16 @@ class AssignmentRepository @Inject constructor(
      * Immediately patches the local assignment cache to reflect a review grade, before any network
      * call — the dashboard/review queue reflect progress instantly regardless of connectivity. Only
      * ever a prediction (see [SrsStageCalculator]); [reconcileAfterReviewResult] overwrites it with
-     * the server-confirmed value once the real submission syncs. Returns null if the assignment or
-     * its SRS system isn't cached yet (e.g. SRS systems haven't synced since install) — the caller
-     * just won't see a rank-change animation until the next successful sync catches this up.
+     * the server-confirmed value once the real submission syncs. Returns null if the assignment
+     * isn't cached, or its SRS system isn't cached anywhere (neither [srsSystemCache] nor the DB
+     * fallback has it — e.g. SRS systems haven't synced since install) — the caller just won't see
+     * a rank-change animation until the next successful sync catches this up. [srsSystemId] comes
+     * from the caller's already-in-memory [ReviewItem]/[LessonItem], so this never needs to look it
+     * up via [subjectDao] the way the older [srsSystemFor] still does for [reconcileAfterReviewResult].
      */
-    suspend fun applyOptimisticReviewResult(assignmentId: Long, grade: ReviewGrade): RankChange? {
+    suspend fun applyOptimisticReviewResult(assignmentId: Long, srsSystemId: Long, grade: ReviewGrade): RankChange? {
         val assignment = assignmentDao.getById(assignmentId) ?: return null
-        val srsSystem = srsSystemFor(assignment.subjectId) ?: return null
+        val srsSystem = srsSystemById(srsSystemId) ?: return null
         val nextStage = if (grade.isFullyCorrect) {
             SrsStageCalculator.nextStageOnCorrect(assignment.srsStage, srsSystem)
         } else {
@@ -119,10 +123,55 @@ class AssignmentRepository @Inject constructor(
     /** Same idea as [applyOptimisticReviewResult] but for starting a lesson — every lesson item
      *  starts the same way (locked straight to the SRS system's starting stage), so no grade input
      *  is needed to know the target stage, only whether the assignment/SRS-system data is cached. */
-    suspend fun applyOptimisticLessonStart(assignmentId: Long): RankChange? {
+    suspend fun applyOptimisticLessonStart(assignmentId: Long, srsSystemId: Long): RankChange? {
         val assignment = assignmentDao.getById(assignmentId) ?: return null
-        val srsSystem = srsSystemFor(assignment.subjectId) ?: return null
+        val srsSystem = srsSystemById(srsSystemId) ?: return null
         assignmentDao.upsertAll(listOf(assignment.withStageTransition(srsSystem.startingStagePosition, srsSystem, Instant.now())))
+        return RankChange(SrsStage.LOCKED, SrsStage.fromRaw(srsSystem.startingStagePosition))
+    }
+
+    // Small, rarely-changing reference data — WaniKani only has a couple of SRS systems — cached
+    // in memory once so a review/lesson item's rank change can be predicted with zero DB access at
+    // all (computeReviewRankChange/computeLessonStartRankChange), and so the deferred write
+    // (applyOptimisticReviewResult/applyOptimisticLessonStart) doesn't need a DB round trip for the
+    // SRS system either, only for the assignment row itself. Safe to treat as immutable for a
+    // session: SRS systems don't change after the initial sync.
+    private var srsSystemCache: Map<Long, SrsSystemEntity>? = null
+
+    /** Warms [srsSystemCache] if it isn't already — call once before a grading session starts
+     *  (e.g. when the review/lesson queue loads), so every answer in that session can compute its
+     *  rank change synchronously via [computeReviewRankChange]/[computeLessonStartRankChange]. */
+    suspend fun warmSrsSystemCache() {
+        if (srsSystemCache == null) {
+            srsSystemCache = srsSystemDao.observeAll().first().associateBy { it.id }
+        }
+    }
+
+    /** Cache-first lookup, falling back to a direct DB read if the cache hasn't been warmed (or
+     *  was warmed before this system existed — e.g. right after a first-ever sync). */
+    private suspend fun srsSystemById(srsSystemId: Long): SrsSystemEntity? =
+        srsSystemCache?.get(srsSystemId) ?: srsSystemDao.getById(srsSystemId)
+
+    /**
+     * Pure, synchronous prediction of a review grade's rank change — no DB access, safe to call
+     * directly from a ViewModel's UI-update path. Needs [warmSrsSystemCache] to have already run;
+     * returns null on a cache miss, same as [applyOptimisticReviewResult] does when the SRS system
+     * isn't cached yet — the caller just won't see a rank-change animation for that answer. The
+     * actual DB write is a separate, deferred concern — still [applyOptimisticReviewResult].
+     */
+    fun computeReviewRankChange(item: ReviewItem, grade: ReviewGrade): RankChange? {
+        val srsSystem = srsSystemCache?.get(item.srsSystemId) ?: return null
+        val nextStage = if (grade.isFullyCorrect) {
+            SrsStageCalculator.nextStageOnCorrect(item.srsStage, srsSystem)
+        } else {
+            SrsStageCalculator.nextStageOnIncorrect(item.srsStage, srsSystem)
+        }
+        return RankChange(SrsStage.fromRaw(item.srsStage), SrsStage.fromRaw(nextStage))
+    }
+
+    /** Same idea as [computeReviewRankChange] but for starting a lesson. */
+    fun computeLessonStartRankChange(item: LessonItem): RankChange? {
+        val srsSystem = srsSystemCache?.get(item.srsSystemId) ?: return null
         return RankChange(SrsStage.LOCKED, SrsStage.fromRaw(srsSystem.startingStagePosition))
     }
 
@@ -143,7 +192,7 @@ class AssignmentRepository @Inject constructor(
     }
 
     private suspend fun srsSystemFor(subjectId: Long): SrsSystemEntity? =
-        subjectDao.getById(subjectId)?.srsSystemId?.let { srsSystemDao.getById(it) }
+        subjectDao.getById(subjectId)?.srsSystemId?.let { srsSystemById(it) }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeReviewQueue(): Flow<List<ReviewItem>> =
@@ -165,7 +214,8 @@ class AssignmentRepository @Inject constructor(
                             meanings = subject.acceptedMeanings(),
                             readings = subject.acceptedGradableReadings(),
                             auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
-                            pronunciationAudios = subject.toPronunciationAudios()
+                            pronunciationAudios = subject.toPronunciationAudios(),
+                            srsSystemId = subject.srsSystemId
                         )
                     }
                 }
@@ -202,7 +252,8 @@ class AssignmentRepository @Inject constructor(
                             contextSentences = subject.contextSentences.map { ContextSentence(japanese = it.ja, english = it.en) },
                             componentSubjectIds = subject.componentSubjectIds,
                             amalgamationSubjectIds = subject.amalgamationSubjectIds,
-                            visuallySimilarSubjectIds = subject.visuallySimilarSubjectIds
+                            visuallySimilarSubjectIds = subject.visuallySimilarSubjectIds,
+                            srsSystemId = subject.srsSystemId
                         )
                     }
                 }

@@ -1,20 +1,21 @@
 package com.crazyfluff.shellfstudy.feature.review
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,14 +25,17 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
@@ -84,6 +88,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
+import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
@@ -94,6 +99,7 @@ import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailHandleHeigh
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 object ReviewScreenTestTags {
@@ -111,9 +117,14 @@ object ReviewScreenTestTags {
     const val CONTINUE_BUTTON = "review_continue_button"
     const val UNDO_BUTTON = "review_undo_button"
     const val SESSION_COMPLETE = "review_session_complete"
-    const val SESSION_STATS_CARD = "review_session_stats_card"
+    const val SESSION_OVERVIEW_CARD = "review_session_overview_card"
     const val ITEMS_REVIEWED_TEXT = "review_items_reviewed_text"
     const val CORRECT_FIRST_TRY_TEXT = "review_correct_first_try_text"
+    const val SESSION_TIMING_CARD = "review_session_timing_card"
+    const val SESSION_TOTAL_TIME_TEXT = "review_session_total_time_text"
+    const val SESSION_AVERAGE_TIME_TEXT = "review_session_average_time_text"
+    const val SESSION_SLOWEST_CARD = "review_session_slowest_card"
+    const val SESSION_MISSED_CARD = "review_session_missed_card"
     const val DONE_BUTTON = "review_done_button"
     const val BACK_BUTTON = "review_back_button"
     const val SEARCH_BUTTON = "review_search_button"
@@ -123,6 +134,8 @@ object ReviewScreenTestTags {
     const val ABANDON_CONFIRM_BUTTON = "review_abandon_confirm_button"
     const val DETAILS_TOGGLE = "review_details_toggle"
     const val TYPE_MISMATCH_TEXT = "review_type_mismatch_text"
+    const val SUBJECT_TYPE_LABEL = "review_subject_type_label"
+    const val SESSION_TIMER_TEXT = "review_session_timer_text"
 }
 
 @Composable
@@ -187,7 +200,12 @@ fun ReviewScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {},
+                title = {
+                    val startTimeMs = uiState.sessionStartTimeMs
+                    if (uiState.showReviewTimer && startTimeMs != null && canManageSession) {
+                        SessionTimerText(startTimeMs = startTimeMs, modifier = Modifier.testTag(ReviewScreenTestTags.SESSION_TIMER_TEXT))
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag(ReviewScreenTestTags.BACK_BUTTON)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -280,25 +298,11 @@ fun ReviewScreen(
                 }
 
                 uiState.isSessionComplete -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(24.dp).testTag(ReviewScreenTestTags.SESSION_COMPLETE),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Session complete!", style = MaterialTheme.typography.headlineMedium)
-                        if (uiState.sessionItemsReviewed > 0) {
-                            Spacer(modifier = Modifier.height(24.dp))
-                            SessionStatsCard(
-                                itemsReviewed = uiState.sessionItemsReviewed,
-                                correctFirstTry = uiState.sessionItemsCorrectFirstTry
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(
-                            onClick = onDone,
-                            modifier = Modifier.testTag(ReviewScreenTestTags.DONE_BUTTON)
-                        ) { Text("Back to dashboard") }
-                    }
+                    SessionCompleteContent(
+                        uiState = uiState,
+                        onDone = onDone,
+                        onSubjectClick = { searchDetailSheetState.show(it) }
+                    )
                 }
 
                 uiState.currentItem != null && uiState.currentQuestionType != null -> {
@@ -327,8 +331,16 @@ fun ReviewScreen(
         val detailQuestionType = uiState.currentQuestionType
         AnimatedVisibility(
             visible = !isSearchActive && uiState.feedback != null && detailItem != null && detailQuestionType != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            // No fade here (was fadeIn()/fadeOut(), Compose's ~300ms default) — this mounts a
+            // near-full-screen Surface (SubjectDetailSheet's shell, offset off-screen so only its
+            // handle peeks out) at the exact same instant feedback is set, i.e. the same frame the
+            // rank-change badge starts its own entrance animation. That's a second animation plus a
+            // heavy first-time layout competing for the same frame budget, which is what visibly
+            // dropped frames on the badge. The sheet's own drag-driven open/close animation (see
+            // SubjectDetailSheet) is the one that actually matters here; this outer shell can just
+            // pop in instantly, the same way the "Correct!"/"Incorrect" text next to it does.
+            enter = EnterTransition.None,
+            exit = ExitTransition.None,
             modifier = Modifier.fillMaxSize()
         ) {
             if (detailItem != null && detailQuestionType != null) {
@@ -419,12 +431,26 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             color = accentColor,
             modifier = Modifier.testTag(ReviewScreenTestTags.CHARACTERS)
         )
+        if (uiState.showSubjectTypeLabel) {
+            Text(
+                text = subjectTypeLabel(item.subjectType),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(ReviewScreenTestTags.SUBJECT_TYPE_LABEL)
+            )
+        }
         AnimatedVisibility(
             visible = uiState.rankChange != null,
-            enter = scaleIn(
-                initialScale = 0.6f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
-            ) + fadeIn(animationSpec = tween(200))
+            // Fade + slide up from below — no scale (a prior scale+overshoot combination visibly
+            // clipped the chip's edges against AnimatedVisibility's clip-to-bounds behavior; a
+            // pure fade/slide never exceeds its own laid-out bounds, so there's nothing to clip).
+            // 250ms at a full-height slide distance so the motion actually reads as an animation —
+            // a much shorter/smaller version of this previously was imperceptible.
+            enter = fadeIn(animationSpec = tween(durationMillis = 250)) +
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
+                )
         ) {
             val rankChange = uiState.rankChange
             if (rankChange != null) {
@@ -537,12 +563,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    onClick = onContinue,
-                    modifier = Modifier.weight(1f).testTag(ReviewScreenTestTags.CONTINUE_BUTTON)
-                ) { Text("Continue") }
-            }
+            GatedContinueButton(feedback = feedback, onContinue = onContinue, modifier = Modifier.fillMaxWidth())
         }
 
         // Reserves room so the swipe-up handle — pinned to the true bottom of the screen as its
@@ -552,6 +573,24 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         // a gesture pill or 3-button nav bar.
         Spacer(modifier = Modifier.height(16.dp + SubjectDetailHandleHeight + 24.dp))
     }
+}
+
+/** Ticks locally in the Composable rather than through the ViewModel's StateFlow — purely
+ *  presentational, so it doesn't need a per-second state emission. */
+@Composable
+private fun SessionTimerText(startTimeMs: Long, modifier: Modifier = Modifier) {
+    var elapsedSeconds by remember(startTimeMs) { mutableStateOf((System.currentTimeMillis() - startTimeMs) / 1000) }
+    LaunchedEffect(startTimeMs) {
+        while (true) {
+            elapsedSeconds = (System.currentTimeMillis() - startTimeMs) / 1000
+            delay(1000)
+        }
+    }
+    Text(
+        text = "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
+        style = MaterialTheme.typography.titleMedium,
+        modifier = modifier
+    )
 }
 
 @Composable
@@ -585,24 +624,244 @@ private fun RankChangeChip(rankChange: RankChange, modifier: Modifier = Modifier
     }
 }
 
+/** Time an incorrect answer's Continue button stays disabled for, so a reflexive fast tap can't
+ *  blow past feedback before it's been registered. Correct answers never lock. */
+private const val ContinueLockMs = 1200
+
 @Composable
-private fun SessionStatsCard(itemsReviewed: Int, correctFirstTry: Int, modifier: Modifier = Modifier) {
-    val accuracyPercent = correctFirstTry * 100 / itemsReviewed
-    Card(modifier = modifier.testTag(ReviewScreenTestTags.SESSION_STATS_CARD)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Items reviewed: $itemsReviewed",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.testTag(ReviewScreenTestTags.ITEMS_REVIEWED_TEXT)
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Correct on first try: $correctFirstTry of $itemsReviewed ($accuracyPercent%)",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.testTag(ReviewScreenTestTags.CORRECT_FIRST_TRY_TEXT)
+private fun GatedContinueButton(feedback: AnswerFeedback, onContinue: () -> Unit, modifier: Modifier = Modifier) {
+    // Drives the fill directly (rather than deriving it from a separately-toggled "unlocked"
+    // boolean) so the bar actually animates 0->1 while it's visible, and unlocking happens in
+    // sync with it visually finishing — not the instant before it, which just hid a bar stuck at 0.
+    val lockProgress = remember(feedback) { Animatable(if (feedback.isCorrect) 1f else 0f) }
+    val continueUnlocked = feedback.isCorrect || lockProgress.value >= 1f
+    LaunchedEffect(feedback) {
+        if (!feedback.isCorrect) {
+            lockProgress.snapTo(0f)
+            lockProgress.animateTo(1f, animationSpec = tween(ContinueLockMs))
+        }
+    }
+
+    Box(modifier = modifier) {
+        Button(
+            onClick = onContinue,
+            enabled = continueUnlocked,
+            modifier = Modifier.fillMaxWidth().testTag(ReviewScreenTestTags.CONTINUE_BUTTON)
+        ) { Text("Continue") }
+        if (!continueUnlocked) {
+            LinearProgressIndicator(
+                progress = { lockProgress.value },
+                color = MaterialTheme.colorScheme.onPrimary,
+                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
+                drawStopIndicator = {},
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp))
             )
         }
     }
+}
+
+@Composable
+private fun SessionCompleteContent(
+    uiState: ReviewUiState,
+    onDone: () -> Unit,
+    onSubjectClick: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(ReviewScreenTestTags.SESSION_COMPLETE)
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Filled.Celebration,
+                contentDescription = null,
+                tint = themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Session complete!", style = MaterialTheme.typography.headlineMedium)
+        }
+
+        if (uiState.sessionItemsReviewed > 0) {
+            Spacer(modifier = Modifier.height(24.dp))
+            SessionOverviewCard(
+                itemsReviewed = uiState.sessionItemsReviewed,
+                correctFirstTry = uiState.sessionItemsCorrectFirstTry,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            SessionTimingCard(
+                totalElapsedMs = uiState.sessionTotalElapsedMs,
+                averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (uiState.sessionSlowestAnswers.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                SessionSlowestAnswersCard(
+                    answers = uiState.sessionSlowestAnswers,
+                    onSubjectClick = onSubjectClick,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (uiState.sessionMissedItems.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                SessionMissedItemsCard(
+                    items = uiState.sessionMissedItems,
+                    onSubjectClick = onSubjectClick,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onDone,
+            modifier = Modifier.testTag(ReviewScreenTestTags.DONE_BUTTON)
+        ) { Text("Back to dashboard") }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SessionOverviewCard(itemsReviewed: Int, correctFirstTry: Int, modifier: Modifier = Modifier) {
+    val accuracyPercent = if (itemsReviewed == 0) 0 else correctFirstTry * 100 / itemsReviewed
+    Card(modifier = modifier.testTag(ReviewScreenTestTags.SESSION_OVERVIEW_CARD)) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    progress = { accuracyPercent / 100f },
+                    modifier = Modifier.size(64.dp),
+                    strokeWidth = 6.dp,
+                    color = themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened),
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+                Text("$accuracyPercent%", style = MaterialTheme.typography.titleMedium)
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = "Items reviewed: $itemsReviewed",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.testTag(ReviewScreenTestTags.ITEMS_REVIEWED_TEXT)
+                )
+                Text(
+                    text = "Correct on first try: $correctFirstTry of $itemsReviewed ($accuracyPercent%)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(ReviewScreenTestTags.CORRECT_FIRST_TRY_TEXT)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionTimingCard(totalElapsedMs: Long, averageTimePerItemMs: Long, modifier: Modifier = Modifier) {
+    Card(modifier = modifier.testTag(ReviewScreenTestTags.SESSION_TIMING_CARD)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Timing", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Total time: ${formatDuration(totalElapsedMs)}",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.testTag(ReviewScreenTestTags.SESSION_TOTAL_TIME_TEXT)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Avg. time per item reviewed: ${formatDuration(averageTimePerItemMs)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(ReviewScreenTestTags.SESSION_AVERAGE_TIME_TEXT)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionSlowestAnswersCard(answers: List<SlowAnswer>, onSubjectClick: (Long) -> Unit, modifier: Modifier = Modifier) {
+    Card(modifier = modifier.testTag(ReviewScreenTestTags.SESSION_SLOWEST_CARD)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Slowest answers", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            answers.forEach { answer ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clickable { onSubjectClick(answer.item.subjectId) }
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(subjectColor(answer.item.subjectType))
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "${answer.item.characters ?: answer.item.meanings.firstOrNull() ?: "?"} " +
+                            "(${answer.type.label}) — ${formatDuration(answer.elapsedMs)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = if (answer.isCorrect) Icons.Default.Check else Icons.Default.Close,
+                        contentDescription = if (answer.isCorrect) "Correct" else "Incorrect",
+                        tint = if (answer.isCorrect) {
+                            themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionMissedItemsCard(items: List<ReviewItem>, onSubjectClick: (Long) -> Unit, modifier: Modifier = Modifier) {
+    Card(modifier = modifier.testTag(ReviewScreenTestTags.SESSION_MISSED_CARD)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Missed items", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items.forEach { item ->
+                    val color = subjectColor(item.subjectType)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onSubjectClick(item.subjectId) }
+                            .background(color.copy(alpha = 0.12f))
+                            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = item.characters ?: item.meanings.firstOrNull() ?: "?",
+                            color = color,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatDuration(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return if (minutes > 0) "%d:%02d".format(minutes, seconds) else "${seconds}s"
 }
 
 /** Label for the small secondary line under the Correct!/Incorrect headline — kept short (capped
@@ -646,6 +905,52 @@ private fun ReviewScreenPreview() {
                     readings = listOf("みず")
                 ),
                 currentQuestionType = QuestionType.MEANING
+            ),
+            onAnswerInputChange = {},
+            onSubmit = {},
+            onDontKnow = {},
+            onContinue = {},
+            onUndo = {},
+            onToggleDetails = {},
+            onRetry = {},
+            onWrapUp = {},
+            onAbandon = {},
+            onDone = {},
+            onBack = {}
+        )
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
+@Composable
+private fun ReviewScreenSessionCompletePreview() {
+    val water = ReviewItem(
+        assignmentId = 1, subjectId = 1, subjectType = SubjectType.KANJI, characters = "水",
+        level = 3, srsStage = 3, meanings = listOf("Water"), readings = listOf("みず")
+    )
+    val fire = ReviewItem(
+        assignmentId = 2, subjectId = 2, subjectType = SubjectType.KANJI, characters = "火",
+        level = 3, srsStage = 3, meanings = listOf("Fire"), readings = listOf("ひ")
+    )
+    val tree = ReviewItem(
+        assignmentId = 3, subjectId = 3, subjectType = SubjectType.RADICAL, characters = "木",
+        level = 1, srsStage = 5, meanings = listOf("Tree"), readings = emptyList()
+    )
+    ShellfStudyTheme {
+        ReviewScreen(
+            uiState = ReviewUiState(
+                isLoading = false,
+                isSessionComplete = true,
+                sessionItemsReviewed = 12,
+                sessionItemsCorrectFirstTry = 9,
+                sessionTotalElapsedMs = 245_000L,
+                sessionAverageTimePerItemMs = 4_200L,
+                sessionSlowestAnswers = listOf(
+                    SlowAnswer(fire, QuestionType.READING, 18_400L, isCorrect = true),
+                    SlowAnswer(water, QuestionType.MEANING, 12_100L, isCorrect = false),
+                    SlowAnswer(tree, QuestionType.MEANING, 9_800L, isCorrect = true)
+                ),
+                sessionMissedItems = listOf(water, fire)
             ),
             onAnswerInputChange = {},
             onSubmit = {},

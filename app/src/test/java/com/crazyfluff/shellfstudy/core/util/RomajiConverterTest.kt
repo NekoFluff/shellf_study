@@ -38,11 +38,15 @@ class RomajiConverterTest {
     }
 
     @Test
-    fun `converts double n to standalone n-kana followed by the next syllable`() {
-        // Phonetic conversion only — the real greeting is spelled with the historical is/wa
-        // exception (こんにちは), which needs dictionary lookup, not phoneme-by-phoneme rules.
-        // Not a concern for WaniKani readings, which are single kanji/vocab words, not particles.
-        assertThat(RomajiConverter.toHiragana("konnichiwa")).isEqualTo("こんにちわ")
+    fun `double n before a vowel or y forces standalone n-kana instead of merging into the next syllable`() {
+        // Deliberate tradeoff: doubling "n" is the other standard escape for ん directly before a
+        // vowel/y (alongside "n'"), so "nn" no longer reads as ん followed by a な/に/ぬ/ね/の-row
+        // syllable — even for real words that happen to contain that pattern naturally, like 三人
+        // ("sannin") or こんにちは ("konnichiwa"). Use "n'i"/"sanni'n"-style apostrophes if a
+        // genuine ん+[na/ni/nu/ne/no] sequence is ever needed.
+        assertThat(RomajiConverter.toHiragana("ganni")).isEqualTo("がんい")
+        assertThat(RomajiConverter.toHiragana("konnichiwa")).isEqualTo("こんいちわ")
+        assertThat(RomajiConverter.toHiragana("sannin")).isEqualTo("さんいん")
     }
 
     @Test
@@ -96,6 +100,40 @@ class RomajiConverterTest {
         assertThat(RomajiConverter.toHiragana("n'ya")).isEqualTo("んや")
         // Without the apostrophe, the same input reads as a merged syllable instead.
         assertThat(RomajiConverter.toHiragana("ni")).isEqualTo("に")
+    }
+
+    @Test
+    fun `a trailing n with nothing after it yet is left unconverted mid-typing`() {
+        // isComplete = false is what the live-typing preview (RomajiVisualTransformation) uses —
+        // a trailing "n" is genuinely ambiguous while more input might still arrive (a vowel next
+        // would turn it into な/に/ぬ/ね/の instead), so it's shown as a bare "n" rather than an
+        // eager, possibly-wrong ん that has to visibly flip once the next key lands.
+        assertThat(RomajiConverter.convert("san", isComplete = false).output).isEqualTo("さn")
+        assertThat(RomajiConverter.convert("gan", isComplete = false).output).isEqualTo("がn")
+        // A single "n" already followed by a real character never needs to wait — it can only
+        // possibly merge into な/に/ぬ/ね/の if that next character is itself a vowel/y, and both
+        // cases already resolve correctly regardless of isComplete.
+        assertThat(RomajiConverter.convert("kanji", isComplete = false).output).isEqualTo("かんじ")
+        assertThat(RomajiConverter.convert("kani", isComplete = false).output).isEqualTo("かに")
+    }
+
+    @Test
+    fun `a trailing n resolves once the rest of the word arrives, even mid-typing`() {
+        // Once a real disambiguating character follows, isComplete no longer matters — this is
+        // the same "wait for the second n" input completing normally as more keys are typed.
+        assertThat(RomajiConverter.convert("ganni", isComplete = false).output).isEqualTo("がんい")
+        // "sannin" itself ends in a trailing "n" with nothing after it yet, so — same as any
+        // other mid-typing trailing n — that final one is still withheld pending isComplete;
+        // only the earlier, now-disambiguated "nn" (followed by "i") resolves.
+        assertThat(RomajiConverter.convert("sannin", isComplete = false).output).isEqualTo("さんいn")
+    }
+
+    @Test
+    fun `a finished trailing n reads as standalone n-kana`() {
+        // isComplete defaults to true — what grading (toHiragana on a submitted answer) uses.
+        // There's nothing left to arrive, so a trailing "n" unambiguously means ん.
+        assertThat(RomajiConverter.toHiragana("san")).isEqualTo("さん")
+        assertThat(RomajiConverter.toHiragana("gohan")).isEqualTo("ごはん")
     }
 
     @Test

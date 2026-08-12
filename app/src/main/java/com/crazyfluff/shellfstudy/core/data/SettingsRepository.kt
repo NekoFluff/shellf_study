@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,7 +21,9 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val showPitchAccent: Boolean = true,
     val autoplayPronunciationAudio: Boolean = true,
-    val restrictAudioToMp3: Boolean = false
+    val restrictAudioToMp3: Boolean = false,
+    val showSubjectTypeLabel: Boolean = false,
+    val showReviewTimer: Boolean = false
 )
 
 data class NotificationSettings(
@@ -44,6 +47,8 @@ class SettingsRepository @Inject constructor(
     private val showPitchAccentKey = booleanPreferencesKey("show_pitch_accent")
     private val autoplayPronunciationAudioKey = booleanPreferencesKey("autoplay_pronunciation_audio")
     private val restrictAudioToMp3Key = booleanPreferencesKey("restrict_audio_to_mp3")
+    private val showSubjectTypeLabelKey = booleanPreferencesKey("show_subject_type_label")
+    private val showReviewTimerKey = booleanPreferencesKey("show_review_timer")
 
     private val notificationsEnabledKey = booleanPreferencesKey("notifications_enabled")
     private val reviewsAvailableEnabledKey = booleanPreferencesKey("notif_reviews_available_enabled")
@@ -55,6 +60,14 @@ class SettingsRepository @Inject constructor(
     private val quietHoursStartHourKey = intPreferencesKey("notif_quiet_hours_start_hour")
     private val quietHoursEndHourKey = intPreferencesKey("notif_quiet_hours_end_hour")
 
+    // dataStore is a single app-wide DataStore<Preferences> instance (see DataStoreModule) shared
+    // by every repository that persists key-value state — ReviewSessionRepository, OutboxRepository,
+    // TokenRepository, etc. dataStore.data re-emits on *every* write to that shared file, regardless
+    // of which key changed, so without distinctUntilChanged() here, an unrelated write elsewhere
+    // (e.g. persisting the review queue mid-session) would re-trigger every collector of these
+    // flows — including ReviewViewModel/LessonViewModel's settings collector, which calls
+    // _uiState.update() on each emission. That spurious recomposition landing mid-animation (the
+    // rank-change badge's entrance, in particular) is what caused visibly dropped frames.
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
         AppSettings(
             dailyLessonGoal = prefs[dailyLessonGoalKey] ?: DEFAULT_DAILY_LESSON_GOAL,
@@ -62,9 +75,11 @@ class SettingsRepository @Inject constructor(
                 ?: ThemeMode.SYSTEM,
             showPitchAccent = prefs[showPitchAccentKey] ?: true,
             autoplayPronunciationAudio = prefs[autoplayPronunciationAudioKey] ?: true,
-            restrictAudioToMp3 = prefs[restrictAudioToMp3Key] ?: false
+            restrictAudioToMp3 = prefs[restrictAudioToMp3Key] ?: false,
+            showSubjectTypeLabel = prefs[showSubjectTypeLabelKey] ?: false,
+            showReviewTimer = prefs[showReviewTimerKey] ?: false
         )
-    }
+    }.distinctUntilChanged()
 
     val notificationSettings: Flow<NotificationSettings> = dataStore.data.map { prefs ->
         val defaults = NotificationSettings()
@@ -79,7 +94,7 @@ class SettingsRepository @Inject constructor(
             quietHoursStartHour = prefs[quietHoursStartHourKey] ?: defaults.quietHoursStartHour,
             quietHoursEndHour = prefs[quietHoursEndHourKey] ?: defaults.quietHoursEndHour
         )
-    }
+    }.distinctUntilChanged()
 
     suspend fun setDailyLessonGoal(goal: Int) {
         dataStore.edit { it[dailyLessonGoalKey] = goal.coerceIn(1, 99) }
@@ -99,6 +114,14 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setRestrictAudioToMp3(enabled: Boolean) {
         dataStore.edit { it[restrictAudioToMp3Key] = enabled }
+    }
+
+    suspend fun setShowSubjectTypeLabel(enabled: Boolean) {
+        dataStore.edit { it[showSubjectTypeLabelKey] = enabled }
+    }
+
+    suspend fun setShowReviewTimer(enabled: Boolean) {
+        dataStore.edit { it[showReviewTimerKey] = enabled }
     }
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {

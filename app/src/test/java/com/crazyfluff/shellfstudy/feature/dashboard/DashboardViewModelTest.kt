@@ -24,6 +24,8 @@ import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import mockwebserver3.Dispatcher
@@ -61,6 +63,7 @@ class DashboardViewModelTest {
         server.start()
 
         dataStore = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
@@ -138,7 +141,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `loads user and summary on init`() = runTest {
+    fun `loads user and summary on init`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         val viewModel = createViewModel()
 
@@ -156,7 +159,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `seeds cached username and counts before the network refresh resolves, then updates them once it does`() = runTest {
+    fun `seeds cached username and counts before the network refresh resolves, then updates them once it does`() = runTest(mainDispatcherRule.dispatcher) {
         dashboardCacheRepository.save(
             username = "cached_user", level = 1, lessonCount = 9, reviewCount = 9, syncedAtMillis = 1_000L
         )
@@ -178,7 +181,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `falls back to cached content and flags offline, instead of the full error screen, when a refresh fails with content already cached`() = runTest {
+    fun `falls back to cached content and flags offline, instead of the full error screen, when a refresh fails with content already cached`() = runTest(mainDispatcherRule.dispatcher) {
         dashboardCacheRepository.save(
             username = "cached_user", level = 5, lessonCount = 3, reviewCount = 7, syncedAtMillis = 1_000L
         )
@@ -198,7 +201,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `writes the fetched summary to the cache repository on a successful refresh`() = runTest {
+    fun `writes the fetched summary to the cache repository on a successful refresh`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         val viewModel = createViewModel()
 
@@ -219,7 +222,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `shows an error message and keeps the token when the user fetch fails with a network error`() = runTest {
+    fun `shows an error message and keeps the token when the user fetch fails with a network error`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(emptyResponse(500), jsonResponse(summaryJson()))
         tokenRepository.saveToken("some-token")
         val viewModel = createViewModel()
@@ -235,7 +238,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `a confirmed 401 on the user fetch clears the token and returns to the login flow`() = runTest {
+    fun `a confirmed 401 on the user fetch clears the token and returns to the login flow`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(emptyResponse(401), jsonResponse(summaryJson()))
         tokenRepository.saveToken("stale-token")
         val viewModel = createViewModel()
@@ -254,7 +257,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `logOut clears the stored token, cancels background sync, and marks state logged out`() = runTest {
+    fun `logOut clears the stored token, cancels background sync, and marks state logged out`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         tokenRepository.saveToken("some-token")
         val viewModel = createViewModel()
@@ -276,7 +279,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `loads lessons completed today and the default daily goal`() = runTest {
+    fun `loads lessons completed today and the default daily goal`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(
             jsonResponse(userJson()),
             jsonResponse(summaryJson()),
@@ -296,7 +299,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `reflects a custom daily lesson goal from settings`() = runTest {
+    fun `reflects a custom daily lesson goal from settings`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         settingsRepository.setDailyLessonGoal(5)
         val viewModel = createViewModel()
@@ -310,7 +313,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `loads level-up progress and days on current level`() = runTest {
+    fun `loads level-up progress and days on current level`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(
             jsonResponse(userJson()),
             jsonResponse(summaryJson()),
@@ -334,7 +337,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `browsing the level progress card to a different level leaves current-level stats untouched`() = runTest {
+    fun `browsing the level progress card to a different level leaves current-level stats untouched`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(
             jsonResponse(userJson()),
             jsonResponse(summaryJson()),
@@ -361,7 +364,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `computes a completion projection from total subjects and items seen`() = runTest {
+    fun `computes a completion projection from total subjects and items seen`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(
             jsonResponse(userJson()),
             jsonResponse(summaryJson()),

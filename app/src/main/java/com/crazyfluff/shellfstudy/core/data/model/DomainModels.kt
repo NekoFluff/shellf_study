@@ -31,7 +31,11 @@ data class ReviewItem(
     /** WaniKani's own official alternate meanings (e.g. "1" alongside "one") — distinct from the
      *  primary [meanings], but just as acceptable a grading answer. */
     val auxiliaryMeanings: List<String> = emptyList(),
-    val pronunciationAudios: List<PronunciationAudio> = emptyList()
+    val pronunciationAudios: List<PronunciationAudio> = emptyList(),
+    /** Carried along so a review's rank change can be computed synchronously against
+     *  AssignmentRepository's in-memory SRS-system cache, with no DB access needed on the
+     *  per-answer critical path — see AssignmentRepository.computeReviewRankChange. */
+    val srsSystemId: Long = 0
 )
 
 data class ReviewGrade(
@@ -61,7 +65,11 @@ data class LessonItem(
     val contextSentences: List<ContextSentence> = emptyList(),
     val componentSubjectIds: List<Long> = emptyList(),
     val amalgamationSubjectIds: List<Long> = emptyList(),
-    val visuallySimilarSubjectIds: List<Long> = emptyList()
+    val visuallySimilarSubjectIds: List<Long> = emptyList(),
+    /** Carried along so a lesson start's rank change can be computed synchronously against
+     *  AssignmentRepository's in-memory SRS-system cache — see
+     *  AssignmentRepository.computeLessonStartRankChange. */
+    val srsSystemId: Long = 0
 )
 
 /** A subject as shown in search results. [srsStage] is null if no assignment exists yet. */

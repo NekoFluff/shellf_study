@@ -66,7 +66,16 @@ object RomajiConverter {
      */
     data class Conversion(val output: String, val rawBoundaries: IntArray, val hiraganaBoundaries: IntArray)
 
-    fun convert(input: String): Conversion {
+    /**
+     * @param isComplete Whether [input] is the final, finished string (e.g. a submitted answer)
+     * rather than still being typed. Only affects a trailing "n" with nothing after it: when
+     * `false` (the live-typing preview), it's left as a bare "n" rather than eagerly guessing ん,
+     * since a vowel could still arrive next and turn it into な/に/ぬ/ね/の instead — see
+     * [com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation]. When `true`
+     * (the default, used for grading a submitted answer) there's nothing left to arrive, so a
+     * trailing "n" unambiguously means ん (e.g. "san" -> さん).
+     */
+    fun convert(input: String, isComplete: Boolean = true): Conversion {
         val result = StringBuilder()
         val rawBoundaries = mutableListOf(0)
         val hiraganaBoundaries = mutableListOf(0)
@@ -106,9 +115,27 @@ object RomajiConverter {
                     i += 2
                 }
 
+                // Doubled "n" is the other standard escape for ん directly before a vowel or "y"
+                // (alongside "n'"), e.g. "ganni" -> がんい. This deliberately shadows the more
+                // common case where "nn" is just ん naturally followed by a な/に/ぬ/ね/の-row
+                // syllable (三人 "sannin" would now read さんいん instead of さんにん) — an
+                // accepted tradeoff so double-n reliably means "force ん" rather than being
+                // ambiguous with the next syllable.
+                current == 'n' && next == 'n' && remaining >= 3 && (input[i + 2] in VOWELS || input[i + 2] == 'y') -> {
+                    result.append('ん')
+                    i += 2
+                }
+
                 // A lone "n" converts to ん once we know it isn't the start of "na/ni/nu/ne/no/nya...":
-                // when followed by a consonant, another "n", or end of input.
-                current == 'n' && (next == null || next !in VOWELS && next != 'y') -> {
+                // when followed by a known consonant or another "n" (that doesn't itself force
+                // ん-before-vowel above).
+                current == 'n' && next != null && next !in VOWELS && next != 'y' -> {
+                    result.append('ん')
+                    i += 1
+                }
+
+                // A trailing "n" with nothing typed after it yet — see [isComplete]'s doc.
+                current == 'n' && next == null && isComplete -> {
                     result.append('ん')
                     i += 1
                 }

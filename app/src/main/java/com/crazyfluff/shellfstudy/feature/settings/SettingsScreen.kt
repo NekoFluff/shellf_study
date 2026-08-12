@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Card
@@ -61,6 +62,8 @@ object SettingsScreenTestTags {
     const val PITCH_ACCENT_TOGGLE = "settings_pitch_accent_toggle"
     const val AUTOPLAY_AUDIO_TOGGLE = "settings_autoplay_audio_toggle"
     const val MP3_ONLY_AUDIO_TOGGLE = "settings_mp3_only_audio_toggle"
+    const val SHOW_SUBJECT_TYPE_LABEL_TOGGLE = "settings_show_subject_type_label_toggle"
+    const val SHOW_REVIEW_TIMER_TOGGLE = "settings_show_review_timer_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
     const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
     const val REVIEWS_BACKLOG_TOGGLE = "settings_reviews_backlog_toggle"
@@ -101,6 +104,8 @@ fun SettingsRoute(
         onShowPitchAccentChange = viewModel::onShowPitchAccentChange,
         onAutoplayPronunciationAudioChange = viewModel::onAutoplayPronunciationAudioChange,
         onRestrictAudioToMp3Change = viewModel::onRestrictAudioToMp3Change,
+        onShowSubjectTypeLabelChange = viewModel::onShowSubjectTypeLabelChange,
+        onShowReviewTimerChange = viewModel::onShowReviewTimerChange,
         onNotificationsEnabledChange = { enabled ->
             if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -129,6 +134,8 @@ fun SettingsScreen(
     onShowPitchAccentChange: (Boolean) -> Unit,
     onAutoplayPronunciationAudioChange: (Boolean) -> Unit,
     onRestrictAudioToMp3Change: (Boolean) -> Unit,
+    onShowSubjectTypeLabelChange: (Boolean) -> Unit,
+    onShowReviewTimerChange: (Boolean) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onReviewsAvailableEnabledChange: (Boolean) -> Unit,
     onReviewsBacklogEnabledChange: (Boolean) -> Unit,
@@ -242,6 +249,25 @@ fun SettingsScreen(
                     checked = uiState.restrictAudioToMp3,
                     onCheckedChange = onRestrictAudioToMp3Change,
                     testTag = SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            SectionCard(title = "Reviews", icon = Icons.Default.Quiz) {
+                ToggleRow(
+                    label = "Show item type",
+                    description = "Displays Radical, Kanji, or Vocabulary below the word during reviews and lesson quizzes — handy on e-ink screens where color alone is hard to read.",
+                    checked = uiState.showSubjectTypeLabel,
+                    onCheckedChange = onShowSubjectTypeLabelChange,
+                    testTag = SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE
+                )
+                ToggleRow(
+                    label = "Session timer",
+                    description = "Shows a running clock for how long the current review session has taken.",
+                    checked = uiState.showReviewTimer,
+                    onCheckedChange = onShowReviewTimerChange,
+                    testTag = SettingsScreenTestTags.SHOW_REVIEW_TIMER_TOGGLE
                 )
             }
 
@@ -490,6 +516,8 @@ private fun SettingsScreenPreview() {
             onShowPitchAccentChange = {},
             onAutoplayPronunciationAudioChange = {},
             onRestrictAudioToMp3Change = {},
+            onShowSubjectTypeLabelChange = {},
+            onShowReviewTimerChange = {},
             onNotificationsEnabledChange = {},
             onReviewsAvailableEnabledChange = {},
             onReviewsBacklogEnabledChange = {},

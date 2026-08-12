@@ -31,6 +31,8 @@ class SettingsRepositoryTest {
             assertThat(settings.themeMode).isEqualTo(ThemeMode.SYSTEM)
             assertThat(settings.showPitchAccent).isTrue()
             assertThat(settings.autoplayPronunciationAudio).isTrue()
+            assertThat(settings.showSubjectTypeLabel).isFalse()
+            assertThat(settings.showReviewTimer).isFalse()
         }
     }
 
@@ -53,6 +55,28 @@ class SettingsRepositoryTest {
 
         repository.settings.test {
             assertThat(awaitItem().autoplayPronunciationAudio).isFalse()
+        }
+    }
+
+    @Test
+    fun `setShowSubjectTypeLabel persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setShowSubjectTypeLabel(true)
+
+        repository.settings.test {
+            assertThat(awaitItem().showSubjectTypeLabel).isTrue()
+        }
+    }
+
+    @Test
+    fun `setShowReviewTimer persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setShowReviewTimer(true)
+
+        repository.settings.test {
+            assertThat(awaitItem().showReviewTimer).isTrue()
         }
     }
 

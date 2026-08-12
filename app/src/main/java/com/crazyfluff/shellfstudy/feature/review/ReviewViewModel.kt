@@ -55,18 +55,29 @@ data class ReviewUiState(
     val isDetailsExpanded: Boolean = false,
     val sessionItemsReviewed: Int = 0,
     val sessionItemsCorrectFirstTry: Int = 0,
-    val answerTypeMismatchCount: Int = 0
+    val answerTypeMismatchCount: Int = 0,
+    val showSubjectTypeLabel: Boolean = false,
+    val showReviewTimer: Boolean = false,
+    val sessionStartTimeMs: Long? = null,
+    val sessionMissedItems: List<ReviewItem> = emptyList(),
+    val sessionTotalElapsedMs: Long = 0L,
+    val sessionAverageTimePerItemMs: Long = 0L,
+    val sessionSlowestAnswers: List<SlowAnswer> = emptyList()
 )
+
+data class SlowAnswer(val item: ReviewItem, val type: QuestionType, val elapsedMs: Long, val isCorrect: Boolean)
 
 private data class PendingQuestion(val item: ReviewItem, val type: QuestionType)
 
-private class ItemProgress {
+private class ItemProgress(val item: ReviewItem) {
     var meaningDone = false
     var readingDone = false
     var hadIncorrectMeaning = false
     var hadIncorrectReading = false
     val hasAnyProgress: Boolean get() = meaningDone || readingDone || hadIncorrectMeaning || hadIncorrectReading
 }
+
+private data class AnsweredQuestionRecord(val item: ReviewItem, val type: QuestionType, val isCorrect: Boolean, val elapsedMs: Long)
 
 @HiltViewModel
 class ReviewViewModel @Inject constructor(
@@ -85,14 +96,37 @@ class ReviewViewModel @Inject constructor(
     private val progressByAssignmentId = mutableMapOf<Long, ItemProgress>()
     private var totalQuestions = 0
 
+    // Set synchronously (not via _uiState) so a second rapid tap is rejected immediately, before
+    // the first submission's suspend work (grading, optimistic SRS write, outbox enqueue) has had
+    // a chance to land feedback in state — otherwise both submissions race gradeAnswer, double the
+    // queue mutation, and the loser's stale rank change flashes on screen before the winner's.
+    private var isGrading = false
+
+    private val answeredQuestions = mutableListOf<AnsweredQuestionRecord>()
+    // In-memory only, matching the rest of this session-stat tracking — a process death mid-session
+    // simply restarts the clock on resume rather than resuming the original elapsed time.
+    private var sessionStartTimeMs: Long = 0L
+    private var questionShownAtMs: Long = 0L
+
     init {
         loadOrResume()
+        viewModelScope.launch {
+            settingsRepository.settings.collect { settings ->
+                _uiState.update {
+                    it.copy(showSubjectTypeLabel = settings.showSubjectTypeLabel, showReviewTimer = settings.showReviewTimer)
+                }
+            }
+        }
     }
 
     /** Resumes a persisted in-progress session if one exists, otherwise fetches a fresh queue. */
     fun loadOrResume() {
         viewModelScope.launch {
             _uiState.update { ReviewUiState(isLoading = true) }
+            // Warmed once here, during the loading spinner, so every answer graded during this
+            // session can compute its rank change synchronously — see
+            // AssignmentRepository.computeReviewRankChange.
+            assignmentRepository.warmSrsSystemCache()
             val persisted = reviewSessionRepository.load()
             if (persisted != null) {
                 resumeFromPersisted(persisted)
@@ -112,9 +146,13 @@ class ReviewViewModel @Inject constructor(
     private suspend fun resumeFromPersisted(persisted: PersistedReviewSession) {
         val itemsById = assignmentRepository.observeReviewQueue().first().associateBy { it.assignmentId }
 
-        // The cache backing this persisted session is gone (e.g. app storage was cleared) —
-        // fall back to a fresh fetch rather than show a broken queue.
-        if (persisted.queue.any { it.assignmentId !in itemsById }) {
+        // The cache backing this persisted session is gone (e.g. app storage was cleared), or a
+        // progress entry belongs to an item that was fully completed before the process died —
+        // applyOptimisticReviewResult() pushes a completed item's next-review time into the
+        // future, so it drops out of observeReviewQueue()/itemsById even though its progress (kept
+        // around for session stats) is still persisted. Either way, fall back to a fresh fetch
+        // rather than crash building ItemProgress for an item we can no longer look up.
+        if (persisted.queue.any { it.assignmentId !in itemsById } || persisted.progress.any { it.assignmentId !in itemsById }) {
             reviewSessionRepository.clear()
             fetchFreshQueue()
             return
@@ -126,7 +164,7 @@ class ReviewViewModel @Inject constructor(
         }
         progressByAssignmentId.clear()
         persisted.progress.forEach { p ->
-            progressByAssignmentId[p.assignmentId] = ItemProgress().apply {
+            progressByAssignmentId[p.assignmentId] = ItemProgress(itemsById.getValue(p.assignmentId)).apply {
                 meaningDone = p.meaningDone
                 readingDone = p.readingDone
                 hadIncorrectMeaning = p.hadIncorrectMeaning
@@ -134,15 +172,19 @@ class ReviewViewModel @Inject constructor(
             }
         }
         totalQuestions = persisted.totalQuestions
+        answeredQuestions.clear()
+        sessionStartTimeMs = System.currentTimeMillis()
         advanceToNextQuestion()
     }
 
     private suspend fun buildQueue(items: List<ReviewItem>) {
         queue.clear()
         progressByAssignmentId.clear()
+        answeredQuestions.clear()
+        sessionStartTimeMs = System.currentTimeMillis()
 
         items.forEach { item ->
-            progressByAssignmentId[item.assignmentId] = ItemProgress()
+            progressByAssignmentId[item.assignmentId] = ItemProgress(item)
             questionTypesFor(item).forEach { type -> queue.add(PendingQuestion(item, type)) }
         }
         queue.shuffle()
@@ -186,34 +228,39 @@ class ReviewViewModel @Inject constructor(
 
     fun submitAnswer() {
         val state = _uiState.value
-        if (state.feedback != null) return
+        if (state.feedback != null || isGrading) return
         val item = state.currentItem ?: return
         val type = state.currentQuestionType ?: return
         if (state.answerInput.isBlank()) return
 
+        isGrading = true
         viewModelScope.launch {
-            val candidates = candidatesFor(item, type)
-            if (type == QuestionType.MEANING) {
-                // A small typo is graded as correct but flagged, rather than a flat miss — readings
-                // stay exact-match, matching WaniKani's own convention for kana.
-                val match = CloseEnoughMatcher.match(state.answerInput, candidates)
-                // Typing a reading into a meaning answer is a habit slip, not a genuine miss — reject
-                // it outright rather than spending an SRS attempt on it.
-                if (!match.isMatch && state.answerInput.containsKana()) {
-                    _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
-                    return@launch
+            try {
+                val candidates = candidatesFor(item, type)
+                if (type == QuestionType.MEANING) {
+                    // A small typo is graded as correct but flagged, rather than a flat miss — readings
+                    // stay exact-match, matching WaniKani's own convention for kana.
+                    val match = CloseEnoughMatcher.match(state.answerInput, candidates)
+                    // Typing a reading into a meaning answer is a habit slip, not a genuine miss — reject
+                    // it outright rather than spending an SRS attempt on it.
+                    if (!match.isMatch && state.answerInput.containsKana()) {
+                        _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
+                        return@launch
+                    }
+                    gradeAnswer(item, type, match.isMatch, candidates, expandDetails = false, wasCloseMatch = match.isMatch && !match.isExact)
+                } else {
+                    val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
+                    val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
+                    // Same idea in reverse: a wrong reading that closely matches this item's own meaning
+                    // is almost certainly the other question type typed by habit, not a real miss.
+                    if (!isCorrect && CloseEnoughMatcher.match(state.answerInput, candidatesFor(item, QuestionType.MEANING)).isMatch) {
+                        _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
+                        return@launch
+                    }
+                    gradeAnswer(item, type, isCorrect, candidates, expandDetails = false)
                 }
-                gradeAnswer(item, type, match.isMatch, candidates, expandDetails = false, wasCloseMatch = match.isMatch && !match.isExact)
-            } else {
-                val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
-                val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
-                // Same idea in reverse: a wrong reading that closely matches this item's own meaning
-                // is almost certainly the other question type typed by habit, not a real miss.
-                if (!isCorrect && CloseEnoughMatcher.match(state.answerInput, candidatesFor(item, QuestionType.MEANING)).isMatch) {
-                    _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
-                    return@launch
-                }
-                gradeAnswer(item, type, isCorrect, candidates, expandDetails = false)
+            } finally {
+                isGrading = false
             }
         }
     }
@@ -221,13 +268,18 @@ class ReviewViewModel @Inject constructor(
     /** Gives up on the current question — grades it as a miss without requiring a typed guess. */
     fun dontKnowAnswer() {
         val state = _uiState.value
-        if (state.feedback != null) return
+        if (state.feedback != null || isGrading) return
         val item = state.currentItem ?: return
         val type = state.currentQuestionType ?: return
 
+        isGrading = true
         viewModelScope.launch {
-            val candidates = candidatesFor(item, type)
-            gradeAnswer(item, type, isCorrect = false, candidates, expandDetails = true)
+            try {
+                val candidates = candidatesFor(item, type)
+                gradeAnswer(item, type, isCorrect = false, candidates, expandDetails = true)
+            } finally {
+                isGrading = false
+            }
         }
     }
 
@@ -239,7 +291,8 @@ class ReviewViewModel @Inject constructor(
         expandDetails: Boolean,
         wasCloseMatch: Boolean = false
     ) {
-        val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress() }
+        val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress(item) }
+        answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, System.currentTimeMillis() - questionShownAtMs))
 
         queue.removeFirstOrNull()
         if (isCorrect) {
@@ -255,16 +308,25 @@ class ReviewViewModel @Inject constructor(
             queue.addLast(PendingQuestion(item, type))
         }
 
-        // Computed before the uiState update (not in a separate launch) so the rank-change and the
-        // feedback land in one emission — with the local write being fully synchronous now (no
-        // network), a decoupled launch would just add a same-tick second emission for no benefit.
-        val newRankChange = if (isCorrect && isFullyDone(item, itemProgress)) {
-            submitReviewResult(item, itemProgress)
+        // Snapshotted synchronously, right after mutating the queue/progress above, so the
+        // detached durability write below can safely run concurrently with the next question's
+        // own grading/advance — queue/progressByAssignmentId are plain, non-thread-safe
+        // collections, and once feedback is visible the user is free to act immediately.
+        val snapshot = currentPersistSnapshot()
+
+        val grade = if (isCorrect && isFullyDone(item, itemProgress)) {
+            ReviewGrade(meaningCorrect = !itemProgress.hadIncorrectMeaning, readingCorrect = !itemProgress.hadIncorrectReading)
         } else {
             null
         }
+        // Computed synchronously against AssignmentRepository's in-memory SRS-system cache
+        // (warmed once when the queue loaded) — zero DB access on this critical path at all now.
+        // The actual DB write (persisting the new stage) is durability bookkeeping the user never
+        // waits on, so it's launched as its own detached coroutine below instead of awaited inline
+        // — previously this alone was a sequential DB read-then-write standing between tapping
+        // Submit and the rank-change badge appearing, on top of three more writes after it.
+        val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
 
-        persistCurrentState()
         _uiState.update {
             it.copy(
                 feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
@@ -273,6 +335,8 @@ class ReviewViewModel @Inject constructor(
                 rankChange = newRankChange ?: it.rankChange
             )
         }
+
+        persistDurabilityWork(grade, item, snapshot)
 
         val settings = settingsRepository.settings.first()
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
@@ -303,28 +367,17 @@ class ReviewViewModel @Inject constructor(
             val requeuedIndex = queue.indexOfLast { it.item.assignmentId == item.assignmentId && it.type == type }
             if (requeuedIndex >= 0) queue.addFirst(queue.removeAt(requeuedIndex))
 
+            // Undo removes the incorrect attempt just recorded by gradeAnswer, and restarts this
+            // question's clock so the retry's timing doesn't inherit time spent before the undo.
+            answeredQuestions.removeLastOrNull()
+            questionShownAtMs = System.currentTimeMillis()
+
             persistCurrentState()
             // undoCounter changes even though currentItem/currentQuestionType don't — this is what
             // the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't change
             // either of those but still needs to refocus the field the user just tapped away from.
             _uiState.update { it.copy(feedback = null, answerInput = "", remainingCount = queue.size, undoCounter = it.undoCounter + 1) }
         }
-    }
-
-    /**
-     * Local-write-first: durably records the grade and patches the SRS stage optimistically, then
-     * queues the actual network submission for the background sync worker — no network call (and
-     * so nothing to fail) happens on this path, which is what makes grading work fully offline.
-     */
-    private suspend fun submitReviewResult(item: ReviewItem, progress: ItemProgress): RankChange? {
-        val grade = ReviewGrade(
-            meaningCorrect = !progress.hadIncorrectMeaning,
-            readingCorrect = !progress.hadIncorrectReading
-        )
-        val rankChange = assignmentRepository.applyOptimisticReviewResult(item.assignmentId, grade)
-        outboxRepository.enqueueReviewSubmission(item.assignmentId, item.subjectId, grade)
-        statsRepository.markStudyActivityToday()
-        return rankChange?.takeIf { it.from != it.to }
     }
 
     private fun isFullyDone(item: ReviewItem, progress: ItemProgress): Boolean {
@@ -362,18 +415,44 @@ class ReviewViewModel @Inject constructor(
     private fun completedQuestionCount(): Int =
         progressByAssignmentId.values.sumOf { (if (it.meaningDone) 1 else 0) + (if (it.readingDone) 1 else 0) }
 
-    /** Items reviewed vs. how many of those were answered correctly without ever missing. */
-    private fun sessionStats(): Pair<Int, Int> {
+    private data class SessionSummary(
+        val itemsReviewed: Int,
+        val correctFirstTry: Int,
+        val missedItems: List<ReviewItem>,
+        val totalElapsedMs: Long,
+        val averageTimePerItemMs: Long,
+        val slowestAnswers: List<SlowAnswer>
+    )
+
+    /** Items reviewed, how many were correct without ever missing, which were missed at least once,
+     *  and timing — total session time, average time per item reviewed, and the slowest answers.
+     *  The average divides all time spent answering (every submission, correct or not) by the
+     *  count of distinct items, not by correct-answer count — a couple of wrong tries on one item
+     *  shouldn't be excluded from that item's own time. */
+    private fun sessionSummary(): SessionSummary {
         val itemsReviewed = progressByAssignmentId.size
         val correctFirstTry = progressByAssignmentId.values.count { !it.hadIncorrectMeaning && !it.hadIncorrectReading }
-        return itemsReviewed to correctFirstTry
+        val missedItems = progressByAssignmentId.values
+            .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
+            .map { it.item }
+        val averageTimePerItemMs = if (itemsReviewed == 0) 0L else answeredQuestions.sumOf { it.elapsedMs } / itemsReviewed
+        val slowestAnswers = answeredQuestions.sortedByDescending { it.elapsedMs }.take(5)
+            .map { SlowAnswer(it.item, it.type, it.elapsedMs, it.isCorrect) }
+        return SessionSummary(
+            itemsReviewed = itemsReviewed,
+            correctFirstTry = correctFirstTry,
+            missedItems = missedItems,
+            totalElapsedMs = System.currentTimeMillis() - sessionStartTimeMs,
+            averageTimePerItemMs = averageTimePerItemMs,
+            slowestAnswers = slowestAnswers
+        )
     }
 
     private suspend fun advanceToNextQuestion() {
         val next = queue.firstOrNull()
         if (next == null) {
             reviewSessionRepository.clear()
-            val (itemsReviewed, correctFirstTry) = sessionStats()
+            val summary = sessionSummary()
             _uiState.update {
                 it.copy(
                     isLoading = false,
@@ -383,12 +462,17 @@ class ReviewViewModel @Inject constructor(
                     remainingCount = 0,
                     feedback = null,
                     rankChange = null,
-                    sessionItemsReviewed = itemsReviewed,
-                    sessionItemsCorrectFirstTry = correctFirstTry
+                    sessionItemsReviewed = summary.itemsReviewed,
+                    sessionItemsCorrectFirstTry = summary.correctFirstTry,
+                    sessionMissedItems = summary.missedItems,
+                    sessionTotalElapsedMs = summary.totalElapsedMs,
+                    sessionAverageTimePerItemMs = summary.averageTimePerItemMs,
+                    sessionSlowestAnswers = summary.slowestAnswers
                 )
             }
             return
         }
+        questionShownAtMs = System.currentTimeMillis()
         _uiState.update {
             it.copy(
                 isLoading = false,
@@ -399,20 +483,48 @@ class ReviewViewModel @Inject constructor(
                 rankChange = null,
                 isDetailsExpanded = false,
                 totalCount = totalQuestions,
-                remainingCount = queue.size
+                remainingCount = queue.size,
+                sessionStartTimeMs = sessionStartTimeMs
             )
         }
     }
 
+    /** Captures the current queue/progress as an immutable, ready-to-persist value — safe to hold
+     *  across a suspension point even if the live queue/progressByAssignmentId are mutated by
+     *  something else afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). */
+    private fun currentPersistSnapshot(): PersistedReviewSession = PersistedReviewSession(
+        queue = queue.map { PersistedQuestion(it.item.assignmentId, it.type.name) },
+        progress = progressByAssignmentId.map { (id, p) ->
+            PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
+        },
+        totalQuestions = totalQuestions
+    )
+
+    private suspend fun persistSnapshot(snapshot: PersistedReviewSession) {
+        reviewSessionRepository.save(snapshot)
+    }
+
     private suspend fun persistCurrentState() {
-        reviewSessionRepository.save(
-            PersistedReviewSession(
-                queue = queue.map { PersistedQuestion(it.item.assignmentId, it.type.name) },
-                progress = progressByAssignmentId.map { (id, p) ->
-                    PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
-                },
-                totalQuestions = totalQuestions
-            )
-        )
+        persistSnapshot(currentPersistSnapshot())
+    }
+
+    /** Fires the post-grading durability writes (outbox enqueue, study-streak mark, session
+     *  persistence) as their own child coroutine, detached from [gradeAnswer]'s own suspend chain
+     *  — none of it needs to complete before the caller (submitAnswer/dontKnowAnswer) considers
+     *  grading "done" and clears [isGrading], so the UI unlocks the instant feedback is visible
+     *  rather than waiting on bookkeeping the user never sees. */
+    private fun persistDurabilityWork(grade: ReviewGrade?, item: ReviewItem, snapshot: PersistedReviewSession) {
+        viewModelScope.launch {
+            if (grade != null) {
+                // The actual DB write of the new SRS stage — already reflected in the UI via the
+                // synchronous computeReviewRankChange prediction above, so this just makes the
+                // local cache catch up. Recomputes from a fresh DB read rather than trusting the
+                // in-memory item, so a concurrent change elsewhere still wins.
+                assignmentRepository.applyOptimisticReviewResult(item.assignmentId, item.srsSystemId, grade)
+                outboxRepository.enqueueReviewSubmission(item.assignmentId, item.subjectId, grade)
+                statsRepository.markStudyActivityToday()
+            }
+            persistSnapshot(snapshot)
+        }
     }
 }

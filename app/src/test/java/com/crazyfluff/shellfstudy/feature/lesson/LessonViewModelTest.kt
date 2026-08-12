@@ -19,6 +19,8 @@ import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import mockwebserver3.Dispatcher
@@ -54,6 +56,7 @@ class LessonViewModelTest {
         server = MockWebServer()
         server.start()
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         settingsRepository = SettingsRepository(dataStore)
@@ -96,7 +99,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `loads a batch of lessons into the select phase with all pre-selected`() = runTest {
+    fun `loads a batch of lessons into the select phase with all pre-selected`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -112,7 +115,21 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `an empty lesson queue is reported as no lessons available`() = runTest {
+    fun `showSubjectTypeLabel setting flows into uiState`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setShowSubjectTypeLabel(true)
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading || !state.showSubjectTypeLabel) state = awaitItem()
+            assertThat(state.showSubjectTypeLabel).isTrue()
+        }
+    }
+
+    @Test
+    fun `an empty lesson queue is reported as no lessons available`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(emptyCollectionJson()), jsonResponse(emptyCollectionJson()))
 
         val viewModel = createViewModel()
@@ -125,7 +142,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `toggling a lesson selection adds or removes it`() = runTest {
+    fun `toggling a lesson selection adds or removes it`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -144,7 +161,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `selectNone and selectAll clear and restore the full selection`() = runTest {
+    fun `selectNone and selectAll clear and restore the full selection`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -162,7 +179,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `startSelectedLessons enters the study phase with only the selected items`() = runTest {
+    fun `startSelectedLessons enters the study phase with only the selected items`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -183,7 +200,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `startSelectedLessons loads stroke order per subject, keyed by subject id`() = runTest {
+    fun `startSelectedLessons loads stroke order per subject, keyed by subject id`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
         strokeOrderRepository = FakeStrokeOrderRepository(
             mapOf('口' to listOf(StrokeOrderStroke(pathData = "M10,10L90,10", labelX = 5f, labelY = 5f)))
@@ -204,7 +221,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `advancing past the last study card starts the quiz`() = runTest {
+    fun `advancing past the last study card starts the quiz`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -226,7 +243,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `previousStudyCard moves back a card but not before the first`() = runTest {
+    fun `previousStudyCard moves back a card but not before the first`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -252,7 +269,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `onStudyCardSwiped updates the study index directly`() = runTest {
+    fun `onStudyCardSwiped updates the study index directly`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -270,7 +287,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `a correct quiz answer marks the assignment started once all its questions are done`() = runTest {
+    fun `a correct quiz answer marks the assignment started once all its questions are done`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -305,7 +322,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `an incorrect quiz answer requeues the question instead of starting the assignment`() = runTest {
+    fun `an incorrect quiz answer requeues the question instead of starting the assignment`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -335,7 +352,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `dontKnowAnswer grades as incorrect and requeues`() = runTest {
+    fun `dontKnowAnswer grades as incorrect and requeues`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()

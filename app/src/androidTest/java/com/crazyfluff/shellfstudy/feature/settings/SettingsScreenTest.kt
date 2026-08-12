@@ -22,6 +22,8 @@ class SettingsScreenTest {
         onShowPitchAccentChange: (Boolean) -> Unit = {},
         onAutoplayPronunciationAudioChange: (Boolean) -> Unit = {},
         onRestrictAudioToMp3Change: (Boolean) -> Unit = {},
+        onShowSubjectTypeLabelChange: (Boolean) -> Unit = {},
+        onShowReviewTimerChange: (Boolean) -> Unit = {},
         onNotificationsEnabledChange: (Boolean) -> Unit = {},
         onReviewsAvailableEnabledChange: (Boolean) -> Unit = {},
         onReviewsBacklogEnabledChange: (Boolean) -> Unit = {},
@@ -41,6 +43,8 @@ class SettingsScreenTest {
                 onShowPitchAccentChange = onShowPitchAccentChange,
                 onAutoplayPronunciationAudioChange = onAutoplayPronunciationAudioChange,
                 onRestrictAudioToMp3Change = onRestrictAudioToMp3Change,
+                onShowSubjectTypeLabelChange = onShowSubjectTypeLabelChange,
+                onShowReviewTimerChange = onShowReviewTimerChange,
                 onNotificationsEnabledChange = onNotificationsEnabledChange,
                 onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
                 onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
@@ -143,6 +147,30 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE).performClick()
         assert(restrictToMp3 == true)
+    }
+
+    @Test
+    fun togglingShowSubjectTypeLabelSwitch_invokesCallback() {
+        var showLabel: Boolean? = null
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showSubjectTypeLabel = false),
+            onShowSubjectTypeLabelChange = { showLabel = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE).performClick()
+        assert(showLabel == true)
+    }
+
+    @Test
+    fun togglingShowReviewTimerSwitch_invokesCallback() {
+        var showTimer: Boolean? = null
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showReviewTimer = false),
+            onShowReviewTimerChange = { showTimer = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_REVIEW_TIMER_TOGGLE).performClick()
+        assert(showTimer == true)
     }
 
     @Test

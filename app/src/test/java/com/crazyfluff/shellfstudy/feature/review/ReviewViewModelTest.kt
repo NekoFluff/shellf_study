@@ -18,6 +18,8 @@ import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import mockwebserver3.Dispatcher
@@ -55,11 +57,13 @@ class ReviewViewModelTest {
         assignmentRepository = repositories.assignmentRepository
         statsRepository = repositories.statsRepository
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         val settingsDataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("settings.preferences_pb") }
         )
         settingsRepository = SettingsRepository(settingsDataStore)
@@ -91,7 +95,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `radical item is a single meaning-only question that completes the session when answered correctly`() = runTest {
+    fun `radical item is a single meaning-only question that completes the session when answered correctly`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -121,7 +125,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `a rank change from completing an item surfaces once and clears on continue`() = runTest {
+    fun `a rank change from completing an item surfaces once and clears on continue`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -152,7 +156,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `completing a review durably queues the submission in the outbox instead of calling the network`() = runTest {
+    fun `completing a review durably queues the submission in the outbox instead of calling the network`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -179,7 +183,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `an incorrect answer requeues the same question instead of advancing`() = runTest {
+    fun `an incorrect answer requeues the same question instead of advancing`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -218,7 +222,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `submitting a reading into a meaning question rejects it instead of grading a miss`() = runTest {
+    fun `submitting a reading into a meaning question rejects it instead of grading a miss`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -247,7 +251,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `submitting a meaning into a reading question rejects it instead of grading a miss`() = runTest {
+    fun `submitting a meaning into a reading question rejects it instead of grading a miss`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -286,7 +290,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `dontKnowAnswer grades as incorrect, requeues, and expands details`() = runTest {
+    fun `dontKnowAnswer grades as incorrect, requeues, and expands details`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -321,7 +325,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `dontKnowAnswer does nothing once feedback is already showing`() = runTest {
+    fun `dontKnowAnswer does nothing once feedback is already showing`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -342,7 +346,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `kanji item requires both meaning and reading before the session completes`() = runTest {
+    fun `kanji item requires both meaning and reading before the session completes`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -374,7 +378,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `answering a reading question autoplays the correct pronunciation when the setting is enabled`() = runTest {
+    fun `answering a reading question autoplays the correct pronunciation when the setting is enabled`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -412,7 +416,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `answering a meaning question never autoplays pronunciation audio`() = runTest {
+    fun `answering a meaning question never autoplays pronunciation audio`() = runTest(mainDispatcherRule.dispatcher) {
         // A radical only ever produces a single MEANING question (see questionTypesFor) — unlike
         // the kanji fixture used elsewhere, this sidesteps the shuffled queue potentially serving a
         // READING question first, which would legitimately (and racily, since the setting read is
@@ -436,7 +440,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `autoplay is skipped once the setting is turned off`() = runTest {
+    fun `autoplay is skipped once the setting is turned off`() = runTest(mainDispatcherRule.dispatcher) {
         settingsRepository.setAutoplayPronunciationAudio(false)
         dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
 
@@ -464,7 +468,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `autoplay is skipped when restrictAudioToMp3 is enabled and only an ogg clip exists`() = runTest {
+    fun `autoplay is skipped when restrictAudioToMp3 is enabled and only an ogg clip exists`() = runTest(mainDispatcherRule.dispatcher) {
         settingsRepository.setRestrictAudioToMp3(true)
         dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJsonWithOggOnlyAudio()))
 
@@ -492,7 +496,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `undo reverts an incorrect answer so it doesn't count as a miss`() = runTest {
+    fun `undo reverts an incorrect answer so it doesn't count as a miss`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -527,7 +531,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `abandonSession clears persisted state and marks the session abandoned`() = runTest {
+    fun `abandonSession clears persisted state and marks the session abandoned`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -547,7 +551,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `a new ViewModel resumes a persisted session instead of refetching from the network`() = runTest {
+    fun `a new ViewModel resumes a persisted session instead of refetching from the network`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val firstViewModel = createViewModel()
@@ -570,7 +574,156 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `an empty due queue completes the session immediately with nothing to answer`() = runTest {
+    fun `showSubjectTypeLabel and showReviewTimer settings flow into uiState`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setShowSubjectTypeLabel(true)
+        settingsRepository.setShowReviewTimer(true)
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading || !state.showSubjectTypeLabel || !state.showReviewTimer) state = awaitItem()
+            assertThat(state.showSubjectTypeLabel).isTrue()
+            assertThat(state.showReviewTimer).isTrue()
+        }
+    }
+
+    @Test
+    fun `session summary reports missed items, slowest answers capped at five, and non-negative timing`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.sessionStartTimeMs).isNotNull()
+
+            // Miss the first question drawn (whichever type it is), then work through both question
+            // types until the session completes.
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            val missedState = awaitItem()
+            assertThat(missedState.feedback?.isCorrect).isFalse()
+
+            viewModel.onContinue()
+            state = awaitItem()
+
+            var isComplete = false
+            var safetyCounter = 0
+            while (!isComplete && safetyCounter < 10) {
+                safetyCounter++
+                val answer = if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+                viewModel.onAnswerInputChange(answer)
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+                isComplete = state.isSessionComplete
+            }
+
+            assertThat(state.isSessionComplete).isTrue()
+            assertThat(state.sessionMissedItems).hasSize(1)
+            assertThat(state.sessionMissedItems.first().characters).isEqualTo("水")
+            assertThat(state.sessionSlowestAnswers).isNotEmpty()
+            assertThat(state.sessionSlowestAnswers.size).isAtMost(5)
+            val elapsedTimes = state.sessionSlowestAnswers.map { it.elapsedMs }
+            assertThat(elapsedTimes).isEqualTo(elapsedTimes.sortedDescending())
+            assertThat(state.sessionTotalElapsedMs).isAtLeast(0L)
+            assertThat(state.sessionAverageTimePerItemMs).isAtLeast(0L)
+        }
+    }
+
+    @Test
+    fun `undo removes the just-recorded incorrect answer from session timing`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("typo")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+
+            viewModel.undoLastAnswer()
+            awaitItem()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+            // The undone incorrect attempt shouldn't be double-counted — first-try accuracy is
+            // unaffected and only one item was ever reviewed.
+            assertThat(finalState.sessionItemsReviewed).isEqualTo(1)
+            assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(1)
+            assertThat(finalState.sessionMissedItems).isEmpty()
+        }
+    }
+
+    @Test
+    fun `resuming after fully completing one item of several does not crash`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: ItemProgress now carries a ReviewItem (for session-stat reporting),
+        // reconstructed on resume via itemsById.getValue(assignmentId) where itemsById only
+        // contains currently-due items. Completing the radical here pushes its next-review time
+        // into the future via applyOptimisticReviewResult, dropping it out of the due queue even
+        // though its (completed) progress is still persisted — resuming must not crash on that.
+        dispatch(jsonResponse(twoItemAssignmentsJson()), jsonResponse(twoItemSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            var radicalCompleted = false
+            var safetyCounter = 0
+            while (!radicalCompleted && safetyCounter < 10) {
+                safetyCounter++
+                if (state.currentItem?.assignmentId == 101L) {
+                    // The radical — a single meaning question; answering it correctly completes it.
+                    firstViewModel.onAnswerInputChange("Mouth")
+                    awaitItem()
+                    firstViewModel.submitAnswer()
+                    awaitItem()
+                    radicalCompleted = true
+                } else {
+                    // The kanji — answer wrong so it's requeued and never completes, keeping the
+                    // session (and the resumed one below) meaningfully in-progress.
+                    firstViewModel.dontKnowAnswer()
+                    awaitItem()
+                }
+                firstViewModel.onContinue()
+                state = awaitItem()
+            }
+
+            assertThat(radicalCompleted).isTrue()
+            assertThat(state.isSessionComplete).isFalse()
+        }
+
+        // Simulate leaving and coming back: a fresh ViewModel must resume without crashing, even
+        // though assignment 101's completed progress is no longer in the due queue.
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.errorMessage).isNull()
+            assertThat(state.isSessionComplete).isFalse()
+            assertThat(state.currentItem?.assignmentId).isEqualTo(555L)
+        }
+    }
+
+    @Test
+    fun `an empty due queue completes the session immediately with nothing to answer`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(emptyCollectionJson()), jsonResponse(emptyCollectionJson()))
 
         val viewModel = createViewModel()
@@ -672,6 +825,58 @@ class ReviewViewModelTest {
               ]
             }
           }]
+        }
+    """.trimIndent()
+
+    private fun twoItemAssignmentsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 2,
+          "data": [
+            {
+              "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "radical",
+                "srs_stage": 1, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            },
+            {
+              "id": 555, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/555",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 440, "subject_type": "kanji",
+                "srs_stage": 3, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            }
+          ]
+        }
+    """.trimIndent()
+
+    private fun twoItemSubjectsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 2,
+          "data": [
+            {
+              "id": 1, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/1",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "mouth",
+                "characters": "口",
+                "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
+                "readings": []
+              }
+            },
+            {
+              "id": 440, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/440",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 3, "slug": "water",
+                "characters": "水",
+                "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
+                "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}]
+              }
+            }
+          ]
         }
     """.trimIndent()
 

@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.feature.lesson
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -379,6 +380,64 @@ class LessonScreenTest {
         composeTestRule.onNodeWithTag(LessonScreenTestTags.FEEDBACK_TEXT).assertIsDisplayed()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).performClick()
         assert(continued)
+    }
+
+    @Test
+    fun quizPhase_subjectTypeLabel_shownWhenSettingEnabled() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING,
+                showSubjectTypeLabel = true
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Radical").assertIsDisplayed()
+    }
+
+    @Test
+    fun quizPhase_subjectTypeLabel_absentWhenSettingDisabled() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING,
+                showSubjectTypeLabel = false
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL).assertCountEquals(0)
+    }
+
+    @Test
+    fun quizPhase_continueButton_disabledBrieflyAfterIncorrectAnswer_thenEnables() {
+        composeTestRule.mainClock.autoAdvance = false
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING,
+                feedback = LessonAnswerFeedback(isCorrect = false, correctAnswer = "Mouth")
+            )
+        )
+
+        composeTestRule.mainClock.advanceTimeBy(50)
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).assertIsNotEnabled()
+
+        composeTestRule.mainClock.advanceTimeBy(1300)
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).assertIsEnabled()
+    }
+
+    @Test
+    fun quizPhase_continueButton_enabledImmediately_afterCorrectAnswer() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = LessonQuestionType.MEANING,
+                feedback = LessonAnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).assertIsEnabled()
     }
 
     @Test

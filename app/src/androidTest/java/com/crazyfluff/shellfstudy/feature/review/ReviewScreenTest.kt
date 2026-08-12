@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.feature.review
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -136,6 +137,90 @@ class ReviewScreenTest {
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.FEEDBACK_TEXT).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.CONTINUE_BUTTON).performClick()
         assert(continued)
+    }
+
+    @Test
+    fun subjectTypeLabel_shownWhenSettingEnabled() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                showSubjectTypeLabel = true
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.SUBJECT_TYPE_LABEL).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Kanji").assertIsDisplayed()
+    }
+
+    @Test
+    fun subjectTypeLabel_absentWhenSettingDisabled() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                showSubjectTypeLabel = false
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SUBJECT_TYPE_LABEL).assertCountEquals(0)
+    }
+
+    @Test
+    fun sessionTimer_shownWhenSettingEnabledAndSessionInProgress() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                showReviewTimer = true, sessionStartTimeMs = System.currentTimeMillis()
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_TIMER_TEXT).assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionTimer_absentWhenSettingDisabled() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                showReviewTimer = false, sessionStartTimeMs = System.currentTimeMillis()
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SESSION_TIMER_TEXT).assertCountEquals(0)
+    }
+
+    @Test
+    fun continueButton_disabledBrieflyAfterIncorrectAnswer_thenEnables() {
+        composeTestRule.mainClock.autoAdvance = false
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Water")
+            )
+        )
+
+        composeTestRule.mainClock.advanceTimeBy(50)
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.CONTINUE_BUTTON).assertIsNotEnabled()
+
+        composeTestRule.mainClock.advanceTimeBy(1300)
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.CONTINUE_BUTTON).assertIsEnabled()
+    }
+
+    @Test
+    fun continueButton_enabledImmediately_afterCorrectAnswer() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.CONTINUE_BUTTON).assertIsEnabled()
     }
 
     @Test
@@ -373,7 +458,7 @@ class ReviewScreenTest {
     }
 
     @Test
-    fun sessionComplete_showsStatsCardWithCounts() {
+    fun sessionComplete_showsOverviewCardWithCounts() {
         setScreen(
             ReviewUiState(
                 isLoading = false, isSessionComplete = true,
@@ -381,17 +466,87 @@ class ReviewScreenTest {
             )
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_STATS_CARD).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_OVERVIEW_CARD).assertIsDisplayed()
         composeTestRule.onNodeWithText("Items reviewed: 5").assertIsDisplayed()
         composeTestRule.onNodeWithText("Correct on first try: 3 of 5 (60%)").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Great work. Your reviews have been submitted.").assertCountEquals(0)
     }
 
     @Test
-    fun sessionComplete_hidesStatsCardWhenNothingWasReviewed() {
+    fun sessionComplete_hidesCardsWhenNothingWasReviewed() {
         setScreen(ReviewUiState(isLoading = false, isSessionComplete = true, sessionItemsReviewed = 0))
 
-        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SESSION_STATS_CARD).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SESSION_OVERVIEW_CARD).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SESSION_TIMING_CARD).assertCountEquals(0)
+    }
+
+    @Test
+    fun sessionComplete_showsTimingCard() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsReviewed = 3, sessionItemsCorrectFirstTry = 3,
+                sessionTotalElapsedMs = 125_000L, sessionAverageTimePerItemMs = 4_500L
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_TIMING_CARD).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Total time: 2:05").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Avg. time per item reviewed: 4s").assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionComplete_showsSlowestAnswersCard_whenPresent() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsReviewed = 1, sessionItemsCorrectFirstTry = 1,
+                sessionSlowestAnswers = listOf(
+                    SlowAnswer(sampleItem, QuestionType.MEANING, 12_000L, isCorrect = true)
+                )
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_SLOWEST_CARD).assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionComplete_hidesSlowestAnswersCard_whenEmpty() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsReviewed = 1, sessionItemsCorrectFirstTry = 1,
+                sessionSlowestAnswers = emptyList()
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SESSION_SLOWEST_CARD).assertCountEquals(0)
+    }
+
+    @Test
+    fun sessionComplete_showsMissedItemsCard_whenPresent() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsReviewed = 2, sessionItemsCorrectFirstTry = 1,
+                sessionMissedItems = listOf(sampleItem)
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_MISSED_CARD).assertIsDisplayed()
+        composeTestRule.onNodeWithText("水").assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionComplete_hidesMissedItemsCard_whenEmpty() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsReviewed = 1, sessionItemsCorrectFirstTry = 1,
+                sessionMissedItems = emptyList()
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SESSION_MISSED_CARD).assertCountEquals(0)
     }
 
     @Test

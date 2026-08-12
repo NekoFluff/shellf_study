@@ -15,6 +15,8 @@ import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockWebServer
 import org.junit.After
@@ -44,6 +46,7 @@ class AuthViewModelTest {
         server.start()
 
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
@@ -62,7 +65,7 @@ class AuthViewModelTest {
         AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler, pitchAccentScrapeScheduler, notificationCoordinator)
 
     @Test
-    fun `submitting a blank token shows a validation error and makes no request`() = runTest {
+    fun `submitting a blank token shows a validation error and makes no request`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
         viewModel.uiState.test {
             awaitItem()
@@ -77,7 +80,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `submitting a valid token authenticates and schedules background sync`() = runTest {
+    fun `submitting a valid token authenticates and schedules background sync`() = runTest(mainDispatcherRule.dispatcher) {
         server.enqueue(jsonResponse(userJson()))
         val viewModel = createViewModel()
 
@@ -97,7 +100,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `submitting an invalid token shows an error and does not authenticate`() = runTest {
+    fun `submitting an invalid token shows an error and does not authenticate`() = runTest(mainDispatcherRule.dispatcher) {
         server.enqueue(emptyResponse(401))
         val viewModel = createViewModel()
 
@@ -116,7 +119,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `submitting a token that fails with a network error keeps it stored`() = runTest {
+    fun `submitting a token that fails with a network error keeps it stored`() = runTest(mainDispatcherRule.dispatcher) {
         server.enqueue(emptyResponse(500))
         val viewModel = createViewModel()
 

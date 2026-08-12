@@ -10,6 +10,8 @@ import com.crazyfluff.shellfstudy.core.data.ThemeMode
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationScheduler
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -30,6 +32,7 @@ class SettingsViewModelTest {
 
     private fun createViewModel(): SettingsViewModel {
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         settingsRepository = SettingsRepository(dataStore)
@@ -39,7 +42,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `onDailyLessonGoalChange updates the state`() = runTest {
+    fun `onDailyLessonGoalChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
@@ -51,7 +54,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `onThemeModeChange updates the state`() = runTest {
+    fun `onThemeModeChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
@@ -63,7 +66,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `onThemeModeChange updates the state to eink`() = runTest {
+    fun `onThemeModeChange updates the state to eink`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
@@ -75,7 +78,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `onShowPitchAccentChange updates the state`() = runTest {
+    fun `onShowPitchAccentChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
@@ -87,7 +90,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `onAutoplayPronunciationAudioChange updates the state`() = runTest {
+    fun `onAutoplayPronunciationAudioChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
@@ -99,7 +102,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `onRestrictAudioToMp3Change updates the state`() = runTest {
+    fun `onRestrictAudioToMp3Change updates the state`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
@@ -111,7 +114,31 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `uiState reflects opt-in notification defaults`() = runTest {
+    fun `onShowSubjectTypeLabelChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().showSubjectTypeLabel).isFalse()
+
+            viewModel.onShowSubjectTypeLabelChange(true)
+            assertThat(awaitItem().showSubjectTypeLabel).isTrue()
+        }
+    }
+
+    @Test
+    fun `onShowReviewTimerChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().showReviewTimer).isFalse()
+
+            viewModel.onShowReviewTimerChange(true)
+            assertThat(awaitItem().showReviewTimer).isTrue()
+        }
+    }
+
+    @Test
+    fun `uiState reflects opt-in notification defaults`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
         viewModel.uiState.test {
             val state = awaitItem()
@@ -132,7 +159,7 @@ class SettingsViewModelTest {
     // call inside it have definitely happened, in that order.
 
     @Test
-    fun `enabling notifications persists and reschedules the daily reminder`() = runTest {
+    fun `enabling notifications persists and reschedules the daily reminder`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.onNotificationsEnabledChange(true).join()
@@ -143,7 +170,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `disabling notifications persists and cancels all scheduled work`() = runTest {
+    fun `disabling notifications persists and cancels all scheduled work`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
         viewModel.onNotificationsEnabledChange(true).join()
 
@@ -154,7 +181,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `permission result persists only what was actually granted`() = runTest {
+    fun `permission result persists only what was actually granted`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.onNotificationsPermissionResult(granted = true).join()
@@ -167,7 +194,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `changing the daily reminder hour reschedules it`() = runTest {
+    fun `changing the daily reminder hour reschedules it`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.onDailyReminderHourChange(9).join()
@@ -177,7 +204,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `category toggles persist without touching scheduling`() = runTest {
+    fun `category toggles persist without touching scheduling`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
@@ -190,7 +217,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `backlog threshold and quiet hours persist`() = runTest {
+    fun `backlog threshold and quiet hours persist`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
