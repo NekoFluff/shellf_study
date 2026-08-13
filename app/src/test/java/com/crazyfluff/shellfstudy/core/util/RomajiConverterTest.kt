@@ -61,6 +61,14 @@ class RomajiConverterTest {
     }
 
     @Test
+    fun `a submitted answer mixing hiragana with a trailing romaji n resolves the n`() {
+        // e.g. a user on a hiragana IME keyboard typing こうさて then falling back to romaji "n"
+        // for the final ん. isComplete defaults to true for a submitted answer, so the trailing
+        // "n" unambiguously resolves same as it would for a pure-romaji "kousaten".
+        assertThat(RomajiConverter.toHiragana("こうさてn")).isEqualTo("こうさてん")
+    }
+
+    @Test
     fun `handles shi chi tsu fu alternate spellings`() {
         assertThat(RomajiConverter.toHiragana("shi")).isEqualTo("し")
         assertThat(RomajiConverter.toHiragana("si")).isEqualTo("し")
