@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.core.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
@@ -31,6 +32,8 @@ class LessonSessionRepository @Inject constructor(
     private val store = JsonPreferenceStore(
         dataStore, json, "persisted_lesson_session", PersistedLessonSession.serializer()
     )
+
+    val hasActiveSession: Flow<Boolean> = store.exists
 
     suspend fun save(session: PersistedLessonSession) = store.save(session)
 

@@ -266,6 +266,18 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun lessonsCard_showsRenamedLabel_whenSessionActive() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveLessonSession = true),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onNodeWithText("Resume").assertIsDisplayed()
+    }
+
+    @Test
     fun searchButton_opensInlineSearchOverlay() {
         composeTestRule.setContent {
             DashboardScreen(
@@ -291,5 +303,97 @@ class DashboardScreenTest {
         }
 
         composeTestRule.onAllNodesWithText("Shellf Study").assertCountEquals(0)
+    }
+
+    @Test
+    fun abandonReviewMenuItem_isAbsent_whenNoReviewSessionIsActive() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onAllNodesWithText("Abandon review session").assertCountEquals(0)
+    }
+
+    @Test
+    fun abandonReviewMenuItem_confirming_invokesCallback() {
+        var abandoned = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveReviewSession = true),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true }
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.ABANDON_REVIEW_CONFIRM_BUTTON).performClick()
+        assert(abandoned)
+    }
+
+    @Test
+    fun abandonReviewConfirmDialog_cancel_doesNotInvokeCallback() {
+        var abandoned = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveReviewSession = true),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true }
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM).performClick()
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.ABANDON_REVIEW_CONFIRM_BUTTON).assertCountEquals(0)
+        assert(!abandoned)
+    }
+
+    @Test
+    fun abandonLessonMenuItem_isAbsent_whenNoLessonSessionIsActive() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onAllNodesWithText("Abandon lesson session").assertCountEquals(0)
+    }
+
+    @Test
+    fun abandonLessonMenuItem_confirming_invokesCallback() {
+        var abandoned = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveLessonSession = true),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonLessonSession = { abandoned = true }
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.ABANDON_LESSON_CONFIRM_BUTTON).performClick()
+        assert(abandoned)
+    }
+
+    @Test
+    fun bothAbandonMenuItems_appearTogether_whenBothSessionsAreActive() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(
+                    isRefreshing = false, username = "x", level = 1,
+                    hasActiveReviewSession = true, hasActiveLessonSession = true
+                ),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM).assertIsDisplayed()
     }
 }

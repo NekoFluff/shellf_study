@@ -413,6 +413,100 @@ class LessonViewModelTest {
         }
     }
 
+    @Test
+    fun `a new ViewModel resumes a persisted quiz session instead of refetching from the network`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            firstViewModel.startSelectedLessons()
+            awaitItem()
+
+            firstViewModel.nextStudyCard()
+            val quizState = awaitItem()
+            assertThat(quizState.phase).isEqualTo(LessonPhase.QUIZ)
+        }
+        val requestCountAfterFirstLoad = server.requestCount
+
+        // Simulate leaving and coming back: a fresh ViewModel sharing the same repositories should
+        // pick the in-progress quiz back up rather than hitting the network again.
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.phase).isEqualTo(LessonPhase.QUIZ)
+            assertThat(state.totalQuizCount).isEqualTo(1)
+            assertThat(state.currentQuizItem?.assignmentId).isEqualTo(101L)
+        }
+        assertThat(server.requestCount).isEqualTo(requestCountAfterFirstLoad)
+    }
+
+    @Test
+    fun `resuming falls back to a fresh fetch when a queued item can no longer be found`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            firstViewModel.startSelectedLessons()
+            awaitItem()
+
+            firstViewModel.nextStudyCard()
+            awaitItem() // quiz begins, persisted
+        }
+
+        // Simulate the assignment being started elsewhere (e.g. synced in from another device)
+        // between sessions — it's no longer due for a lesson, so the persisted queue entry
+        // referencing it can't be resolved on resume, and resumeFromPersisted must fall back to a
+        // fresh fetch instead of crashing.
+        val existing = repositories.assignmentDao.getById(101L)!!
+        repositories.assignmentDao.upsertAll(listOf(existing.copy(startedAt = "2026-01-02T00:00:00.000000Z")))
+
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.errorMessage).isNull()
+            assertThat(state.hasNoLessonsAvailable).isTrue()
+        }
+        assertThat(lessonSessionRepository.load()).isNull()
+    }
+
+    @Test
+    fun `completing the quiz clears the persisted lesson session`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+            assertThat(lessonSessionRepository.load()).isNotNull()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+        }
+
+        assertThat(lessonSessionRepository.load()).isNull()
+    }
+
     private fun radicalAssignmentsJson() = """
         {
           "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,

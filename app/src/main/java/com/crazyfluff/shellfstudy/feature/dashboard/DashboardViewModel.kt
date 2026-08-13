@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
@@ -54,6 +55,7 @@ data class DashboardUiState(
     val lastSyncedAtMillis: Long? = null,
     val isLoggedOut: Boolean = false,
     val hasActiveReviewSession: Boolean = false,
+    val hasActiveLessonSession: Boolean = false,
     val lessonsCompletedToday: Int = 0,
     val dailyLessonGoal: Int = 15,
     val kanjiGuruedForLevelUp: Int = 0,
@@ -105,6 +107,7 @@ class DashboardViewModel @Inject constructor(
     private val waniKaniRepository: WaniKaniRepository,
     private val tokenRepository: TokenRepository,
     private val reviewSessionRepository: ReviewSessionRepository,
+    private val lessonSessionRepository: LessonSessionRepository,
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
     private val assignmentRepository: AssignmentRepository,
@@ -141,6 +144,7 @@ class DashboardViewModel @Inject constructor(
         }
 
         observe(reviewSessionRepository.hasActiveSession) { copy(hasActiveReviewSession = it) }
+        observe(lessonSessionRepository.hasActiveSession) { copy(hasActiveLessonSession = it) }
         observe(outboxRepository.observePendingCount()) { copy(pendingSyncCount = it) }
         observe(outboxRepository.blockedOnAuth) { copy(syncBlockedOnAuth = it) }
         observe(settingsRepository.settings) { copy(dailyLessonGoal = it.dailyLessonGoal) }
@@ -341,6 +345,17 @@ class DashboardViewModel @Inject constructor(
             notificationCoordinator.onLogout()
             _dashboardData.update { it.copy(isLoggedOut = true) }
         }
+    }
+
+    /** Discards a persisted in-progress review session without needing to open the Review screen
+     *  first — [hasActiveReviewSession] reflects the clear reactively via its own observed flow. */
+    fun abandonReviewSession() {
+        viewModelScope.launch { reviewSessionRepository.clear() }
+    }
+
+    /** Same idea as [abandonReviewSession] but for the lesson quiz. */
+    fun abandonLessonSession() {
+        viewModelScope.launch { lessonSessionRepository.clear() }
     }
 
     /** Guru'd-kanji progress toward leveling up — always scoped to the level currently being studied. */

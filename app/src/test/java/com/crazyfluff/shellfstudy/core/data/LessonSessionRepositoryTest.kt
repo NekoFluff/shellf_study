@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -66,5 +67,35 @@ class LessonSessionRepositoryTest {
         dataStore.edit { prefs -> prefs[sessionKey] = "not valid json" }
 
         assertThat(repository.load()).isNull()
+    }
+
+    @Test
+    fun `hasActiveSession is false when nothing is saved`() = runTest {
+        val repository = createRepository()
+
+        repository.hasActiveSession.test {
+            assertThat(awaitItem()).isFalse()
+        }
+    }
+
+    @Test
+    fun `hasActiveSession is true once a session is saved`() = runTest {
+        val repository = createRepository()
+        repository.save(sampleSession)
+
+        repository.hasActiveSession.test {
+            assertThat(awaitItem()).isTrue()
+        }
+    }
+
+    @Test
+    fun `hasActiveSession is false again after clear`() = runTest {
+        val repository = createRepository()
+        repository.save(sampleSession)
+        repository.clear()
+
+        repository.hasActiveSession.test {
+            assertThat(awaitItem()).isFalse()
+        }
     }
 }

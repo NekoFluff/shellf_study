@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,7 +50,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -74,6 +72,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
@@ -276,19 +275,13 @@ fun ReviewScreen(
         }
     ) { innerPadding ->
         if (showAbandonConfirm) {
-            AlertDialog(
-                onDismissRequest = { showAbandonConfirm = false },
-                title = { Text("Abandon this session?") },
-                text = { Text("Progress on items you haven't finished yet will be lost. This won't affect items you've already submitted.") },
-                confirmButton = {
-                    TextButton(
-                        onClick = { showAbandonConfirm = false; onAbandon() },
-                        modifier = Modifier.testTag(ReviewScreenTestTags.ABANDON_CONFIRM_BUTTON)
-                    ) { Text("Abandon") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showAbandonConfirm = false }) { Text("Cancel") }
-                }
+            ConfirmationDialog(
+                title = "Abandon this session?",
+                text = "Progress on items you haven't finished yet will be lost. This won't affect items you've already submitted.",
+                confirmLabel = "Abandon",
+                onConfirm = { showAbandonConfirm = false; onAbandon() },
+                onDismiss = { showAbandonConfirm = false },
+                confirmButtonTestTag = ReviewScreenTestTags.ABANDON_CONFIRM_BUTTON
             )
         }
 

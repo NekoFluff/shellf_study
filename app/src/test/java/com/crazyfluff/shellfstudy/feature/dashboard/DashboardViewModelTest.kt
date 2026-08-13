@@ -10,7 +10,13 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
+import com.crazyfluff.shellfstudy.core.data.PersistedItemProgress
+import com.crazyfluff.shellfstudy.core.data.PersistedLessonQuestion
+import com.crazyfluff.shellfstudy.core.data.PersistedLessonSession
+import com.crazyfluff.shellfstudy.core.data.PersistedQuestion
+import com.crazyfluff.shellfstudy.core.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
@@ -51,6 +57,7 @@ class DashboardViewModelTest {
     private lateinit var tokenRepository: TokenRepository
     private lateinit var repositories: TestRepositories
     private lateinit var reviewSessionRepository: ReviewSessionRepository
+    private lateinit var lessonSessionRepository: LessonSessionRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var dashboardCacheRepository: DashboardCacheRepository
     private lateinit var syncScheduler: FakeSyncScheduler
@@ -69,6 +76,7 @@ class DashboardViewModelTest {
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
         repositories = buildTestRepositories(server.url("/").toString())
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+        lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         settingsRepository = SettingsRepository(dataStore)
         dashboardCacheRepository = DashboardCacheRepository(dataStore)
         syncScheduler = FakeSyncScheduler()
@@ -101,6 +109,7 @@ class DashboardViewModelTest {
                     waniKaniRepository = repositories.waniKaniRepository,
                     tokenRepository = tokenRepository,
                     reviewSessionRepository = reviewSessionRepository,
+                    lessonSessionRepository = lessonSessionRepository,
                     settingsRepository = settingsRepository,
                     subjectRepository = repositories.subjectRepository,
                     assignmentRepository = repositories.assignmentRepository,
@@ -338,6 +347,87 @@ class DashboardViewModelTest {
         tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
         assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
         assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
+    }
+
+    private val sampleReviewSession = PersistedReviewSession(
+        queue = listOf(PersistedQuestion(assignmentId = 1, questionType = "MEANING")),
+        progress = listOf(
+            PersistedItemProgress(
+                assignmentId = 1,
+                meaningDone = false,
+                readingDone = false,
+                hadIncorrectMeaning = false,
+                hadIncorrectReading = false
+            )
+        ),
+        totalQuestions = 1
+    )
+
+    private val sampleLessonSession = PersistedLessonSession(
+        quizQueue = listOf(PersistedLessonQuestion(assignmentId = 1, questionType = "MEANING")),
+        totalQuizCount = 1
+    )
+
+    @Test
+    fun `hasActiveReviewSession and hasActiveLessonSession reflect their repositories independently`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        reviewSessionRepository.save(sampleReviewSession)
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isRefreshing || !state.hasActiveReviewSession) state = awaitItem()
+            assertThat(state.hasActiveReviewSession).isTrue()
+            assertThat(state.hasActiveLessonSession).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `abandonReviewSession clears only the review session repository`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        reviewSessionRepository.save(sampleReviewSession)
+        lessonSessionRepository.save(sampleLessonSession)
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isRefreshing || !state.hasActiveReviewSession) state = awaitItem()
+
+            viewModel.abandonReviewSession()
+            var afterAbandon = awaitItem()
+            while (afterAbandon.hasActiveReviewSession) afterAbandon = awaitItem()
+            assertThat(afterAbandon.hasActiveReviewSession).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertThat(reviewSessionRepository.load()).isNull()
+        assertThat(lessonSessionRepository.load()).isNotNull()
+    }
+
+    @Test
+    fun `abandonLessonSession clears only the lesson session repository`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        reviewSessionRepository.save(sampleReviewSession)
+        lessonSessionRepository.save(sampleLessonSession)
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isRefreshing || !state.hasActiveLessonSession) state = awaitItem()
+
+            viewModel.abandonLessonSession()
+            var afterAbandon = awaitItem()
+            while (afterAbandon.hasActiveLessonSession) afterAbandon = awaitItem()
+            assertThat(afterAbandon.hasActiveLessonSession).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertThat(lessonSessionRepository.load()).isNull()
+        assertThat(reviewSessionRepository.load()).isNotNull()
     }
 
     @Test

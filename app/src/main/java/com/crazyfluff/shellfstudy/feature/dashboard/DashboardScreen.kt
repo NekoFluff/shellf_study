@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -57,6 +58,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
@@ -83,6 +85,10 @@ object DashboardScreenTestTags {
     const val SETTINGS_BUTTON = "dashboard_settings_button"
     const val LESSONS_TODAY_PROGRESS = "dashboard_lessons_today_progress"
     const val GURU_PROGRESS = "dashboard_guru_progress"
+    const val ABANDON_REVIEW_MENU_ITEM = "dashboard_abandon_review_menu_item"
+    const val ABANDON_LESSON_MENU_ITEM = "dashboard_abandon_lesson_menu_item"
+    const val ABANDON_REVIEW_CONFIRM_BUTTON = "dashboard_abandon_review_confirm_button"
+    const val ABANDON_LESSON_CONFIRM_BUTTON = "dashboard_abandon_lesson_confirm_button"
 }
 
 @Composable
@@ -130,6 +136,8 @@ fun DashboardRoute(
         onStartLesson = onStartLesson,
         onOpenSettings = onOpenSettings,
         onLogOut = viewModel::logOut,
+        onAbandonReviewSession = viewModel::abandonReviewSession,
+        onAbandonLessonSession = viewModel::abandonLessonSession,
         searchUiState = searchUiState,
         onSearchQueryChange = searchViewModel::onQueryChange,
         onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange
@@ -145,12 +153,16 @@ fun DashboardScreen(
     onLogOut: () -> Unit,
     onStartLesson: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onAbandonReviewSession: () -> Unit = {},
+    onAbandonLessonSession: () -> Unit = {},
     searchUiState: SearchUiState = SearchUiState(),
     onSearchQueryChange: (String) -> Unit = {},
     onLevelProgressLevelChange: (Int) -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var showAbandonReviewConfirm by remember { mutableStateOf(false) }
+    var showAbandonLessonConfirm by remember { mutableStateOf(false) }
     val detailSheetState = rememberSubjectDetailSheetState()
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -198,6 +210,28 @@ fun DashboardScreen(
                                 onClick = { menuExpanded = false; onLogOut() },
                                 modifier = Modifier.testTag(DashboardScreenTestTags.LOG_OUT_BUTTON)
                             )
+                            if (uiState.hasActiveReviewSession) {
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Abandon review session", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                    },
+                                    onClick = { menuExpanded = false; showAbandonReviewConfirm = true },
+                                    modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM)
+                                )
+                            }
+                            if (uiState.hasActiveLessonSession) {
+                                if (!uiState.hasActiveReviewSession) HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Abandon lesson session", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                    },
+                                    onClick = { menuExpanded = false; showAbandonLessonConfirm = true },
+                                    modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM)
+                                )
+                            }
                         }
                     }
                 )
@@ -292,7 +326,9 @@ fun DashboardScreen(
                                 horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 SummaryCard(
-                                    label = "Lessons",
+                                    // Kept to one short word — see the matching comment on the
+                                    // Reviews card below; the same wrap-height concern applies here.
+                                    label = if (uiState.hasActiveLessonSession) "Resume" else "Lessons",
                                     count = uiState.lessonCount,
                                     // Fixed brand color rather than MaterialTheme.colorScheme.tertiary:
                                     // the dark color scheme maps tertiary to a pale tint meant for
@@ -365,6 +401,27 @@ fun DashboardScreen(
             modifier = Modifier.fillMaxSize(),
             onSubjectClick = { detailSheetState.show(it) }
         )
+
+        if (showAbandonReviewConfirm) {
+            ConfirmationDialog(
+                title = "Abandon review session?",
+                text = "Progress on reviews you haven't finished yet will be lost. This won't affect items you've already submitted.",
+                confirmLabel = "Abandon",
+                onConfirm = { showAbandonReviewConfirm = false; onAbandonReviewSession() },
+                onDismiss = { showAbandonReviewConfirm = false },
+                confirmButtonTestTag = DashboardScreenTestTags.ABANDON_REVIEW_CONFIRM_BUTTON
+            )
+        }
+        if (showAbandonLessonConfirm) {
+            ConfirmationDialog(
+                title = "Abandon lesson session?",
+                text = "Progress on the lessons you haven't finished quizzing yet will be lost. Lessons you've already completed won't be affected.",
+                confirmLabel = "Abandon",
+                onConfirm = { showAbandonLessonConfirm = false; onAbandonLessonSession() },
+                onDismiss = { showAbandonLessonConfirm = false },
+                confirmButtonTestTag = DashboardScreenTestTags.ABANDON_LESSON_CONFIRM_BUTTON
+            )
+        }
     }
 
     SubjectDetailSheetHost(detailSheetState)
