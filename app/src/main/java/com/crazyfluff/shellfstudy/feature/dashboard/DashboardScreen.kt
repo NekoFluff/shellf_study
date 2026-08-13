@@ -180,57 +180,59 @@ fun DashboardScreen(
                         ) {
                             Icon(Icons.Default.Search, contentDescription = "Search")
                         }
-                        IconButton(
-                            onClick = { menuExpanded = true },
-                            modifier = Modifier.testTag(DashboardScreenTestTags.OVERFLOW_MENU)
-                        ) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More options")
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Settings") },
-                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                onClick = { menuExpanded = false; onOpenSettings() },
-                                modifier = Modifier.testTag(DashboardScreenTestTags.SETTINGS_BUTTON)
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text("Log out", color = MaterialTheme.colorScheme.error) },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.Logout,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                },
-                                onClick = { menuExpanded = false; onLogOut() },
-                                modifier = Modifier.testTag(DashboardScreenTestTags.LOG_OUT_BUTTON)
-                            )
-                            if (uiState.hasActiveReviewSession) {
+                        Box {
+                            IconButton(
+                                onClick = { menuExpanded = true },
+                                modifier = Modifier.testTag(DashboardScreenTestTags.OVERFLOW_MENU)
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Settings") },
+                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                    onClick = { menuExpanded = false; onOpenSettings() },
+                                    modifier = Modifier.testTag(DashboardScreenTestTags.SETTINGS_BUTTON)
+                                )
                                 HorizontalDivider()
                                 DropdownMenuItem(
-                                    text = { Text("Abandon review session", color = MaterialTheme.colorScheme.error) },
+                                    text = { Text("Log out", color = MaterialTheme.colorScheme.error) },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.Logout,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
                                     },
-                                    onClick = { menuExpanded = false; showAbandonReviewConfirm = true },
-                                    modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM)
+                                    onClick = { menuExpanded = false; onLogOut() },
+                                    modifier = Modifier.testTag(DashboardScreenTestTags.LOG_OUT_BUTTON)
                                 )
-                            }
-                            if (uiState.hasActiveLessonSession) {
-                                if (!uiState.hasActiveReviewSession) HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Abandon lesson session", color = MaterialTheme.colorScheme.error) },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                                    },
-                                    onClick = { menuExpanded = false; showAbandonLessonConfirm = true },
-                                    modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM)
-                                )
+                                if (uiState.hasActiveReviewSession) {
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Abandon review session", color = MaterialTheme.colorScheme.error) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                        },
+                                        onClick = { menuExpanded = false; showAbandonReviewConfirm = true },
+                                        modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM)
+                                    )
+                                }
+                                if (uiState.hasActiveLessonSession) {
+                                    if (!uiState.hasActiveReviewSession) HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Abandon lesson session", color = MaterialTheme.colorScheme.error) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                        },
+                                        onClick = { menuExpanded = false; showAbandonLessonConfirm = true },
+                                        modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM)
+                                    )
+                                }
                             }
                         }
                     }
@@ -249,7 +251,8 @@ fun DashboardScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp)
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 24.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
                     when (val contentState = uiState.contentState) {

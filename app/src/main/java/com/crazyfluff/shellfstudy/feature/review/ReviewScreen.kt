@@ -5,7 +5,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,6 +90,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.designsystem.theme.RankChangeChip
+import com.crazyfluff.shellfstudy.core.designsystem.theme.RankChangeChipEnterDurationMs
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
@@ -249,37 +252,39 @@ fun ReviewScreen(
                         Icon(Icons.Default.Search, contentDescription = "Search")
                     }
                     if (canManageSession) {
-                        IconButton(
-                            onClick = { menuExpanded = true },
-                            modifier = Modifier.testTag(ReviewScreenTestTags.OVERFLOW_MENU)
-                        ) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More options")
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Wrap up") },
-                                leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
-                                enabled = !uiState.isWrappingUp,
-                                onClick = { menuExpanded = false; onWrapUp() },
-                                modifier = Modifier.testTag(ReviewScreenTestTags.WRAP_UP_MENU_ITEM)
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text("Abandon session", color = MaterialTheme.colorScheme.error) },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                },
-                                onClick = { menuExpanded = false; showAbandonConfirm = true },
-                                modifier = Modifier.testTag(ReviewScreenTestTags.ABANDON_MENU_ITEM)
-                            )
+                        Box {
+                            IconButton(
+                                onClick = { menuExpanded = true },
+                                modifier = Modifier.testTag(ReviewScreenTestTags.OVERFLOW_MENU)
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Wrap up") },
+                                    leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
+                                    enabled = !uiState.isWrappingUp,
+                                    onClick = { menuExpanded = false; onWrapUp() },
+                                    modifier = Modifier.testTag(ReviewScreenTestTags.WRAP_UP_MENU_ITEM)
+                                )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Abandon session", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    },
+                                    onClick = { menuExpanded = false; showAbandonConfirm = true },
+                                    modifier = Modifier.testTag(ReviewScreenTestTags.ABANDON_MENU_ITEM)
+                                )
+                            }
                         }
                     }
                 }
@@ -437,18 +442,18 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         (uiState.totalCount - uiState.remainingCount).toFloat() / uiState.totalCount
     val accentColor = subjectColor(item.subjectType)
 
+    LinearProgressIndicator(
+        progress = { progress },
+        modifier = Modifier.fillMaxWidth(),
+        color = accentColor,
+        drawStopIndicator = {}
+    )
     Text(
         text = "${uiState.totalCount - uiState.remainingCount} / ${uiState.totalCount}",
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
             .testTag(ReviewScreenTestTags.PROGRESS_COUNT)
-    )
-    LinearProgressIndicator(
-        progress = { progress },
-        modifier = Modifier.fillMaxWidth(),
-        color = accentColor,
-        drawStopIndicator = {}
     )
 
     Column(
@@ -505,12 +510,20 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             // Fade + slide up from below — no scale (a prior scale+overshoot combination visibly
             // clipped the chip's edges against AnimatedVisibility's clip-to-bounds behavior; a
             // pure fade/slide never exceeds its own laid-out bounds, so there's nothing to clip).
-            // 250ms at a full-height slide distance so the motion actually reads as an animation —
-            // a much shorter/smaller version of this previously was imperceptible.
-            enter = fadeIn(animationSpec = tween(durationMillis = 250)) +
+            // Duration shared with RankChangeChip's own internal color-morph animation via
+            // RankChangeChipEnterDurationMs so the two can't drift out of sync; at a full-height
+            // slide distance so the motion actually reads as an animation — a much shorter/smaller
+            // version of this previously was imperceptible.
+            enter = fadeIn(animationSpec = tween(durationMillis = RankChangeChipEnterDurationMs)) +
                 slideInVertically(
                     initialOffsetY = { it },
-                    animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
+                    animationSpec = tween(durationMillis = RankChangeChipEnterDurationMs, easing = FastOutSlowInEasing)
+                ),
+            // Snappier than the entrance — the chip should feel dismissed, not lingered on.
+            exit = fadeOut(animationSpec = tween(durationMillis = 150)) +
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
                 )
         ) {
             val rankChange = uiState.rankChange
