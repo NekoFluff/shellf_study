@@ -221,9 +221,14 @@ class ReviewViewModel @Inject constructor(
                 // A small typo is graded as correct but flagged, rather than a flat miss — readings
                 // stay exact-match, matching WaniKani's own convention for kana.
                 val match = CloseEnoughMatcher.match(state.answerInput, candidates)
+                val readingCandidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, QuestionType.READING)
                 // Typing a reading into a meaning answer is a habit slip, not a genuine miss — reject
-                // it outright rather than spending an SRS attempt on it.
-                if (!match.isMatch && state.answerInput.containsKana()) {
+                // it outright rather than spending an SRS attempt on it. Kana is one unambiguous
+                // tell; a wrong guess that romaji-converts into this item's own reading is the same
+                // slip, just typed in Latin letters.
+                val looksLikeReading = state.answerInput.containsKana() ||
+                    CloseEnoughMatcher.match(convertReadingSafely(state.answerInput.trim()), readingCandidates).isMatch
+                if (!match.isMatch && looksLikeReading) {
                     _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
                     return@launchIfIdle
                 }
