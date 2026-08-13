@@ -3,6 +3,10 @@ package com.crazyfluff.shellfstudy
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.svg.SvgDecoder
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.notifications.NotificationChannels
@@ -12,7 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @HiltAndroidApp
-class ShellfStudyApplication : Application(), Configuration.Provider {
+class ShellfStudyApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var strokeOrderRepository: StrokeOrderRepository
@@ -20,6 +24,13 @@ class ShellfStudyApplication : Application(), Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
+
+    // Radicals with no Unicode glyph (e.g. "Death Star") render via character_images, which the
+    // WaniKani API only ever supplies as SVG — the decoder must be registered explicitly here.
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader.Builder(context)
+            .components { add(SvgDecoder.Factory()) }
+            .build()
 
     override fun onCreate() {
         super.onCreate()

@@ -165,9 +165,9 @@ class SubjectRepository @Inject constructor(
 private fun buildSearchTarget(characters: String?, slug: String, meanings: List<String>, readings: List<String>): String =
     (listOfNotNull(characters) + slug + meanings + readings).joinToString(" ").lowercase()
 
-/** Prefers a plain PNG variant (no inline SVG decoder in this app's Coil setup) over SVG. */
+/** WaniKani only ever supplies character_images as SVG; the ImageLoader has an SvgDecoder registered. */
 private fun selectCharacterImageUrl(images: List<CharacterImageData>): String? =
-    images.firstOrNull { it.contentType == "image/png" }?.url
+    images.firstOrNull { it.contentType == "image/svg+xml" }?.url
 
 private fun SubjectEntity.toSubjectSummary(): SubjectSummary = SubjectSummary(
     subjectId = id,
