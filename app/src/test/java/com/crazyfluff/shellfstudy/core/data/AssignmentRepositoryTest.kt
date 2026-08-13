@@ -1,7 +1,6 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
-import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
@@ -209,21 +208,6 @@ class AssignmentRepositoryTest {
         val rankChange = repository.computeReviewRankChange(item, ReviewGrade(meaningCorrect = true, readingCorrect = true))
 
         assertThat(rankChange).isNull()
-    }
-
-    @Test
-    fun `computeLessonStartRankChange predicts locked to the srs system's starting stage`() = runTest {
-        repository.warmSrsSystemCache()
-        val item = LessonItem(
-            assignmentId = 101, subjectId = 1, subjectType = SubjectType.RADICAL, characters = "口",
-            level = 3, meanings = listOf("Mouth"), readings = listOf("くち"),
-            meaningMnemonic = null, readingMnemonic = null, srsSystemId = 0
-        )
-
-        val rankChange = repository.computeLessonStartRankChange(item)
-
-        assertThat(rankChange?.from?.raw).isEqualTo(0)
-        assertThat(rankChange?.to?.raw).isEqualTo(1)
     }
 
     @Test

@@ -87,7 +87,6 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.VocabReadingRo
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.componentsLabel
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
-import com.crazyfluff.shellfstudy.core.designsystem.theme.RankChangeChip
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
@@ -132,7 +131,6 @@ object LessonScreenTestTags {
     const val DONT_KNOW_BUTTON = "lesson_dont_know_button"
     const val FEEDBACK_TEXT = "lesson_feedback_text"
     const val ANSWER_DETAIL_TEXT = "lesson_answer_detail_text"
-    const val RANK_CHANGE_TEXT = "lesson_rank_change_text"
     const val QUIZ_SUBJECT_TYPE_LABEL = "lesson_quiz_subject_type_label"
     const val CONTINUE_BUTTON = "lesson_continue_button"
     const val SESSION_COMPLETE = "lesson_session_complete"
@@ -213,6 +211,12 @@ fun LessonScreen(
 
     val detailSheetState = rememberSubjectDetailSheetState()
 
+    // Wrapping Scaffold and SubjectDetailSheetHost in a shared Box — rather than leaving them as
+    // top-level siblings — is what lets the detail sheet's handle overlay the true bottom of the
+    // screen and pick up real navigation-bar insets via its own navigationBarsPadding(), instead of
+    // ending up laid out underneath the system nav bar/gesture area. Mirrors ReviewScreen's
+    // equivalent wrapping Box.
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -323,6 +327,7 @@ fun LessonScreen(
     }
 
     SubjectDetailSheetHost(detailSheetState)
+    }
 }
 
 @Composable
@@ -911,10 +916,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
                             }
                         )
                 )
-            }
-            uiState.rankChange?.let { rankChange ->
-                Spacer(modifier = Modifier.height(4.dp))
-                RankChangeChip(rankChange, modifier = Modifier.testTag(LessonScreenTestTags.RANK_CHANGE_TEXT))
             }
             Spacer(modifier = Modifier.height(16.dp))
             GatedContinueButton(

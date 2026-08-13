@@ -5,7 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -15,7 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
@@ -50,16 +50,21 @@ fun GatedContinueButton(
             modifier = Modifier.fillMaxWidth().testTag(continueButtonTestTag)
         ) { Text("Continue") }
         if (!continueUnlocked) {
+            // Inset from the button's own edges and given a little breathing room off the bottom
+            // — sitting flush against it clipped straight through the button's rounded (pill)
+            // corners, leaving little squared-off flecks of color poking out past its curve.
             LinearProgressIndicator(
                 progress = { lockProgress.value },
                 color = MaterialTheme.colorScheme.onPrimary,
                 trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
+                strokeCap = StrokeCap.Round,
                 drawStopIndicator = {},
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp))
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 8.dp)
+                    .height(4.dp)
             )
         }
     }

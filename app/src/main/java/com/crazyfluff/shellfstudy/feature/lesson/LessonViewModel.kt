@@ -16,7 +16,6 @@ import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
-import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.network.SubjectType
@@ -60,7 +59,6 @@ data class LessonUiState(
     val currentQuestionType: QuestionType? = null,
     val answerInput: String = "",
     val feedback: AnswerFeedback? = null,
-    val rankChange: RankChange? = null,
     val totalQuizCount: Int = 0,
     val remainingQuizCount: Int = 0,
     val isSessionComplete: Boolean = false,
@@ -118,9 +116,9 @@ class LessonViewModel @Inject constructor(
     private fun loadOrResume() {
         viewModelScope.launch {
             _uiState.update { LessonUiState(isLoading = true) }
-            // Warmed once here, during the loading spinner, so every item started during this
-            // session can compute its rank change synchronously — see
-            // AssignmentRepository.computeLessonStartRankChange.
+            // Warmed once here, during the loading spinner, so applyOptimisticLessonStart can
+            // resolve the SRS system for each item started during this session with zero DB
+            // round trips.
             assignmentRepository.warmSrsSystemCache()
             val persisted = lessonSessionRepository.load()
             if (persisted != null) {
@@ -380,21 +378,11 @@ class LessonViewModel @Inject constructor(
         // marked started once) — computed once so both the optimistic patch below and the outbox
         // enqueue afterward agree on whether this is really a first-time completion.
         val isNewlyStarted = justCompletedItem && startedAssignmentIds.add(item.assignmentId)
-        // Computed synchronously against AssignmentRepository's in-memory SRS-system cache
-        // (warmed once when the queue loaded) — zero DB access on this critical path at all now.
-        // The actual DB write is durability bookkeeping the user never waits on, so it's launched
-        // as its own detached coroutine below instead of awaited inline.
-        val newRankChange = if (isNewlyStarted) {
-            assignmentRepository.computeLessonStartRankChange(item)?.takeIf { it.from != it.to }
-        } else {
-            null
-        }
 
         _uiState.update {
             it.copy(
                 feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
-                remainingQuizCount = quizQueue.size,
-                rankChange = newRankChange ?: it.rankChange
+                remainingQuizCount = quizQueue.size
             )
         }
 
@@ -422,9 +410,6 @@ class LessonViewModel @Inject constructor(
     private suspend fun persistDurabilityWork(isNewlyStarted: Boolean, item: LessonItem, snapshot: PersistedLessonSession) {
         applicationScope.runDurably {
             if (isNewlyStarted) {
-                // The actual DB write of the new SRS stage — already reflected in the UI via the
-                // synchronous computeLessonStartRankChange prediction above, so this just makes
-                // the local cache catch up.
                 assignmentRepository.applyOptimisticLessonStart(item.assignmentId, item.srsSystemId)
                 outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
             }
@@ -441,7 +426,7 @@ class LessonViewModel @Inject constructor(
         if (next == null) {
             applicationScope.runDurably { lessonSessionRepository.clear() }
             _uiState.update {
-                it.copy(isSessionComplete = true, currentQuizItem = null, currentQuestionType = null, rankChange = null)
+                it.copy(isSessionComplete = true, currentQuizItem = null, currentQuestionType = null)
             }
             return
         }
@@ -451,7 +436,6 @@ class LessonViewModel @Inject constructor(
                 currentQuestionType = next.type,
                 answerInput = "",
                 feedback = null,
-                rankChange = null,
                 remainingQuizCount = quizQueue.size
             )
         }

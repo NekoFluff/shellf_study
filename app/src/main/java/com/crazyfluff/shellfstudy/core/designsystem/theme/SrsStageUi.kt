@@ -1,7 +1,5 @@
 package com.crazyfluff.shellfstudy.core.designsystem.theme
 
-import androidx.compose.animation.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Row
@@ -17,8 +15,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,35 +36,26 @@ fun srsStageColor(stage: SrsStage): Color = when (stage) {
 
 @Composable
 fun RankChangeChip(rankChange: RankChange, modifier: Modifier = Modifier) {
-    val fromColor = srsStageColor(rankChange.from)
-    val toColor = srsStageColor(rankChange.to)
-    // Animatable directly, rather than animateColorAsState — that composable is itself a
-    // remember{Animatable}+LaunchedEffect wrapper, so driving a separate mutableStateOf just to
-    // hand it a "target" would be animating through a proxy for no benefit. animateTo also lets
-    // this start immediately from fromColor without the extra recomposition animateColorAsState
-    // needs to notice its targetValue changed.
-    val color = remember(rankChange) { Animatable(fromColor) }
-    LaunchedEffect(rankChange) { color.animateTo(toColor, tween(durationMillis = 500)) }
-    val animatedColor = color.value
+    val color = srsStageColor(rankChange.to)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .clip(RoundedCornerShape(50))
-            .background(animatedColor.copy(alpha = 0.15f))
-            .border(1.dp, animatedColor, RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.15f))
+            .border(1.dp, color, RoundedCornerShape(50))
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Icon(
             imageVector = if (rankChange.isRankUp) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
             contentDescription = if (rankChange.isRankUp) "Rank up" else "Rank down",
-            tint = animatedColor,
+            tint = color,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = rankChange.to.displayName,
-            color = animatedColor,
+            color = color,
             style = MaterialTheme.typography.labelLarge
         )
     }

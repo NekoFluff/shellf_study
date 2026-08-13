@@ -66,9 +66,8 @@ data class LessonItem(
     val componentSubjectIds: List<Long> = emptyList(),
     val amalgamationSubjectIds: List<Long> = emptyList(),
     val visuallySimilarSubjectIds: List<Long> = emptyList(),
-    /** Carried along so a lesson start's rank change can be computed synchronously against
-     *  AssignmentRepository's in-memory SRS-system cache — see
-     *  AssignmentRepository.computeLessonStartRankChange. */
+    /** Carried along so AssignmentRepository.applyOptimisticLessonStart can resolve the SRS
+     *  system's starting stage without an extra DB round trip. */
     val srsSystemId: Long = 0
 )
 

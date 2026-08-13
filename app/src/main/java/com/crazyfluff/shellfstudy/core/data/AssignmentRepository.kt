@@ -126,16 +126,16 @@ class AssignmentRepository @Inject constructor(
     }
 
     // Small, rarely-changing reference data — WaniKani only has a couple of SRS systems — cached
-    // in memory once so a review/lesson item's rank change can be predicted with zero DB access at
-    // all (computeReviewRankChange/computeLessonStartRankChange), and so the deferred write
+    // in memory once so a review item's rank change can be predicted with zero DB access at all
+    // ([computeReviewRankChange]), and so the deferred write
     // (applyOptimisticReviewResult/applyOptimisticLessonStart) doesn't need a DB round trip for the
     // SRS system either, only for the assignment row itself. Safe to treat as immutable for a
     // session: SRS systems don't change after the initial sync.
     private var srsSystemCache: Map<Long, SrsSystemEntity>? = null
 
     /** Warms [srsSystemCache] if it isn't already — call once before a grading session starts
-     *  (e.g. when the review/lesson queue loads), so every answer in that session can compute its
-     *  rank change synchronously via [computeReviewRankChange]/[computeLessonStartRankChange]. */
+     *  (e.g. when the review/lesson queue loads), so every review answer in that session can
+     *  compute its rank change synchronously via [computeReviewRankChange]. */
     suspend fun warmSrsSystemCache() {
         if (srsSystemCache == null) {
             srsSystemCache = srsSystemDao.observeAll().first().associateBy { it.id }
@@ -162,12 +162,6 @@ class AssignmentRepository @Inject constructor(
             SrsStageCalculator.nextStageOnIncorrect(item.srsStage, srsSystem)
         }
         return RankChange(SrsStage.fromRaw(item.srsStage), SrsStage.fromRaw(nextStage))
-    }
-
-    /** Same idea as [computeReviewRankChange] but for starting a lesson. */
-    fun computeLessonStartRankChange(item: LessonItem): RankChange? {
-        val srsSystem = srsSystemCache?.get(item.srsSystemId) ?: return null
-        return RankChange(SrsStage.LOCKED, SrsStage.fromRaw(srsSystem.startingStagePosition))
     }
 
     /** Reconciles the assignment with the WK-confirmed result once a queued review submission
