@@ -859,7 +859,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             singleLine = true,
             enabled = uiState.feedback == null,
             visualTransformation = if (questionType == QuestionType.READING) {
-                RomajiVisualTransformation
+                RomajiVisualTransformation(isComplete = uiState.feedback != null)
             } else {
                 VisualTransformation.None
             },

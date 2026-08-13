@@ -19,12 +19,16 @@ import com.crazyfluff.shellfstudy.core.util.RomajiConverter
  * snapping to the end. An offset that lands strictly inside a multi-character romaji-to-kana step
  * (e.g. partway through "sha") has no exact counterpart on the other side, so it snaps to the far
  * end of that step's span — the same way a real IME can't place a cursor mid-syllable.
+ *
+ * @param isComplete Forwarded to [RomajiConverter.convert] as-is. Pass `false` while the field is
+ * still editable (a trailing "n" is ambiguous — more input might still arrive), and `true` once an
+ * answer has been submitted and graded, so the disabled field reflects the same fully-resolved
+ * conversion that grading actually checked against, instead of leaving a stray "n" that grading
+ * already treated as ん.
  */
-object RomajiVisualTransformation : VisualTransformation {
+class RomajiVisualTransformation(private val isComplete: Boolean = false) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
-        // isComplete = false: the user may still be typing, so a trailing "n" with nothing after
-        // it stays a bare "n" rather than eagerly guessing ん — see RomajiConverter.convert's doc.
-        val conversion = RomajiConverter.convert(text.text, isComplete = false)
+        val conversion = RomajiConverter.convert(text.text, isComplete = isComplete)
         val offsetMapping = object : OffsetMapping {
             override fun originalToTransformed(offset: Int): Int =
                 mapOffset(offset, conversion.rawBoundaries, conversion.hiraganaBoundaries)

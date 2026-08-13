@@ -505,7 +505,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             singleLine = true,
             enabled = uiState.feedback == null,
             visualTransformation = if (questionType == QuestionType.READING) {
-                RomajiVisualTransformation
+                RomajiVisualTransformation(isComplete = feedbackForField != null)
             } else {
                 VisualTransformation.None
             },
