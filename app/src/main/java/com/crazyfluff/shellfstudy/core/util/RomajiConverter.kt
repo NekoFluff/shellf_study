@@ -115,13 +115,15 @@ object RomajiConverter {
                     i += 2
                 }
 
-                // Doubled "n" is the other standard escape for ん directly before a vowel or "y"
-                // (alongside "n'"), e.g. "ganni" -> がんい. This deliberately shadows the more
-                // common case where "nn" is just ん naturally followed by a な/に/ぬ/ね/の-row
-                // syllable (三人 "sannin" would now read さんいん instead of さんにん) — an
-                // accepted tradeoff so double-n reliably means "force ん" rather than being
-                // ambiguous with the next syllable.
-                current == 'n' && next == 'n' && remaining >= 3 && (input[i + 2] in VOWELS || input[i + 2] == 'y') -> {
+                // Doubled "n" is the standard escape for ん directly before a vowel or "y" (alongside
+                // "n'"), e.g. "ganni" -> がんい, and unconditionally means ん regardless of what (if
+                // anything) follows — unlike a lone trailing "n", it can never merge into
+                // な/に/ぬ/ね/の, so there's nothing to look ahead for. This deliberately shadows the
+                // more common case where "nn" is just ん naturally followed by a な/に/ぬ/ね/の-row
+                // syllable (三人 "sannin" would now read さんいん instead of さんにん) — an accepted
+                // tradeoff so double-n reliably means "force ん" rather than being ambiguous with the
+                // next syllable.
+                current == 'n' && next == 'n' -> {
                     result.append('ん')
                     i += 2
                 }

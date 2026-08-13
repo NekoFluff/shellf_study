@@ -118,6 +118,17 @@ class RomajiConverterTest {
     }
 
     @Test
+    fun `a trailing doubled n with nothing after it yet resolves to a single n-kana`() {
+        // Unlike a lone trailing "n", a trailing "nn" can never merge into な/に/ぬ/ね/の — a
+        // following vowel/y would still force ん (see the doubled-n-before-a-vowel test above), so
+        // there's nothing to wait for. It should resolve to ん immediately rather than showing a
+        // dangling raw "n" after an already-resolved ん.
+        assertThat(RomajiConverter.convert("nn", isComplete = false).output).isEqualTo("ん")
+        assertThat(RomajiConverter.convert("konn", isComplete = false).output).isEqualTo("こん")
+        assertThat(RomajiConverter.toHiragana("nn")).isEqualTo("ん")
+    }
+
+    @Test
     fun `a trailing n resolves once the rest of the word arrives, even mid-typing`() {
         // Once a real disambiguating character follows, isComplete no longer matters — this is
         // the same "wait for the second n" input completing normally as more keys are typed.
