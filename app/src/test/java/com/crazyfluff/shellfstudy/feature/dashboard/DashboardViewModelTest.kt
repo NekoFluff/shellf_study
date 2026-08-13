@@ -88,15 +88,17 @@ class DashboardViewModelTest {
 
     @After
     fun tearDown() {
-        // DashboardViewModel.uiState is backed by a MutableStateFlow fed by several independent
-        // viewModelScope collectors (settings, review-session, and repository-derived stats). In
-        // production those collectors die with the ViewModel's own viewModelScope via onCleared(),
-        // triggered by ViewModelStore.clear() on Activity/Fragment destruction. Nothing does that
-        // automatically here, so routing creation through a real ViewModelStore lets us trigger the
-        // same cleanup Android would, and draining MainDispatcherRule's scheduler afterwards forces
-        // that cancellation to actually settle now — while the MockWebServer and temp DataStore file
-        // are still alive — instead of resolving asynchronously after this test has ended, which can
-        // otherwise surface as `UncaughtExceptionsBeforeTest` in whichever test runs next.
+        // DashboardViewModel.uiState is a combine() chain (settings, review-session, and
+        // repository-derived stats) wrapped in stateIn(WhileSubscribed(...)), kept alive here by
+        // Turbine's own active collection in each test. In production that subscription — and
+        // everything upstream of it — dies with the ViewModel's own viewModelScope via
+        // onCleared(), triggered by ViewModelStore.clear() on Activity/Fragment destruction.
+        // Nothing does that automatically here, so routing creation through a real ViewModelStore
+        // lets us trigger the same cleanup Android would, and draining MainDispatcherRule's
+        // scheduler afterwards forces that cancellation to actually settle now — while the
+        // MockWebServer and temp DataStore file are still alive — instead of resolving
+        // asynchronously after this test has ended, which can otherwise surface as
+        // `UncaughtExceptionsBeforeTest` in whichever test runs next.
         viewModelStore.clear()
         mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
         server.shutdown()

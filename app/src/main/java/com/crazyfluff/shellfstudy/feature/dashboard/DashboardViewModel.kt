@@ -28,14 +28,15 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -111,6 +112,37 @@ sealed interface DashboardContentState {
     data object Content : DashboardContentState
 }
 
+/** The pieces of [DashboardUiState] driven by cheap, frequently-changing local flags (active
+ *  session / pending sync), grouped so they share one subscription instead of five. */
+private data class SessionSyncState(
+    val hasActiveReviewSession: Boolean,
+    val hasActiveLessonSession: Boolean,
+    val pendingSyncCount: Int,
+    val syncBlockedOnAuth: Boolean,
+    val dailyLessonGoal: Int
+)
+
+/** The pieces of [DashboardUiState] that are real Room-derived computations (forecast bucketing,
+ *  SRS-stage spread, completion projection) — the ones worth keeping off Main even while visible
+ *  (see the `flowOn(Dispatchers.Default)` on their sources in [AssignmentRepository]). */
+private data class ProgressStatsState(
+    val lessonsCompletedToday: Int,
+    val daysOnCurrentLevel: Int?,
+    val reviewForecast: ReviewForecast,
+    val itemSpread: ItemSpread,
+    val completionProjection: CompletionProjection
+)
+
+/** The Level Progress / level-up pieces, both keyed off a level (current, or browsed via
+ *  [DashboardViewModel.onLevelProgressLevelChange]). Both default to "nothing yet" — [level] can
+ *  stay null indefinitely (e.g. the initial user/summary fetch fails with no cache to fall back
+ *  on), and this must never block [DashboardViewModel.uiState] from emitting while that's true. */
+private data class LevelDependentState(
+    val kanjiGuruedForLevelUp: Int = 0,
+    val kanjiTotalForLevelUp: Int = 0,
+    val levelProgress: LevelProgress? = null
+)
+
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val waniKaniRepository: WaniKaniRepository,
@@ -129,12 +161,95 @@ class DashboardViewModel @Inject constructor(
     private val notificationCoordinator: NotificationCoordinator
 ) : ViewModel() {
 
+    // Holds only the state set imperatively by one-shot calls below (refresh/onDashboardResumed/
+    // seedFromCache/logOut) — never touched by a continuously-running collector, so it costs
+    // nothing while unobserved and needs no lifecycle gating of its own.
     private val _dashboardData = MutableStateFlow(DashboardUiState())
-    val uiState: StateFlow<DashboardUiState> = _dashboardData.asStateFlow()
 
     // Which level the Level Progress card is browsing. Null tracks the user's current level
     // automatically; once they page to a different level it's pinned until changed again.
     private val selectedProgressLevel = MutableStateFlow<Int?>(null)
+
+    private val currentLevel: Flow<Int?> = _dashboardData.map { it.level }.distinctUntilChanged()
+
+    private val sessionSyncState: Flow<SessionSyncState> = combine(
+        reviewSessionRepository.hasActiveSession,
+        lessonSessionRepository.hasActiveSession,
+        outboxRepository.observePendingCount(),
+        outboxRepository.blockedOnAuth,
+        settingsRepository.settings.map { it.dailyLessonGoal }.distinctUntilChanged()
+    ) { hasReviewSession, hasLessonSession, pendingCount, blockedOnAuth, dailyGoal ->
+        SessionSyncState(hasReviewSession, hasLessonSession, pendingCount, blockedOnAuth, dailyGoal)
+    }
+
+    private val completionProjectionFlow: Flow<CompletionProjection> = combine(
+        subjectRepository.observeTotalSubjectCount(),
+        assignmentRepository.observeItemsSeenCount(),
+        settingsRepository.settings
+    ) { totalItems, itemsSeen, settings -> buildCompletionProjection(totalItems, itemsSeen, settings.dailyLessonGoal) }
+
+    private val progressStatsState: Flow<ProgressStatsState> = combine(
+        assignmentRepository.observeLessonsCompletedToday(),
+        statsRepository.observeDaysOnCurrentLevel(),
+        assignmentRepository.observeReviewForecast(),
+        assignmentRepository.observeSrsItemSpread(),
+        completionProjectionFlow
+    ) { lessonsToday, daysOnLevel, forecast, itemSpread, projection ->
+        ProgressStatsState(lessonsToday, daysOnLevel, forecast, itemSpread, projection)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val levelDependentState: Flow<LevelDependentState> = currentLevel.flatMapLatest { level ->
+        if (level == null) {
+            // No level yet (e.g. the initial user/summary fetch failed with nothing cached) —
+            // emit the "nothing to show" default immediately rather than waiting forever, so this
+            // never blocks the rest of uiState from emitting.
+            flowOf(LevelDependentState())
+        } else {
+            combine(
+                assignmentRepository.observeLevelUpProgress(level),
+                selectedProgressLevel.map { it ?: level }.distinctUntilChanged()
+                    .flatMapLatest { pagedLevel -> assignmentRepository.observeLevelProgress(pagedLevel) }
+            ) { levelUp, levelProgress ->
+                LevelDependentState(levelUp.kanjiGuruedOrHigher, levelUp.kanjiTotal, levelProgress)
+            }
+        }
+    }
+
+    // The only StateFlow this ViewModel exposes — everything reactive above is plumbed through
+    // here rather than mutating _dashboardData directly. SharingStarted.WhileSubscribed(5_000)
+    // means every Flow feeding this (and their underlying Room/DataStore queries) only runs while
+    // something is actually collecting `uiState` — i.e. while DashboardScreen is visible and using
+    // collectAsStateWithLifecycle(). Previously these ran via independent viewModelScope.launch
+    // collectors started in init{}, which kept going for this ViewModel's entire lifetime — since
+    // Hilt scopes it to Dashboard's NavBackStackEntry and Review/Lesson/Settings are all pushed on
+    // top of Dashboard rather than replacing it, that meant real Room-query recomputation (e.g.
+    // observeReviewForecast's forecast bucketing) kept firing on every unrelated write to the
+    // assignments table — including from Review's own grading — even while Dashboard wasn't the
+    // visible screen at all. 5 seconds is the standard Android-recommended timeout: long enough to
+    // survive a quick config-change-style blip without dropping the upstream subscription, short
+    // enough to genuinely detach for the length of an actual review/lesson session. The last known
+    // value is still shown instantly on return (stateIn's replay), with a fresh recompute running
+    // just behind it — no blank/loading flash, and no more background cost while truly off-screen.
+    val uiState: StateFlow<DashboardUiState> = combine(
+        _dashboardData, sessionSyncState, progressStatsState, levelDependentState
+    ) { imperative, sessionSync, progress, levelDependent ->
+        imperative.copy(
+            hasActiveReviewSession = sessionSync.hasActiveReviewSession,
+            hasActiveLessonSession = sessionSync.hasActiveLessonSession,
+            pendingSyncCount = sessionSync.pendingSyncCount,
+            syncBlockedOnAuth = sessionSync.syncBlockedOnAuth,
+            dailyLessonGoal = sessionSync.dailyLessonGoal,
+            lessonsCompletedToday = progress.lessonsCompletedToday,
+            daysOnCurrentLevel = progress.daysOnCurrentLevel,
+            reviewForecast = progress.reviewForecast,
+            itemSpread = progress.itemSpread,
+            completionProjection = progress.completionProjection,
+            kanjiGuruedForLevelUp = levelDependent.kanjiGuruedForLevelUp,
+            kanjiTotalForLevelUp = levelDependent.kanjiTotalForLevelUp,
+            levelProgress = levelDependent.levelProgress
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
 
     // Guards the very first dashboard appearance in this ViewModel's lifetime: that call goes
     // through onDashboardResumed() (driven by the Route's LaunchedEffect(Unit), which fires on
@@ -151,19 +266,6 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             seedFromCache()
         }
-
-        observe(reviewSessionRepository.hasActiveSession) { copy(hasActiveReviewSession = it) }
-        observe(lessonSessionRepository.hasActiveSession) { copy(hasActiveLessonSession = it) }
-        observe(outboxRepository.observePendingCount()) { copy(pendingSyncCount = it) }
-        observe(outboxRepository.blockedOnAuth) { copy(syncBlockedOnAuth = it) }
-        observe(settingsRepository.settings) { copy(dailyLessonGoal = it.dailyLessonGoal) }
-        observe(assignmentRepository.observeLessonsCompletedToday()) { copy(lessonsCompletedToday = it) }
-        observe(statsRepository.observeDaysOnCurrentLevel()) { copy(daysOnCurrentLevel = it) }
-        observe(assignmentRepository.observeReviewForecast()) { copy(reviewForecast = it) }
-        observe(assignmentRepository.observeSrsItemSpread()) { copy(itemSpread = it) }
-        observeLevelUpProgress()
-        observeLevelProgress()
-        observeCompletionProjection()
     }
 
     /** Lets the Level Progress card page to a different level than the one currently being studied. */
@@ -357,7 +459,8 @@ class DashboardViewModel @Inject constructor(
     }
 
     /** Discards a persisted in-progress review session without needing to open the Review screen
-     *  first — [hasActiveReviewSession] reflects the clear reactively via its own observed flow. */
+     *  first — [DashboardUiState.hasActiveReviewSession] reflects the clear reactively via its own
+     *  observed flow. */
     fun abandonReviewSession() {
         viewModelScope.launch { reviewSessionRepository.clear() }
     }
@@ -365,49 +468,6 @@ class DashboardViewModel @Inject constructor(
     /** Same idea as [abandonReviewSession] but for the lesson quiz. */
     fun abandonLessonSession() {
         viewModelScope.launch { lessonSessionRepository.clear() }
-    }
-
-    /** Guru'd-kanji progress toward leveling up — always scoped to the level currently being studied. */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun observeLevelUpProgress() {
-        viewModelScope.launch {
-            _dashboardData.map { it.level }.filterNotNull().distinctUntilChanged()
-                .flatMapLatest { level -> assignmentRepository.observeLevelUpProgress(level) }
-                .collect { levelUp ->
-                    _dashboardData.update {
-                        it.copy(kanjiGuruedForLevelUp = levelUp.kanjiGuruedOrHigher, kanjiTotalForLevelUp = levelUp.kanjiTotal)
-                    }
-                }
-        }
-    }
-
-    /** Per-subject-type breakdown for the Level Progress card — defaults to the current level, but browsable. */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun observeLevelProgress() {
-        viewModelScope.launch {
-            combine(
-                _dashboardData.map { it.level }.filterNotNull().distinctUntilChanged(),
-                selectedProgressLevel
-            ) { currentLevel, selected -> selected ?: currentLevel }
-                .distinctUntilChanged()
-                .flatMapLatest { level -> assignmentRepository.observeLevelProgress(level) }
-                .collect { progress -> _dashboardData.update { it.copy(levelProgress = progress) } }
-        }
-    }
-
-    private fun observeCompletionProjection() {
-        viewModelScope.launch {
-            combine(
-                subjectRepository.observeTotalSubjectCount(),
-                assignmentRepository.observeItemsSeenCount(),
-                settingsRepository.settings
-            ) { totalItems, itemsSeen, settings -> buildCompletionProjection(totalItems, itemsSeen, settings.dailyLessonGoal) }
-                .collect { projection -> _dashboardData.update { it.copy(completionProjection = projection) } }
-        }
-    }
-
-    private fun <T> observe(flow: Flow<T>, update: DashboardUiState.(T) -> DashboardUiState) {
-        viewModelScope.launch { flow.collect { value -> _dashboardData.update { it.update(value) } } }
     }
 }
 

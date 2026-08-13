@@ -7,6 +7,7 @@ import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.coroutines.runDurably
 import com.crazyfluff.shellfstudy.core.data.ApiResult
+import com.crazyfluff.shellfstudy.core.data.AppSettings
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.containsKana
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
@@ -105,10 +106,21 @@ class ReviewViewModel @Inject constructor(
     private var sessionStartTimeMs: Long = 0L
     private var questionShownAtMs: Long = 0L
 
+    // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
+    // flags as a plain field instead of calling `settingsRepository.settings.first()` — starting a
+    // fresh Flow collection (new coroutine, map{}, distinctUntilChanged()) on Main measured at
+    // 40-70ms on a cold JIT (real device profiling, not Robolectric), sitting squarely inside the
+    // ~250ms window between publishing feedback/rankChange and the RankChangeChip/IME-dismiss
+    // animation actually running — dropping enough frames that the animation appeared to "snap"
+    // rather than animate. AppSettings()'s defaults match SettingsRepository's DataStore defaults,
+    // so the narrow window before this field's first real emission lands is harmless.
+    private var latestSettings = AppSettings()
+
     init {
         loadOrResume()
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
+                latestSettings = settings
                 _uiState.update {
                     it.copy(showSubjectTypeLabel = settings.showSubjectTypeLabel, showReviewTimer = settings.showReviewTimer)
                 }
@@ -316,8 +328,10 @@ class ReviewViewModel @Inject constructor(
 
             grade to snapshot
         }
-
-        val settings = settingsRepository.settings.first()
+        // Reads the field kept warm by the settings collector in init{} instead of
+        // `settingsRepository.settings.first()` — see `latestSettings`'s doc comment for why a
+        // fresh Flow collection here measurably janked the post-submit animation.
+        val settings = latestSettings
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
             candidates.firstOrNull()?.let { reading ->
                 selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)

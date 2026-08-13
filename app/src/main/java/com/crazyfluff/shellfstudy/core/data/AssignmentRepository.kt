@@ -28,12 +28,14 @@ import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.core.network.WkResourceItem
 import com.crazyfluff.shellfstudy.core.network.collectAllPages
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.time.Duration
 import java.time.Instant
@@ -289,9 +291,23 @@ class AssignmentRepository @Inject constructor(
                 buckets = buckets,
                 availableNowCountsByType = availableNow.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
             )
-        }
+        }.flowOn(Dispatchers.Default)
+        // Room's InvalidationTracker re-fires observeDueForReview/observeUpcoming on ANY write to
+        // the assignments table, anywhere in the app — not just ones this forecast cares about.
+        // DashboardViewModel collects this in viewModelScope, which stays alive (and this keeps
+        // recomputing) even while Dashboard isn't the visible screen, e.g. mid-review-session where
+        // Review is pushed on top of it. Without flowOn, the O(hours * upcoming-count) bucketing
+        // above ran synchronously on Dispatchers.Main.immediate, competing with whatever screen was
+        // actually in the foreground for the same frame — this is what caused the review-submit
+        // stutter (dropped frame(s) right after Submit), not anything in the Review screen itself.
     }
 
+    // flowOn(Dispatchers.Default) on these (and observeReviewForecast above) is defense in depth,
+    // not the primary fix — DashboardViewModel now only collects any of these while Dashboard is
+    // actually visible (see its stateIn(WhileSubscribed(...)) usage), so Room's InvalidationTracker
+    // no longer wakes them up on every unrelated write while some other screen is in the
+    // foreground. This just guarantees that even while genuinely subscribed, the grouping/mapping
+    // work below never runs on Dispatchers.Main.immediate.
     fun observeSrsItemSpread(): Flow<ItemSpread> =
         combine(assignmentDao.observeSrsStageCounts(), subjectDao.observeTotalCount()) { stageCounts, totalSubjects ->
             val byStage = stageCounts.associate { SrsStage.fromRaw(it.srsStage) to it.count }
@@ -309,7 +325,7 @@ class AssignmentRepository @Inject constructor(
                 enlightenedCount = enlightened,
                 burnedCount = burned
             )
-        }
+        }.flowOn(Dispatchers.Default)
 
     fun observeLevelProgress(level: Int): Flow<LevelProgress> =
         assignmentDao.observeLevelProgressItemRows(level).map { rows ->
@@ -327,7 +343,7 @@ class AssignmentRepository @Inject constructor(
                 SubjectTypeProgress(subjectType = type, items = items)
             }
             LevelProgress(level = level, breakdown = breakdown)
-        }
+        }.flowOn(Dispatchers.Default)
 
     fun observeItemsSeenCount(): Flow<Int> = assignmentDao.observeItemsSeenCount()
 
@@ -345,7 +361,7 @@ class AssignmentRepository @Inject constructor(
                 kanjiGuruedOrHigher = rows.count { it.srsStage >= GURU_SRS_STAGE },
                 kanjiTotal = rows.size
             )
-        }
+        }.flowOn(Dispatchers.Default)
 
     private fun startOfTodayIso(): String =
         LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toString()
