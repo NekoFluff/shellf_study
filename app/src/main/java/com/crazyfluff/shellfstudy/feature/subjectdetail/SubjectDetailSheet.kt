@@ -149,8 +149,15 @@ fun SubjectDetailSheet(
     val sheetHeightDp = rememberNearFullScreenSheetHeightDp()
     val sheetHeightPx = with(density) { sheetHeightDp.toPx() }
     val handleHeightPx = with(density) { SubjectDetailHandleHeight.toPx() }
+    // navigationBarsPadding's reserved clearance sits *below* the sheet's un-offset resting slot,
+    // not below the physical screen edge — an offset of just sheetHeightPx lands the handle's top
+    // exactly at the top of that clearance, leaving the handle's own height sitting inside it. On a
+    // gesture-nav device that clearance is drawn-through translucent, so the handle (and its "Swipe
+    // up for details" label) stays visible under the system nav controls even fully "dismissed".
+    // Adding the nav bar's own height clears the handle past the physical bottom edge too.
+    val navBarBottomPx = with(density) { WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().toPx() }
     val collapsedOffsetPx = if (dismissesFully) {
-        sheetHeightPx
+        sheetHeightPx + navBarBottomPx
     } else {
         (sheetHeightPx - handleHeightPx).coerceAtLeast(0f)
     }
