@@ -23,4 +23,8 @@ interface SyncStateDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(state: SyncStateEntity)
+
+    /** Wipes every resource's `updated_after` cursor, so the next sync pass is a true full refetch. */
+    @Query("DELETE FROM sync_state")
+    suspend fun clearAll()
 }

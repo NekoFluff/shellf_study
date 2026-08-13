@@ -7,13 +7,21 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.ThemeMode
+import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationScheduler
+import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
+import com.crazyfluff.shellfstudy.fakes.emptyResponse
+import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import mockwebserver3.Dispatcher
+import mockwebserver3.MockResponse
+import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -30,7 +38,15 @@ class SettingsViewModelTest {
     private lateinit var notificationCoordinator: FakeNotificationCoordinator
     private lateinit var notificationScheduler: FakeNotificationScheduler
 
-    private fun createViewModel(): SettingsViewModel {
+    /**
+     * Real [SyncOrchestrator] backed by a local server rather than a fake — [SyncOrchestrator] isn't
+     * an interface, and this codebase's convention is real collaborators over mocks. Tests that don't
+     * exercise `onFullRefreshRequested` never make it fire a request, so this default (pointed at
+     * nothing reachable) is safe for every other test in this file.
+     */
+    private fun createViewModel(
+        syncOrchestrator: SyncOrchestrator = buildTestRepositories("http://localhost/").syncOrchestrator
+    ): SettingsViewModel {
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
             scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
@@ -38,8 +54,11 @@ class SettingsViewModelTest {
         settingsRepository = SettingsRepository(dataStore)
         notificationCoordinator = FakeNotificationCoordinator()
         notificationScheduler = FakeNotificationScheduler()
-        return SettingsViewModel(settingsRepository, notificationCoordinator, notificationScheduler)
+        return SettingsViewModel(settingsRepository, notificationCoordinator, notificationScheduler, syncOrchestrator)
     }
+
+    private fun emptyCollectionResponse(objectType: String): MockResponse =
+        jsonResponse("""{"object":"$objectType","url":"https://api.wanikani.com/v2/$objectType","data":[]}""")
 
     @Test
     fun `onDailyLessonGoalChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
@@ -229,5 +248,60 @@ class SettingsViewModelTest {
             viewModel.onQuietHoursEndHourChange(6)
             assertThat(awaitItem().quietHoursEndHour).isEqualTo(6)
         }
+    }
+
+    @Test
+    fun `full refresh reports loading then clears on success`() = runTest(mainDispatcherRule.dispatcher) {
+        val server = MockWebServer()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.path.orEmpty().substringBefore('?')
+                return when {
+                    path.startsWith("/spaced_repetition_systems") -> emptyCollectionResponse("srs_system")
+                    path.startsWith("/subjects") -> emptyCollectionResponse("kanji")
+                    path.startsWith("/assignments") -> emptyCollectionResponse("assignment")
+                    path.startsWith("/review_statistics") -> emptyCollectionResponse("review_statistic")
+                    path.startsWith("/study_materials") -> emptyCollectionResponse("study_material")
+                    path.startsWith("/level_progressions") -> emptyCollectionResponse("level_progression")
+                    else -> emptyResponse(404)
+                }
+            }
+        }
+        server.start()
+        val viewModel = createViewModel(buildTestRepositories(server.url("/").toString()).syncOrchestrator)
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().isFullRefreshing).isFalse()
+
+            viewModel.onFullRefreshRequested()
+            assertThat(awaitItem().isFullRefreshing).isTrue()
+
+            val finalState = awaitItem()
+            assertThat(finalState.isFullRefreshing).isFalse()
+            assertThat(finalState.fullRefreshError).isNull()
+        }
+        server.shutdown()
+    }
+
+    @Test
+    fun `full refresh surfaces an error message on failure`() = runTest(mainDispatcherRule.dispatcher) {
+        val server = MockWebServer()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = emptyResponse(500)
+        }
+        server.start()
+        val viewModel = createViewModel(buildTestRepositories(server.url("/").toString()).syncOrchestrator)
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().isFullRefreshing).isFalse()
+
+            viewModel.onFullRefreshRequested()
+            assertThat(awaitItem().isFullRefreshing).isTrue()
+
+            val finalState = awaitItem()
+            assertThat(finalState.isFullRefreshing).isFalse()
+            assertThat(finalState.fullRefreshError).isNotNull()
+        }
+        server.shutdown()
     }
 }

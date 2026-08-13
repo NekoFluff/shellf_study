@@ -2,11 +2,14 @@ package com.crazyfluff.shellfstudy.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.ThemeMode
 import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.core.notifications.NotificationScheduler
+import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -30,20 +33,27 @@ data class SettingsUiState(
     val dailyReminderHour: Int = 20,
     val quietHoursEnabled: Boolean = true,
     val quietHoursStartHour: Int = 22,
-    val quietHoursEndHour: Int = 7
+    val quietHoursEndHour: Int = 7,
+    val isFullRefreshing: Boolean = false,
+    val fullRefreshError: String? = null
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val notificationCoordinator: NotificationCoordinator,
-    private val notificationScheduler: NotificationScheduler
+    private val notificationScheduler: NotificationScheduler,
+    private val syncOrchestrator: SyncOrchestrator
 ) : ViewModel() {
+
+    private data class FullRefreshState(val isRefreshing: Boolean = false, val error: String? = null)
+    private val fullRefreshState = MutableStateFlow(FullRefreshState())
 
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.settings,
-        settingsRepository.notificationSettings
-    ) { app, notif ->
+        settingsRepository.notificationSettings,
+        fullRefreshState
+    ) { app, notif, refresh ->
         SettingsUiState(
             dailyLessonGoal = app.dailyLessonGoal,
             themeMode = app.themeMode,
@@ -60,7 +70,9 @@ class SettingsViewModel @Inject constructor(
             dailyReminderHour = notif.dailyReminderHour,
             quietHoursEnabled = notif.quietHoursEnabled,
             quietHoursStartHour = notif.quietHoursStartHour,
-            quietHoursEndHour = notif.quietHoursEndHour
+            quietHoursEndHour = notif.quietHoursEndHour,
+            isFullRefreshing = refresh.isRefreshing,
+            fullRefreshError = refresh.error
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
@@ -141,5 +153,19 @@ class SettingsViewModel @Inject constructor(
 
     fun onQuietHoursEndHourChange(hour: Int) {
         viewModelScope.launch { settingsRepository.setQuietHoursEndHour(hour) }
+    }
+
+    /**
+     * Re-downloads every resource from scratch (see [SyncOrchestrator.fullRefresh]) — unlike the
+     * dashboard's pull-to-refresh, this bypasses the `updated_after` cursor entirely, so it's the
+     * only way to recover on-device data left wrong by a client-side mapping bug that's since been
+     * fixed but whose bad output was already persisted.
+     */
+    fun onFullRefreshRequested() = viewModelScope.launch {
+        fullRefreshState.value = FullRefreshState(isRefreshing = true)
+        fullRefreshState.value = when (val result = syncOrchestrator.fullRefresh()) {
+            is ApiResult.Success -> FullRefreshState()
+            is ApiResult.Error -> FullRefreshState(error = result.message)
+        }
     }
 }

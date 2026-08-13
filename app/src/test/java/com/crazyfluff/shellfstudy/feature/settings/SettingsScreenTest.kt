@@ -42,6 +42,7 @@ class SettingsScreenTest {
         onQuietHoursEnabledChange: (Boolean) -> Unit = {},
         onQuietHoursStartHourChange: (Int) -> Unit = {},
         onQuietHoursEndHourChange: (Int) -> Unit = {},
+        onFullRefreshRequested: () -> Unit = {},
         onBack: () -> Unit = {}
     ) {
         composeTestRule.setContent {
@@ -63,6 +64,7 @@ class SettingsScreenTest {
                 onQuietHoursEnabledChange = onQuietHoursEnabledChange,
                 onQuietHoursStartHourChange = onQuietHoursStartHourChange,
                 onQuietHoursEndHourChange = onQuietHoursEndHourChange,
+                onFullRefreshRequested = onFullRefreshRequested,
                 onBack = onBack
             )
         }
@@ -263,5 +265,38 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_END_DECREASE).performScrollTo().performClick()
         assert(end == 6)
+    }
+
+    @Test
+    fun fullRefreshRow_showsConfirmationBeforeInvokingCallback() {
+        var refreshed = false
+        setContent(uiState = SettingsUiState(), onFullRefreshRequested = { refreshed = true })
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_ROW).performScrollTo().performClick()
+        assert(!refreshed)
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_CONFIRM_BUTTON).performClick()
+        assert(refreshed)
+    }
+
+    @Test
+    fun fullRefreshRow_showsProgressAndIsDisabledWhileRefreshing() {
+        var refreshed = false
+        setContent(
+            uiState = SettingsUiState(isFullRefreshing = true),
+            onFullRefreshRequested = { refreshed = true }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_PROGRESS).performScrollTo().assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_ROW).performClick()
+        assert(!refreshed)
+    }
+
+    @Test
+    fun fullRefreshRow_showsErrorMessageOnFailure() {
+        setContent(uiState = SettingsUiState(fullRefreshError = "WaniKani API error (500)"))
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_ERROR_TEXT).performScrollTo().assertIsDisplayed()
     }
 }

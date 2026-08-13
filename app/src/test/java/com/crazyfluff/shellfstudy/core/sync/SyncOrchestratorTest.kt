@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.sync
 
 import com.crazyfluff.shellfstudy.core.data.ApiResult
+import com.crazyfluff.shellfstudy.core.database.SyncStateEntity
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
@@ -81,6 +82,24 @@ class SyncOrchestratorTest {
             "/spaced_repetition_systems", "/subjects", "/assignments",
             "/review_statistics", "/study_materials", "/level_progressions"
         )
+    }
+
+    @Test
+    fun `fullRefresh clears every resource's sync cursor before resyncing`() = runTest {
+        // Seed cursors as if a normal sync had already run — force(=true) alone would reuse these.
+        listOf("subjects", "srs_systems", "assignments", "review_statistics", "study_materials").forEach { resource ->
+            repositories.syncStateDao.upsert(
+                SyncStateEntity(resource = resource, lastSyncedAt = "2020-01-01T00:00:00Z", lastSyncSuccessAt = "2020-01-01T00:00:00Z")
+            )
+        }
+
+        val result = repositories.syncOrchestrator.fullRefresh()
+
+        assertThat(result).isEqualTo(ApiResult.Success(Unit))
+        // A non-null cursor would show up as `?updated_after=...` on every cursor-bearing request —
+        // its absence proves fullRefresh() actually cleared the cursors rather than just bypassing
+        // the staleness check the way syncAll(force = true) does.
+        assertThat(requestedPaths.none { it.contains("updated_after") }).isTrue()
     }
 
     private fun pathsRequested(): List<String> = requestedPaths.map { it.substringBefore('?') }

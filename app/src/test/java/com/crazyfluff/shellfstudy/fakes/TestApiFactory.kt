@@ -106,7 +106,7 @@ fun buildTestRepositories(
     val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao)
     val statsRepository = StatsRepository(api, FakeReviewStatisticDao(), FakeLevelProgressionDao(), studyActivityDao, syncStateDao)
     val waniKaniRepository = WaniKaniRepository(api)
-    val syncOrchestrator = SyncOrchestrator(subjectRepository, assignmentRepository, statsRepository)
+    val syncOrchestrator = SyncOrchestrator(subjectRepository, assignmentRepository, statsRepository, syncStateDao)
 
     return TestRepositories(
         api, subjectDao, assignmentDao, srsSystemDao, syncStateDao, studyActivityDao, outboxDao, outboxSyncScheduler,

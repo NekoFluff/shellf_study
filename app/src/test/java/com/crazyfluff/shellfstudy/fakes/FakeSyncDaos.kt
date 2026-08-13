@@ -82,6 +82,10 @@ class FakeSyncStateDao : SyncStateDao {
     override suspend fun upsert(state: SyncStateEntity) {
         this.state[state.resource] = state
     }
+
+    override suspend fun clearAll() {
+        state.clear()
+    }
 }
 
 class FakeStudyActivityDao : StudyActivityDao {

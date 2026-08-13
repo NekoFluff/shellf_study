@@ -26,8 +26,10 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -41,6 +43,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,6 +53,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.ThemeMode
+import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 
 object SettingsScreenTestTags {
@@ -81,6 +87,10 @@ object SettingsScreenTestTags {
     const val QUIET_HOURS_END_DECREASE = "settings_quiet_hours_end_decrease"
     const val QUIET_HOURS_END_INCREASE = "settings_quiet_hours_end_increase"
     const val QUIET_HOURS_END_VALUE = "settings_quiet_hours_end_value"
+    const val FULL_REFRESH_ROW = "settings_full_refresh_row"
+    const val FULL_REFRESH_PROGRESS = "settings_full_refresh_progress"
+    const val FULL_REFRESH_CONFIRM_BUTTON = "settings_full_refresh_confirm_button"
+    const val FULL_REFRESH_ERROR_TEXT = "settings_full_refresh_error_text"
 }
 
 @Composable
@@ -121,6 +131,7 @@ fun SettingsRoute(
         onQuietHoursEnabledChange = viewModel::onQuietHoursEnabledChange,
         onQuietHoursStartHourChange = viewModel::onQuietHoursStartHourChange,
         onQuietHoursEndHourChange = viewModel::onQuietHoursEndHourChange,
+        onFullRefreshRequested = viewModel::onFullRefreshRequested,
         onBack = onBack
     )
 }
@@ -145,8 +156,11 @@ fun SettingsScreen(
     onQuietHoursEnabledChange: (Boolean) -> Unit,
     onQuietHoursStartHourChange: (Int) -> Unit,
     onQuietHoursEndHourChange: (Int) -> Unit,
+    onFullRefreshRequested: () -> Unit,
     onBack: () -> Unit
 ) {
+    var showFullRefreshConfirm by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -366,7 +380,59 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            SectionCard(title = "Data", icon = Icons.Default.Sync) {
+                Text(
+                    text = "Re-downloads your entire WaniKani library from scratch. Useful if some content looks wrong or missing after an app update.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !uiState.isFullRefreshing) { showFullRefreshConfirm = true }
+                        .testTag(SettingsScreenTestTags.FULL_REFRESH_ROW)
+                        .padding(vertical = 8.dp)
+                ) {
+                    Text("Full refresh", style = MaterialTheme.typography.bodyLarge)
+                    if (uiState.isFullRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp).testTag(SettingsScreenTestTags.FULL_REFRESH_PROGRESS),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(Icons.Default.Sync, contentDescription = null)
+                    }
+                }
+                if (uiState.fullRefreshError != null) {
+                    Text(
+                        text = uiState.fullRefreshError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag(SettingsScreenTestTags.FULL_REFRESH_ERROR_TEXT)
+                    )
+                }
+            }
         }
+    }
+
+    if (showFullRefreshConfirm) {
+        ConfirmationDialog(
+            title = "Full refresh?",
+            text = "This re-downloads your entire WaniKani library from scratch instead of just what's changed. It may take longer than a normal sync and use more data.",
+            confirmLabel = "Refresh",
+            onConfirm = {
+                showFullRefreshConfirm = false
+                onFullRefreshRequested()
+            },
+            onDismiss = { showFullRefreshConfirm = false },
+            confirmButtonTestTag = SettingsScreenTestTags.FULL_REFRESH_CONFIRM_BUTTON
+        )
     }
 }
 
@@ -527,6 +593,7 @@ private fun SettingsScreenPreview() {
             onQuietHoursEnabledChange = {},
             onQuietHoursStartHourChange = {},
             onQuietHoursEndHourChange = {},
+            onFullRefreshRequested = {},
             onBack = {}
         )
     }
