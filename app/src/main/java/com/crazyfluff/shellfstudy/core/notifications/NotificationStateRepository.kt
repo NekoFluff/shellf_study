@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
@@ -39,7 +40,7 @@ class NotificationStateRepository @Inject constructor(
                 runCatching { LocalDate.parse(it) }.getOrNull()
             }
         )
-    }
+    }.distinctUntilChanged()
 
     suspend fun updateReviewWatermark(count: Int) {
         dataStore.edit { it[lastNotifiedReviewCountKey] = count }

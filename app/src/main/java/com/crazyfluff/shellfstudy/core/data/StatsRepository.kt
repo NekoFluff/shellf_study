@@ -10,7 +10,9 @@ import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDao
 import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDayEntity
 import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.core.network.collectAllPages
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.time.Duration
 import java.time.Instant
@@ -101,7 +103,7 @@ class StatsRepository @Inject constructor(
             }
 
             StudyStreak(currentStreakDays = currentStreak, isActiveToday = isActiveToday)
-        }
+        }.flowOn(Dispatchers.Default)
 
     fun observeDaysOnCurrentLevel(): Flow<Int?> =
         levelProgressionDao.observeAll().map { progressions ->

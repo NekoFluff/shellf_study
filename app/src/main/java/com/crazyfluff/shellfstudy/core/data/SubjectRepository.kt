@@ -16,12 +16,14 @@ import com.crazyfluff.shellfstudy.core.network.CharacterImageData
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.core.network.collectAllPages
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.time.Duration
 import javax.inject.Inject
@@ -159,7 +161,7 @@ class SubjectRepository @Inject constructor(
                     flowOf(emptyList())
                 }
             pitchAccentsFlow.map { pitchAccents -> entity?.toSubjectDetail(pitchAccents) }
-        }
+        }.flowOn(Dispatchers.Default)
 }
 
 private fun buildSearchTarget(characters: String?, slug: String, meanings: List<String>, readings: List<String>): String =

@@ -213,7 +213,7 @@ class AssignmentRepository @Inject constructor(
                     }
                 }
             }
-        }
+        }.flowOn(Dispatchers.Default)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeLessonQueue(): Flow<List<LessonItem>> =
@@ -253,7 +253,7 @@ class AssignmentRepository @Inject constructor(
                     }
                 }
             }
-        }
+        }.flowOn(Dispatchers.Default)
 
     /** The subject's current SRS stage, or null if it hasn't been lessoned yet (no assignment
      *  exists) — the subject detail view's stat chip source. */
