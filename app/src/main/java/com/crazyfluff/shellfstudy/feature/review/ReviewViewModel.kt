@@ -29,6 +29,7 @@ import com.crazyfluff.shellfstudy.core.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.core.quiz.convertReadingSafely
 import com.crazyfluff.shellfstudy.core.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
+import androidx.tracing.trace
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -262,52 +263,56 @@ class ReviewViewModel @Inject constructor(
         expandDetails: Boolean,
         wasCloseMatch: Boolean = false
     ) {
-        val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress(item) }
-        answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, System.currentTimeMillis() - questionShownAtMs))
+        val (grade, snapshot) = trace("gradeAnswer:computeAndPublish") {
+            val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress(item) }
+            answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, System.currentTimeMillis() - questionShownAtMs))
 
-        queue.removeCurrent()
-        if (isCorrect) {
-            when (type) {
-                QuestionType.MEANING -> itemProgress.meaningDone = true
-                QuestionType.READING -> itemProgress.readingDone = true
+            queue.removeCurrent()
+            if (isCorrect) {
+                when (type) {
+                    QuestionType.MEANING -> itemProgress.meaningDone = true
+                    QuestionType.READING -> itemProgress.readingDone = true
+                }
+            } else {
+                when (type) {
+                    QuestionType.MEANING -> itemProgress.hadIncorrectMeaning = true
+                    QuestionType.READING -> itemProgress.hadIncorrectReading = true
+                }
+                queue.requeue(PendingQuestion(item, type))
             }
-        } else {
-            when (type) {
-                QuestionType.MEANING -> itemProgress.hadIncorrectMeaning = true
-                QuestionType.READING -> itemProgress.hadIncorrectReading = true
+
+            // Snapshotted synchronously, right after mutating the queue/progress above, so the
+            // detached durability write below can safely run concurrently with the next question's
+            // own grading/advance — queue/progressByAssignmentId are plain, non-thread-safe
+            // collections, and once feedback is visible the user is free to act immediately.
+            val snapshot = currentPersistSnapshot()
+
+            val grade = if (isCorrect && isFullyDone(item, itemProgress)) {
+                ReviewGrade(meaningCorrect = !itemProgress.hadIncorrectMeaning, readingCorrect = !itemProgress.hadIncorrectReading)
+            } else {
+                null
             }
-            queue.requeue(PendingQuestion(item, type))
+            // Computed synchronously against AssignmentRepository's in-memory SRS-system cache
+            // (warmed once when the queue loaded) — zero DB access on this critical path at all now.
+            // The actual DB write (persisting the new stage) is durability bookkeeping the user never
+            // waits on, so it's launched as its own detached coroutine below instead of awaited inline
+            // — previously this alone was a sequential DB read-then-write standing between tapping
+            // Submit and the rank-change badge appearing, on top of three more writes after it.
+            val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
+
+            _uiState.update {
+                it.copy(
+                    feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
+                    remainingCount = queue.size,
+                    isDetailsExpanded = it.isDetailsExpanded || expandDetails,
+                    rankChange = newRankChange ?: it.rankChange
+                )
+            }
+
+            grade to snapshot
         }
 
-        // Snapshotted synchronously, right after mutating the queue/progress above, so the
-        // detached durability write below can safely run concurrently with the next question's
-        // own grading/advance — queue/progressByAssignmentId are plain, non-thread-safe
-        // collections, and once feedback is visible the user is free to act immediately.
-        val snapshot = currentPersistSnapshot()
-
-        val grade = if (isCorrect && isFullyDone(item, itemProgress)) {
-            ReviewGrade(meaningCorrect = !itemProgress.hadIncorrectMeaning, readingCorrect = !itemProgress.hadIncorrectReading)
-        } else {
-            null
-        }
-        // Computed synchronously against AssignmentRepository's in-memory SRS-system cache
-        // (warmed once when the queue loaded) — zero DB access on this critical path at all now.
-        // The actual DB write (persisting the new stage) is durability bookkeeping the user never
-        // waits on, so it's launched as its own detached coroutine below instead of awaited inline
-        // — previously this alone was a sequential DB read-then-write standing between tapping
-        // Submit and the rank-change badge appearing, on top of three more writes after it.
-        val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
-
-        _uiState.update {
-            it.copy(
-                feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
-                remainingCount = queue.size,
-                isDetailsExpanded = it.isDetailsExpanded || expandDetails,
-                rankChange = newRankChange ?: it.rankChange
-            )
-        }
-
-        persistDurabilityWork(grade, item, snapshot)
+        trace("gradeAnswer:persistDurabilityWork") { persistDurabilityWork(grade, item, snapshot) }
 
         val settings = settingsRepository.settings.first()
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {

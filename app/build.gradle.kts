@@ -97,6 +97,8 @@ dependencies {
     implementation(libs.androidx.media3.datasource)
     implementation(libs.androidx.media3.common)
 
+    implementation(libs.androidx.tracing.ktx)
+
     // Unit tests
     testImplementation(libs.junit)
     testImplementation(libs.truth)

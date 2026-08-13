@@ -48,14 +48,17 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.tracing.trace
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectDetailContent
@@ -123,9 +126,15 @@ private enum class SheetAnchor { Collapsed, Open }
  * state survive) for stretches where nothing should actually be visible or interactable — Review's
  * mid-quiz sheet must not show even a bare "Swipe up for details" handle before the current question
  * has been answered (that handle would itself be a spoiler-adjacent affordance, and its content is
- * shown fully revealed with no gating once opened). Renders nothing at all while `false`, but every
- * `remember`/`LaunchedEffect` above stays alive, so flipping back to `true` on the next question is a
- * cheap recomposition rather than a fresh mount.
+ * shown fully revealed with no gating once opened). Always laid out at real size — alpha and
+ * interactivity are what actually gate on `active`, not composition or measurement. Measuring this
+ * Surface (near-full-screen, elevated, rounded corners, nav-bar-aware) from scratch is itself a real
+ * cost (~50ms+ across two frames; see ReviewSubmitJankProfilingTest) — Review resets `rankChange`/
+ * `feedback` every question, so an implementation that skips composition, or even just collapses to
+ * zero size, while inactive pays that full re-measure cost again on every single question that
+ * reveals this sheet, not just the session's first. Keeping it laid out at a fixed real size means
+ * that cost lands exactly once per session; every question after that is a cheap alpha flip on an
+ * already-measured, already-drawn layer.
  */
 @Composable
 fun SubjectDetailSheet(
@@ -166,13 +175,15 @@ fun SubjectDetailSheet(
     // already-expanded (SubjectDetailSheetHost) still gets the same slide-up-from-the-handle open
     // animation via the LaunchedEffect below, instead of just popping in fully open.
     val dragState = remember {
-        AnchoredDraggableState(initialValue = SheetAnchor.Collapsed).apply {
-            updateAnchors(
-                DraggableAnchors {
-                    SheetAnchor.Open at 0f
-                    SheetAnchor.Collapsed at collapsedOffsetPx
-                }
-            )
+        trace("subjectDetailSheet:firstMountSetup") {
+            AnchoredDraggableState(initialValue = SheetAnchor.Collapsed).apply {
+                updateAnchors(
+                    DraggableAnchors {
+                        SheetAnchor.Open at 0f
+                        SheetAnchor.Collapsed at collapsedOffsetPx
+                    }
+                )
+            }
         }
     }
 
@@ -225,18 +236,33 @@ fun SubjectDetailSheet(
     // "has it stopped moving" signal for that, same reasoning as isOpenIsh above.
     val strokeOrderSettled = dragState.settledValue == SheetAnchor.Open
 
-    if (!active) return
-
-    Box(modifier = modifier.fillMaxSize().testTag(SubjectDetailTestTags.SHEET_ROOT)) {
+    // Always laid out at real size (never a zero-size or absent subtree) — only alpha and
+    // interactivity are gated on [active] now, not composition or measurement. Going from a 0dp
+    // constraint to this Surface's real (near-full-screen, elevated, rounded-corner) size is itself
+    // an expensive measure/layout/draw pass — see ReviewSubmitJankProfilingTest — so gating on size
+    // (or, before that, on composition at all) meant paying that cost again on every question that
+    // reveals this sheet, not just the session's first. Keeping the real size fixed means that cost
+    // is paid exactly once per session, the first time this composable is ever placed; every
+    // question after that just flips an already-cached layer's alpha, which is cheap.
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .alpha(if (active) 1f else 0f)
+            .then(if (active) Modifier else Modifier.clearAndSetSemantics {})
+            .testTag(SubjectDetailTestTags.SHEET_ROOT)
+    ) {
         // Dims the rest of the screen only while meaningfully open — never while merely peeking, so
         // the collapsed handle bar behaves passively and doesn't steal touches from what's behind
         // it. Tapping it collapses the sheet the same animated way as dragging the handle down.
+        // `enabled = active` (rather than the whole Box's inherited alpha) is what actually stops
+        // this from stealing touches meant for the quiz underneath while inactive.
         if (isOpenIsh) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.32f))
                     .clickable(
+                        enabled = active,
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
                         onClick = collapse
@@ -263,8 +289,8 @@ fun SubjectDetailSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(if (isOpenIsh) SubjectDetailOpenHandleHeight else SubjectDetailHandleHeight)
-                        .anchoredDraggable(dragState, Orientation.Vertical)
-                        .clickable(onClick = onToggle)
+                        .then(if (active) Modifier.anchoredDraggable(dragState, Orientation.Vertical) else Modifier)
+                        .clickable(enabled = active, onClick = onToggle)
                         .testTag(handleTestTag)
                 ) {
                     if (isOpenIsh) {

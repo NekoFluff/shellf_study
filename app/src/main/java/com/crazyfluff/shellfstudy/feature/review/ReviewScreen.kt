@@ -46,6 +46,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,16 +55,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.tracing.Trace
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
@@ -80,6 +85,8 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMo
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
 import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
+import com.crazyfluff.shellfstudy.core.data.model.RankChange
+import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.designsystem.theme.RankChangeChip
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
@@ -99,6 +106,10 @@ import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+
+/** Arbitrary non-null value used only to warm up [RankChangeChip]'s first composition ahead of
+ *  time — see its call site in [ReviewQuestionContent]. Never actually shown. */
+private val RankChangeChipWarmupValue = RankChange(from = SrsStage.APPRENTICE_1, to = SrsStage.APPRENTICE_2)
 
 object ReviewScreenTestTags {
     const val LOADING_INDICATOR = "review_loading_indicator"
@@ -350,9 +361,20 @@ fun ReviewScreen(
 
         lastDetailSubjectId?.let { subjectId ->
             lastDetailQuestionType?.let { questionType ->
+                val active = !isSearchActive && uiState.feedback != null
+                // Instant marker (not a duration span) for a captured System Trace — labels the
+                // frame where `active` first flips true, i.e. the frame right after Submit, so the
+                // AnchoredDraggableState/Surface first-mount cost this gates is easy to find.
+                DisposableEffect(active) {
+                    if (active) {
+                        Trace.beginSection("subjectDetailSheet:activeBecomesTrue")
+                        Trace.endSection()
+                    }
+                    onDispose {}
+                }
                 SubjectDetailSheet(
                     subjectId = subjectId,
-                    active = !isSearchActive && uiState.feedback != null,
+                    active = active,
                     expanded = uiState.isDetailsExpanded,
                     onToggle = onToggleDetails,
                     revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
@@ -447,6 +469,36 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.testTag(ReviewScreenTestTags.SUBJECT_TYPE_LABEL)
             )
+        }
+        // Unconditionally mounted warm-up for RankChangeChip's icon/text (measured at ~30ms across
+        // two frames; see ReviewSubmitJankProfilingTest). Review resets `rankChange` to null every
+        // question (see ReviewViewModel.advanceToNextQuestion), so AnimatedVisibility below tears
+        // down and rebuilds its content on every question that has a rank change, not just the
+        // session's first — without a warm-up, that cost recurs on every such Submit. Measures its
+        // children at a realistic width (unlike a zero-size warm-up, which measures Text/Icon
+        // against degenerate 0px constraints and doesn't exercise the same layout path) but reports
+        // zero size to this Column and clips its own draw to nothing, so it neither pushes later
+        // content down nor is ever actually visible or hit-testable.
+        Layout(
+            modifier = Modifier.clipToBounds(),
+            content = {
+                RankChangeChip(RankChangeChipWarmupValue)
+                RankChangeChip(RankChangeChipWarmupValue.copy(from = SrsStage.APPRENTICE_2, to = SrsStage.APPRENTICE_1))
+            }
+        ) { measurables, _ ->
+            val childConstraints = Constraints(maxWidth = 200.dp.roundToPx())
+            val placeables = measurables.map { it.measure(childConstraints) }
+            layout(0, 0) { placeables.forEach { it.place(0, 0) } }
+        }
+        // Instant marker for a captured System Trace — labels the frame where `rankChange` first
+        // turns non-null, i.e. right after Submit, so RankChangeChip's enter animation is easy to
+        // find (the animation itself runs on Compose's own clock, so there's nothing to bracket).
+        DisposableEffect(uiState.rankChange) {
+            if (uiState.rankChange != null) {
+                Trace.beginSection("rankChangeChip:becomesVisible")
+                Trace.endSection()
+            }
+            onDispose {}
         }
         AnimatedVisibility(
             visible = uiState.rankChange != null,
