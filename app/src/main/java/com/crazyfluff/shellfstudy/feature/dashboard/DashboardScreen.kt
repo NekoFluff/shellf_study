@@ -337,6 +337,7 @@ fun DashboardScreen(
                                     // vivid blue in both themes.
                                     color = SubjectTypeColors.Radical,
                                     onClick = onStartLesson,
+                                    enabled = uiState.isLessonsCardEnabled,
                                     badge = {
                                         LessonsTodayBadge(
                                             completed = uiState.lessonsCompletedToday,
@@ -356,6 +357,7 @@ fun DashboardScreen(
                                     count = uiState.reviewCount,
                                     color = SubjectTypeColors.Kanji,
                                     onClick = onStartReview,
+                                    enabled = uiState.isReviewsCardEnabled,
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxHeight()
@@ -434,12 +436,21 @@ private fun SummaryCard(
     color: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     badge: (@Composable () -> Unit)? = null
 ) {
     Card(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = color, contentColor = Color.White)
+        colors = if (enabled) {
+            CardDefaults.cardColors(containerColor = color, contentColor = Color.White)
+        } else {
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -451,14 +462,16 @@ private fun SummaryCard(
                 Text(text = count.toString(), style = MaterialTheme.typography.displayLarge)
                 Text(text = label, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.8f),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-            )
+            if (enabled) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                )
+            }
             if (badge != null) {
                 Box(modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
                     badge()
@@ -618,6 +631,30 @@ private fun DashboardScreenPreview() {
                 level = 12,
                 lessonCount = 5,
                 reviewCount = 23,
+                lessonsCompletedToday = 3,
+                dailyLessonGoal = 15,
+                kanjiGuruedForLevelUp = 18,
+                kanjiTotalForLevelUp = 25,
+                daysOnCurrentLevel = 6
+            ),
+            onRefresh = {},
+            onStartReview = {},
+            onLogOut = {}
+        )
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
+@Composable
+private fun DashboardScreenAllCaughtUpPreview() {
+    ShellfStudyTheme {
+        DashboardScreen(
+            uiState = DashboardUiState(
+                isRefreshing = false,
+                username = "durtle_fan",
+                level = 12,
+                lessonCount = 0,
+                reviewCount = 0,
                 lessonsCompletedToday = 3,
                 dailyLessonGoal = 15,
                 kanjiGuruedForLevelUp = 18,

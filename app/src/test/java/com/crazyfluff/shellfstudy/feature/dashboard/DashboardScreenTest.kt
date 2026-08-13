@@ -207,6 +207,51 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun lessonCard_doesNotInvokeOnStartLesson_whenNoLessonsAndNoActiveSession() {
+        var startedLesson = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, lessonCount = 0),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true }
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.LESSON_COUNT).performClick()
+        assert(!startedLesson)
+    }
+
+    @Test
+    fun reviewCard_doesNotInvokeOnStartReview_whenNoReviewsAndNoActiveSession() {
+        var startedReview = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, reviewCount = 0),
+                onRefresh = {}, onStartReview = { startedReview = true }, onLogOut = {}
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.REVIEW_COUNT).performClick()
+        assert(!startedReview)
+    }
+
+    @Test
+    fun lessonCard_invokesOnStartLesson_whenNoLessonsButSessionActive() {
+        var startedLesson = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(
+                    isRefreshing = false, username = "x", level = 1,
+                    lessonCount = 0, hasActiveLessonSession = true
+                ),
+                onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true }
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.LESSON_COUNT).performClick()
+        assert(startedLesson)
+    }
+
+    @Test
     fun showsLessonsCompletedTodayProgress() {
         composeTestRule.setContent {
             DashboardScreen(

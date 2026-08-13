@@ -86,6 +86,15 @@ data class DashboardUiState(
             errorMessage != null -> DashboardContentState.FullScreenError(errorMessage)
             else -> DashboardContentState.Content
         }
+
+    /** Whether the Lessons/Reviews summary cards should be tappable — false when there's nothing
+     *  to start and no in-progress session to resume, so the dashboard doesn't invite a tap that
+     *  just bounces straight into an empty session. */
+    val isLessonsCardEnabled: Boolean
+        get() = hasActiveLessonSession || lessonCount > 0
+
+    val isReviewsCardEnabled: Boolean
+        get() = hasActiveReviewSession || reviewCount > 0
 }
 
 sealed interface DashboardBannerState {
