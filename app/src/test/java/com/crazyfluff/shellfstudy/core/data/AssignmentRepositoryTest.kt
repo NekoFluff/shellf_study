@@ -340,6 +340,36 @@ class AssignmentRepositoryTest {
         }
     }
 
+    @Test
+    fun `observeReviewForecast groups both the now-count and each bucket's count by subject type`() = runTest {
+        val now = Instant.now()
+        val nextHour = now.truncatedTo(ChronoUnit.HOURS).plus(Duration.ofHours(1))
+        repositories.assignmentDao.upsertAll(
+            listOf(
+                AssignmentEntity(
+                    id = 1, subjectId = 1, subjectType = "radical", srsStage = 1,
+                    createdAt = "2026-01-01T00:00:00.000000Z", availableAt = nextHour.toString(), hidden = false
+                ),
+                AssignmentEntity(
+                    id = 2, subjectId = 2, subjectType = "kanji", srsStage = 1,
+                    createdAt = "2026-01-01T00:00:00.000000Z", availableAt = nextHour.toString(), hidden = false
+                ),
+                AssignmentEntity(
+                    id = 3, subjectId = 3, subjectType = "vocabulary", srsStage = 1,
+                    createdAt = "2026-01-01T00:00:00.000000Z", availableAt = now.minusSeconds(60).toString(), hidden = false
+                )
+            )
+        )
+
+        repository.observeReviewForecast().test {
+            val forecast = awaitItem()
+            assertThat(forecast.availableNowCountsByType[SubjectType.VOCABULARY]).isEqualTo(1)
+            val bucket = forecast.buckets.first { it.availableAt == nextHour }
+            assertThat(bucket.countsByType[SubjectType.RADICAL]).isEqualTo(1)
+            assertThat(bucket.countsByType[SubjectType.KANJI]).isEqualTo(1)
+        }
+    }
+
     private suspend fun seedSubject(
         id: Long,
         characters: String,

@@ -103,7 +103,9 @@ class SubjectDetailViewModelTest {
         strokeOrderRepository = FakeStrokeOrderRepository(
             mapOf('水' to listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f)))
         )
-        viewModel = SubjectDetailViewModel(repositories.subjectRepository, settingsRepository, audioPlayer, strokeOrderRepository)
+        viewModel = SubjectDetailViewModel(
+            repositories.subjectRepository, repositories.assignmentRepository, settingsRepository, audioPlayer, strokeOrderRepository
+        )
     }
 
     @After

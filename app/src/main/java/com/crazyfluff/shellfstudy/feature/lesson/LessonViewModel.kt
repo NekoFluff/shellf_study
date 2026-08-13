@@ -2,6 +2,8 @@ package com.crazyfluff.shellfstudy.feature.lesson
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.coroutines.runDurably
 import com.crazyfluff.shellfstudy.core.data.ApiResult
@@ -96,6 +98,7 @@ class LessonViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
     private val strokeOrderRepository: StrokeOrderRepository,
+    private val pronunciationAudioPlayer: PronunciationAudioPlayer,
     @ApplicationScope private val applicationScope: CoroutineScope
 ) : ViewModel() {
 
@@ -453,6 +456,23 @@ class LessonViewModel @Inject constructor(
         }
 
         persistDurabilityWork(isNewlyStarted, item, snapshot)
+
+        val settings = settingsRepository.settings.first()
+        if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
+            candidates.firstOrNull()?.let { reading ->
+                selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
+                    ?.let(pronunciationAudioPlayer::play)
+            }
+        }
+    }
+
+    /** Manual play from the study card's reading row — mirrors SubjectDetailViewModel.playReading. */
+    fun playReading(item: LessonItem, reading: String) {
+        viewModelScope.launch {
+            val restrictAudioToMp3 = settingsRepository.settings.first().restrictAudioToMp3
+            selectAudioFor(item.pronunciationAudios, reading, mp3Only = restrictAudioToMp3)
+                ?.let(pronunciationAudioPlayer::play)
+        }
     }
 
     /** Captures the current quiz queue as an immutable, ready-to-persist value — safe to hold

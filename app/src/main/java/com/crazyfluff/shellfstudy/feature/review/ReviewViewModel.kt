@@ -250,7 +250,7 @@ class ReviewViewModel @Inject constructor(
 
         gradingGuard.launchIfIdle {
             val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-            gradeAnswer(item, type, isCorrect = false, candidates, expandDetails = true)
+            gradeAnswer(item, type, isCorrect = false, candidates, expandDetails = false)
         }
     }
 

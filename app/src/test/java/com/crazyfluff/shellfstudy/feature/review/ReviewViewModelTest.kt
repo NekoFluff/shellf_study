@@ -328,7 +328,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `dontKnowAnswer grades as incorrect, requeues, and expands details`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `dontKnowAnswer grades as incorrect and requeues, without auto-expanding details`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -342,7 +342,8 @@ class ReviewViewModelTest {
             val feedbackState = awaitItem()
             assertThat(feedbackState.feedback?.isCorrect).isFalse()
             assertThat(feedbackState.feedback?.correctAnswer).isEqualTo("Mouth")
-            assertThat(feedbackState.isDetailsExpanded).isTrue()
+            // "I don't know" shouldn't force the detail sheet open — same as a regular wrong answer.
+            assertThat(feedbackState.isDetailsExpanded).isFalse()
             // Requeued, not dropped — remaining count is unchanged, still one question to answer.
             assertThat(feedbackState.remainingCount).isEqualTo(1)
 

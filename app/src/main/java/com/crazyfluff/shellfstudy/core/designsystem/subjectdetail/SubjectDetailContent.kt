@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -25,10 +26,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.core.network.SubjectType
@@ -62,7 +65,8 @@ fun SubjectDetailContent(
     showPitchAccent: Boolean = true,
     onPlayReading: ((String) -> Unit)? = null,
     strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
-    autoPlayStrokeOrder: Boolean = true
+    autoPlayStrokeOrder: Boolean = true,
+    srsStage: SrsStage? = null
 ) {
     val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.MEANING)
     val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.READING)
@@ -211,15 +215,17 @@ fun SubjectDetailContent(
                 SectionEyebrow("Context sentences")
                 // 20dp between example sentences (vs. 2dp between a sentence's own JP/EN pair) so
                 // each example reads as its own distinct card of information while scanning.
-                Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                    detail.contextSentences.forEach { sentence ->
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                text = sentence.english,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                SelectionContainer {
+                    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        detail.contextSentences.forEach { sentence ->
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    text = sentence.english,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -239,6 +245,14 @@ fun SubjectDetailContent(
             subjects = detail.amalgamationSubjectIds.mapNotNull { relatedSubjects[it] },
             onSubjectClick = onRelatedSubjectClick
         )
+
+        if (srsStage != null) {
+            HorizontalDivider()
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SectionEyebrow("Stats")
+                SrsStageChip(srsStage)
+            }
+        }
     }
 }
 

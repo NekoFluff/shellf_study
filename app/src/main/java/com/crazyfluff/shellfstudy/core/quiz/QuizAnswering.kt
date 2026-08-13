@@ -3,9 +3,11 @@ package com.crazyfluff.shellfstudy.core.quiz
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter
 
-/** Radicals have no reading, so they're meaning-only; every other subject type asks both. */
+/** Radicals have no reading, and kana-only vocabulary has no reading distinct from its own
+ *  characters (WaniKani's API returns an empty `readings` list for it) — both are meaning-only.
+ *  Every other subject type asks both. */
 fun questionTypesFor(subjectType: SubjectType): List<QuestionType> =
-    if (subjectType == SubjectType.RADICAL) {
+    if (subjectType == SubjectType.RADICAL || subjectType == SubjectType.KANA_VOCABULARY) {
         listOf(QuestionType.MEANING)
     } else {
         listOf(QuestionType.MEANING, QuestionType.READING)

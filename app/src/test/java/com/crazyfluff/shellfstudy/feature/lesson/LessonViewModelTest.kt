@@ -16,6 +16,7 @@ import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
+import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
@@ -54,6 +55,7 @@ class LessonViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var subjectRepository: SubjectRepository
     private var strokeOrderRepository: StrokeOrderRepository = FakeStrokeOrderRepository()
+    private lateinit var pronunciationAudioPlayer: FakePronunciationAudioPlayer
 
     @Before
     fun setUp() {
@@ -71,6 +73,7 @@ class LessonViewModelTest {
         strokeOrderRepository = FakeStrokeOrderRepository()
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+        pronunciationAudioPlayer = FakePronunciationAudioPlayer()
     }
 
     @After
@@ -80,7 +83,7 @@ class LessonViewModelTest {
 
     private fun TestScope.createViewModel() = LessonViewModel(
         assignmentRepository, outboxRepository, lessonSessionRepository, pitchAccentRepository, settingsRepository,
-        subjectRepository, strokeOrderRepository, backgroundScope
+        subjectRepository, strokeOrderRepository, pronunciationAudioPlayer, backgroundScope
     )
 
     /** Routes by path — refreshing the lesson queue now syncs subjects and assignments, in either order. */

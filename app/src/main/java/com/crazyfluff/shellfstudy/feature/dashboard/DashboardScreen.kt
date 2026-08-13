@@ -39,7 +39,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +57,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
@@ -170,9 +170,9 @@ fun DashboardScreen(
             topBar = {
                 // No literal wordmark title here on purpose — a minimal, icon-only action row
                 // reads cleaner and keeps the header from competing with the welcome message
-                // below it.
-                TopAppBar(
-                    title = {},
+                // below it. CompactTopBar (not the stock TopAppBar) so the empty title doesn't
+                // reserve a fixed ~64dp band of dead space above that welcome message.
+                CompactTopBar(
                     actions = {
                         IconButton(
                             onClick = { isSearchActive = true },

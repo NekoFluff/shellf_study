@@ -78,7 +78,7 @@ fun CompletionProjectionCard(projection: CompletionProjection?, modifier: Modifi
                                 style = MaterialTheme.typography.bodyLarge
                             )
                             Text(
-                                text = "${projection.daysRemaining} days · ${projection.dailyPace}/day",
+                                text = "${projection.daysRemaining} days · ${projection.dailyPace} items/day",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

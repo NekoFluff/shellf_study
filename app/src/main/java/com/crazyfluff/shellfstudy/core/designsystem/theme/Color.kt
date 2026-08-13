@@ -28,6 +28,11 @@ object SrsStageColors {
     val Locked = Color(0xFF9E9E9E)
 }
 
+/** Lighter stand-in for [SrsStageColors.Burned] on the dark color scheme — the near-black
+ *  charcoal is illegible against a dark background, unlike the other (already-bright) stage
+ *  colors, which don't need a dark-theme variant. */
+val BurnedDark = Color(0xFFB0B0B0)
+
 /** Smouldering Durtles' pitch-accent-pattern color convention, kept for a familiar look. */
 object PitchAccentColors {
     val Heiban = Color(0xFFD20CA3)

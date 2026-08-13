@@ -94,6 +94,7 @@ class LessonScreenTest {
                         is LessonScreenEvent.AnswerInputChange -> onAnswerInputChange(event.value)
                         LessonScreenEvent.Submit -> onSubmit()
                         LessonScreenEvent.DontKnow -> onDontKnow()
+                        is LessonScreenEvent.PlayReading -> {}
                         LessonScreenEvent.Continue -> onContinue()
                         LessonScreenEvent.Retry -> onRetry()
                         LessonScreenEvent.Done -> onDone()

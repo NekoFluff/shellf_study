@@ -49,6 +49,10 @@ private val EinkColorScheme = lightColorScheme(
 /** Whether the e-ink theme is active — lets categorical colors (subject type, SRS stage, pitch accent) fall back to grayscale. */
 val LocalEinkTheme = staticCompositionLocalOf { false }
 
+/** Whether the dark color scheme is active — lets categorical colors that don't otherwise track
+ *  Material's color scheme (e.g. [SrsStageColors.Burned]) swap in a legible dark-theme variant. */
+val LocalDarkTheme = staticCompositionLocalOf { false }
+
 /** Returns [einkValue] under the e-ink theme, [default] otherwise. */
 @Composable
 fun themeAwareColor(default: Color, einkValue: Color): Color =
@@ -76,7 +80,7 @@ fun ShellfStudyTheme(
         else -> LightColorScheme
     }
 
-    CompositionLocalProvider(LocalEinkTheme provides isEink) {
+    CompositionLocalProvider(LocalEinkTheme provides isEink, LocalDarkTheme provides (darkTheme && !isEink)) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,

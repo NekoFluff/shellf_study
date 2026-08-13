@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,6 +39,8 @@ import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
 import com.crazyfluff.shellfstudy.core.data.model.reviewForecastSummary
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
+import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
+import com.crazyfluff.shellfstudy.core.network.SubjectType
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -114,11 +117,24 @@ private fun summaryText(forecast: ReviewForecast?, selectedIndex: Int?): String 
         } else {
             val bucket = forecast.buckets[selectedIndex - 1]
             val time = TIME_FORMATTER.format(bucket.availableAt.atZone(ZoneId.systemDefault()))
-            if (bucket.newlyAvailableCount == 0) "No new reviews at $time" else "${bucket.newlyAvailableCount} new at $time"
+            // Cumulative — everything due by this point in time, not just what newly becomes
+            // available in this one hour's bucket — since "how many reviews would I have if I
+            // waited until X" is the more useful number to plan around.
+            val totalByThen = forecast.reviewsAvailableNow + forecast.buckets.take(selectedIndex).sumOf { it.newlyAvailableCount }
+            "$totalByThen total due by $time"
         }
     }
     return reviewForecastSummary(forecast)
 }
+
+/** Stacking order for a bar's colored segments — radicals at the bottom, vocabulary at the top,
+ *  matching the dashboard's other subject-type breakdowns (e.g. ItemSpreadCard). Kana-only
+ *  vocabulary shares vocabulary's color/segment (see [subjectColor]), so its count folds in here. */
+private fun countsByStackOrder(countsByType: Map<SubjectType, Int>): List<Pair<SubjectType, Int>> = listOf(
+    SubjectType.RADICAL to (countsByType[SubjectType.RADICAL] ?: 0),
+    SubjectType.KANJI to (countsByType[SubjectType.KANJI] ?: 0),
+    SubjectType.VOCABULARY to (countsByType[SubjectType.VOCABULARY] ?: 0) + (countsByType[SubjectType.KANA_VOCABULARY] ?: 0)
+)
 
 @Composable
 private fun ReviewForecastBarChart(
@@ -126,16 +142,20 @@ private fun ReviewForecastBarChart(
     selectedIndex: Int?,
     onSelect: (Int) -> Unit
 ) {
-    // Fixed brand color (matches the Reviews summary card) rather than colorScheme.secondary,
-    // which resolves to a pale, low-contrast tint in the dark theme.
-    val nowColor = SubjectTypeColors.Kanji
-    val futureColor = SubjectTypeColors.Kanji.copy(alpha = 0.55f)
-    val dimmedColor = SubjectTypeColors.Kanji.copy(alpha = 0.2f)
+    // Resolved here (composable scope) rather than inside the Canvas draw lambda, since
+    // subjectColor() is theme-aware (dark/e-ink) and DrawScope isn't a composable context.
+    val typeColors = mapOf(
+        SubjectType.RADICAL to subjectColor(SubjectType.RADICAL),
+        SubjectType.KANJI to subjectColor(SubjectType.KANJI),
+        SubjectType.VOCABULARY to subjectColor(SubjectType.VOCABULARY)
+    )
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val gridColor = MaterialTheme.colorScheme.outlineVariant
 
     val counts: List<Int> = listOf(forecast?.reviewsAvailableNow ?: 0) +
         (forecast?.buckets?.map { it.newlyAvailableCount } ?: List(24) { 0 })
+    val countsByType: List<Map<SubjectType, Int>> = listOf(forecast?.availableNowCountsByType ?: emptyMap()) +
+        (forecast?.buckets?.map { it.countsByType } ?: List(24) { emptyMap() })
     val maxCount = (counts.maxOrNull() ?: 0).coerceAtLeast(1)
     val barCount = counts.size
 
@@ -167,13 +187,26 @@ private fun ReviewForecastBarChart(
         counts.forEachIndexed { index, count ->
             val barHeight = if (forecast == null) 4.dp.toPx() else (size.height * (count.toFloat() / maxCount)).coerceAtLeast(2f)
             val x = index * (barWidth + gap)
-            val color = when {
-                forecast == null -> trackColor
-                selectedIndex != null && selectedIndex != index -> dimmedColor
-                index == 0 -> nowColor
-                else -> futureColor
+            val isDimmed = selectedIndex != null && selectedIndex != index
+            // Full strength for "now" (index 0), a lighter tint for future bars — same distinction
+            // the old single-hue bars made — dimmed further still once another bar is selected.
+            val alpha = when {
+                isDimmed -> 0.2f
+                index == 0 -> 1f
+                else -> 0.55f
             }
-            drawRoundedTopBar(x = x, width = barWidth, barHeight = barHeight, color = color)
+            if (forecast == null || count == 0) {
+                drawRoundedTopBar(x = x, width = barWidth, barHeight = barHeight, color = trackColor)
+            } else {
+                drawStackedBar(
+                    x = x,
+                    width = barWidth,
+                    barHeight = barHeight,
+                    segments = countsByStackOrder(countsByType[index]),
+                    total = count,
+                    colorFor = { type -> typeColors.getValue(type).copy(alpha = alpha) }
+                )
+            }
         }
     }
 }
@@ -204,10 +237,9 @@ private fun ReviewForecastAxisLabels(forecast: ReviewForecast) {
     }
 }
 
-private fun DrawScope.drawRoundedTopBar(x: Float, width: Float, barHeight: Float, color: Color) {
-    val top = size.height - barHeight
+private fun DrawScope.roundedTopBarPath(x: Float, top: Float, width: Float, barHeight: Float): Path {
     val radius = (width / 2f).coerceAtMost(6.dp.toPx())
-    val path = Path().apply {
+    return Path().apply {
         addRoundRect(
             RoundRect(
                 rect = Rect(offset = Offset(x, top), size = Size(width, barHeight)),
@@ -218,7 +250,36 @@ private fun DrawScope.drawRoundedTopBar(x: Float, width: Float, barHeight: Float
             )
         )
     }
+}
+
+private fun DrawScope.drawRoundedTopBar(x: Float, width: Float, barHeight: Float, color: Color) {
+    val path = roundedTopBarPath(x, size.height - barHeight, width, barHeight)
     drawPath(path, color = color)
+}
+
+/** Draws [segments] (subject type to its count within this bar) stacked bottom-to-top within the
+ *  bar's own rounded-top outline — radicals at the bottom, vocabulary at the top — so the bar's
+ *  overall (volume-scaled) height is unchanged, but its composition by subject type is now visible. */
+private fun DrawScope.drawStackedBar(
+    x: Float,
+    width: Float,
+    barHeight: Float,
+    segments: List<Pair<SubjectType, Int>>,
+    total: Int,
+    colorFor: (SubjectType) -> Color
+) {
+    val top = size.height - barHeight
+    val path = roundedTopBarPath(x, top, width, barHeight)
+    clipPath(path) {
+        var yOffset = size.height
+        segments.forEach { (type, typeCount) ->
+            if (typeCount <= 0) return@forEach
+            val segmentHeight = barHeight * (typeCount.toFloat() / total)
+            val segmentTop = yOffset - segmentHeight
+            drawRect(color = colorFor(type), topLeft = Offset(x, segmentTop), size = Size(width, segmentHeight))
+            yOffset = segmentTop
+        }
+    }
 }
 
 @Preview(showBackground = true)

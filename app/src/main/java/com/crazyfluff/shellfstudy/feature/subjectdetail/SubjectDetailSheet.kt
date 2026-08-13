@@ -393,7 +393,8 @@ private fun ColumnScope.SubjectDetailBody(
             showPitchAccent = uiState.showPitchAccent,
             onPlayReading = viewModel::playReading,
             strokeOrder = uiState.strokeOrder,
-            autoPlayStrokeOrder = autoPlayStrokeOrder
+            autoPlayStrokeOrder = autoPlayStrokeOrder,
+            srsStage = uiState.srsStage
         )
     }
 }

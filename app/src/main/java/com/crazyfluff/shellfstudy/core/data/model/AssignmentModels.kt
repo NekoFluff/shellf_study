@@ -6,12 +6,14 @@ import java.time.Instant
 data class ReviewForecastBucket(
     val hoursFromNow: Int,
     val availableAt: Instant,
-    val newlyAvailableCount: Int
+    val newlyAvailableCount: Int,
+    val countsByType: Map<SubjectType, Int> = emptyMap()
 )
 
 data class ReviewForecast(
     val reviewsAvailableNow: Int,
-    val buckets: List<ReviewForecastBucket>
+    val buckets: List<ReviewForecastBucket>,
+    val availableNowCountsByType: Map<SubjectType, Int> = emptyMap()
 )
 
 data class ItemSpread(

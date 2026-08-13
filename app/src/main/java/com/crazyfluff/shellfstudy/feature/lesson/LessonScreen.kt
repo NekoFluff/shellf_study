@@ -26,6 +26,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -49,7 +50,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -76,6 +76,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemRow
@@ -166,6 +167,7 @@ sealed interface LessonScreenEvent {
     data class AnswerInputChange(val value: String) : LessonScreenEvent
     data object Submit : LessonScreenEvent
     data object DontKnow : LessonScreenEvent
+    data class PlayReading(val item: LessonItem, val reading: String) : LessonScreenEvent
     data object Continue : LessonScreenEvent
     data object Retry : LessonScreenEvent
     data object Done : LessonScreenEvent
@@ -195,6 +197,7 @@ fun LessonRoute(
                 is LessonScreenEvent.AnswerInputChange -> viewModel.onAnswerInputChange(event.value)
                 LessonScreenEvent.Submit -> viewModel.submitAnswer()
                 LessonScreenEvent.DontKnow -> viewModel.dontKnowAnswer()
+                is LessonScreenEvent.PlayReading -> viewModel.playReading(event.item, event.reading)
                 LessonScreenEvent.Continue -> viewModel.onContinue()
                 LessonScreenEvent.Retry -> viewModel.load()
                 LessonScreenEvent.Done -> onSessionComplete()
@@ -221,6 +224,7 @@ fun LessonScreen(
     val onAnswerInputChange: (String) -> Unit = { onEvent(LessonScreenEvent.AnswerInputChange(it)) }
     val onSubmit = { onEvent(LessonScreenEvent.Submit) }
     val onDontKnow = { onEvent(LessonScreenEvent.DontKnow) }
+    val onPlayReading: (LessonItem, String) -> Unit = { item, reading -> onEvent(LessonScreenEvent.PlayReading(item, reading)) }
     val onContinue = { onEvent(LessonScreenEvent.Continue) }
     val onRetry = { onEvent(LessonScreenEvent.Retry) }
     val onDone = { onEvent(LessonScreenEvent.Done) }
@@ -236,8 +240,7 @@ fun LessonScreen(
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {},
+            CompactTopBar(
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag(LessonScreenTestTags.BACK_BUTTON)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -317,7 +320,8 @@ fun LessonScreen(
                         onNext = onNextStudyCard,
                         onPrevious = onPreviousStudyCard,
                         onSwiped = onStudyCardSwiped,
-                        onSubjectClick = { detailSheetState.show(it) }
+                        onSubjectClick = { detailSheetState.show(it) },
+                        onPlayReading = onPlayReading
                     )
                 }
 
@@ -446,7 +450,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSwiped: (Int) -> Unit,
-    onSubjectClick: (Long) -> Unit
+    onSubjectClick: (Long) -> Unit,
+    onPlayReading: (LessonItem, String) -> Unit
 ) {
     val currentItem = uiState.studyItems.getOrNull(uiState.studyIndex) ?: return
     val isLastCard = uiState.studyIndex == uiState.studyItems.lastIndex
@@ -500,8 +505,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
             // cluster, mirroring the subject detail view's headline — see SubjectDetailContent.kt.
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SubjectGlyph(
-                    characters = item.characters ?: item.meanings.firstOrNull(),
-                    characterImageUrl = null,
+                    characters = item.characters,
+                    characterImageUrl = item.characterImageUrl,
                     subjectType = item.subjectType,
                     size = 96.dp,
                     modifier = Modifier.testTag(LessonScreenTestTags.STUDY_CHARACTERS)
@@ -537,7 +542,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                     isVocabulary = isVocabulary,
                     hasReadingBreakdown = hasReadingBreakdown,
                     pitchAccents = uiState.pitchAccentsBySubjectId[item.subjectId].orEmpty(),
-                    showPitchAccent = uiState.showPitchAccent
+                    showPitchAccent = uiState.showPitchAccent,
+                    onPlayReading = { reading -> onPlayReading(item, reading) }
                 )
             }
             if (isVocabulary && item.contextSentences.isNotEmpty()) {
@@ -846,7 +852,8 @@ private fun LessonReadingSection(
     isVocabulary: Boolean,
     hasReadingBreakdown: Boolean,
     pitchAccents: List<PitchAccent>,
-    showPitchAccent: Boolean
+    showPitchAccent: Boolean,
+    onPlayReading: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -863,8 +870,8 @@ private fun LessonReadingSection(
                             reading = reading,
                             pitchAccents = pitchAccents,
                             showPitchAccent = showPitchAccent,
-                            hasAudio = false,
-                            onPlayReading = null
+                            hasAudio = item.pronunciationAudios.isNotEmpty(),
+                            onPlayReading = onPlayReading
                         )
                     }
                 }
@@ -887,15 +894,17 @@ private fun LessonReadingSection(
 private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionEyebrow("Context sentences")
-        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            sentences.forEach { sentence ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = sentence.english,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        SelectionContainer {
+            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                sentences.forEach { sentence ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = sentence.english,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

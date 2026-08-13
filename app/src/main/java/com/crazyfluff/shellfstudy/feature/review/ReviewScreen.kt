@@ -45,7 +45,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -66,6 +65,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
@@ -77,6 +77,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
 import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.RankChangeChip
@@ -217,7 +218,7 @@ fun ReviewScreen(
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
-            TopAppBar(
+            CompactTopBar(
                 title = {
                     val startTimeMs = uiState.sessionStartTimeMs
                     if (uiState.showReviewTimer && startTimeMs != null && canManageSession) {
@@ -432,10 +433,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         modifier = Modifier.weight(1f, fill = false).fillMaxWidth().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = item.characters ?: item.meanings.firstOrNull() ?: "?",
-            style = MaterialTheme.typography.displayLarge,
-            color = accentColor,
+        SubjectGlyph(
+            characters = item.characters,
+            characterImageUrl = item.characterImageUrl,
+            subjectType = item.subjectType,
+            size = 104.dp,
             modifier = Modifier.testTag(ReviewScreenTestTags.CHARACTERS)
         )
         if (uiState.showSubjectTypeLabel) {

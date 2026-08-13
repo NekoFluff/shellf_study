@@ -4,10 +4,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,21 +50,19 @@ fun GatedContinueButton(
             modifier = Modifier.fillMaxWidth().testTag(continueButtonTestTag)
         ) { Text("Continue") }
         if (!continueUnlocked) {
-            // Inset from the button's own edges and given a little breathing room off the bottom
-            // — sitting flush against it clipped straight through the button's rounded (pill)
-            // corners, leaving little squared-off flecks of color poking out past its curve.
-            LinearProgressIndicator(
+            // A small ring on the button's trailing edge — empty at 0%, a full ring at 100% —
+            // rather than a bar along an edge, so the lock timer reads as a countdown rather than
+            // a loading bar (which it isn't; nothing is actually loading).
+            CircularProgressIndicator(
                 progress = { lockProgress.value },
                 color = MaterialTheme.colorScheme.onPrimary,
                 trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
                 strokeCap = StrokeCap.Round,
-                drawStopIndicator = {},
+                strokeWidth = 2.dp,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 8.dp)
-                    .height(4.dp)
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 20.dp)
+                    .size(16.dp)
             )
         }
     }

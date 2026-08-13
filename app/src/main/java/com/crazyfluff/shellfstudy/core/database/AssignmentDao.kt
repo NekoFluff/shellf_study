@@ -29,6 +29,11 @@ interface AssignmentDao {
     @Query("SELECT * FROM assignments WHERE id = :id")
     suspend fun getById(id: Long): AssignmentEntity?
 
+    /** The assignment (if any — the subject may not have been lessoned yet) backing a subject,
+     *  for surfacing its current SRS stage in the subject detail view. */
+    @Query("SELECT * FROM assignments WHERE subjectId = :subjectId LIMIT 1")
+    fun observeBySubjectId(subjectId: Long): Flow<AssignmentEntity?>
+
     /** Reviews available right now: unlocked, started, and past their SRS-scheduled availableAt. */
     @Query("SELECT * FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt <= :nowIso ORDER BY availableAt ASC")
     fun observeDueForReview(nowIso: String): Flow<List<AssignmentEntity>>

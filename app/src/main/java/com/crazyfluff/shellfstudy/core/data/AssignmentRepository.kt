@@ -199,6 +199,7 @@ class AssignmentRepository @Inject constructor(
                             subjectId = subject.id,
                             subjectType = SubjectType.fromWkString(subject.subjectType),
                             characters = subject.characters,
+                            characterImageUrl = subject.characterImageUrl,
                             level = subject.level,
                             srsStage = assignment.srsStage,
                             meanings = subject.acceptedMeanings(),
@@ -227,6 +228,7 @@ class AssignmentRepository @Inject constructor(
                             subjectId = subject.id,
                             subjectType = SubjectType.fromWkString(subject.subjectType),
                             characters = subject.characters,
+                            characterImageUrl = subject.characterImageUrl,
                             level = subject.level,
                             meanings = subject.acceptedMeanings(),
                             readings = subject.acceptedGradableReadings(),
@@ -239,6 +241,7 @@ class AssignmentRepository @Inject constructor(
                             kunyomiReadings = subject.readings.filter { it.type == "kunyomi" }.map { it.reading },
                             nanoriReadings = subject.readings.filter { it.type == "nanori" }.map { it.reading },
                             partsOfSpeech = subject.partsOfSpeech,
+                            pronunciationAudios = subject.toPronunciationAudios(),
                             contextSentences = subject.contextSentences.map { ContextSentence(japanese = it.ja, english = it.en) },
                             componentSubjectIds = subject.componentSubjectIds,
                             amalgamationSubjectIds = subject.amalgamationSubjectIds,
@@ -249,6 +252,11 @@ class AssignmentRepository @Inject constructor(
                 }
             }
         }
+
+    /** The subject's current SRS stage, or null if it hasn't been lessoned yet (no assignment
+     *  exists) — the subject detail view's stat chip source. */
+    fun observeSrsStage(subjectId: Long): Flow<SrsStage?> =
+        assignmentDao.observeBySubjectId(subjectId).map { assignment -> assignment?.let { SrsStage.fromRaw(it.srsStage) } }
 
     fun observeReviewForecast(hours: Int = 24): Flow<ReviewForecast> {
         val now = Instant.now()
@@ -265,13 +273,22 @@ class AssignmentRepository @Inject constructor(
             val buckets = (1..hours).map { hourOffset ->
                 val bucketStart = currentHourStart.plus(Duration.ofHours(hourOffset.toLong()))
                 val bucketEnd = bucketStart.plus(Duration.ofHours(1))
-                val count = upcoming.count { assignment ->
-                    val availableAt = assignment.availableAt?.let(Instant::parse) ?: return@count false
+                val inBucket = upcoming.filter { assignment ->
+                    val availableAt = assignment.availableAt?.let(Instant::parse) ?: return@filter false
                     !availableAt.isBefore(bucketStart) && availableAt.isBefore(bucketEnd)
                 }
-                ReviewForecastBucket(hoursFromNow = hourOffset, availableAt = bucketStart, newlyAvailableCount = count)
+                ReviewForecastBucket(
+                    hoursFromNow = hourOffset,
+                    availableAt = bucketStart,
+                    newlyAvailableCount = inBucket.size,
+                    countsByType = inBucket.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
+                )
             }
-            ReviewForecast(reviewsAvailableNow = availableNow.size, buckets = buckets)
+            ReviewForecast(
+                reviewsAvailableNow = availableNow.size,
+                buckets = buckets,
+                availableNowCountsByType = availableNow.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
+            )
         }
     }
 
