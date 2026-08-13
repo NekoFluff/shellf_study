@@ -710,12 +710,16 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `resuming after fully completing one item of several does not crash`() = runTest(mainDispatcherRule.dispatcher) {
-        // Regression test: ItemProgress now carries a ReviewItem (for session-stat reporting),
-        // reconstructed on resume via itemsById.getValue(assignmentId) where itemsById only
-        // contains currently-due items. Completing the radical here pushes its next-review time
-        // into the future via applyOptimisticReviewResult, dropping it out of the due queue even
-        // though its (completed) progress is still persisted — resuming must not crash on that.
+    fun `resuming after fully completing one item of several preserves progress on the rest instead of resetting the whole session`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: completing the radical here pushes its next-review time into the future
+        // via applyOptimisticReviewResult, dropping it out of the due queue even though its
+        // (completed) progress is still persisted. resumeFromPersisted must not treat that as a
+        // reason to discard the *entire* persisted session (queue + still-in-progress kanji
+        // progress) and silently fall back to a fresh fetch — it should only ever fall back when a
+        // *queue* entry (not a stray progress entry) can't be resolved. totalCount is the
+        // observable proof: it's fixed at session start (1 radical question + 2 kanji questions =
+        // 3) and never recomputed as items complete, so a fresh-fetch fallback would report 2
+        // (only the still-due kanji) instead of the true 3.
         dispatch(jsonResponse(twoItemAssignmentsJson()), jsonResponse(twoItemSubjectsJson()))
 
         val firstViewModel = createViewModel()
@@ -748,8 +752,10 @@ class ReviewViewModelTest {
             assertThat(state.isSessionComplete).isFalse()
         }
 
-        // Simulate leaving and coming back: a fresh ViewModel must resume without crashing, even
-        // though assignment 101's completed progress is no longer in the due queue.
+        // Simulate leaving and coming back: a fresh ViewModel must resume the original session —
+        // not silently reset it — even though assignment 101's completed progress is no longer in
+        // the due queue.
+        val requestCountBeforeResume = server.requestCount
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
@@ -757,7 +763,13 @@ class ReviewViewModelTest {
             assertThat(state.errorMessage).isNull()
             assertThat(state.isSessionComplete).isFalse()
             assertThat(state.currentItem?.assignmentId).isEqualTo(555L)
+            // The real assertion: totalCount must still reflect the original 3-question session
+            // (1 radical + 2 kanji), not a recomputed 2 (only the kanji still due) — which is what
+            // a silent fetchFreshQueue() fallback would produce.
+            assertThat(state.totalCount).isEqualTo(3)
         }
+        // No fresh sync should have been needed either — the persisted queue was reused as-is.
+        assertThat(server.requestCount).isEqualTo(requestCountBeforeResume)
     }
 
     @Test

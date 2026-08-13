@@ -142,13 +142,19 @@ class ReviewViewModel @Inject constructor(
     private suspend fun resumeFromPersisted(persisted: PersistedReviewSession) {
         val itemsById = assignmentRepository.observeReviewQueue().first().associateBy { it.assignmentId }
 
-        // The cache backing this persisted session is gone (e.g. app storage was cleared), or a
-        // progress entry belongs to an item that was fully completed before the process died —
-        // applyOptimisticReviewResult() pushes a completed item's next-review time into the
-        // future, so it drops out of observeReviewQueue()/itemsById even though its progress (kept
-        // around for session stats) is still persisted. Either way, fall back to a fresh fetch
-        // rather than crash building ItemProgress for an item we can no longer look up.
-        if (persisted.queue.any { it.assignmentId !in itemsById } || persisted.progress.any { it.assignmentId !in itemsById }) {
+        // A *queue* entry referencing an item we can no longer look up (e.g. app storage was
+        // cleared) is genuinely unrecoverable — rebuilding its PendingQuestion needs the full
+        // ReviewItem. Fall back to a fresh fetch rather than crash on that.
+        //
+        // A stale *progress* entry, on the other hand, is the normal, expected shape of a
+        // partially-completed session: applyOptimisticReviewResult() pushes a fully-completed
+        // item's next-review time into the future the moment it's finished, so it drops out of
+        // observeReviewQueue()/itemsById well before the session as a whole ends. Discarding the
+        // whole session over that would throw away progress on every other still-in-progress item
+        // just because one item happened to finish first — so that entry is simply dropped instead
+        // (it only feeds the end-of-session summary tally, which already can't reconstruct a
+        // completed item's full ReviewItem without its still-cached-elsewhere subject data).
+        if (persisted.queue.any { it.assignmentId !in itemsById }) {
             reviewSessionRepository.clear()
             fetchFreshQueue()
             return
@@ -161,7 +167,8 @@ class ReviewViewModel @Inject constructor(
         )
         progressByAssignmentId.clear()
         persisted.progress.forEach { p ->
-            progressByAssignmentId[p.assignmentId] = ItemProgress(itemsById.getValue(p.assignmentId)).apply {
+            val item = itemsById[p.assignmentId] ?: return@forEach
+            progressByAssignmentId[p.assignmentId] = ItemProgress(item).apply {
                 meaningDone = p.meaningDone
                 readingDone = p.readingDone
                 hadIncorrectMeaning = p.hadIncorrectMeaning
