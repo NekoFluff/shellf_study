@@ -55,8 +55,8 @@ fun GatedContinueButton(
             // a loading bar (which it isn't; nothing is actually loading).
             CircularProgressIndicator(
                 progress = { lockProgress.value },
-                color = MaterialTheme.colorScheme.onPrimary,
-                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
+                color = MaterialTheme.colorScheme.onSurface,
+                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                 strokeCap = StrokeCap.Round,
                 strokeWidth = 2.dp,
                 modifier = Modifier

@@ -317,8 +317,6 @@ class ReviewViewModel @Inject constructor(
             grade to snapshot
         }
 
-        trace("gradeAnswer:persistDurabilityWork") { persistDurabilityWork(grade, item, snapshot) }
-
         val settings = settingsRepository.settings.first()
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
             candidates.firstOrNull()?.let { reading ->
@@ -326,6 +324,8 @@ class ReviewViewModel @Inject constructor(
                     ?.let(pronunciationAudioPlayer::play)
             }
         }
+
+        trace("gradeAnswer:persistDurabilityWork") { persistDurabilityWork(grade, item, snapshot) }
     }
 
     /** Reverts the most recent incorrect answer — for a typo, not a genuine miss. */

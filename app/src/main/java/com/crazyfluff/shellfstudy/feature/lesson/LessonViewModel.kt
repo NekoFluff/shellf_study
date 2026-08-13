@@ -455,8 +455,6 @@ class LessonViewModel @Inject constructor(
             )
         }
 
-        persistDurabilityWork(isNewlyStarted, item, snapshot)
-
         val settings = settingsRepository.settings.first()
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
             candidates.firstOrNull()?.let { reading ->
@@ -464,6 +462,8 @@ class LessonViewModel @Inject constructor(
                     ?.let(pronunciationAudioPlayer::play)
             }
         }
+
+        persistDurabilityWork(isNewlyStarted, item, snapshot)
     }
 
     /** Manual play from the study card's reading row — mirrors SubjectDetailViewModel.playReading. */
