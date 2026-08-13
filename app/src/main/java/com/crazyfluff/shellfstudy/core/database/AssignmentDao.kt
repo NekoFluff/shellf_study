@@ -16,7 +16,8 @@ data class LevelProgressItemRow(
     val characters: String?,
     val characterImageUrl: String?,
     val slug: String,
-    val passedAt: String?
+    val passedAt: String?,
+    val srsStage: Int
 )
 
 /** One kanji assignment's SRS stage at a given level — the level-up-progress source. */
@@ -54,7 +55,7 @@ interface AssignmentDao {
     /** Every started assignment's type, subject display text, and passed status at [level]. */
     @Query(
         """
-        SELECT a.subjectId as subjectId, a.subjectType as subjectType, s.characters as characters, s.characterImageUrl as characterImageUrl, s.slug as slug, a.passedAt as passedAt
+        SELECT a.subjectId as subjectId, a.subjectType as subjectType, s.characters as characters, s.characterImageUrl as characterImageUrl, s.slug as slug, a.passedAt as passedAt, a.srsStage as srsStage
         FROM assignments a
         JOIN subjects s ON s.id = a.subjectId
         WHERE s.level = :level AND a.hidden = 0 AND a.unlockedAt IS NOT NULL

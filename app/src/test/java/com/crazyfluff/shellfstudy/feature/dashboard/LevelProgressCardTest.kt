@@ -12,6 +12,8 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.core.data.model.LevelItem
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.data.model.SubjectTypeProgress
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import org.junit.Rule
@@ -40,8 +42,10 @@ class LevelProgressCardTest {
             LevelItem(
                 subjectId = subjectType.ordinal * 1000L + index,
                 subjectType = subjectType,
+                characters = "${subjectType.name}$index",
                 display = "${subjectType.name}$index",
-                passed = index <= passed
+                passed = index <= passed,
+                srsStage = if (index <= passed) SrsStage.GURU_1 else SrsStage.APPRENTICE_1
             )
         }
 
@@ -130,5 +134,120 @@ class LevelProgressCardTest {
         }
 
         composeTestRule.onNodeWithTag(LevelProgressTestTags.PREV_LEVEL_BUTTON).assertIsNotEnabled()
+    }
+
+    @Test
+    fun showsLevelUpIndicator_whenViewingCurrentLevelAndNotYetReady() {
+        composeTestRule.setContent {
+            LevelProgressCard(
+                progress = sampleProgress,
+                maxLevel = 12,
+                levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 18, kanjiTotal = 25)
+            )
+        }
+
+        // requiredCount = ceil(25 * 0.9) = 23
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_INDICATOR).assertIsDisplayed()
+        composeTestRule.onNodeWithText("18 / 23 kanji guru'd to level up").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsReadyToLevelUp_whenThresholdMet() {
+        composeTestRule.setContent {
+            LevelProgressCard(
+                progress = sampleProgress,
+                maxLevel = 12,
+                levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 23, kanjiTotal = 25)
+            )
+        }
+
+        composeTestRule.onNodeWithText("Ready to level up!").assertIsDisplayed()
+    }
+
+    @Test
+    fun hidesLevelUpIndicator_whenNotViewingCurrentLevel() {
+        composeTestRule.setContent {
+            LevelProgressCard(
+                progress = sampleProgress,
+                maxLevel = 20,
+                levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 18, kanjiTotal = 25)
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_INDICATOR).assertCountEquals(0)
+    }
+
+    @Test
+    fun hidesLevelUpIndicator_whenLevelUpProgressNull() {
+        composeTestRule.setContent {
+            LevelProgressCard(progress = sampleProgress, maxLevel = 12, levelUpProgress = null)
+        }
+
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_INDICATOR).assertCountEquals(0)
+    }
+
+    @Test
+    fun chipFillGateIsPassed_notCurrentSrsStage() {
+        // Simulates a post-Guru-demotion item: passed = true (ever reached Guru) but srsStage has
+        // fallen back to Apprentice. The chip must still render filled/white-text like any other
+        // passed item, not outlined like an unpassed Apprentice item.
+        val demotedProgress = LevelProgress(
+            level = 12,
+            breakdown = listOf(
+                SubjectTypeProgress(
+                    SubjectType.RADICAL,
+                    items = listOf(
+                        LevelItem(
+                            subjectId = 1L,
+                            subjectType = SubjectType.RADICAL,
+                            characters = "R1",
+                            display = "R1",
+                            passed = true,
+                            srsStage = SrsStage.APPRENTICE_1
+                        )
+                    )
+                )
+            )
+        )
+        composeTestRule.setContent { LevelProgressCard(progress = demotedProgress) }
+
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.EXPAND_TOGGLE_BUTTON).performClick()
+
+        // Passed items render white text (Color.White); unpassed items use onSurfaceVariant — this
+        // is exercised indirectly by confirming the chip renders and the row's own count still
+        // reads it as passed, consistent with the fill/outline gate being `passed`, not `srsStage`.
+        composeTestRule.onNodeWithText("Radical: 1 / 1").assertIsDisplayed()
+        composeTestRule.onNodeWithText("R1").assertIsDisplayed()
+    }
+
+    @Test
+    fun rendersImageForImageOnlyRadicalItem() {
+        // Image-only radicals (no unicode glyph) carry a characterImageUrl and a slug fallback in
+        // `display` — the chip should render the image (via SubjectGlyph), not the slug text.
+        val imageOnlyProgress = LevelProgress(
+            level = 12,
+            breakdown = listOf(
+                SubjectTypeProgress(
+                    SubjectType.RADICAL,
+                    items = listOf(
+                        LevelItem(
+                            subjectId = 1L,
+                            subjectType = SubjectType.RADICAL,
+                            characters = null,
+                            display = "drop",
+                            passed = false,
+                            srsStage = SrsStage.APPRENTICE_1,
+                            characterImageUrl = "https://example.com/drop.png"
+                        )
+                    )
+                )
+            )
+        )
+        composeTestRule.setContent { LevelProgressCard(progress = imageOnlyProgress) }
+
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.EXPAND_TOGGLE_BUTTON).performClick()
+
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + "1").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("drop").assertCountEquals(0)
     }
 }

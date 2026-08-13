@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data.model
 
 import com.crazyfluff.shellfstudy.core.network.SubjectType
+import kotlin.math.ceil
 
 data class WaniKaniUser(
     val username: String,
@@ -17,7 +18,14 @@ data class DashboardSummary(
 data class LevelUpProgress(
     val kanjiGuruedOrHigher: Int,
     val kanjiTotal: Int
-)
+) {
+    /** WaniKani's actual level-up threshold: 90% of the level's kanji, rounded up. */
+    val requiredCount: Int get() = ceil(kanjiTotal * 0.9).toInt()
+
+    /** [kanjiTotal] > 0 guard avoids the vacuous "0 >= requiredCount(0) == 0" reading as ready
+     *  during the no-data-yet default. */
+    val isLevelUpReady: Boolean get() = kanjiTotal > 0 && kanjiGuruedOrHigher >= requiredCount
+}
 
 data class ReviewItem(
     val assignmentId: Long,

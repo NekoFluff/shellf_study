@@ -100,7 +100,8 @@ class FakeAssignmentDao(
                     characters = subject?.characters,
                     characterImageUrl = subject?.characterImageUrl,
                     slug = subject?.slug.orEmpty(),
-                    passedAt = assignment.passedAt
+                    passedAt = assignment.passedAt,
+                    srsStage = assignment.srsStage
                 )
             }
     }

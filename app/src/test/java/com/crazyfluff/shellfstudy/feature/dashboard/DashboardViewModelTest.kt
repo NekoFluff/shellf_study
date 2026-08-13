@@ -483,10 +483,10 @@ class DashboardViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isRefreshing) state = awaitItem()
-            while (state.kanjiTotalForLevelUp == 0) state = awaitItem()
+            while ((state.levelUpProgress?.kanjiTotal ?: 0) == 0) state = awaitItem()
 
-            assertThat(state.kanjiTotalForLevelUp).isEqualTo(2)
-            assertThat(state.kanjiGuruedForLevelUp).isEqualTo(1)
+            assertThat(state.levelUpProgress?.kanjiTotal).isEqualTo(2)
+            assertThat(state.levelUpProgress?.kanjiGuruedOrHigher).isEqualTo(1)
             while (state.daysOnCurrentLevel == null) state = awaitItem()
             assertThat(state.daysOnCurrentLevel).isNotNull()
             cancelAndIgnoreRemainingEvents()
@@ -507,7 +507,7 @@ class DashboardViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.levelProgress?.level != 12) state = awaitItem()
-            assertThat(state.kanjiTotalForLevelUp).isEqualTo(2)
+            assertThat(state.levelUpProgress?.kanjiTotal).isEqualTo(2)
 
             viewModel.onLevelProgressLevelChange(5)
             while (state.levelProgress?.level != 5) state = awaitItem()
@@ -516,7 +516,7 @@ class DashboardViewModelTest {
             assertThat(kanjiAtLevel5.totalCount).isEqualTo(1)
             assertThat(kanjiAtLevel5.passedCount).isEqualTo(0)
             // Guru-for-levelup stats always track the level actually being studied, not the browsed one.
-            assertThat(state.kanjiTotalForLevelUp).isEqualTo(2)
+            assertThat(state.levelUpProgress?.kanjiTotal).isEqualTo(2)
             cancelAndIgnoreRemainingEvents()
         }
     }

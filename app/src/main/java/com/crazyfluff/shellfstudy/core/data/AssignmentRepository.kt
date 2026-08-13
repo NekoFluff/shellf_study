@@ -358,8 +358,10 @@ class AssignmentRepository @Inject constructor(
                     LevelItem(
                         subjectId = row.subjectId,
                         subjectType = type,
+                        characters = row.characters,
                         display = row.characters ?: row.slug,
                         passed = row.passedAt != null,
+                        srsStage = SrsStage.fromRaw(row.srsStage),
                         characterImageUrl = row.characterImageUrl
                     )
                 }

@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.network.MeaningData
@@ -291,6 +292,31 @@ class AssignmentRepositoryTest {
             val progress = awaitItem()
             assertThat(progress.kanjiTotal).isEqualTo(2)
             assertThat(progress.kanjiGuruedOrHigher).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `observeLevelProgress maps each item's current srsStage`() = runTest {
+        seedSubject(id = 1, level = 12, characters = "一", meaning = "One", reading = "いち")
+        seedSubject(id = 2, level = 12, characters = "二", meaning = "Two", reading = "に")
+        server.enqueue(
+            jsonResponse(
+                collectionJson(
+                    listOf(
+                        assignmentData(id = 201, subjectId = 1, srsStage = 5, unlockedAt = "2020-01-01T00:00:00.000000Z"),
+                        assignmentData(id = 202, subjectId = 2, srsStage = 2, unlockedAt = "2020-01-01T00:00:00.000000Z")
+                    )
+                )
+            )
+        )
+
+        repository.syncAssignments(force = true)
+
+        repository.observeLevelProgress(12).test {
+            val progress = awaitItem()
+            val kanji = progress.breakdown.first { it.subjectType == SubjectType.KANJI }
+            assertThat(kanji.items.first { it.subjectId == 1L }.srsStage).isEqualTo(SrsStage.GURU_1)
+            assertThat(kanji.items.first { it.subjectId == 2L }.srsStage).isEqualTo(SrsStage.APPRENTICE_2)
         }
     }
 

@@ -37,10 +37,15 @@ data class ItemSpread(
 data class LevelItem(
     val subjectId: Long,
     val subjectType: SubjectType,
-    /** Characters when the subject has a glyph, otherwise its slug (WaniKani's own fallback for image-only radicals). */
+    /** The subject's raw unicode glyph, if it has one. WaniKani can supply [characterImageUrl]
+     *  *alongside* a real glyph (not only for glyph-less radicals), so this must be checked before
+     *  [characterImageUrl] wherever both are rendered — matching [display]'s own priority. */
+    val characters: String?,
+    /** Characters when the subject has a glyph, otherwise its slug — the ultimate text fallback
+     *  when there's also no [characterImageUrl] to show. */
     val display: String,
     val passed: Boolean,
-    /** PNG image URL for radicals that have no unicode glyph — preferred over [display]'s slug fallback when present. */
+    val srsStage: SrsStage,
     val characterImageUrl: String? = null
 )
 

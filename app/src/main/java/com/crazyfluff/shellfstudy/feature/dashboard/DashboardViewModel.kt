@@ -18,6 +18,7 @@ import com.crazyfluff.shellfstudy.core.data.model.CompletionProjection
 import com.crazyfluff.shellfstudy.core.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.core.data.model.WaniKaniUser
 import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
@@ -59,8 +60,7 @@ data class DashboardUiState(
     val hasActiveLessonSession: Boolean = false,
     val lessonsCompletedToday: Int = 0,
     val dailyLessonGoal: Int = 15,
-    val kanjiGuruedForLevelUp: Int = 0,
-    val kanjiTotalForLevelUp: Int = 0,
+    val levelUpProgress: LevelUpProgress? = null,
     val daysOnCurrentLevel: Int? = null,
     val reviewForecast: ReviewForecast? = null,
     val levelProgress: LevelProgress? = null,
@@ -138,8 +138,7 @@ private data class ProgressStatsState(
  *  stay null indefinitely (e.g. the initial user/summary fetch fails with no cache to fall back
  *  on), and this must never block [DashboardViewModel.uiState] from emitting while that's true. */
 private data class LevelDependentState(
-    val kanjiGuruedForLevelUp: Int = 0,
-    val kanjiTotalForLevelUp: Int = 0,
+    val levelUpProgress: LevelUpProgress? = null,
     val levelProgress: LevelProgress? = null
 )
 
@@ -211,7 +210,7 @@ class DashboardViewModel @Inject constructor(
                 selectedProgressLevel.map { it ?: level }.distinctUntilChanged()
                     .flatMapLatest { pagedLevel -> assignmentRepository.observeLevelProgress(pagedLevel) }
             ) { levelUp, levelProgress ->
-                LevelDependentState(levelUp.kanjiGuruedOrHigher, levelUp.kanjiTotal, levelProgress)
+                LevelDependentState(levelUp, levelProgress)
             }
         }
     }
@@ -245,8 +244,7 @@ class DashboardViewModel @Inject constructor(
             reviewForecast = progress.reviewForecast,
             itemSpread = progress.itemSpread,
             completionProjection = progress.completionProjection,
-            kanjiGuruedForLevelUp = levelDependent.kanjiGuruedForLevelUp,
-            kanjiTotalForLevelUp = levelDependent.kanjiTotalForLevelUp,
+            levelUpProgress = levelDependent.levelUpProgress,
             levelProgress = levelDependent.levelProgress
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())

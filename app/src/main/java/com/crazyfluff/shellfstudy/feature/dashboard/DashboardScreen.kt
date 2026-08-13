@@ -58,9 +58,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
+import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
 import com.crazyfluff.shellfstudy.core.notifications.NotificationDeepLink
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
@@ -84,7 +84,6 @@ object DashboardScreenTestTags {
     const val OVERFLOW_MENU = "dashboard_overflow_menu"
     const val SETTINGS_BUTTON = "dashboard_settings_button"
     const val LESSONS_TODAY_PROGRESS = "dashboard_lessons_today_progress"
-    const val GURU_PROGRESS = "dashboard_guru_progress"
     const val ABANDON_REVIEW_MENU_ITEM = "dashboard_abandon_review_menu_item"
     const val ABANDON_LESSON_MENU_ITEM = "dashboard_abandon_lesson_menu_item"
     const val ABANDON_REVIEW_CONFIRM_BUTTON = "dashboard_abandon_review_confirm_button"
@@ -298,30 +297,6 @@ fun DashboardScreen(
                                 style = MaterialTheme.typography.bodyLarge
                             )
 
-                            if (uiState.kanjiTotalForLevelUp > 0) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                val guruProgress =
-                                    (uiState.kanjiGuruedForLevelUp.toFloat() / uiState.kanjiTotalForLevelUp)
-                                        .coerceIn(0f, 1f)
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag(DashboardScreenTestTags.GURU_PROGRESS)
-                                ) {
-                                    Text(
-                                        text = "${uiState.kanjiGuruedForLevelUp} / ${uiState.kanjiTotalForLevelUp} kanji guru'd",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    LinearProgressIndicator(
-                                        progress = { guruProgress },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = SrsStageColors.Guru,
-                                        drawStopIndicator = {}
-                                    )
-                                }
-                            }
-
                             Spacer(modifier = Modifier.height(24.dp))
 
                             Row(
@@ -376,6 +351,7 @@ fun DashboardScreen(
                                 LevelProgressCard(
                                     progress = uiState.levelProgress,
                                     maxLevel = uiState.level,
+                                    levelUpProgress = uiState.levelUpProgress,
                                     onLevelChange = onLevelProgressLevelChange,
                                     onSubjectClick = { detailSheetState.show(it) },
                                     modifier = Modifier.fillMaxWidth()
@@ -636,8 +612,7 @@ private fun DashboardScreenPreview() {
                 reviewCount = 23,
                 lessonsCompletedToday = 3,
                 dailyLessonGoal = 15,
-                kanjiGuruedForLevelUp = 18,
-                kanjiTotalForLevelUp = 25,
+                levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 18, kanjiTotal = 25),
                 daysOnCurrentLevel = 6
             ),
             onRefresh = {},
@@ -660,8 +635,7 @@ private fun DashboardScreenAllCaughtUpPreview() {
                 reviewCount = 0,
                 lessonsCompletedToday = 3,
                 dailyLessonGoal = 15,
-                kanjiGuruedForLevelUp = 18,
-                kanjiTotalForLevelUp = 25,
+                levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 18, kanjiTotal = 25),
                 daysOnCurrentLevel = 6
             ),
             onRefresh = {},

@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -16,8 +17,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -44,8 +47,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.core.data.model.LevelItem
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.data.model.SubjectTypeProgress
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.network.SubjectType
@@ -58,12 +65,14 @@ object LevelProgressTestTags {
     const val EXPAND_TOGGLE_BUTTON = "level_progress_expand_toggle_button"
     const val DETAIL_PREFIX = "level_progress_detail_"
     const val ITEM_CHIP_PREFIX = "level_progress_item_"
+    const val LEVEL_UP_INDICATOR = "level_progress_level_up_indicator"
 }
 
 @Composable
 fun LevelProgressCard(
     progress: LevelProgress?,
     maxLevel: Int? = null,
+    levelUpProgress: LevelUpProgress? = null,
     onLevelChange: (Int) -> Unit = {},
     onSubjectClick: (Long) -> Unit = {},
     modifier: Modifier = Modifier
@@ -109,7 +118,20 @@ fun LevelProgressCard(
             }
             Spacer(modifier = Modifier.height(8.dp))
             progress.breakdown.forEach { entry ->
-                SubjectTypeProgressRow(entry, showDetail = expanded, onSubjectClick = onSubjectClick)
+                // Only the Kanji row, and only while viewing the level the user is actually on
+                // (not a past/future level paged to via the arrows above), should claim "you're
+                // this close to leveling up" — level-up is a current-level-only concept.
+                val relevantLevelUpProgress = if (entry.subjectType == SubjectType.KANJI && progress.level == maxLevel) {
+                    levelUpProgress
+                } else {
+                    null
+                }
+                SubjectTypeProgressRow(
+                    entry,
+                    showDetail = expanded,
+                    onSubjectClick = onSubjectClick,
+                    levelUpProgress = relevantLevelUpProgress
+                )
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
@@ -117,7 +139,12 @@ fun LevelProgressCard(
 }
 
 @Composable
-private fun SubjectTypeProgressRow(entry: SubjectTypeProgress, showDetail: Boolean, onSubjectClick: (Long) -> Unit) {
+private fun SubjectTypeProgressRow(
+    entry: SubjectTypeProgress,
+    showDetail: Boolean,
+    onSubjectClick: (Long) -> Unit,
+    levelUpProgress: LevelUpProgress? = null
+) {
     val fraction = if (entry.totalCount > 0) (entry.passedCount.toFloat() / entry.totalCount).coerceIn(0f, 1f) else 0f
     Column(modifier = Modifier.testTag(LevelProgressTestTags.ROW_PREFIX + entry.subjectType.name)) {
         Text(
@@ -131,6 +158,28 @@ private fun SubjectTypeProgressRow(entry: SubjectTypeProgress, showDetail: Boole
             color = subjectColor(entry.subjectType),
             drawStopIndicator = {}
         )
+        if (levelUpProgress != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            // Deliberately worded differently from the passedCount line above ("guru'd to level
+            // up" vs. "passed") — the two numbers can genuinely diverge after an SRS demotion:
+            // passedCount counts an item as passed forever once it first reaches Guru, while this
+            // reflects its *current* stage, which is what WaniKani's level-up rule actually checks.
+            val levelUpText = if (levelUpProgress.isLevelUpReady) {
+                "Ready to level up!"
+            } else {
+                "${levelUpProgress.kanjiGuruedOrHigher} / ${levelUpProgress.requiredCount} kanji guru'd to level up"
+            }
+            Text(
+                text = levelUpText,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (levelUpProgress.isLevelUpReady) {
+                    srsStageColor(SrsStage.GURU_1)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.testTag(LevelProgressTestTags.LEVEL_UP_INDICATOR)
+            )
+        }
         AnimatedVisibility(
             visible = showDetail && entry.items.isNotEmpty(),
             enter = fadeIn() + expandVertically(),
@@ -150,7 +199,19 @@ private fun SubjectTypeProgressRow(entry: SubjectTypeProgress, showDetail: Boole
     }
 }
 
-/** One kanji/radical/vocab item, filled when passed and outlined when not — same idea as WaniKani's own item grids. */
+/** One kanji/radical/vocab item. Filled (subject-color background, white content) once passed,
+ *  outlined otherwise — same idea as WaniKani's own item grids. The fill/outline gate is
+ *  [LevelItem.passed] (ever reached Guru), matching [SubjectTypeProgress.passedCount] above it —
+ *  gating on live [LevelItem.srsStage] instead could show an item outlined here while the row
+ *  above still counts it as passed, after an SRS demotion. The accent stays [subjectColor] (not
+ *  [srsStageColor]) so a row full of items sharing a stage — radicals in particular, which usually
+ *  all reach Guru together — doesn't collapse into one indistinguishable color; a not-yet-passed
+ *  item's Apprentice sub-stage is instead called out with a small dot row under the glyph.
+ *
+ *  Content priority is [LevelItem.characters] first, then [LevelItem.characterImageUrl], then
+ *  [LevelItem.display]'s slug fallback — WaniKani can supply a decorative character_images SVG
+ *  *alongside* a real glyph, not only for glyph-less radicals, so characterImageUrl alone isn't a
+ *  reliable "no real character" signal. */
 @Composable
 private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
     val accent = subjectColor(item.subjectType)
@@ -161,19 +222,74 @@ private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
             .border(1.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
     }
-    Text(
-        text = item.display,
-        style = MaterialTheme.typography.titleMedium,
-        color = if (item.passed) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        modifier = Modifier
-            .defaultMinSize(minWidth = 48.dp)
-            .then(backgroundModifier)
-            .clickable { onClick(item.subjectId) }
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .testTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + item.subjectId)
-    )
+    val chipModifier = Modifier
+        .defaultMinSize(minWidth = 48.dp)
+        .then(backgroundModifier)
+        .clickable { onClick(item.subjectId) }
+        .testTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + item.subjectId)
+
+    Box(modifier = chipModifier) {
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .align(Alignment.Center),
+            contentAlignment = Alignment.Center
+        ) {
+            when {
+                item.characters != null -> Text(
+                    text = item.characters,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (item.passed) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+                item.characterImageUrl != null -> SubjectGlyph(
+                    characters = null,
+                    characterImageUrl = item.characterImageUrl,
+                    subjectType = item.subjectType,
+                    size = 28.dp
+                )
+                else -> Text(
+                    text = item.display,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (item.passed) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+        }
+
+        val subStageDots = apprenticeSubStageDots(item.srsStage)
+        if (!item.passed && subStageDots != null) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset(y = (-3).dp)
+            ) {
+                repeat(4) { index ->
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .background(
+                                color = if (index < subStageDots) accent else accent.copy(alpha = 0.25f),
+                                shape = CircleShape
+                            )
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Dot count (of 4) for an unpassed item's Apprentice sub-stage — null for Locked (nothing studied
+ *  yet to show progress on) and for Guru+ (always [LevelItem.passed], never reaches here). */
+private fun apprenticeSubStageDots(stage: SrsStage): Int? = when (stage) {
+    SrsStage.APPRENTICE_1 -> 1
+    SrsStage.APPRENTICE_2 -> 2
+    SrsStage.APPRENTICE_3 -> 3
+    SrsStage.APPRENTICE_4 -> 4
+    else -> null
 }
 
 @Preview(showBackground = true)
@@ -186,25 +302,62 @@ private fun LevelProgressCardPreview() {
                 breakdown = listOf(
                     SubjectTypeProgress(
                         subjectType = SubjectType.RADICAL,
-                        items = listOf("一", "二", "三", "口", "日").mapIndexed { index, characters ->
-                            LevelItem(subjectId = index.toLong(), subjectType = SubjectType.RADICAL, display = characters, passed = true)
-                        }
+                        items = listOf("一", "二", "三", "口").mapIndexed { index, characters ->
+                            LevelItem(
+                                subjectId = index.toLong(),
+                                subjectType = SubjectType.RADICAL,
+                                characters = characters,
+                                display = characters,
+                                passed = true,
+                                srsStage = SrsStage.GURU_1
+                            )
+                        } + LevelItem(
+                            // An image-only radical (no unicode glyph) — exercises the SubjectGlyph
+                            // fallback branch, distinct from the four text-glyph radicals above.
+                            subjectId = 4L,
+                            subjectType = SubjectType.RADICAL,
+                            characters = null,
+                            display = "leaf",
+                            passed = true,
+                            srsStage = SrsStage.GURU_1,
+                            characterImageUrl = "https://files.wanikani.com/example-leaf.svg"
+                        )
                     ),
                     SubjectTypeProgress(
                         subjectType = SubjectType.KANJI,
                         items = (1..25).map { index ->
-                            LevelItem(subjectId = 100L + index, subjectType = SubjectType.KANJI, display = "漢$index", passed = index <= 18)
+                            LevelItem(
+                                subjectId = 100L + index,
+                                subjectType = SubjectType.KANJI,
+                                characters = "漢$index",
+                                display = "漢$index",
+                                passed = index <= 18,
+                                srsStage = when {
+                                    index <= 18 -> SrsStage.GURU_1
+                                    index <= 22 -> SrsStage.APPRENTICE_4
+                                    index <= 24 -> SrsStage.APPRENTICE_2
+                                    else -> SrsStage.LOCKED
+                                }
+                            )
                         }
                     ),
                     SubjectTypeProgress(
                         subjectType = SubjectType.VOCABULARY,
                         items = (1..10).map { index ->
-                            LevelItem(subjectId = 1000L + index, subjectType = SubjectType.VOCABULARY, display = "語彙$index", passed = index <= 4)
+                            LevelItem(
+                                subjectId = 1000L + index,
+                                subjectType = SubjectType.VOCABULARY,
+                                characters = "語彙$index",
+                                display = "語彙$index",
+                                passed = index <= 4,
+                                srsStage = if (index <= 4) SrsStage.GURU_1 else SrsStage.APPRENTICE_1
+                            )
                         }
                     )
                 )
             ),
-            maxLevel = 12
+            maxLevel = 12,
+            levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 18, kanjiTotal = 25)
         )
     }
 }

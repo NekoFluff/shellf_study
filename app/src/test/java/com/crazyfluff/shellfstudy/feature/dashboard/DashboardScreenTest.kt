@@ -271,22 +271,6 @@ class DashboardScreenTest {
     }
 
     @Test
-    fun showsKanjiGuruProgress_whenLevelUpDataPresent() {
-        composeTestRule.setContent {
-            DashboardScreen(
-                uiState = DashboardUiState(
-                    isRefreshing = false, username = "x", level = 12,
-                    kanjiGuruedForLevelUp = 18, kanjiTotalForLevelUp = 25
-                ),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
-            )
-        }
-
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.GURU_PROGRESS).assertIsDisplayed()
-        composeTestRule.onNodeWithText("18 / 25 kanji guru'd").assertIsDisplayed()
-    }
-
-    @Test
     fun showsDaysOnLevel_inlineWithLevelText() {
         composeTestRule.setContent {
             DashboardScreen(
