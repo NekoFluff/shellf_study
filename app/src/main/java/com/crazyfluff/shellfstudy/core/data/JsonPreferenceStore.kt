@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.KSerializer
@@ -24,7 +25,13 @@ class JsonPreferenceStore<T>(
 ) {
     private val key = stringPreferencesKey(keyName)
 
-    val exists: Flow<Boolean> = dataStore.data.map { it[key] != null }
+    // dataStore is the single app-wide DataStore<Preferences> instance (see DataStoreModule),
+    // shared by every repository that persists key-value state — it re-emits on *every* write to
+    // that file regardless of which key changed, so without distinctUntilChanged() an unrelated
+    // write elsewhere (a settings change, an outbox enqueue) would spuriously re-trigger every
+    // collector of this flow. See SettingsRepository.settings for the fuller account of this,
+    // including the dropped-frames incident it caused there.
+    val exists: Flow<Boolean> = dataStore.data.map { it[key] != null }.distinctUntilChanged()
 
     suspend fun save(value: T) {
         dataStore.edit { prefs -> prefs[key] = json.encodeToString(serializer, value) }
