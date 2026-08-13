@@ -20,7 +20,9 @@ import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.time.Duration
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 class AssignmentRepositoryTest {
 
@@ -313,6 +315,28 @@ class AssignmentRepositoryTest {
             assertThat(spread.apprenticeCount).isEqualTo(1)
             assertThat(spread.burnedCount).isEqualTo(1)
             assertThat(spread.lockedCount).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `observeReviewForecast labels buckets by clock-hour boundary, not raw now-offset`() = runTest {
+        // Regression test: bucket labels used to be `now + N hours` (e.g. 2:47 + 1h = 3:47),
+        // reading almost an hour behind the actual on-the-hour availableAt they described. They
+        // must instead land on the real clock hour the assignment becomes due.
+        seedSubject(id = 1, characters = "一", meaning = "One", reading = "いち")
+        val nextHour = Instant.now().truncatedTo(ChronoUnit.HOURS).plus(Duration.ofHours(1))
+        server.enqueue(
+            jsonResponse(
+                collectionJson(listOf(assignmentData(id = 1, subjectId = 1, availableAt = nextHour.toString())))
+            )
+        )
+
+        repository.syncAssignments(force = true)
+
+        repository.observeReviewForecast().test {
+            val forecast = awaitItem()
+            val bucket = forecast.buckets.first { it.newlyAvailableCount == 1 }
+            assertThat(bucket.availableAt).isEqualTo(nextHour)
         }
     }
 

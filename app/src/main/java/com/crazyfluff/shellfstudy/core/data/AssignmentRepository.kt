@@ -39,6 +39,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -252,13 +253,18 @@ class AssignmentRepository @Inject constructor(
     fun observeReviewForecast(hours: Int = 24): Flow<ReviewForecast> {
         val now = Instant.now()
         val nowIso = now.toString()
+        // WaniKani assignments only ever become available on the hour, so buckets are aligned to
+        // clock-hour boundaries (not rolling 1h windows from `now`) — otherwise a bucket labeled
+        // e.g. "3 PM" would actually span 2:47-3:47, and the label would read an hour behind the
+        // reviews it describes.
+        val currentHourStart = now.truncatedTo(ChronoUnit.HOURS)
         return combine(
             assignmentDao.observeDueForReview(nowIso),
             assignmentDao.observeUpcoming(nowIso)
         ) { availableNow, upcoming ->
             val buckets = (1..hours).map { hourOffset ->
-                val bucketStart = now.plus(Duration.ofHours((hourOffset - 1).toLong()))
-                val bucketEnd = now.plus(Duration.ofHours(hourOffset.toLong()))
+                val bucketStart = currentHourStart.plus(Duration.ofHours(hourOffset.toLong()))
+                val bucketEnd = bucketStart.plus(Duration.ofHours(1))
                 val count = upcoming.count { assignment ->
                     val availableAt = assignment.availableAt?.let(Instant::parse) ?: return@count false
                     !availableAt.isBefore(bucketStart) && availableAt.isBefore(bucketEnd)
