@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +49,7 @@ import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.data.model.SubjectTypeProgress
+import com.crazyfluff.shellfstudy.core.designsystem.components.SegmentedBar
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor
@@ -66,6 +66,7 @@ object LevelProgressTestTags {
     const val DETAIL_PREFIX = "level_progress_detail_"
     const val ITEM_CHIP_PREFIX = "level_progress_item_"
     const val LEVEL_UP_INDICATOR = "level_progress_level_up_indicator"
+    const val LEVEL_UP_THRESHOLD_MARK = "level_progress_level_up_threshold_mark"
 }
 
 @Composable
@@ -145,38 +146,44 @@ private fun SubjectTypeProgressRow(
     onSubjectClick: (Long) -> Unit,
     levelUpProgress: LevelUpProgress? = null
 ) {
-    val fraction = if (entry.totalCount > 0) (entry.passedCount.toFloat() / entry.totalCount).coerceIn(0f, 1f) else 0f
+    val accent = subjectColor(entry.subjectType)
+    val doneCount = entry.items.count { it.srsStage.raw >= SrsStage.GURU_1.raw }
+    val inProgressCount = entry.items.count { it.srsStage != SrsStage.LOCKED && it.srsStage.raw < SrsStage.GURU_1.raw }
+    val lockedCount = entry.totalCount - doneCount - inProgressCount
+    // Threshold position is approximate: it mixes this row's own item count with a separately
+    // queried kanji total (see LevelUpProgress) that can differ slightly (e.g. it isn't filtered
+    // to only-unlocked items) — close enough for a quick-glance mark; "Ready to level up!" below
+    // is the exact, authoritative signal once the real requirement is actually met.
+    val thresholdFraction = levelUpProgress?.let {
+        if (entry.totalCount > 0) (it.requiredCount.toFloat() / entry.totalCount).coerceIn(0f, 1f) else null
+    }
+
     Column(modifier = Modifier.testTag(LevelProgressTestTags.ROW_PREFIX + entry.subjectType.name)) {
         Text(
             text = "${subjectTypeLabel(entry.subjectType)}: ${entry.passedCount} / ${entry.totalCount}",
             style = MaterialTheme.typography.bodySmall
         )
         Spacer(modifier = Modifier.height(4.dp))
-        LinearProgressIndicator(
-            progress = { fraction },
-            modifier = Modifier.fillMaxWidth(),
-            color = subjectColor(entry.subjectType),
-            drawStopIndicator = {}
-        )
-        if (levelUpProgress != null) {
-            Spacer(modifier = Modifier.height(4.dp))
-            // Deliberately worded differently from the passedCount line above ("guru'd to level
-            // up" vs. "passed") — the two numbers can genuinely diverge after an SRS demotion:
-            // passedCount counts an item as passed forever once it first reaches Guru, while this
-            // reflects its *current* stage, which is what WaniKani's level-up rule actually checks.
-            val levelUpText = if (levelUpProgress.isLevelUpReady) {
-                "Ready to level up!"
+        SegmentedBar(
+            segments = listOf(
+                accent to doneCount,
+                accent.copy(alpha = 0.4f) to inProgressCount,
+                MaterialTheme.colorScheme.surfaceVariant to lockedCount
+            ),
+            modifier = if (thresholdFraction != null) {
+                Modifier.testTag(LevelProgressTestTags.LEVEL_UP_THRESHOLD_MARK)
             } else {
-                "${levelUpProgress.kanjiGuruedOrHigher} / ${levelUpProgress.requiredCount} kanji guru'd to level up"
-            }
+                Modifier
+            },
+            height = 6.dp,
+            thresholdFraction = thresholdFraction
+        )
+        if (levelUpProgress?.isLevelUpReady == true) {
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = levelUpText,
+                text = "Ready to level up!",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (levelUpProgress.isLevelUpReady) {
-                    srsStageColor(SrsStage.GURU_1)
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                color = srsStageColor(SrsStage.GURU_1),
                 modifier = Modifier.testTag(LevelProgressTestTags.LEVEL_UP_INDICATOR)
             )
         }

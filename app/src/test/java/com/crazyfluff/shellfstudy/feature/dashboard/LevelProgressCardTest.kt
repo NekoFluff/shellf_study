@@ -137,7 +137,7 @@ class LevelProgressCardTest {
     }
 
     @Test
-    fun showsLevelUpIndicator_whenViewingCurrentLevelAndNotYetReady() {
+    fun showsThresholdMarkOnBar_whenViewingCurrentLevelAndNotYetReady() {
         composeTestRule.setContent {
             LevelProgressCard(
                 progress = sampleProgress,
@@ -146,9 +146,8 @@ class LevelProgressCardTest {
             )
         }
 
-        // requiredCount = ceil(25 * 0.9) = 23
-        composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_INDICATOR).assertIsDisplayed()
-        composeTestRule.onNodeWithText("18 / 23 kanji guru'd to level up").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_THRESHOLD_MARK).assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_INDICATOR).assertCountEquals(0)
     }
 
     @Test
@@ -161,11 +160,12 @@ class LevelProgressCardTest {
             )
         }
 
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_INDICATOR).assertIsDisplayed()
         composeTestRule.onNodeWithText("Ready to level up!").assertIsDisplayed()
     }
 
     @Test
-    fun hidesLevelUpIndicator_whenNotViewingCurrentLevel() {
+    fun hidesLevelUpSignals_whenNotViewingCurrentLevel() {
         composeTestRule.setContent {
             LevelProgressCard(
                 progress = sampleProgress,
@@ -175,15 +175,17 @@ class LevelProgressCardTest {
         }
 
         composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_INDICATOR).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_THRESHOLD_MARK).assertCountEquals(0)
     }
 
     @Test
-    fun hidesLevelUpIndicator_whenLevelUpProgressNull() {
+    fun hidesLevelUpSignals_whenLevelUpProgressNull() {
         composeTestRule.setContent {
             LevelProgressCard(progress = sampleProgress, maxLevel = 12, levelUpProgress = null)
         }
 
         composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_INDICATOR).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_THRESHOLD_MARK).assertCountEquals(0)
     }
 
     @Test

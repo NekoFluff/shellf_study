@@ -1,6 +1,5 @@
 package com.crazyfluff.shellfstudy.feature.dashboard
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,16 +18,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
+import com.crazyfluff.shellfstudy.core.designsystem.components.SegmentedBar
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
@@ -79,30 +76,13 @@ fun ItemSpreadCard(spread: ItemSpread?, modifier: Modifier = Modifier) {
     }
 }
 
-/** Draws [segments] (color to count) as contiguous proportional-width rectangles filling the
- *  DrawScope's bounds — shared by the overall stage bar and each row's subject-type mini-bar so
- *  the proportional-width math lives in exactly one place. */
-private fun DrawScope.drawProportionalSegments(segments: List<Pair<Color, Int>>) {
-    val total = segments.sumOf { it.second }.coerceAtLeast(1)
-    var xOffset = 0f
-    segments.forEach { (color, count) ->
-        val segmentWidth = size.width * (count.toFloat() / total)
-        drawRect(color = color, topLeft = Offset(xOffset, 0f), size = Size(segmentWidth, size.height))
-        xOffset += segmentWidth
-    }
-}
-
 @Composable
 private fun ItemSpreadBar(segments: List<SpreadSegment>) {
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(24.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .testTag(ItemSpreadTestTags.BAR)
-    ) {
-        drawProportionalSegments(segments.map { it.color to it.count })
-    }
+    SegmentedBar(
+        segments = segments.map { it.color to it.count },
+        modifier = Modifier.testTag(ItemSpreadTestTags.BAR),
+        height = 24.dp
+    )
 }
 
 /** A stage's composition by subject type (Radical/Kanji/Vocabulary), same visual language as
@@ -111,15 +91,11 @@ private fun ItemSpreadBar(segments: List<SpreadSegment>) {
 private fun TypeMiniBar(bucket: ItemSpreadBucket, countsByType: Map<SubjectType, Int>, modifier: Modifier = Modifier) {
     val typeSegments = listOf(SubjectType.RADICAL, SubjectType.KANJI, SubjectType.VOCABULARY)
         .map { type -> subjectColor(type) to (countsByType[type] ?: 0) }
-    Canvas(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(6.dp)
-            .clip(RoundedCornerShape(3.dp))
-            .testTag(ItemSpreadTestTags.typeBar(bucket))
-    ) {
-        drawProportionalSegments(typeSegments)
-    }
+    SegmentedBar(
+        segments = typeSegments,
+        modifier = modifier.testTag(ItemSpreadTestTags.typeBar(bucket)),
+        height = 6.dp
+    )
 }
 
 @Composable
