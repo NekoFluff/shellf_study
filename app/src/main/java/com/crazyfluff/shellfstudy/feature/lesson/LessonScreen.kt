@@ -27,6 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.selection.rememberSelectionState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -95,6 +96,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.VocabReadingRo
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.componentsLabel
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
+import com.crazyfluff.shellfstudy.core.designsystem.text.lookUpInAkebiContextMenu
 import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
@@ -894,7 +896,11 @@ private fun LessonReadingSection(
 private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionEyebrow("Context sentences")
-        SelectionContainer {
+        val contextSentenceSelectionState = rememberSelectionState()
+        SelectionContainer(
+            state = contextSentenceSelectionState,
+            modifier = Modifier.lookUpInAkebiContextMenu(contextSentenceSelectionState),
+        ) {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 sentences.forEach { sentence ->
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {

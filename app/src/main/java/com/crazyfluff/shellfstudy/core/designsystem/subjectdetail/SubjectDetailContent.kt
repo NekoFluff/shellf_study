@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.selection.rememberSelectionState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -31,6 +32,7 @@ import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.core.designsystem.text.lookUpInAkebiContextMenu
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSection
@@ -215,7 +217,11 @@ fun SubjectDetailContent(
                 SectionEyebrow("Context sentences")
                 // 20dp between example sentences (vs. 2dp between a sentence's own JP/EN pair) so
                 // each example reads as its own distinct card of information while scanning.
-                SelectionContainer {
+                val contextSentenceSelectionState = rememberSelectionState()
+                SelectionContainer(
+                    state = contextSentenceSelectionState,
+                    modifier = Modifier.lookUpInAkebiContextMenu(contextSentenceSelectionState),
+                ) {
                     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         detail.contextSentences.forEach { sentence ->
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
