@@ -6,7 +6,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
-data class SrsStageCount(val srsStage: Int, val count: Int)
+/** One SRS stage's assignment count for a single subject type — the item-spread type-breakdown source. */
+data class SrsStageTypeCount(val srsStage: Int, val subjectType: String, val count: Int)
 
 /** One assignment's type, subject display text, and passed status at a given level — the level-progress source. */
 data class LevelProgressItemRow(
@@ -46,9 +47,9 @@ interface AssignmentDao {
     @Query("SELECT * FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt > :nowIso ORDER BY availableAt ASC")
     fun observeUpcoming(nowIso: String): Flow<List<AssignmentEntity>>
 
-    /** SRS-stage distribution across every started assignment — the item-spread source. */
-    @Query("SELECT srsStage, COUNT(*) as count FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL GROUP BY srsStage")
-    fun observeSrsStageCounts(): Flow<List<SrsStageCount>>
+    /** SRS-stage distribution by subject type across every started assignment — the item-spread source. */
+    @Query("SELECT srsStage, subjectType, COUNT(*) as count FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL GROUP BY srsStage, subjectType")
+    fun observeSrsStageAndTypeCounts(): Flow<List<SrsStageTypeCount>>
 
     /** Every started assignment's type, subject display text, and passed status at [level]. */
     @Query(

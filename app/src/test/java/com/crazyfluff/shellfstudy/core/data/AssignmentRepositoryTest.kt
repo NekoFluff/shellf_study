@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.core.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
@@ -319,6 +320,42 @@ class AssignmentRepositoryTest {
     }
 
     @Test
+    fun `observeSrsItemSpread breaks each stage down by subject type, folding kana-vocabulary into vocabulary`() = runTest {
+        seedSubject(id = 1, characters = "1", meaning = "a", reading = "a", subjectType = "radical")
+        seedSubject(id = 2, characters = "2", meaning = "b", reading = "b", subjectType = "kanji")
+        seedSubject(id = 3, characters = "3", meaning = "c", reading = "c", subjectType = "vocabulary")
+        seedSubject(id = 4, characters = "4", meaning = "d", reading = "d", subjectType = "kana_vocabulary")
+        seedSubject(id = 5, characters = "5", meaning = "e", reading = "e", subjectType = "kanji") // never started -> locked
+        server.enqueue(
+            jsonResponse(
+                collectionJson(
+                    listOf(
+                        assignmentData(id = 1, subjectId = 1, subjectType = "radical", srsStage = 5, startedAt = "2020-01-01T00:00:00.000000Z"),
+                        assignmentData(id = 2, subjectId = 2, subjectType = "kanji", srsStage = 5, startedAt = "2020-01-01T00:00:00.000000Z"),
+                        assignmentData(id = 3, subjectId = 3, subjectType = "vocabulary", srsStage = 5, startedAt = "2020-01-01T00:00:00.000000Z"),
+                        assignmentData(id = 4, subjectId = 4, subjectType = "kana_vocabulary", srsStage = 5, startedAt = "2020-01-01T00:00:00.000000Z")
+                    )
+                )
+            )
+        )
+
+        repository.syncAssignments(force = true)
+
+        repository.observeSrsItemSpread().test {
+            val spread = awaitItem()
+            assertThat(spread.guruCount).isEqualTo(4)
+            val guruByType = spread.countsByType.getValue(ItemSpreadBucket.GURU)
+            assertThat(guruByType[SubjectType.RADICAL]).isEqualTo(1)
+            assertThat(guruByType[SubjectType.KANJI]).isEqualTo(1)
+            assertThat(guruByType[SubjectType.VOCABULARY]).isEqualTo(2)
+
+            assertThat(spread.lockedCount).isEqualTo(1)
+            val lockedByType = spread.countsByType.getValue(ItemSpreadBucket.LOCKED)
+            assertThat(lockedByType[SubjectType.KANJI]).isEqualTo(1)
+        }
+    }
+
+    @Test
     fun `observeReviewForecast labels buckets by clock-hour boundary, not raw now-offset`() = runTest {
         // Regression test: bucket labels used to be `now + N hours` (e.g. 2:47 + 1h = 3:47),
         // reading almost an hour behind the actual on-the-hour availableAt they described. They
@@ -376,6 +413,7 @@ class AssignmentRepositoryTest {
         meaning: String,
         reading: String,
         level: Int = 3,
+        subjectType: String = "kanji",
         meaningMnemonic: String? = null,
         readingMnemonic: String? = null
     ) {
@@ -383,7 +421,7 @@ class AssignmentRepositoryTest {
             listOf(
                 SubjectEntity(
                     id = id,
-                    subjectType = "kanji",
+                    subjectType = subjectType,
                     level = level,
                     slug = characters,
                     characters = characters,
@@ -401,6 +439,7 @@ class AssignmentRepositoryTest {
     private fun assignmentData(
         id: Long,
         subjectId: Long = 440,
+        subjectType: String = "kanji",
         srsStage: Int = 3,
         availableAt: String? = null,
         unlockedAt: String? = null,
@@ -414,7 +453,7 @@ class AssignmentRepositoryTest {
           "data": {
             "created_at": "2026-01-01T00:00:00.000000Z",
             "subject_id": $subjectId,
-            "subject_type": "kanji",
+            "subject_type": "$subjectType",
             "srs_stage": $srsStage
             ${availableAt?.let { ", \"available_at\": \"$it\"" } ?: ""}
             ${unlockedAt?.let { ", \"unlocked_at\": \"$it\"" } ?: ""}
@@ -431,7 +470,7 @@ class AssignmentRepositoryTest {
         availableAt: String? = null,
         unlockedAt: String? = null,
         startedAt: String? = null
-    ) = collectionJson(listOf(assignmentData(id, subjectId, srsStage, availableAt, unlockedAt, startedAt)))
+    ) = collectionJson(listOf(assignmentData(id = id, subjectId = subjectId, srsStage = srsStage, availableAt = availableAt, unlockedAt = unlockedAt, startedAt = startedAt)))
 
     private fun collectionJson(items: List<String>) = """
         {

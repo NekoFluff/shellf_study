@@ -4,9 +4,10 @@ import com.crazyfluff.shellfstudy.core.database.AssignmentDao
 import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.core.database.KanjiLevelUpRow
 import com.crazyfluff.shellfstudy.core.database.LevelProgressItemRow
-import com.crazyfluff.shellfstudy.core.database.SrsStageCount
+import com.crazyfluff.shellfstudy.core.database.SrsStageTypeCount
 import com.crazyfluff.shellfstudy.core.database.SubjectDao
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
+import com.crazyfluff.shellfstudy.core.database.SubjectTypeCount
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -31,6 +32,10 @@ class FakeSubjectDao : SubjectDao {
         subjects.map { map -> map.values.filter { it.searchTarget.contains(query, ignoreCase = true) }.take(200) }
 
     override fun observeTotalCount(): Flow<Int> = subjects.map { it.size }
+
+    override fun observeTotalCountsByType(): Flow<List<SubjectTypeCount>> = subjects.map { map ->
+        map.values.groupingBy { it.subjectType }.eachCount().map { (type, count) -> SubjectTypeCount(type, count) }
+    }
 
     override suspend fun getUnlockedVocabularyCharacters(): List<String> = subjects.value.values
         .filter { (it.subjectType == "vocabulary" || it.subjectType == "kana_vocabulary") && it.id in unlockedIds.value }
@@ -77,11 +82,11 @@ class FakeAssignmentDao(
         map.values.filter { !it.hidden && it.availableAt != null && it.availableAt > nowIso }
     }
 
-    override fun observeSrsStageCounts(): Flow<List<SrsStageCount>> = assignments.map { map ->
+    override fun observeSrsStageAndTypeCounts(): Flow<List<SrsStageTypeCount>> = assignments.map { map ->
         map.values.filter { !it.hidden && it.startedAt != null }
-            .groupingBy { it.srsStage }
+            .groupingBy { it.srsStage to it.subjectType }
             .eachCount()
-            .map { (stage, count) -> SrsStageCount(stage, count) }
+            .map { (key, count) -> SrsStageTypeCount(key.first, key.second, count) }
     }
 
     override fun observeLevelProgressItemRows(level: Int): Flow<List<LevelProgressItemRow>> = assignments.map { map ->

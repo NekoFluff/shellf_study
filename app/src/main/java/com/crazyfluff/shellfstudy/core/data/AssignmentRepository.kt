@@ -2,6 +2,8 @@ package com.crazyfluff.shellfstudy.core.data
 
 import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
+import com.crazyfluff.shellfstudy.core.data.model.ItemSpreadBucket
+import com.crazyfluff.shellfstudy.core.data.model.foldKana
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.LevelItem
 import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
@@ -48,11 +50,18 @@ import javax.inject.Singleton
 private const val RESOURCE_ASSIGNMENTS = "assignments"
 private val ASSIGNMENTS_STALENESS = Duration.ofHours(1)
 
-private val APPRENTICE_STAGES = listOf(SrsStage.APPRENTICE_1, SrsStage.APPRENTICE_2, SrsStage.APPRENTICE_3, SrsStage.APPRENTICE_4)
-private val GURU_STAGES = listOf(SrsStage.GURU_1, SrsStage.GURU_2)
-
 /** Guru or higher is what counts toward leveling up. */
 private val GURU_SRS_STAGE = SrsStage.GURU_1.raw
+
+/** Which item-spread bucket a stage's count rolls up into — mirrors [com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor]'s bucketing. */
+private fun bucketFor(stage: SrsStage): ItemSpreadBucket = when (stage) {
+    SrsStage.LOCKED -> ItemSpreadBucket.LOCKED
+    SrsStage.APPRENTICE_1, SrsStage.APPRENTICE_2, SrsStage.APPRENTICE_3, SrsStage.APPRENTICE_4 -> ItemSpreadBucket.APPRENTICE
+    SrsStage.GURU_1, SrsStage.GURU_2 -> ItemSpreadBucket.GURU
+    SrsStage.MASTER -> ItemSpreadBucket.MASTER
+    SrsStage.ENLIGHTENED -> ItemSpreadBucket.ENLIGHTENED
+    SrsStage.BURNED -> ItemSpreadBucket.BURNED
+}
 
 /** Owns the full assignment mirror — SRS progress for every subject the user has encountered. */
 @Singleton
@@ -309,21 +318,35 @@ class AssignmentRepository @Inject constructor(
     // foreground. This just guarantees that even while genuinely subscribed, the grouping/mapping
     // work below never runs on Dispatchers.Main.immediate.
     fun observeSrsItemSpread(): Flow<ItemSpread> =
-        combine(assignmentDao.observeSrsStageCounts(), subjectDao.observeTotalCount()) { stageCounts, totalSubjects ->
-            val byStage = stageCounts.associate { SrsStage.fromRaw(it.srsStage) to it.count }
-            val apprentice = APPRENTICE_STAGES.sumOf { byStage[it] ?: 0 }
-            val guru = GURU_STAGES.sumOf { byStage[it] ?: 0 }
-            val master = byStage[SrsStage.MASTER] ?: 0
-            val enlightened = byStage[SrsStage.ENLIGHTENED] ?: 0
-            val burned = byStage[SrsStage.BURNED] ?: 0
-            val started = apprentice + guru + master + enlightened + burned
+        combine(assignmentDao.observeSrsStageAndTypeCounts(), subjectDao.observeTotalCountsByType()) { stageTypeCounts, totalsByType ->
+            val countsByBucket = mutableMapOf<ItemSpreadBucket, MutableMap<SubjectType, Int>>()
+            stageTypeCounts.forEach { row ->
+                val bucket = bucketFor(SrsStage.fromRaw(row.srsStage))
+                val type = SubjectType.fromWkString(row.subjectType).foldKana()
+                val byType = countsByBucket.getOrPut(bucket) { mutableMapOf() }
+                byType[type] = (byType[type] ?: 0) + row.count
+            }
+
+            val startedByType = mutableMapOf<SubjectType, Int>()
+            countsByBucket.values.forEach { byType ->
+                byType.forEach { (type, count) -> startedByType[type] = (startedByType[type] ?: 0) + count }
+            }
+            val totalByType = totalsByType
+                .groupBy { SubjectType.fromWkString(it.subjectType).foldKana() }
+                .mapValues { (_, rows) -> rows.sumOf { it.count } }
+            countsByBucket[ItemSpreadBucket.LOCKED] = totalByType
+                .mapValuesTo(mutableMapOf()) { (type, total) -> (total - (startedByType[type] ?: 0)).coerceAtLeast(0) }
+
+            fun bucketTotal(bucket: ItemSpreadBucket) = countsByBucket[bucket]?.values?.sum() ?: 0
+
             ItemSpread(
-                lockedCount = (totalSubjects - started).coerceAtLeast(0),
-                apprenticeCount = apprentice,
-                guruCount = guru,
-                masterCount = master,
-                enlightenedCount = enlightened,
-                burnedCount = burned
+                lockedCount = bucketTotal(ItemSpreadBucket.LOCKED),
+                apprenticeCount = bucketTotal(ItemSpreadBucket.APPRENTICE),
+                guruCount = bucketTotal(ItemSpreadBucket.GURU),
+                masterCount = bucketTotal(ItemSpreadBucket.MASTER),
+                enlightenedCount = bucketTotal(ItemSpreadBucket.ENLIGHTENED),
+                burnedCount = bucketTotal(ItemSpreadBucket.BURNED),
+                countsByType = countsByBucket.mapValues { it.value.toMap() }
             )
         }.flowOn(Dispatchers.Default)
 

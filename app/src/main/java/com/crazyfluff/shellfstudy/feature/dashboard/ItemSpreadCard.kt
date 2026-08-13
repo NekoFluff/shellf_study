@@ -22,22 +22,26 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
-import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
+import com.crazyfluff.shellfstudy.core.data.model.ItemSpreadBucket
+import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
-import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
+import com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor
+import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
+import com.crazyfluff.shellfstudy.core.network.SubjectType
 
 object ItemSpreadTestTags {
     const val CARD = "item_spread_card"
     const val BAR = "item_spread_bar"
     const val EMPTY_STATE = "item_spread_empty_state"
+    fun typeBar(bucket: ItemSpreadBucket) = "item_spread_type_bar_${bucket.name.lowercase()}"
 }
 
-private data class SpreadSegment(val label: String, val count: Int, val color: Color)
+private data class SpreadSegment(val bucket: ItemSpreadBucket, val label: String, val count: Int, val color: Color)
 
 @Composable
 fun ItemSpreadCard(spread: ItemSpread?, modifier: Modifier = Modifier) {
@@ -47,12 +51,12 @@ fun ItemSpreadCard(spread: ItemSpread?, modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.height(8.dp))
 
             val segments = listOf(
-                SpreadSegment("Locked", spread?.lockedCount ?: 0, themeAwareColor(SrsStageColors.Locked, EinkStageColors.Locked)),
-                SpreadSegment("Apprentice", spread?.apprenticeCount ?: 0, themeAwareColor(SrsStageColors.Apprentice, EinkStageColors.Apprentice)),
-                SpreadSegment("Guru", spread?.guruCount ?: 0, themeAwareColor(SrsStageColors.Guru, EinkStageColors.Guru)),
-                SpreadSegment("Master", spread?.masterCount ?: 0, themeAwareColor(SrsStageColors.Master, EinkStageColors.Master)),
-                SpreadSegment("Enlightened", spread?.enlightenedCount ?: 0, themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)),
-                SpreadSegment("Burned", spread?.burnedCount ?: 0, themeAwareColor(SrsStageColors.Burned, EinkStageColors.Burned))
+                SpreadSegment(ItemSpreadBucket.LOCKED, "Locked", spread?.lockedCount ?: 0, srsStageColor(SrsStage.LOCKED)),
+                SpreadSegment(ItemSpreadBucket.APPRENTICE, "Apprentice", spread?.apprenticeCount ?: 0, srsStageColor(SrsStage.APPRENTICE_1)),
+                SpreadSegment(ItemSpreadBucket.GURU, "Guru", spread?.guruCount ?: 0, srsStageColor(SrsStage.GURU_1)),
+                SpreadSegment(ItemSpreadBucket.MASTER, "Master", spread?.masterCount ?: 0, srsStageColor(SrsStage.MASTER)),
+                SpreadSegment(ItemSpreadBucket.ENLIGHTENED, "Enlightened", spread?.enlightenedCount ?: 0, srsStageColor(SrsStage.ENLIGHTENED)),
+                SpreadSegment(ItemSpreadBucket.BURNED, "Burned", spread?.burnedCount ?: 0, srsStageColor(SrsStage.BURNED))
             )
 
             ItemSpreadBar(segments)
@@ -66,17 +70,30 @@ fun ItemSpreadCard(spread: ItemSpread?, modifier: Modifier = Modifier) {
                     modifier = Modifier.testTag(ItemSpreadTestTags.EMPTY_STATE)
                 )
             } else {
+                val total = spread?.totalCount ?: 0
                 segments.filter { it.count > 0 }.forEach { segment ->
-                    StatRow(segment)
+                    StatRow(segment, total = total, countsByType = spread?.countsByType?.get(segment.bucket).orEmpty())
                 }
             }
         }
     }
 }
 
+/** Draws [segments] (color to count) as contiguous proportional-width rectangles filling the
+ *  DrawScope's bounds — shared by the overall stage bar and each row's subject-type mini-bar so
+ *  the proportional-width math lives in exactly one place. */
+private fun DrawScope.drawProportionalSegments(segments: List<Pair<Color, Int>>) {
+    val total = segments.sumOf { it.second }.coerceAtLeast(1)
+    var xOffset = 0f
+    segments.forEach { (color, count) ->
+        val segmentWidth = size.width * (count.toFloat() / total)
+        drawRect(color = color, topLeft = Offset(xOffset, 0f), size = Size(segmentWidth, size.height))
+        xOffset += segmentWidth
+    }
+}
+
 @Composable
 private fun ItemSpreadBar(segments: List<SpreadSegment>) {
-    val total = segments.sumOf { it.count }.coerceAtLeast(1)
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
@@ -84,21 +101,44 @@ private fun ItemSpreadBar(segments: List<SpreadSegment>) {
             .clip(RoundedCornerShape(12.dp))
             .testTag(ItemSpreadTestTags.BAR)
     ) {
-        var xOffset = 0f
-        segments.forEach { segment ->
-            val segmentWidth = size.width * (segment.count.toFloat() / total)
-            drawRect(color = segment.color, topLeft = Offset(xOffset, 0f), size = Size(segmentWidth, size.height))
-            xOffset += segmentWidth
-        }
+        drawProportionalSegments(segments.map { it.color to it.count })
+    }
+}
+
+/** A stage's composition by subject type (Radical/Kanji/Vocabulary), same visual language as
+ *  [ItemSpreadBar] but thinner, sitting under that stage's legend row. */
+@Composable
+private fun TypeMiniBar(bucket: ItemSpreadBucket, countsByType: Map<SubjectType, Int>, modifier: Modifier = Modifier) {
+    val typeSegments = listOf(SubjectType.RADICAL, SubjectType.KANJI, SubjectType.VOCABULARY)
+        .map { type -> subjectColor(type) to (countsByType[type] ?: 0) }
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .testTag(ItemSpreadTestTags.typeBar(bucket))
+    ) {
+        drawProportionalSegments(typeSegments)
     }
 }
 
 @Composable
-private fun StatRow(segment: SpreadSegment) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-        Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(segment.color))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = "${segment.label}: ${segment.count}", style = MaterialTheme.typography.bodySmall)
+private fun StatRow(segment: SpreadSegment, total: Int, countsByType: Map<SubjectType, Int>) {
+    val percent = if (total > 0) segment.count * 100 / total else 0
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(segment.color))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = "${segment.label}: ${segment.count} ($percent%)", style = MaterialTheme.typography.bodySmall)
+        }
+        if (segment.count > 0) {
+            Spacer(modifier = Modifier.height(2.dp))
+            TypeMiniBar(
+                bucket = segment.bucket,
+                countsByType = countsByType,
+                modifier = Modifier.padding(start = 18.dp)
+            )
+        }
     }
 }
 
@@ -113,7 +153,15 @@ private fun ItemSpreadCardPreview() {
                 guruCount = 120,
                 masterCount = 40,
                 enlightenedCount = 30,
-                burnedCount = 200
+                burnedCount = 200,
+                countsByType = mapOf(
+                    ItemSpreadBucket.LOCKED to mapOf(SubjectType.RADICAL to 50, SubjectType.KANJI to 200, SubjectType.VOCABULARY to 250),
+                    ItemSpreadBucket.APPRENTICE to mapOf(SubjectType.RADICAL to 10, SubjectType.KANJI to 30, SubjectType.VOCABULARY to 40),
+                    ItemSpreadBucket.GURU to mapOf(SubjectType.RADICAL to 20, SubjectType.KANJI to 40, SubjectType.VOCABULARY to 60),
+                    ItemSpreadBucket.MASTER to mapOf(SubjectType.RADICAL to 5, SubjectType.KANJI to 15, SubjectType.VOCABULARY to 20),
+                    ItemSpreadBucket.ENLIGHTENED to mapOf(SubjectType.RADICAL to 5, SubjectType.KANJI to 10, SubjectType.VOCABULARY to 15),
+                    ItemSpreadBucket.BURNED to mapOf(SubjectType.RADICAL to 40, SubjectType.KANJI to 70, SubjectType.VOCABULARY to 90)
+                )
             )
         )
     }

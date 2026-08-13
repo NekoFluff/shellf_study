@@ -16,13 +16,20 @@ data class ReviewForecast(
     val availableNowCountsByType: Map<SubjectType, Int> = emptyMap()
 )
 
+enum class ItemSpreadBucket { LOCKED, APPRENTICE, GURU, MASTER, ENLIGHTENED, BURNED }
+
+/** [SubjectType.KANA_VOCABULARY] shares [SubjectType.VOCABULARY]'s color/segment wherever subject
+ *  types are broken out in a chart, so its count folds into vocabulary's at those call sites. */
+fun SubjectType.foldKana(): SubjectType = if (this == SubjectType.KANA_VOCABULARY) SubjectType.VOCABULARY else this
+
 data class ItemSpread(
     val lockedCount: Int,
     val apprenticeCount: Int,
     val guruCount: Int,
     val masterCount: Int,
     val enlightenedCount: Int,
-    val burnedCount: Int
+    val burnedCount: Int,
+    val countsByType: Map<ItemSpreadBucket, Map<SubjectType, Int>> = emptyMap()
 ) {
     val totalCount: Int get() = lockedCount + apprenticeCount + guruCount + masterCount + enlightenedCount + burnedCount
 }

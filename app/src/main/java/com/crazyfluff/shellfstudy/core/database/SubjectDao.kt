@@ -6,6 +6,9 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
+/** One subject type's total subject count — the item-spread "locked" type-breakdown source. */
+data class SubjectTypeCount(val subjectType: String, val count: Int)
+
 @Dao
 interface SubjectDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -25,6 +28,9 @@ interface SubjectDao {
 
     @Query("SELECT COUNT(*) FROM subjects")
     fun observeTotalCount(): Flow<Int>
+
+    @Query("SELECT subjectType, COUNT(*) as count FROM subjects GROUP BY subjectType")
+    fun observeTotalCountsByType(): Flow<List<SubjectTypeCount>>
 
     /** Vocab characters for subjects the user has actually unlocked — keeps the background pitch-accent scrape from fetching data for locked/future-level vocab. */
     @Query(
