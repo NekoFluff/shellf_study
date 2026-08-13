@@ -6,13 +6,10 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,7 +32,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -62,7 +57,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
@@ -74,6 +68,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemRow
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemsCard
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionOverviewCard
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionSlowestAnswersCard
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
@@ -634,29 +634,39 @@ private fun SessionCompleteContent(
         if (uiState.sessionItemsReviewed > 0) {
             Spacer(modifier = Modifier.height(24.dp))
             SessionOverviewCard(
-                itemsReviewed = uiState.sessionItemsReviewed,
+                itemsLabel = "Items reviewed",
+                itemsCount = uiState.sessionItemsReviewed,
                 correctFirstTry = uiState.sessionItemsCorrectFirstTry,
+                cardTestTag = ReviewScreenTestTags.SESSION_OVERVIEW_CARD,
+                itemsTextTestTag = ReviewScreenTestTags.ITEMS_REVIEWED_TEXT,
+                correctFirstTryTextTestTag = ReviewScreenTestTags.CORRECT_FIRST_TRY_TEXT,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(12.dp))
             SessionTimingCard(
                 totalElapsedMs = uiState.sessionTotalElapsedMs,
                 averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
+                averageLabel = "Avg. time per item reviewed",
+                cardTestTag = ReviewScreenTestTags.SESSION_TIMING_CARD,
+                totalTimeTestTag = ReviewScreenTestTags.SESSION_TOTAL_TIME_TEXT,
+                averageTimeTestTag = ReviewScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
                 modifier = Modifier.fillMaxWidth()
             )
             if (uiState.sessionSlowestAnswers.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 SessionSlowestAnswersCard(
-                    answers = uiState.sessionSlowestAnswers,
+                    answers = uiState.sessionSlowestAnswers.map { it.toRow() },
                     onSubjectClick = onSubjectClick,
+                    cardTestTag = ReviewScreenTestTags.SESSION_SLOWEST_CARD,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
             if (uiState.sessionMissedItems.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 SessionMissedItemsCard(
-                    items = uiState.sessionMissedItems,
+                    items = uiState.sessionMissedItems.map { it.toMissedItemRow() },
                     onSubjectClick = onSubjectClick,
+                    cardTestTag = ReviewScreenTestTags.SESSION_MISSED_CARD,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -671,140 +681,20 @@ private fun SessionCompleteContent(
     }
 }
 
-@Composable
-private fun SessionOverviewCard(itemsReviewed: Int, correctFirstTry: Int, modifier: Modifier = Modifier) {
-    val accuracyPercent = if (itemsReviewed == 0) 0 else correctFirstTry * 100 / itemsReviewed
-    Card(modifier = modifier.testTag(ReviewScreenTestTags.SESSION_OVERVIEW_CARD)) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(64.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    progress = { accuracyPercent / 100f },
-                    modifier = Modifier.size(64.dp),
-                    strokeWidth = 6.dp,
-                    color = themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened),
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-                Text("$accuracyPercent%", style = MaterialTheme.typography.titleMedium)
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(
-                    text = "Items reviewed: $itemsReviewed",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.testTag(ReviewScreenTestTags.ITEMS_REVIEWED_TEXT)
-                )
-                Text(
-                    text = "Correct on first try: $correctFirstTry of $itemsReviewed ($accuracyPercent%)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(ReviewScreenTestTags.CORRECT_FIRST_TRY_TEXT)
-                )
-            }
-        }
-    }
-}
+private fun SlowAnswer.toRow(): SessionAnswerRow = SessionAnswerRow(
+    label = item.characters ?: item.meanings.firstOrNull() ?: "?",
+    typeLabel = type.label,
+    elapsedMs = elapsedMs,
+    isCorrect = isCorrect,
+    subjectId = item.subjectId,
+    subjectType = item.subjectType
+)
 
-@Composable
-private fun SessionTimingCard(totalElapsedMs: Long, averageTimePerItemMs: Long, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.testTag(ReviewScreenTestTags.SESSION_TIMING_CARD)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Timing", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Total time: ${formatDuration(totalElapsedMs)}",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.testTag(ReviewScreenTestTags.SESSION_TOTAL_TIME_TEXT)
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Avg. time per item reviewed: ${formatDuration(averageTimePerItemMs)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag(ReviewScreenTestTags.SESSION_AVERAGE_TIME_TEXT)
-            )
-        }
-    }
-}
-
-@Composable
-private fun SessionSlowestAnswersCard(answers: List<SlowAnswer>, onSubjectClick: (Long) -> Unit, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.testTag(ReviewScreenTestTags.SESSION_SLOWEST_CARD)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Slowest answers", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            answers.forEach { answer ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clickable { onSubjectClick(answer.item.subjectId) }
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(subjectColor(answer.item.subjectType))
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "${answer.item.characters ?: answer.item.meanings.firstOrNull() ?: "?"} " +
-                            "(${answer.type.label}) — ${formatDuration(answer.elapsedMs)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(
-                        imageVector = if (answer.isCorrect) Icons.Default.Check else Icons.Default.Close,
-                        contentDescription = if (answer.isCorrect) "Correct" else "Incorrect",
-                        tint = if (answer.isCorrect) {
-                            themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)
-                        } else {
-                            MaterialTheme.colorScheme.error
-                        },
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SessionMissedItemsCard(items: List<ReviewItem>, onSubjectClick: (Long) -> Unit, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.testTag(ReviewScreenTestTags.SESSION_MISSED_CARD)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Missed items", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items.forEach { item ->
-                    val color = subjectColor(item.subjectType)
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onSubjectClick(item.subjectId) }
-                            .background(color.copy(alpha = 0.12f))
-                            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = item.characters ?: item.meanings.firstOrNull() ?: "?",
-                            color = color,
-                            style = MaterialTheme.typography.headlineSmall
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun formatDuration(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return if (minutes > 0) "%d:%02d".format(minutes, seconds) else "${seconds}s"
-}
-
+private fun ReviewItem.toMissedItemRow(): SessionMissedItemRow = SessionMissedItemRow(
+    label = characters ?: meanings.firstOrNull() ?: "?",
+    subjectId = subjectId,
+    subjectType = subjectType
+)
 
 private fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
     QuestionType.MEANING -> DetailQuestionType.MEANING

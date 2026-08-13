@@ -473,6 +473,98 @@ class LessonScreenTest {
     }
 
     @Test
+    fun sessionComplete_showsOverviewCardWithCounts() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsLearned = 5, sessionItemsCorrectFirstTry = 3
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SESSION_OVERVIEW_CARD).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Items learned: 5").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Correct on first try: 3 of 5 (60%)").assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionComplete_hidesCardsWhenNothingWasLearned() {
+        setScreen(LessonUiState(isLoading = false, isSessionComplete = true, sessionItemsLearned = 0))
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.SESSION_OVERVIEW_CARD).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.SESSION_TIMING_CARD).assertCountEquals(0)
+    }
+
+    @Test
+    fun sessionComplete_showsTimingCard() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsLearned = 3, sessionItemsCorrectFirstTry = 3,
+                sessionTotalElapsedMs = 125_000L, sessionAverageTimePerItemMs = 4_500L
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SESSION_TIMING_CARD).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Total time: 2:05").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Avg. time per item learned: 4s").assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionComplete_showsSlowestAnswersCard_whenPresent() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsLearned = 1, sessionItemsCorrectFirstTry = 1,
+                sessionSlowestAnswers = listOf(
+                    LessonSlowAnswer(radicalItem, QuestionType.MEANING, 12_000L, isCorrect = true)
+                )
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SESSION_SLOWEST_CARD).assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionComplete_hidesSlowestAnswersCard_whenEmpty() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsLearned = 1, sessionItemsCorrectFirstTry = 1,
+                sessionSlowestAnswers = emptyList()
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.SESSION_SLOWEST_CARD).assertCountEquals(0)
+    }
+
+    @Test
+    fun sessionComplete_showsMissedItemsCard_whenPresent() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsLearned = 2, sessionItemsCorrectFirstTry = 1,
+                sessionMissedItems = listOf(radicalItem)
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SESSION_MISSED_CARD).assertIsDisplayed()
+        composeTestRule.onNodeWithText("口").assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionComplete_hidesMissedItemsCard_whenEmpty() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, isSessionComplete = true,
+                sessionItemsLearned = 1, sessionItemsCorrectFirstTry = 1,
+                sessionMissedItems = emptyList()
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.SESSION_MISSED_CARD).assertCountEquals(0)
+    }
+
+    @Test
     fun errorState_showsErrorTextAndRetry() {
         var retried = false
         setScreen(

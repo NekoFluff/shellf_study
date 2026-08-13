@@ -31,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Remove
@@ -76,6 +77,12 @@ import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemRow
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemsCard
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionOverviewCard
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionSlowestAnswersCard
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
@@ -87,10 +94,12 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.VocabReadingRo
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.componentsLabel
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
+import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
+import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
@@ -134,6 +143,14 @@ object LessonScreenTestTags {
     const val QUIZ_SUBJECT_TYPE_LABEL = "lesson_quiz_subject_type_label"
     const val CONTINUE_BUTTON = "lesson_continue_button"
     const val SESSION_COMPLETE = "lesson_session_complete"
+    const val SESSION_OVERVIEW_CARD = "lesson_session_overview_card"
+    const val ITEMS_LEARNED_TEXT = "lesson_items_learned_text"
+    const val CORRECT_FIRST_TRY_TEXT = "lesson_correct_first_try_text"
+    const val SESSION_TIMING_CARD = "lesson_session_timing_card"
+    const val SESSION_TOTAL_TIME_TEXT = "lesson_session_total_time_text"
+    const val SESSION_AVERAGE_TIME_TEXT = "lesson_session_average_time_text"
+    const val SESSION_SLOWEST_CARD = "lesson_session_slowest_card"
+    const val SESSION_MISSED_CARD = "lesson_session_missed_card"
     const val DONE_BUTTON = "lesson_done_button"
 }
 
@@ -276,20 +293,11 @@ fun LessonScreen(
                 }
 
                 uiState.isSessionComplete -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize().testTag(LessonScreenTestTags.SESSION_COMPLETE),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Lesson complete!", style = MaterialTheme.typography.headlineMedium)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Great work. These items will start showing up in your reviews.")
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(
-                            onClick = onDone,
-                            modifier = Modifier.testTag(LessonScreenTestTags.DONE_BUTTON)
-                        ) { Text("Back to dashboard") }
-                    }
+                    SessionCompleteContent(
+                        uiState = uiState,
+                        onDone = onDone,
+                        onSubjectClick = { detailSheetState.show(it) }
+                    )
                 }
 
                 uiState.phase == LessonPhase.SELECT -> {
@@ -328,6 +336,108 @@ fun LessonScreen(
 
     SubjectDetailSheetHost(detailSheetState)
     }
+}
+
+@Composable
+private fun SessionCompleteContent(
+    uiState: LessonUiState,
+    onDone: () -> Unit,
+    onSubjectClick: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(LessonScreenTestTags.SESSION_COMPLETE)
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Filled.Celebration,
+                contentDescription = null,
+                tint = themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Lesson complete!", style = MaterialTheme.typography.headlineMedium)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Great work. These items will start showing up in your reviews.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (uiState.sessionItemsLearned > 0) {
+            Spacer(modifier = Modifier.height(24.dp))
+            SessionOverviewCard(
+                itemsLabel = "Items learned",
+                itemsCount = uiState.sessionItemsLearned,
+                correctFirstTry = uiState.sessionItemsCorrectFirstTry,
+                cardTestTag = LessonScreenTestTags.SESSION_OVERVIEW_CARD,
+                itemsTextTestTag = LessonScreenTestTags.ITEMS_LEARNED_TEXT,
+                correctFirstTryTextTestTag = LessonScreenTestTags.CORRECT_FIRST_TRY_TEXT,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            SessionTimingCard(
+                totalElapsedMs = uiState.sessionTotalElapsedMs,
+                averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
+                averageLabel = "Avg. time per item learned",
+                cardTestTag = LessonScreenTestTags.SESSION_TIMING_CARD,
+                totalTimeTestTag = LessonScreenTestTags.SESSION_TOTAL_TIME_TEXT,
+                averageTimeTestTag = LessonScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (uiState.sessionSlowestAnswers.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                SessionSlowestAnswersCard(
+                    answers = uiState.sessionSlowestAnswers.map { it.toRow() },
+                    onSubjectClick = onSubjectClick,
+                    cardTestTag = LessonScreenTestTags.SESSION_SLOWEST_CARD,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (uiState.sessionMissedItems.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                SessionMissedItemsCard(
+                    items = uiState.sessionMissedItems.map { it.toMissedItemRow() },
+                    onSubjectClick = onSubjectClick,
+                    cardTestTag = LessonScreenTestTags.SESSION_MISSED_CARD,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onDone,
+            modifier = Modifier.testTag(LessonScreenTestTags.DONE_BUTTON)
+        ) { Text("Back to dashboard") }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+private fun LessonSlowAnswer.toRow(): SessionAnswerRow = SessionAnswerRow(
+    label = item.characters ?: item.meanings.firstOrNull() ?: "?",
+    typeLabel = type.label,
+    elapsedMs = elapsedMs,
+    isCorrect = isCorrect,
+    subjectId = item.subjectId,
+    subjectType = item.subjectType
+)
+
+private fun LessonItem.toMissedItemRow(): SessionMissedItemRow = SessionMissedItemRow(
+    label = characters ?: meanings.firstOrNull() ?: "?",
+    subjectId = subjectId,
+    subjectType = subjectType
+)
+
+private val QuestionType.label: String get() = when (this) {
+    QuestionType.MEANING -> "meaning"
+    QuestionType.READING -> "reading"
 }
 
 @Composable
@@ -951,6 +1061,45 @@ private fun LessonScreenStudyPreview() {
                     )
                 ),
                 studyIndex = 0
+            ),
+            onEvent = {}
+        )
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
+@Composable
+private fun LessonScreenSessionCompletePreview() {
+    val water = LessonItem(
+        assignmentId = 1, subjectId = 1, subjectType = SubjectType.KANJI, characters = "水",
+        level = 3, meanings = listOf("Water"), readings = listOf("みず"),
+        meaningMnemonic = "This kanji looks like a stream of water.", readingMnemonic = "Sounds like 'me-zoo'."
+    )
+    val fire = LessonItem(
+        assignmentId = 2, subjectId = 2, subjectType = SubjectType.KANJI, characters = "火",
+        level = 3, meanings = listOf("Fire"), readings = listOf("ひ"),
+        meaningMnemonic = "Looks like flames.", readingMnemonic = "Sounds like 'he'."
+    )
+    val tree = LessonItem(
+        assignmentId = 3, subjectId = 3, subjectType = SubjectType.RADICAL, characters = "木",
+        level = 1, meanings = listOf("Tree"), readings = emptyList(),
+        meaningMnemonic = "Looks like a tree.", readingMnemonic = null
+    )
+    ShellfStudyTheme {
+        LessonScreen(
+            uiState = LessonUiState(
+                isLoading = false,
+                isSessionComplete = true,
+                sessionItemsLearned = 5,
+                sessionItemsCorrectFirstTry = 3,
+                sessionTotalElapsedMs = 128_000L,
+                sessionAverageTimePerItemMs = 25_600L,
+                sessionSlowestAnswers = listOf(
+                    LessonSlowAnswer(fire, QuestionType.READING, 15_200L, isCorrect = true),
+                    LessonSlowAnswer(water, QuestionType.MEANING, 11_400L, isCorrect = false),
+                    LessonSlowAnswer(tree, QuestionType.MEANING, 6_800L, isCorrect = true)
+                ),
+                sessionMissedItems = listOf(water, fire)
             ),
             onEvent = {}
         )

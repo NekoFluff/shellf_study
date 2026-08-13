@@ -507,6 +507,144 @@ class LessonViewModelTest {
         assertThat(lessonSessionRepository.load()).isNull()
     }
 
+    @Test
+    fun `session summary reports items learned, correct-first-try, missed items, and timing`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            // Miss the only question first, then answer it correctly — a "correct on first try"
+            // count of zero and one missed item is the expected result.
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            val missedState = awaitItem()
+            assertThat(missedState.feedback?.isCorrect).isFalse()
+
+            viewModel.onContinue()
+            awaitItem() // requeued question shown again
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+
+            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat(finalState.sessionItemsLearned).isEqualTo(1)
+            assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(0)
+            assertThat(finalState.sessionMissedItems).hasSize(1)
+            assertThat(finalState.sessionMissedItems.first().characters).isEqualTo("口")
+            assertThat(finalState.sessionSlowestAnswers).isNotEmpty()
+            assertThat(finalState.sessionSlowestAnswers.size).isAtMost(5)
+            assertThat(finalState.sessionTotalElapsedMs).isAtLeast(0L)
+            assertThat(finalState.sessionAverageTimePerItemMs).isAtLeast(0L)
+        }
+    }
+
+    @Test
+    fun `session summary reports full correct-first-try count when nothing was missed`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // studyIndex 1
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            var isComplete = false
+            var safetyCounter = 0
+            while (!isComplete && safetyCounter < 10) {
+                safetyCounter++
+                val item = state.currentQuizItem!!
+                viewModel.onAnswerInputChange(item.meanings.first())
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+                isComplete = state.isSessionComplete
+            }
+
+            assertThat(state.isSessionComplete).isTrue()
+            assertThat(state.sessionItemsLearned).isEqualTo(2)
+            assertThat(state.sessionItemsCorrectFirstTry).isEqualTo(2)
+            assertThat(state.sessionMissedItems).isEmpty()
+        }
+    }
+
+    @Test
+    fun `resuming a persisted session preserves progress for the eventual session summary`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            firstViewModel.startSelectedLessons()
+            awaitItem()
+            firstViewModel.nextStudyCard()
+            awaitItem()
+            firstViewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            // Miss the first-drawn question once, then move on — its incorrect-attempt flag should
+            // survive into the persisted snapshot even though the item isn't done yet.
+            firstViewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            firstViewModel.submitAnswer()
+            awaitItem()
+            firstViewModel.onContinue()
+            awaitItem()
+        }
+
+        // Simulate leaving and coming back mid-quiz: a fresh ViewModel sharing the same repositories
+        // must resume with the missed-once item still counted as missed in the session summary,
+        // not silently forget it happened.
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            var isComplete = false
+            var safetyCounter = 0
+            while (!isComplete && safetyCounter < 10) {
+                safetyCounter++
+                val item = state.currentQuizItem!!
+                secondViewModel.onAnswerInputChange(item.meanings.first())
+                awaitItem()
+                secondViewModel.submitAnswer()
+                awaitItem()
+                secondViewModel.onContinue()
+                state = awaitItem()
+                isComplete = state.isSessionComplete
+            }
+
+            assertThat(state.isSessionComplete).isTrue()
+            assertThat(state.sessionItemsLearned).isEqualTo(2)
+            assertThat(state.sessionMissedItems).hasSize(1)
+        }
+    }
+
     private fun radicalAssignmentsJson() = """
         {
           "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,

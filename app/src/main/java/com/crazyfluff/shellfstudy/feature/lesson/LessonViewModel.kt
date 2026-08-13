@@ -8,6 +8,7 @@ import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
+import com.crazyfluff.shellfstudy.core.data.PersistedLessonItemProgress
 import com.crazyfluff.shellfstudy.core.data.PersistedLessonQuestion
 import com.crazyfluff.shellfstudy.core.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
@@ -66,8 +67,25 @@ data class LessonUiState(
     val showSubjectTypeLabel: Boolean = false,
     val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
     val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
-    val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
+    val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap(),
+    val sessionItemsLearned: Int = 0,
+    val sessionItemsCorrectFirstTry: Int = 0,
+    val sessionMissedItems: List<LessonItem> = emptyList(),
+    val sessionTotalElapsedMs: Long = 0L,
+    val sessionAverageTimePerItemMs: Long = 0L,
+    val sessionSlowestAnswers: List<LessonSlowAnswer> = emptyList()
 )
+
+data class LessonSlowAnswer(val item: LessonItem, val type: QuestionType, val elapsedMs: Long, val isCorrect: Boolean)
+
+private class LessonItemProgress(val item: LessonItem) {
+    var meaningDone = false
+    var readingDone = false
+    var hadIncorrectMeaning = false
+    var hadIncorrectReading = false
+}
+
+private data class LessonAnsweredQuestionRecord(val item: LessonItem, val type: QuestionType, val isCorrect: Boolean, val elapsedMs: Long)
 
 @HiltViewModel
 class LessonViewModel @Inject constructor(
@@ -89,6 +107,13 @@ class LessonViewModel @Inject constructor(
     private var totalQuizCount = 0
 
     private val gradingGuard = QuizGradingGuard(viewModelScope)
+
+    private val progressByAssignmentId = mutableMapOf<Long, LessonItemProgress>()
+    private val answeredQuestions = mutableListOf<LessonAnsweredQuestionRecord>()
+    // In-memory only, matching ReviewViewModel's equivalent tracking — a process death mid-session
+    // simply restarts the clock on resume rather than resuming the original elapsed time.
+    private var sessionStartTimeMs: Long = 0L
+    private var questionShownAtMs: Long = 0L
 
     init {
         loadOrResume()
@@ -146,8 +171,25 @@ class LessonViewModel @Inject constructor(
             }
         )
         startedAssignmentIds.clear()
+        progressByAssignmentId.clear()
+        persisted.progress.forEach { p ->
+            val item = itemsById[p.assignmentId] ?: return@forEach
+            progressByAssignmentId[p.assignmentId] = LessonItemProgress(item).apply {
+                meaningDone = p.meaningDone
+                readingDone = p.readingDone
+                hadIncorrectMeaning = p.hadIncorrectMeaning
+                hadIncorrectReading = p.hadIncorrectReading
+            }
+        }
+        answeredQuestions.clear()
+        sessionStartTimeMs = System.currentTimeMillis()
+        questionShownAtMs = System.currentTimeMillis()
         totalQuizCount = persisted.totalQuizCount
         val next = quizQueue.current
+        // A persisted queue is only ever written mid-quiz (see advanceQuiz's completion branch,
+        // which clears it), so next == null here is an unreachable edge case in practice — handled
+        // defensively anyway, mirroring ReviewViewModel.resumeFromPersisted's equivalent.
+        val summary = if (next == null) sessionSummary() else null
         _uiState.update {
             it.copy(
                 isLoading = false,
@@ -156,7 +198,13 @@ class LessonViewModel @Inject constructor(
                 remainingQuizCount = quizQueue.size,
                 currentQuizItem = next?.item,
                 currentQuestionType = next?.type,
-                isSessionComplete = next == null
+                isSessionComplete = next == null,
+                sessionItemsLearned = summary?.itemsLearned ?: it.sessionItemsLearned,
+                sessionItemsCorrectFirstTry = summary?.correctFirstTry ?: it.sessionItemsCorrectFirstTry,
+                sessionMissedItems = summary?.missedItems ?: it.sessionMissedItems,
+                sessionTotalElapsedMs = summary?.totalElapsedMs ?: it.sessionTotalElapsedMs,
+                sessionAverageTimePerItemMs = summary?.averageTimePerItemMs ?: it.sessionAverageTimePerItemMs,
+                sessionSlowestAnswers = summary?.slowestAnswers ?: it.sessionSlowestAnswers
             )
         }
     }
@@ -299,6 +347,13 @@ class LessonViewModel @Inject constructor(
     private suspend fun beginQuiz(items: List<LessonItem>) {
         quizQueue.build(items, typesFor = { item -> questionTypesFor(item.subjectType) })
         totalQuizCount = quizQueue.size
+
+        progressByAssignmentId.clear()
+        items.forEach { item -> progressByAssignmentId[item.assignmentId] = LessonItemProgress(item) }
+        answeredQuestions.clear()
+        sessionStartTimeMs = System.currentTimeMillis()
+        questionShownAtMs = sessionStartTimeMs
+
         val next = quizQueue.current
         _uiState.update {
             it.copy(
@@ -358,11 +413,22 @@ class LessonViewModel @Inject constructor(
         candidates: List<String>,
         wasCloseMatch: Boolean = false
     ) {
+        val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { LessonItemProgress(item) }
+        answeredQuestions.add(LessonAnsweredQuestionRecord(item, type, isCorrect, System.currentTimeMillis() - questionShownAtMs))
+
         quizQueue.removeCurrent()
         val justCompletedItem = if (!isCorrect) {
+            when (type) {
+                QuestionType.MEANING -> itemProgress.hadIncorrectMeaning = true
+                QuestionType.READING -> itemProgress.hadIncorrectReading = true
+            }
             quizQueue.requeue(PendingQuestion(item, type))
             false
         } else {
+            when (type) {
+                QuestionType.MEANING -> itemProgress.meaningDone = true
+                QuestionType.READING -> itemProgress.readingDone = true
+            }
             // No more pending questions for this item — it's been answered correctly on every
             // question type it has, so the lesson for it is done.
             quizQueue.noneMatches { it.item.assignmentId == item.assignmentId }
@@ -394,6 +460,9 @@ class LessonViewModel @Inject constructor(
      *  afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). */
     private fun currentPersistSnapshot(): PersistedLessonSession = PersistedLessonSession(
         quizQueue = quizQueue.toList().map { PersistedLessonQuestion(it.item.assignmentId, it.type.name) },
+        progress = progressByAssignmentId.map { (id, p) ->
+            PersistedLessonItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
+        },
         totalQuizCount = totalQuizCount
     )
 
@@ -421,15 +490,59 @@ class LessonViewModel @Inject constructor(
         viewModelScope.launch { advanceQuiz() }
     }
 
+    private data class LessonSessionSummary(
+        val itemsLearned: Int,
+        val correctFirstTry: Int,
+        val missedItems: List<LessonItem>,
+        val totalElapsedMs: Long,
+        val averageTimePerItemMs: Long,
+        val slowestAnswers: List<LessonSlowAnswer>
+    )
+
+    /** Items learned, how many were correct without ever missing, which were missed at least once,
+     *  and timing — mirrors ReviewViewModel.sessionSummary(). "Missed" here means at least one wrong
+     *  attempt during the quiz, not a real SRS miss — every lesson item is requeued until correct. */
+    private fun sessionSummary(): LessonSessionSummary {
+        val itemsLearned = progressByAssignmentId.size
+        val correctFirstTry = progressByAssignmentId.values.count { !it.hadIncorrectMeaning && !it.hadIncorrectReading }
+        val missedItems = progressByAssignmentId.values
+            .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
+            .map { it.item }
+        val totalElapsedMs = System.currentTimeMillis() - sessionStartTimeMs
+        val averageTimePerItemMs = if (itemsLearned == 0) 0L else totalElapsedMs / itemsLearned
+        val slowestAnswers = answeredQuestions.sortedByDescending { it.elapsedMs }.take(5)
+            .map { LessonSlowAnswer(it.item, it.type, it.elapsedMs, it.isCorrect) }
+        return LessonSessionSummary(
+            itemsLearned = itemsLearned,
+            correctFirstTry = correctFirstTry,
+            missedItems = missedItems,
+            totalElapsedMs = totalElapsedMs,
+            averageTimePerItemMs = averageTimePerItemMs,
+            slowestAnswers = slowestAnswers
+        )
+    }
+
     private suspend fun advanceQuiz() {
         val next = quizQueue.current
         if (next == null) {
             applicationScope.runDurably { lessonSessionRepository.clear() }
+            val summary = sessionSummary()
             _uiState.update {
-                it.copy(isSessionComplete = true, currentQuizItem = null, currentQuestionType = null)
+                it.copy(
+                    isSessionComplete = true,
+                    currentQuizItem = null,
+                    currentQuestionType = null,
+                    sessionItemsLearned = summary.itemsLearned,
+                    sessionItemsCorrectFirstTry = summary.correctFirstTry,
+                    sessionMissedItems = summary.missedItems,
+                    sessionTotalElapsedMs = summary.totalElapsedMs,
+                    sessionAverageTimePerItemMs = summary.averageTimePerItemMs,
+                    sessionSlowestAnswers = summary.slowestAnswers
+                )
             }
             return
         }
+        questionShownAtMs = System.currentTimeMillis()
         _uiState.update {
             it.copy(
                 currentQuizItem = next.item,

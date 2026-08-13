@@ -12,8 +12,18 @@ import javax.inject.Singleton
 data class PersistedLessonQuestion(val assignmentId: Long, val questionType: String)
 
 @Serializable
+data class PersistedLessonItemProgress(
+    val assignmentId: Long,
+    val meaningDone: Boolean,
+    val readingDone: Boolean,
+    val hadIncorrectMeaning: Boolean,
+    val hadIncorrectReading: Boolean
+)
+
+@Serializable
 data class PersistedLessonSession(
     val quizQueue: List<PersistedLessonQuestion>,
+    val progress: List<PersistedLessonItemProgress> = emptyList(),
     val totalQuizCount: Int
 )
 
