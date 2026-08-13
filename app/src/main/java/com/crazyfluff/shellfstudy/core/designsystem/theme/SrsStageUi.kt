@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.core.designsystem.theme
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,10 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,9 +42,14 @@ fun srsStageColor(stage: SrsStage): Color = when (stage) {
 fun RankChangeChip(rankChange: RankChange, modifier: Modifier = Modifier) {
     val fromColor = srsStageColor(rankChange.from)
     val toColor = srsStageColor(rankChange.to)
-    var targetColor by remember(rankChange) { mutableStateOf(fromColor) }
-    LaunchedEffect(rankChange) { targetColor = toColor }
-    val animatedColor by animateColorAsState(targetValue = targetColor, animationSpec = tween(500), label = "rankChangeColor")
+    // Animatable directly, rather than animateColorAsState — that composable is itself a
+    // remember{Animatable}+LaunchedEffect wrapper, so driving a separate mutableStateOf just to
+    // hand it a "target" would be animating through a proxy for no benefit. animateTo also lets
+    // this start immediately from fromColor without the extra recomposition animateColorAsState
+    // needs to notice its targetValue changed.
+    val color = remember(rankChange) { Animatable(fromColor) }
+    LaunchedEffect(rankChange) { color.animateTo(toColor, tween(durationMillis = 500)) }
+    val animatedColor = color.value
 
     Row(
         verticalAlignment = Alignment.CenterVertically,

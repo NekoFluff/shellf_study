@@ -1,8 +1,6 @@
 package com.crazyfluff.shellfstudy.feature.review
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -342,37 +340,32 @@ fun ReviewScreen(
     }
 
         // Only shown once there's actually something to toggle — pre-answer it'd just be a dimmed,
-        // non-interactive bar taking up space and inviting a swipe that does nothing. Stays composed
-        // (collapsed to just the handle) for as long as feedback is showing, not only while expanded,
-        // so the same AnchoredDraggableState-driven handle is always there to grab — see
-        // SubjectDetailSheet for why this single drag state is what makes the swipe feel connected to
-        // the sheet opening, rather than a drag on a separate handle merely toggling a boolean that a
-        // different, independently-animating sheet then reacts to.
-        val detailItem = uiState.currentItem
-        val detailQuestionType = uiState.currentQuestionType
-        AnimatedVisibility(
-            visible = !isSearchActive && uiState.feedback != null && detailItem != null && detailQuestionType != null,
-            // No fade here (was fadeIn()/fadeOut(), Compose's ~300ms default) — this mounts a
-            // near-full-screen Surface (SubjectDetailSheet's shell, offset off-screen so only its
-            // handle peeks out) at the exact same instant feedback is set, i.e. the same frame the
-            // rank-change badge starts its own entrance animation. That's a second animation plus a
-            // heavy first-time layout competing for the same frame budget, which is what visibly
-            // dropped frames on the badge. The sheet's own drag-driven open/close animation (see
-            // SubjectDetailSheet) is the one that actually matters here; this outer shell can just
-            // pop in instantly, the same way the "Correct!"/"Incorrect" text next to it does.
-            enter = EnterTransition.None,
-            exit = ExitTransition.None,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            if (detailItem != null && detailQuestionType != null) {
+        // non-interactive bar taking up space and inviting a swipe that does nothing (and, since
+        // isAnswered is hardcoded true below, one that would leak the fully-revealed answer to a
+        // question not yet submitted). Kept mounted permanently once the first question of the
+        // session loads — `active` gates visibility/interactivity, not composition — so its
+        // AnchoredDraggableState/Surface (SubjectDetailSheet's shell) only ever pays first-mount cost
+        // once per session instead of once per question, the same off-screen-mount treatment
+        // SubjectDetailSheetHost uses. The subjectId/questionType are remembered past the point a
+        // new question clears uiState.currentItem/currentQuestionType, so the now-invisible sheet
+        // still has a valid (if stale) subject to sit on between questions.
+        var lastDetailSubjectId by remember { mutableStateOf<Long?>(null) }
+        var lastDetailQuestionType by remember { mutableStateOf<QuestionType?>(null) }
+        uiState.currentItem?.let { lastDetailSubjectId = it.subjectId }
+        uiState.currentQuestionType?.let { lastDetailQuestionType = it }
+
+        lastDetailSubjectId?.let { subjectId ->
+            lastDetailQuestionType?.let { questionType ->
                 SubjectDetailSheet(
-                    subjectId = detailItem.subjectId,
+                    subjectId = subjectId,
+                    active = !isSearchActive && uiState.feedback != null,
                     expanded = uiState.isDetailsExpanded,
                     onToggle = onToggleDetails,
                     revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
                     isAnswered = true,
-                    questionType = detailQuestionType.toDetailQuestionType(),
-                    handleTestTag = ReviewScreenTestTags.DETAILS_TOGGLE
+                    questionType = questionType.toDetailQuestionType(),
+                    handleTestTag = ReviewScreenTestTags.DETAILS_TOGGLE,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }

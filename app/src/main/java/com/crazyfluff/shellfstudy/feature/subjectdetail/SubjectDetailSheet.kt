@@ -118,6 +118,14 @@ private enum class SheetAnchor { Collapsed, Open }
  * time and tears it down the moment it collapses, so there's no peek bar left to rest at — `true`
  * collapses all the way past the bottom of the screen, so the close animation reads as the whole
  * sheet sliding away rather than shrinking down to a bar that then vanishes.
+ *
+ * [active] lets a caller keep this composable mounted (so its [dragState] and other `remember`ed
+ * state survive) for stretches where nothing should actually be visible or interactable — Review's
+ * mid-quiz sheet must not show even a bare "Swipe up for details" handle before the current question
+ * has been answered (that handle would itself be a spoiler-adjacent affordance, and its content is
+ * shown fully revealed with no gating once opened). Renders nothing at all while `false`, but every
+ * `remember`/`LaunchedEffect` above stays alive, so flipping back to `true` on the next question is a
+ * cheap recomposition rather than a fresh mount.
  */
 @Composable
 fun SubjectDetailSheet(
@@ -129,7 +137,8 @@ fun SubjectDetailSheet(
     questionType: DetailQuestionType?,
     modifier: Modifier = Modifier,
     handleTestTag: String = SubjectDetailTestTags.PEEK_HANDLE,
-    dismissesFully: Boolean = false
+    dismissesFully: Boolean = false,
+    active: Boolean = true
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -208,6 +217,8 @@ fun SubjectDetailSheet(
     // compete with this sheet's own open animation for frame budget; settledValue is the precise
     // "has it stopped moving" signal for that, same reasoning as isOpenIsh above.
     val strokeOrderSettled = dragState.settledValue == SheetAnchor.Open
+
+    if (!active) return
 
     Box(modifier = modifier.fillMaxSize().testTag(SubjectDetailTestTags.SHEET_ROOT)) {
         // Dims the rest of the screen only while meaningfully open — never while merely peeking, so
