@@ -10,7 +10,7 @@ import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.svg.SvgDecoder
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
-import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
+import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SvgCssVariableInterceptor
 import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.notifications.NotificationChannels

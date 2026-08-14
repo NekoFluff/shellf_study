@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.core.data
 
 import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheDao
 import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheEntity
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi

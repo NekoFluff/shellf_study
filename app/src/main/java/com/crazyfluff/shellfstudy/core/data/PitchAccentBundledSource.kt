@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.core.data
 
 import android.content.Context
 import com.crazyfluff.shellfstudy.R
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.Json
@@ -14,11 +15,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Looks up bundled/pre-scraped pitch-accent entries for a vocabulary word, keyed by its characters. */
-interface PitchAccentBundledSource {
-    fun get(characters: String): List<PitchAccent>
-}
-
 /**
  * Reads the bundled pitch-accent dictionary (res/raw/pitch_info.json, compiled offline by the
  * Smouldering Durtles project from a weblio.jp scrape + a third-party userscript dataset) into an
@@ -26,7 +22,9 @@ interface PitchAccentBundledSource {
  * `[reading|null, partOfSpeech|null, pitchNumber]`, so this is parsed via the raw [JsonElement] API
  * rather than a typed list — there's no clean data-class shape for a tuple. A separate interface
  * (rather than a concrete class) so unit tests can supply a no-resource-needed fake instead of
- * exercising `Resources.openRawResource`, which needs a real Android [Context] to run.
+ * exercising `Resources.openRawResource`, which needs a real Android [Context] to run. The
+ * [PitchAccentBundledSource] interface itself lives in :shared; only this Context-based
+ * implementation stays Android-only until an NSBundle-backed iOS actual is written.
  */
 @Singleton
 class AndroidPitchAccentBundledSource @Inject constructor(

@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.core.data.strokeorder
 
 import android.content.Context
 import com.crazyfluff.shellfstudy.R
+import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -11,20 +12,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
-
-/**
- * Looks up a character's stroke-order data: an ordered list of [StrokeOrderStroke], one per
- * stroke. Returns null if the character has none (e.g. most WaniKani radicals, which have no
- * real Unicode glyph, or any character outside KanjiVG's set).
- */
-interface StrokeOrderRepository {
-    suspend fun getStrokeOrder(character: Char): List<StrokeOrderStroke>?
-
-    /** Parses and caches the bundled dictionary ahead of the first real lookup, so opening a
-     *  subject detail sheet doesn't pay for it inline. Safe to call repeatedly — subsequent calls
-     *  are no-ops once cached. */
-    suspend fun preload()
-}
 
 /**
  * Reads the bundled stroke-order dictionary (res/raw/stroke_data.json, compiled offline by
@@ -43,7 +30,9 @@ interface StrokeOrderRepository {
  * Interface + impl split (rather than a plain class like SubjectRepository) mirrors TokenCipher
  * and PitchAccentBundledSource, since the real implementation needs a real Android [Context] to
  * read resources, which isn't available on the plain host JVM used by ViewModel/repository unit
- * tests — those inject a hand-written fake instead.
+ * tests — those inject a hand-written fake instead. The [StrokeOrderRepository] interface itself
+ * lives in :shared since callers on the (future) iOS target need it too; only this Context-based
+ * implementation stays Android-only until an NSBundle-backed iOS actual is written.
  */
 @Singleton
 class AndroidStrokeOrderRepository @Inject constructor(

@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.core.data.strokeorder
 
+import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
