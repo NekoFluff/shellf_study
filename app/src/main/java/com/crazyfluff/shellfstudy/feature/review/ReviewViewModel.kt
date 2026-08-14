@@ -100,9 +100,11 @@ class ReviewViewModel @Inject constructor(
 
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
+    // Individual per-answer records (used for the "slowest answers" summary) stay in-memory only —
+    // a resume starts this list fresh, so that card only reflects answers given since the most
+    // recent resume. sessionStartTimeMs, by contrast, is restored from persisted state on resume
+    // (see resumeFromPersisted) so the total/average time summaries stay accurate across a resume.
     private val answeredQuestions = mutableListOf<AnsweredQuestionRecord>()
-    // In-memory only, matching the rest of this session-stat tracking — a process death mid-session
-    // simply restarts the clock on resume rather than resuming the original elapsed time.
     private var sessionStartTimeMs: Long = 0L
     private var questionShownAtMs: Long = 0L
 
@@ -190,7 +192,12 @@ class ReviewViewModel @Inject constructor(
         }
         totalQuestions = persisted.totalQuestions
         answeredQuestions.clear()
-        sessionStartTimeMs = System.currentTimeMillis()
+        // Restores the session's original start time rather than restarting the clock — a resume
+        // (backing out mid-session and returning, or a process death) previously reset this to now,
+        // silently undercounting sessionTotalElapsedMs/sessionAverageTimePerItemMs by however long
+        // the session had been away. Falls back to now only for pre-existing persisted data that
+        // predates this field (sessionStartTimeMs == 0L).
+        sessionStartTimeMs = persisted.sessionStartTimeMs.takeIf { it > 0L } ?: System.currentTimeMillis()
         advanceToNextQuestion()
     }
 
@@ -488,7 +495,8 @@ class ReviewViewModel @Inject constructor(
         progress = progressByAssignmentId.map { (id, p) ->
             PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },
-        totalQuestions = totalQuestions
+        totalQuestions = totalQuestions,
+        sessionStartTimeMs = sessionStartTimeMs
     )
 
     private suspend fun persistSnapshot(snapshot: PersistedReviewSession) {

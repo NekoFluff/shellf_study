@@ -24,7 +24,12 @@ data class PersistedItemProgress(
 data class PersistedReviewSession(
     val queue: List<PersistedQuestion>,
     val progress: List<PersistedItemProgress>,
-    val totalQuestions: Int
+    val totalQuestions: Int,
+    // In-memory only prior to this field's addition, which reset the session clock on every resume
+    // instead of restoring how much time had already elapsed — see ReviewViewModel.resumeFromPersisted.
+    // 0 means "no value was ever persisted" (data from before this field existed); resumeFromPersisted
+    // falls back to the current time in that case.
+    val sessionStartTimeMs: Long = 0L
 )
 
 /**

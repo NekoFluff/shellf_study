@@ -11,6 +11,7 @@ import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.PersistedLessonItemProgress
+import com.crazyfluff.shellfstudy.core.data.PersistedLessonPhase
 import com.crazyfluff.shellfstudy.core.data.PersistedLessonQuestion
 import com.crazyfluff.shellfstudy.core.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
@@ -65,6 +66,7 @@ data class LessonUiState(
     val totalQuizCount: Int = 0,
     val remainingQuizCount: Int = 0,
     val isSessionComplete: Boolean = false,
+    val isAbandoned: Boolean = false,
     val showPitchAccent: Boolean = true,
     val showSubjectTypeLabel: Boolean = false,
     val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
@@ -112,9 +114,11 @@ class LessonViewModel @Inject constructor(
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
     private val progressByAssignmentId = mutableMapOf<Long, LessonItemProgress>()
+    // Individual per-answer records (used for the "slowest answers" summary) stay in-memory only —
+    // a resume starts this list fresh, so that card only reflects answers given since the most
+    // recent resume. sessionStartTimeMs, by contrast, is restored from persisted state on resume
+    // (see resumeQuizPhase) so the total/average time summaries stay accurate across a resume.
     private val answeredQuestions = mutableListOf<LessonAnsweredQuestionRecord>()
-    // In-memory only, matching ReviewViewModel's equivalent tracking — a process death mid-session
-    // simply restarts the clock on resume rather than resuming the original elapsed time.
     private var sessionStartTimeMs: Long = 0L
     private var questionShownAtMs: Long = 0L
 
@@ -158,6 +162,48 @@ class LessonViewModel @Inject constructor(
     }
 
     private suspend fun resumeFromPersisted(persisted: PersistedLessonSession) {
+        when (persisted.phase) {
+            PersistedLessonPhase.STUDY -> resumeStudyPhase(persisted)
+            PersistedLessonPhase.QUIZ -> resumeQuizPhase(persisted)
+        }
+    }
+
+    /** Resumes a session left mid-flashcard-study — after "Start session" but before the last card
+     *  hands off to the quiz. Reconstructs the same study batch, in the same order, and jumps back
+     *  to the card the user was on, rather than forcing lesson re-selection and restudying from the
+     *  first card, the same way [resumeQuizPhase] avoids re-fetching a fresh quiz queue. */
+    private suspend fun resumeStudyPhase(persisted: PersistedLessonSession) {
+        val itemsById = assignmentRepository.observeLessonQueue().first().associateBy { it.assignmentId }
+
+        // The cache backing this persisted session is gone, or somehow nothing was actually
+        // selected — fall back to a fresh fetch rather than show a broken study session.
+        if (persisted.studyAssignmentIds.isEmpty() || persisted.studyAssignmentIds.any { it !in itemsById }) {
+            lessonSessionRepository.clear()
+            fetchFreshQueue()
+            return
+        }
+
+        val items = persisted.studyAssignmentIds.map { itemsById.getValue(it) }
+        val (pitchAccents, relatedSubjects, strokeOrders) = coroutineScope {
+            val pitchAccentsDeferred = async { fetchPitchAccents(items) }
+            val relatedSubjectsDeferred = async { fetchRelatedSubjects(items) }
+            val strokeOrdersDeferred = async { fetchStrokeOrders(items) }
+            Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
+        }
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                phase = LessonPhase.STUDY,
+                studyItems = items,
+                studyIndex = persisted.studyIndex.coerceIn(0, items.lastIndex),
+                pitchAccentsBySubjectId = pitchAccents,
+                relatedSubjectsById = relatedSubjects,
+                strokeOrderBySubjectId = strokeOrders
+            )
+        }
+    }
+
+    private suspend fun resumeQuizPhase(persisted: PersistedLessonSession) {
         val itemsById = assignmentRepository.observeLessonQueue().first().associateBy { it.assignmentId }
 
         // The cache backing this persisted session is gone (e.g. app storage was cleared) — fall
@@ -185,7 +231,12 @@ class LessonViewModel @Inject constructor(
             }
         }
         answeredQuestions.clear()
-        sessionStartTimeMs = System.currentTimeMillis()
+        // Restores the session's original start time rather than restarting the clock — a resume
+        // (backing out mid-quiz and returning, or a process death) previously reset this to now,
+        // silently undercounting sessionTotalElapsedMs/sessionAverageTimePerItemMs by however long
+        // the session had been away. Falls back to now only for pre-existing persisted data that
+        // predates this field (sessionStartTimeMs == 0L).
+        sessionStartTimeMs = persisted.sessionStartTimeMs.takeIf { it > 0L } ?: System.currentTimeMillis()
         questionShownAtMs = System.currentTimeMillis()
         totalQuizCount = persisted.totalQuizCount
         val next = quizQueue.current
@@ -285,6 +336,7 @@ class LessonViewModel @Inject constructor(
                     strokeOrderBySubjectId = strokeOrders
                 )
             }
+            applicationScope.runDurably { persistStudySnapshot(selected, 0) }
         }
     }
 
@@ -328,6 +380,7 @@ class LessonViewModel @Inject constructor(
         val state = _uiState.value
         if (state.phase != LessonPhase.STUDY || index !in state.studyItems.indices) return
         _uiState.update { it.copy(studyIndex = index) }
+        viewModelScope.launch { applicationScope.runDurably { persistStudySnapshot(state.studyItems, index) } }
     }
 
     fun nextStudyCard() {
@@ -338,13 +391,29 @@ class LessonViewModel @Inject constructor(
             viewModelScope.launch { beginQuiz(state.studyItems) }
         } else {
             _uiState.update { it.copy(studyIndex = nextIndex) }
+            viewModelScope.launch { applicationScope.runDurably { persistStudySnapshot(state.studyItems, nextIndex) } }
         }
     }
 
     fun previousStudyCard() {
         val state = _uiState.value
         if (state.phase != LessonPhase.STUDY || state.studyIndex == 0) return
-        _uiState.update { it.copy(studyIndex = state.studyIndex - 1) }
+        val previousIndex = state.studyIndex - 1
+        _uiState.update { it.copy(studyIndex = previousIndex) }
+        viewModelScope.launch { applicationScope.runDurably { persistStudySnapshot(state.studyItems, previousIndex) } }
+    }
+
+    /** Persists just enough to resume mid-flashcard-study: which items are in the batch (in order)
+     *  and which card the user is on — see [resumeStudyPhase]. Called on every card change rather
+     *  than only at study's start, so a resume lands on the exact card left off on, not card one. */
+    private suspend fun persistStudySnapshot(items: List<LessonItem>, index: Int) {
+        lessonSessionRepository.save(
+            PersistedLessonSession(
+                phase = PersistedLessonPhase.STUDY,
+                studyAssignmentIds = items.map { it.assignmentId },
+                studyIndex = index
+            )
+        )
     }
 
     private suspend fun beginQuiz(items: List<LessonItem>) {
@@ -479,11 +548,13 @@ class LessonViewModel @Inject constructor(
      *  across a suspension point even if the live quizQueue is mutated by something else
      *  afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). */
     private fun currentPersistSnapshot(): PersistedLessonSession = PersistedLessonSession(
+        phase = PersistedLessonPhase.QUIZ,
         quizQueue = quizQueue.toList().map { PersistedLessonQuestion(it.item.assignmentId, it.type.name) },
         progress = progressByAssignmentId.map { (id, p) ->
             PersistedLessonItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },
-        totalQuizCount = totalQuizCount
+        totalQuizCount = totalQuizCount,
+        sessionStartTimeMs = sessionStartTimeMs
     )
 
     private suspend fun persistSnapshot(snapshot: PersistedLessonSession) {
@@ -508,6 +579,15 @@ class LessonViewModel @Inject constructor(
 
     fun onContinue() {
         viewModelScope.launch { advanceQuiz() }
+    }
+
+    /** Discards a persisted in-progress lesson session (study or quiz) and exits — a clean slate
+     *  next time. Mirrors ReviewViewModel.abandonSession. */
+    fun abandonSession() {
+        viewModelScope.launch {
+            lessonSessionRepository.clear()
+            _uiState.update { it.copy(isAbandoned = true) }
+        }
     }
 
     private data class LessonSessionSummary(

@@ -75,6 +75,7 @@ class LessonScreenTest {
         onDontKnow: () -> Unit = {},
         onContinue: () -> Unit = {},
         onRetry: () -> Unit = {},
+        onAbandon: () -> Unit = {},
         onDone: () -> Unit = {},
         onBack: () -> Unit = {}
     ) {
@@ -97,6 +98,7 @@ class LessonScreenTest {
                         is LessonScreenEvent.PlayReading -> {}
                         LessonScreenEvent.Continue -> onContinue()
                         LessonScreenEvent.Retry -> onRetry()
+                        LessonScreenEvent.Abandon -> onAbandon()
                         LessonScreenEvent.Done -> onDone()
                         LessonScreenEvent.Back -> onBack()
                     }
@@ -588,5 +590,64 @@ class LessonScreenTest {
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.BACK_BUTTON).performClick()
         assert(wentBack)
+    }
+
+    @Test
+    fun overflowMenu_isAbsent_duringSelectPhase() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem), selectedAssignmentIds = setOf(1L)
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.OVERFLOW_MENU).assertCountEquals(0)
+    }
+
+    @Test
+    fun overflowMenu_abandonConfirmed_invokesCallback_duringStudyPhase() {
+        var abandoned = false
+        setScreen(
+            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(radicalItem)),
+            onAbandon = { abandoned = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ABANDON_MENU_ITEM).performClick()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ABANDON_CONFIRM_BUTTON).performClick()
+        assert(abandoned)
+    }
+
+    @Test
+    fun overflowMenu_abandonConfirmed_invokesCallback_duringQuizPhase() {
+        var abandoned = false
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1
+            ),
+            onAbandon = { abandoned = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ABANDON_MENU_ITEM).performClick()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ABANDON_CONFIRM_BUTTON).performClick()
+        assert(abandoned)
+    }
+
+    @Test
+    fun overflowMenu_abandonCancelled_doesNotInvokeCallback() {
+        var abandoned = false
+        setScreen(
+            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(radicalItem)),
+            onAbandon = { abandoned = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ABANDON_MENU_ITEM).performClick()
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.ABANDON_CONFIRM_BUTTON).assertCountEquals(0)
+        assert(!abandoned)
     }
 }

@@ -417,6 +417,38 @@ class LessonViewModelTest {
     }
 
     @Test
+    fun `a new ViewModel resumes a persisted study session on the same card instead of restarting selection`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            firstViewModel.startSelectedLessons()
+            awaitItem()
+
+            firstViewModel.nextStudyCard()
+            val secondCard = awaitItem()
+            assertThat(secondCard.studyIndex).isEqualTo(1)
+        }
+        val requestCountAfterFirstLoad = server.requestCount
+
+        // Simulate leaving and coming back mid-study, before the quiz ever begins: a fresh
+        // ViewModel sharing the same repositories should land back on the same card in the same
+        // batch, rather than forcing lesson re-selection and restudying from card one.
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.phase).isEqualTo(LessonPhase.STUDY)
+            assertThat(state.studyIndex).isEqualTo(1)
+            assertThat(state.studyItems.map { it.assignmentId }).containsExactly(101L, 102L).inOrder()
+        }
+        assertThat(server.requestCount).isEqualTo(requestCountAfterFirstLoad)
+    }
+
+    @Test
     fun `a new ViewModel resumes a persisted quiz session instead of refetching from the network`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
@@ -505,6 +537,28 @@ class LessonViewModelTest {
             viewModel.onContinue()
             val finalState = awaitItem()
             assertThat(finalState.isSessionComplete).isTrue()
+        }
+
+        assertThat(lessonSessionRepository.load()).isNull()
+    }
+
+    @Test
+    fun `abandonSession clears persisted state and marks the session abandoned`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+
+            viewModel.abandonSession()
+            var abandonedState = awaitItem()
+            while (!abandonedState.isAbandoned) abandonedState = awaitItem()
+            assertThat(abandonedState.isAbandoned).isTrue()
         }
 
         assertThat(lessonSessionRepository.load()).isNull()
@@ -646,6 +700,48 @@ class LessonViewModelTest {
             assertThat(state.sessionItemsLearned).isEqualTo(2)
             assertThat(state.sessionMissedItems).hasSize(1)
         }
+    }
+
+    @Test
+    fun `resuming a persisted quiz preserves the original session start time instead of restarting the clock`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: resumeFromPersisted used to stamp sessionStartTimeMs to "now" on every
+        // resume, silently undercounting sessionTotalElapsedMs/sessionAverageTimePerItemMs by
+        // however long the session had been away. It should instead carry over the persisted
+        // value — proven with a fake, unmistakably-in-the-past timestamp rather than comparing
+        // real wall-clock reads, since this whole test can execute within the same millisecond.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            firstViewModel.startSelectedLessons()
+            awaitItem()
+            firstViewModel.nextStudyCard()
+            awaitItem() // quiz begins, persisted
+        }
+
+        val fakeOriginalStartTime = 1_000_000L
+        val persisted = lessonSessionRepository.load()!!
+        lessonSessionRepository.save(persisted.copy(sessionStartTimeMs = fakeOriginalStartTime))
+
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.phase).isEqualTo(LessonPhase.QUIZ)
+
+            // Forces a fresh persisted snapshot so the resumed sessionStartTimeMs can be inspected.
+            secondViewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            secondViewModel.submitAnswer()
+            awaitItem()
+        }
+
+        val resumedSnapshot = lessonSessionRepository.load()
+        assertThat(resumedSnapshot).isNotNull()
+        assertThat(resumedSnapshot!!.sessionStartTimeMs).isEqualTo(fakeOriginalStartTime)
     }
 
     private fun radicalAssignmentsJson() = """

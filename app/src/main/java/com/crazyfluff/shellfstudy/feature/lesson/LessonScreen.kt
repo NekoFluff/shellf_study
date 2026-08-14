@@ -34,12 +34,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -78,6 +82,7 @@ import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
+import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemRow
@@ -155,6 +160,9 @@ object LessonScreenTestTags {
     const val SESSION_SLOWEST_CARD = "lesson_session_slowest_card"
     const val SESSION_MISSED_CARD = "lesson_session_missed_card"
     const val DONE_BUTTON = "lesson_done_button"
+    const val OVERFLOW_MENU = "lesson_overflow_menu"
+    const val ABANDON_MENU_ITEM = "lesson_abandon_menu_item"
+    const val ABANDON_CONFIRM_BUTTON = "lesson_abandon_confirm_button"
 }
 
 sealed interface LessonScreenEvent {
@@ -172,6 +180,7 @@ sealed interface LessonScreenEvent {
     data class PlayReading(val item: LessonItem, val reading: String) : LessonScreenEvent
     data object Continue : LessonScreenEvent
     data object Retry : LessonScreenEvent
+    data object Abandon : LessonScreenEvent
     data object Done : LessonScreenEvent
     data object Back : LessonScreenEvent
 }
@@ -183,6 +192,10 @@ fun LessonRoute(
     viewModel: LessonViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(uiState.isAbandoned) {
+        if (uiState.isAbandoned) onBack()
+    }
 
     LessonScreen(
         uiState = uiState,
@@ -202,6 +215,7 @@ fun LessonRoute(
                 is LessonScreenEvent.PlayReading -> viewModel.playReading(event.item, event.reading)
                 LessonScreenEvent.Continue -> viewModel.onContinue()
                 LessonScreenEvent.Retry -> viewModel.load()
+                LessonScreenEvent.Abandon -> viewModel.abandonSession()
                 LessonScreenEvent.Done -> onSessionComplete()
                 LessonScreenEvent.Back -> onBack()
             }
@@ -229,10 +243,18 @@ fun LessonScreen(
     val onPlayReading: (LessonItem, String) -> Unit = { item, reading -> onEvent(LessonScreenEvent.PlayReading(item, reading)) }
     val onContinue = { onEvent(LessonScreenEvent.Continue) }
     val onRetry = { onEvent(LessonScreenEvent.Retry) }
+    val onAbandon = { onEvent(LessonScreenEvent.Abandon) }
     val onDone = { onEvent(LessonScreenEvent.Done) }
     val onBack = { onEvent(LessonScreenEvent.Back) }
 
     val detailSheetState = rememberSubjectDetailSheetState()
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showAbandonConfirm by remember { mutableStateOf(false) }
+    // A session only exists to abandon once the user has committed to a lesson batch — the SELECT
+    // phase hasn't persisted anything yet (see LessonSessionRepository), so there's nothing there
+    // for the dashboard's "Abandon lesson session" entry, or this screen's own copy of it, to act on.
+    val canManageSession = !uiState.isLoading && uiState.phase != LessonPhase.SELECT &&
+        !uiState.isSessionComplete && uiState.errorMessage == null
 
     // Wrapping Scaffold and SubjectDetailSheetHost in a shared Box — rather than leaving them as
     // top-level siblings — is what lets the detail sheet's handle overlay the true bottom of the
@@ -247,10 +269,51 @@ fun LessonScreen(
                     IconButton(onClick = onBack, modifier = Modifier.testTag(LessonScreenTestTags.BACK_BUTTON)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    if (canManageSession) {
+                        Box {
+                            IconButton(
+                                onClick = { menuExpanded = true },
+                                modifier = Modifier.testTag(LessonScreenTestTags.OVERFLOW_MENU)
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Abandon session", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    },
+                                    onClick = { menuExpanded = false; showAbandonConfirm = true },
+                                    modifier = Modifier.testTag(LessonScreenTestTags.ABANDON_MENU_ITEM)
+                                )
+                            }
+                        }
+                    }
                 }
             )
         }
     ) { innerPadding ->
+        if (showAbandonConfirm) {
+            ConfirmationDialog(
+                title = "Abandon this session?",
+                text = "Progress on lessons you haven't finished studying or quizzing yet will be lost. Lessons you've already completed won't be affected.",
+                confirmLabel = "Abandon",
+                onConfirm = { showAbandonConfirm = false; onAbandon() },
+                onDismiss = { showAbandonConfirm = false },
+                confirmButtonTestTag = LessonScreenTestTags.ABANDON_CONFIRM_BUTTON
+            )
+        }
+
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             when {
                 uiState.isLoading -> {

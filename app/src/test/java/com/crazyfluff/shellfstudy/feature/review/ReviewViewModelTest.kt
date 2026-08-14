@@ -825,6 +825,42 @@ class ReviewViewModelTest {
         }
     }
 
+    @Test
+    fun `resuming a persisted session preserves the original session start time instead of restarting the clock`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: resumeFromPersisted used to stamp sessionStartTimeMs to "now" on every
+        // resume, silently undercounting sessionTotalElapsedMs/sessionAverageTimePerItemMs by
+        // however long the session had been away. It should instead carry over the persisted
+        // value — proven with a fake, unmistakably-in-the-past timestamp rather than comparing
+        // real wall-clock reads, since this whole test can execute within the same millisecond.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+        }
+
+        val fakeOriginalStartTime = 1_000_000L
+        val persisted = reviewSessionRepository.load()!!
+        reviewSessionRepository.save(persisted.copy(sessionStartTimeMs = fakeOriginalStartTime))
+
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            // Forces a fresh persisted snapshot so the resumed sessionStartTimeMs can be inspected.
+            secondViewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            secondViewModel.submitAnswer()
+            awaitItem()
+        }
+
+        val resumedSnapshot = reviewSessionRepository.load()
+        assertThat(resumedSnapshot).isNotNull()
+        assertThat(resumedSnapshot!!.sessionStartTimeMs).isEqualTo(fakeOriginalStartTime)
+    }
+
     private fun radicalAssignmentsJson() = """
         {
           "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,

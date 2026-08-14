@@ -20,19 +20,35 @@ data class PersistedLessonItemProgress(
     val hadIncorrectReading: Boolean
 )
 
+/** Which phase of a lesson session [PersistedLessonSession] represents — the study flashcards
+ *  ([studyAssignmentIds]/[PersistedLessonSession.studyIndex]) or the quiz
+ *  ([PersistedLessonSession.quizQueue]/progress). Only one half of the payload is meaningful at a
+ *  time, matching [com.crazyfluff.shellfstudy.feature.lesson.LessonPhase]. */
+enum class PersistedLessonPhase { STUDY, QUIZ }
+
 @Serializable
 data class PersistedLessonSession(
-    val quizQueue: List<PersistedLessonQuestion>,
+    val phase: PersistedLessonPhase = PersistedLessonPhase.QUIZ,
+    val studyAssignmentIds: List<Long> = emptyList(),
+    val studyIndex: Int = 0,
+    val quizQueue: List<PersistedLessonQuestion> = emptyList(),
     val progress: List<PersistedLessonItemProgress> = emptyList(),
-    val totalQuizCount: Int
+    val totalQuizCount: Int = 0,
+    // In-memory in ReviewViewModel/LessonViewModel prior to this field's addition, which reset the
+    // session clock on every resume instead of restoring how much time had already elapsed — see
+    // LessonViewModel.resumeFromPersisted. 0 means "not started yet" (a STUDY-phase snapshot, where
+    // the quiz clock hasn't started) or "no value was ever persisted" (pre-existing data from before
+    // this field existed); resumeFromPersisted falls back to the current time in both cases.
+    val sessionStartTimeMs: Long = 0L
 )
 
 /**
- * Persists an in-progress lesson quiz (the pending question queue) so it survives navigating away
- * — same idea and shape as [ReviewSessionRepository], which the lesson quiz previously had no
- * equivalent of, so a mid-quiz app-process death or back-navigation silently lost all progress.
- * Only the quiz phase is persisted: the SELECT/STUDY phases have nothing graded yet to lose, so
- * falling back to a fresh fetch there is harmless.
+ * Persists an in-progress lesson session — the study flashcards once the user commits to a batch
+ * via "Start session" (so backing out mid-study, or a process death, doesn't force redoing lesson
+ * selection and restudying from the first card), and the quiz's pending question queue + per-item
+ * progress once the quiz itself begins — so either survives navigating away. Same idea and shape as
+ * [ReviewSessionRepository]. The SELECT phase alone is never persisted: nothing's been committed to
+ * yet, so falling back to a fresh fetch there is harmless.
  */
 @Singleton
 class LessonSessionRepository @Inject constructor(
