@@ -4,10 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
-import com.crazyfluff.shellfstudy.core.data.DashboardCacheRepository
-import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
+import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
-import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
+import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository

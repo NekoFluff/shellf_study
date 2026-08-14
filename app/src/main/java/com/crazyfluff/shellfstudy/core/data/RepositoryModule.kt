@@ -3,9 +3,12 @@ package com.crazyfluff.shellfstudy.core.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
+import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
@@ -13,6 +16,7 @@ import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
+import kotlinx.serialization.json.Json
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
@@ -96,6 +100,21 @@ object RepositoryModule {
     @Provides
     @Singleton
     fun provideWeblioPitchAccentParser(): WeblioPitchAccentParser = WeblioPitchAccentParser()
+
+    @Provides
+    @Singleton
+    fun provideDashboardCacheRepository(dataStore: DataStore<Preferences>): DashboardCacheRepository =
+        DashboardCacheRepository(dataStore)
+
+    @Provides
+    @Singleton
+    fun provideLessonSessionRepository(dataStore: DataStore<Preferences>, json: Json): LessonSessionRepository =
+        LessonSessionRepository(dataStore, json)
+
+    @Provides
+    @Singleton
+    fun provideReviewSessionRepository(dataStore: DataStore<Preferences>, json: Json): ReviewSessionRepository =
+        ReviewSessionRepository(dataStore, json)
 }
 
 @Module

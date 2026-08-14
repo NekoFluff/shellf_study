@@ -6,6 +6,9 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
+import com.crazyfluff.shellfstudy.shared.data.PersistedLessonQuestion
+import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json

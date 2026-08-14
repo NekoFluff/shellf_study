@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences

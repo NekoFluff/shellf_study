@@ -7,10 +7,10 @@ import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.coroutines.runDurably
-import com.crazyfluff.shellfstudy.core.data.PersistedItemProgress
-import com.crazyfluff.shellfstudy.core.data.PersistedQuestion
-import com.crazyfluff.shellfstudy.core.data.PersistedReviewSession
-import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
+import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
+import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
+import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
+import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.AnswerOutcome

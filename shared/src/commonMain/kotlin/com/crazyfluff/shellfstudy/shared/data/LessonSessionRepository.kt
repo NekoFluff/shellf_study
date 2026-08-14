@@ -1,12 +1,10 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Serializable
 data class PersistedLessonQuestion(val assignmentId: Long, val questionType: String)
@@ -50,8 +48,7 @@ data class PersistedLessonSession(
  * [ReviewSessionRepository]. The SELECT phase alone is never persisted: nothing's been committed to
  * yet, so falling back to a fresh fetch there is harmless.
  */
-@Singleton
-class LessonSessionRepository @Inject constructor(
+class LessonSessionRepository(
     dataStore: DataStore<Preferences>,
     json: Json
 ) {

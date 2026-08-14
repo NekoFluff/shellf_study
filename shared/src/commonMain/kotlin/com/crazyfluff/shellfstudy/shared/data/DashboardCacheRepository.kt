@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -9,8 +9,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 data class CachedDashboardSummary(
     val username: String,
@@ -25,8 +23,7 @@ data class CachedDashboardSummary(
  * immediately on a cold start rather than blocking on network — unlike the rest of the dashboard's
  * data, [WaniKaniRepository]'s user/summary fetches have no Room cache backing them.
  */
-@Singleton
-class DashboardCacheRepository @Inject constructor(
+class DashboardCacheRepository(
     private val dataStore: DataStore<Preferences>
 ) {
     private val usernameKey = stringPreferencesKey("dashboard_cache_username")

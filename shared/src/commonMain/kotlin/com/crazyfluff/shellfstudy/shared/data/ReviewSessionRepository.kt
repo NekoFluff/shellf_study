@@ -1,12 +1,10 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Serializable
 data class PersistedQuestion(val assignmentId: Long, val questionType: String)
@@ -36,8 +34,7 @@ data class PersistedReviewSession(
  * survives navigating away — the review screen isn't kept alive on the back stack, so "resume"
  * means reconstructing this state rather than the ViewModel simply still being around.
  */
-@Singleton
-class ReviewSessionRepository @Inject constructor(
+class ReviewSessionRepository(
     dataStore: DataStore<Preferences>,
     json: Json
 ) {
