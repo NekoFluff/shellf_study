@@ -136,6 +136,42 @@ class LessonViewModelTest {
     }
 
     @Test
+    fun `showTotalTimer and showQuestionTimer settings flow into uiState`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setShowTotalTimer(true)
+        settingsRepository.setShowQuestionTimer(true)
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading || !state.showTotalTimer || !state.showQuestionTimer) state = awaitItem()
+            assertThat(state.showTotalTimer).isTrue()
+            assertThat(state.showQuestionTimer).isTrue()
+        }
+    }
+
+    @Test
+    fun `starting the quiz sets sessionStartTimeMs and questionStartTimeMs`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            val quizState = awaitItem()
+
+            assertThat(quizState.sessionStartTimeMs).isNotNull()
+            assertThat(quizState.questionStartTimeMs).isNotNull()
+        }
+    }
+
+    @Test
     fun `an empty lesson queue is reported as no lessons available`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(emptyCollectionJson()), jsonResponse(emptyCollectionJson()))
 

@@ -24,7 +24,8 @@ data class SettingsUiState(
     val autoplayPronunciationAudio: Boolean = true,
     val restrictAudioToMp3: Boolean = false,
     val showSubjectTypeLabel: Boolean = false,
-    val showReviewTimer: Boolean = false,
+    val showTotalTimer: Boolean = false,
+    val showQuestionTimer: Boolean = false,
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
@@ -61,7 +62,8 @@ class SettingsViewModel @Inject constructor(
             autoplayPronunciationAudio = app.autoplayPronunciationAudio,
             restrictAudioToMp3 = app.restrictAudioToMp3,
             showSubjectTypeLabel = app.showSubjectTypeLabel,
-            showReviewTimer = app.showReviewTimer,
+            showTotalTimer = app.showTotalTimer,
+            showQuestionTimer = app.showQuestionTimer,
             notificationsEnabled = notif.notificationsEnabled,
             reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
             reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
@@ -100,8 +102,12 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setShowSubjectTypeLabel(enabled) }
     }
 
-    fun onShowReviewTimerChange(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setShowReviewTimer(enabled) }
+    fun onShowTotalTimerChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowTotalTimer(enabled) }
+    }
+
+    fun onShowQuestionTimerChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowQuestionTimer(enabled) }
     }
 
     /**

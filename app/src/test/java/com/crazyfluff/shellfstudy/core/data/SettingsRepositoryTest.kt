@@ -32,7 +32,8 @@ class SettingsRepositoryTest {
             assertThat(settings.showPitchAccent).isTrue()
             assertThat(settings.autoplayPronunciationAudio).isTrue()
             assertThat(settings.showSubjectTypeLabel).isFalse()
-            assertThat(settings.showReviewTimer).isFalse()
+            assertThat(settings.showTotalTimer).isFalse()
+            assertThat(settings.showQuestionTimer).isFalse()
         }
     }
 
@@ -70,13 +71,24 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `setShowReviewTimer persists the chosen value`() = runTest {
+    fun `setShowTotalTimer persists the chosen value`() = runTest {
         val repository = createRepository()
 
-        repository.setShowReviewTimer(true)
+        repository.setShowTotalTimer(true)
 
         repository.settings.test {
-            assertThat(awaitItem().showReviewTimer).isTrue()
+            assertThat(awaitItem().showTotalTimer).isTrue()
+        }
+    }
+
+    @Test
+    fun `setShowQuestionTimer persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setShowQuestionTimer(true)
+
+        repository.settings.test {
+            assertThat(awaitItem().showQuestionTimer).isTrue()
         }
     }
 

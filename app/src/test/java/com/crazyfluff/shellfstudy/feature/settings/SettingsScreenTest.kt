@@ -32,7 +32,8 @@ class SettingsScreenTest {
         onAutoplayPronunciationAudioChange: (Boolean) -> Unit = {},
         onRestrictAudioToMp3Change: (Boolean) -> Unit = {},
         onShowSubjectTypeLabelChange: (Boolean) -> Unit = {},
-        onShowReviewTimerChange: (Boolean) -> Unit = {},
+        onShowTotalTimerChange: (Boolean) -> Unit = {},
+        onShowQuestionTimerChange: (Boolean) -> Unit = {},
         onNotificationsEnabledChange: (Boolean) -> Unit = {},
         onReviewsAvailableEnabledChange: (Boolean) -> Unit = {},
         onReviewsBacklogEnabledChange: (Boolean) -> Unit = {},
@@ -54,7 +55,8 @@ class SettingsScreenTest {
                 onAutoplayPronunciationAudioChange = onAutoplayPronunciationAudioChange,
                 onRestrictAudioToMp3Change = onRestrictAudioToMp3Change,
                 onShowSubjectTypeLabelChange = onShowSubjectTypeLabelChange,
-                onShowReviewTimerChange = onShowReviewTimerChange,
+                onShowTotalTimerChange = onShowTotalTimerChange,
+                onShowQuestionTimerChange = onShowQuestionTimerChange,
                 onNotificationsEnabledChange = onNotificationsEnabledChange,
                 onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
                 onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
@@ -173,14 +175,26 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun togglingShowReviewTimerSwitch_invokesCallback() {
+    fun togglingShowTotalTimerSwitch_invokesCallback() {
         var showTimer: Boolean? = null
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showReviewTimer = false),
-            onShowReviewTimerChange = { showTimer = it }
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showTotalTimer = false),
+            onShowTotalTimerChange = { showTimer = it }
         )
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_REVIEW_TIMER_TOGGLE).performScrollTo().performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_TOTAL_TIMER_TOGGLE).performScrollTo().performClick()
+        assert(showTimer == true)
+    }
+
+    @Test
+    fun togglingShowQuestionTimerSwitch_invokesCallback() {
+        var showTimer: Boolean? = null
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showQuestionTimer = false),
+            onShowQuestionTimerChange = { showTimer = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_QUESTION_TIMER_TOGGLE).performScrollTo().performClick()
         assert(showTimer == true)
     }
 

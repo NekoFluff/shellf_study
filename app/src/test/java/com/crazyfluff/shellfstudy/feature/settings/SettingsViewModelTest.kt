@@ -145,14 +145,26 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `onShowReviewTimerChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `onShowTotalTimerChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().showReviewTimer).isFalse()
+            assertThat(awaitItem().showTotalTimer).isFalse()
 
-            viewModel.onShowReviewTimerChange(true)
-            assertThat(awaitItem().showReviewTimer).isTrue()
+            viewModel.onShowTotalTimerChange(true)
+            assertThat(awaitItem().showTotalTimer).isTrue()
+        }
+    }
+
+    @Test
+    fun `onShowQuestionTimerChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().showQuestionTimer).isFalse()
+
+            viewModel.onShowQuestionTimerChange(true)
+            assertThat(awaitItem().showQuestionTimer).isTrue()
         }
     }
 

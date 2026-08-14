@@ -69,7 +69,8 @@ object SettingsScreenTestTags {
     const val AUTOPLAY_AUDIO_TOGGLE = "settings_autoplay_audio_toggle"
     const val MP3_ONLY_AUDIO_TOGGLE = "settings_mp3_only_audio_toggle"
     const val SHOW_SUBJECT_TYPE_LABEL_TOGGLE = "settings_show_subject_type_label_toggle"
-    const val SHOW_REVIEW_TIMER_TOGGLE = "settings_show_review_timer_toggle"
+    const val SHOW_TOTAL_TIMER_TOGGLE = "settings_show_total_timer_toggle"
+    const val SHOW_QUESTION_TIMER_TOGGLE = "settings_show_question_timer_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
     const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
     const val REVIEWS_BACKLOG_TOGGLE = "settings_reviews_backlog_toggle"
@@ -115,7 +116,8 @@ fun SettingsRoute(
         onAutoplayPronunciationAudioChange = viewModel::onAutoplayPronunciationAudioChange,
         onRestrictAudioToMp3Change = viewModel::onRestrictAudioToMp3Change,
         onShowSubjectTypeLabelChange = viewModel::onShowSubjectTypeLabelChange,
-        onShowReviewTimerChange = viewModel::onShowReviewTimerChange,
+        onShowTotalTimerChange = viewModel::onShowTotalTimerChange,
+        onShowQuestionTimerChange = viewModel::onShowQuestionTimerChange,
         onNotificationsEnabledChange = { enabled ->
             if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -146,7 +148,8 @@ fun SettingsScreen(
     onAutoplayPronunciationAudioChange: (Boolean) -> Unit,
     onRestrictAudioToMp3Change: (Boolean) -> Unit,
     onShowSubjectTypeLabelChange: (Boolean) -> Unit,
-    onShowReviewTimerChange: (Boolean) -> Unit,
+    onShowTotalTimerChange: (Boolean) -> Unit,
+    onShowQuestionTimerChange: (Boolean) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onReviewsAvailableEnabledChange: (Boolean) -> Unit,
     onReviewsBacklogEnabledChange: (Boolean) -> Unit,
@@ -277,11 +280,18 @@ fun SettingsScreen(
                     testTag = SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE
                 )
                 ToggleRow(
-                    label = "Session timer",
-                    description = "Shows a running clock for how long the current review session has taken.",
-                    checked = uiState.showReviewTimer,
-                    onCheckedChange = onShowReviewTimerChange,
-                    testTag = SettingsScreenTestTags.SHOW_REVIEW_TIMER_TOGGLE
+                    label = "Total time",
+                    description = "Shows a running clock above the progress bar for how long the current review/lesson quiz has taken.",
+                    checked = uiState.showTotalTimer,
+                    onCheckedChange = onShowTotalTimerChange,
+                    testTag = SettingsScreenTestTags.SHOW_TOTAL_TIMER_TOGGLE
+                )
+                ToggleRow(
+                    label = "Question time",
+                    description = "Shows a running clock below the progress bar for how long you've spent on the current question.",
+                    checked = uiState.showQuestionTimer,
+                    onCheckedChange = onShowQuestionTimerChange,
+                    testTag = SettingsScreenTestTags.SHOW_QUESTION_TIMER_TOGGLE
                 )
             }
 
@@ -583,7 +593,8 @@ private fun SettingsScreenPreview() {
             onAutoplayPronunciationAudioChange = {},
             onRestrictAudioToMp3Change = {},
             onShowSubjectTypeLabelChange = {},
-            onShowReviewTimerChange = {},
+            onShowTotalTimerChange = {},
+            onShowQuestionTimerChange = {},
             onNotificationsEnabledChange = {},
             onReviewsAvailableEnabledChange = {},
             onReviewsBacklogEnabledChange = {},

@@ -74,6 +74,7 @@ import androidx.tracing.Trace
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.ElapsedTimeText
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemRow
@@ -107,7 +108,6 @@ import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailHandleHeigh
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
-import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /** Arbitrary non-null value used only to warm up [RankChangeChip]'s first composition ahead of
@@ -147,7 +147,8 @@ object ReviewScreenTestTags {
     const val DETAILS_TOGGLE = "review_details_toggle"
     const val TYPE_MISMATCH_TEXT = "review_type_mismatch_text"
     const val SUBJECT_TYPE_LABEL = "review_subject_type_label"
-    const val SESSION_TIMER_TEXT = "review_session_timer_text"
+    const val TOTAL_TIMER_TEXT = "review_total_timer_text"
+    const val QUESTION_TIMER_TEXT = "review_question_timer_text"
 }
 
 sealed interface ReviewScreenEvent {
@@ -233,12 +234,6 @@ fun ReviewScreen(
     Scaffold(
         topBar = {
             CompactTopBar(
-                title = {
-                    val startTimeMs = uiState.sessionStartTimeMs
-                    if (uiState.showReviewTimer && startTimeMs != null && canManageSession) {
-                        SessionTimerText(startTimeMs = startTimeMs, modifier = Modifier.testTag(ReviewScreenTestTags.SESSION_TIMER_TEXT))
-                    }
-                },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag(ReviewScreenTestTags.BACK_BUTTON)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -442,19 +437,40 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         (uiState.totalCount - uiState.remainingCount).toFloat() / uiState.totalCount
     val accentColor = subjectColor(item.subjectType)
 
+    val totalStartTimeMs = uiState.sessionStartTimeMs
+    if (uiState.showTotalTimer && totalStartTimeMs != null) {
+        ElapsedTimeText(
+            startTimeMs = totalStartTimeMs,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                .testTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT)
+        )
+    }
     LinearProgressIndicator(
         progress = { progress },
         modifier = Modifier.fillMaxWidth(),
         color = accentColor,
         drawStopIndicator = {}
     )
-    Text(
-        text = "${uiState.totalCount - uiState.remainingCount} / ${uiState.totalCount}",
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
-            .testTag(ReviewScreenTestTags.PROGRESS_COUNT)
-    )
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "${uiState.totalCount - uiState.remainingCount} / ${uiState.totalCount}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag(ReviewScreenTestTags.PROGRESS_COUNT)
+        )
+        val questionStartTimeMs = uiState.questionStartTimeMs
+        if (uiState.showQuestionTimer && questionStartTimeMs != null) {
+            ElapsedTimeText(
+                startTimeMs = questionStartTimeMs,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT)
+            )
+        }
+    }
 
     Column(
         modifier = Modifier.weight(1f, fill = false).fillMaxWidth().padding(24.dp),
@@ -652,24 +668,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         // a gesture pill or 3-button nav bar.
         Spacer(modifier = Modifier.height(16.dp + SubjectDetailHandleHeight + 24.dp))
     }
-}
-
-/** Ticks locally in the Composable rather than through the ViewModel's StateFlow — purely
- *  presentational, so it doesn't need a per-second state emission. */
-@Composable
-private fun SessionTimerText(startTimeMs: Long, modifier: Modifier = Modifier) {
-    var elapsedSeconds by remember(startTimeMs) { mutableStateOf((System.currentTimeMillis() - startTimeMs) / 1000) }
-    LaunchedEffect(startTimeMs) {
-        while (true) {
-            elapsedSeconds = (System.currentTimeMillis() - startTimeMs) / 1000
-            delay(1000)
-        }
-    }
-    Text(
-        text = "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
-        style = MaterialTheme.typography.titleMedium,
-        modifier = modifier
-    )
 }
 
 @Composable

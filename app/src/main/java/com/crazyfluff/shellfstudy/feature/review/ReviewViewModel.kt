@@ -60,8 +60,10 @@ data class ReviewUiState(
     val sessionItemsCorrectFirstTry: Int = 0,
     val answerTypeMismatchCount: Int = 0,
     val showSubjectTypeLabel: Boolean = false,
-    val showReviewTimer: Boolean = false,
+    val showTotalTimer: Boolean = false,
+    val showQuestionTimer: Boolean = false,
     val sessionStartTimeMs: Long? = null,
+    val questionStartTimeMs: Long? = null,
     val sessionMissedItems: List<ReviewItem> = emptyList(),
     val sessionTotalElapsedMs: Long = 0L,
     val sessionAverageTimePerItemMs: Long = 0L,
@@ -124,7 +126,11 @@ class ReviewViewModel @Inject constructor(
             settingsRepository.settings.collect { settings ->
                 latestSettings = settings
                 _uiState.update {
-                    it.copy(showSubjectTypeLabel = settings.showSubjectTypeLabel, showReviewTimer = settings.showReviewTimer)
+                    it.copy(
+                        showSubjectTypeLabel = settings.showSubjectTypeLabel,
+                        showTotalTimer = settings.showTotalTimer,
+                        showQuestionTimer = settings.showQuestionTimer
+                    )
                 }
             }
         }
@@ -377,7 +383,15 @@ class ReviewViewModel @Inject constructor(
             // undoCounter changes even though currentItem/currentQuestionType don't — this is what
             // the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't change
             // either of those but still needs to refocus the field the user just tapped away from.
-            _uiState.update { it.copy(feedback = null, answerInput = "", remainingCount = queue.size, undoCounter = it.undoCounter + 1) }
+            _uiState.update {
+                it.copy(
+                    feedback = null,
+                    answerInput = "",
+                    remainingCount = queue.size,
+                    undoCounter = it.undoCounter + 1,
+                    questionStartTimeMs = questionShownAtMs
+                )
+            }
         }
     }
 
@@ -482,7 +496,8 @@ class ReviewViewModel @Inject constructor(
                 isDetailsExpanded = false,
                 totalCount = totalQuestions,
                 remainingCount = queue.size,
-                sessionStartTimeMs = sessionStartTimeMs
+                sessionStartTimeMs = sessionStartTimeMs,
+                questionStartTimeMs = questionShownAtMs
             )
         }
     }

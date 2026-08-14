@@ -174,29 +174,55 @@ class ReviewScreenTest {
     }
 
     @Test
-    fun sessionTimer_shownWhenSettingEnabledAndSessionInProgress() {
+    fun totalTimer_shownWhenSettingEnabledAndSessionInProgress() {
         setScreen(
             ReviewUiState(
                 isLoading = false, totalCount = 1, remainingCount = 1,
                 currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showReviewTimer = true, sessionStartTimeMs = System.currentTimeMillis()
+                showTotalTimer = true, sessionStartTimeMs = System.currentTimeMillis()
             )
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_TIMER_TEXT).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT).assertIsDisplayed()
     }
 
     @Test
-    fun sessionTimer_absentWhenSettingDisabled() {
+    fun totalTimer_absentWhenSettingDisabled() {
         setScreen(
             ReviewUiState(
                 isLoading = false, totalCount = 1, remainingCount = 1,
                 currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showReviewTimer = false, sessionStartTimeMs = System.currentTimeMillis()
+                showTotalTimer = false, sessionStartTimeMs = System.currentTimeMillis()
             )
         )
 
-        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SESSION_TIMER_TEXT).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT).assertCountEquals(0)
+    }
+
+    @Test
+    fun questionTimer_shownWhenSettingEnabledAndSessionInProgress() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                showQuestionTimer = true, questionStartTimeMs = System.currentTimeMillis()
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertIsDisplayed()
+    }
+
+    @Test
+    fun questionTimer_absentWhenSettingDisabled() {
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                showQuestionTimer = false, questionStartTimeMs = System.currentTimeMillis()
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertCountEquals(0)
     }
 
     @Test

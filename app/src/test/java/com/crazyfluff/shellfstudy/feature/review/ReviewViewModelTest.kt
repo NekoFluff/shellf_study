@@ -651,18 +651,20 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `showSubjectTypeLabel and showReviewTimer settings flow into uiState`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `showSubjectTypeLabel, showTotalTimer, and showQuestionTimer settings flow into uiState`() = runTest(mainDispatcherRule.dispatcher) {
         settingsRepository.setShowSubjectTypeLabel(true)
-        settingsRepository.setShowReviewTimer(true)
+        settingsRepository.setShowTotalTimer(true)
+        settingsRepository.setShowQuestionTimer(true)
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading || !state.showSubjectTypeLabel || !state.showReviewTimer) state = awaitItem()
+            while (state.isLoading || !state.showSubjectTypeLabel || !state.showTotalTimer || !state.showQuestionTimer) state = awaitItem()
             assertThat(state.showSubjectTypeLabel).isTrue()
-            assertThat(state.showReviewTimer).isTrue()
+            assertThat(state.showTotalTimer).isTrue()
+            assertThat(state.showQuestionTimer).isTrue()
         }
     }
 
@@ -676,6 +678,7 @@ class ReviewViewModelTest {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
             assertThat(state.sessionStartTimeMs).isNotNull()
+            assertThat(state.questionStartTimeMs).isNotNull()
 
             // Miss the first question drawn (whichever type it is), then work through both question
             // types until the session completes.

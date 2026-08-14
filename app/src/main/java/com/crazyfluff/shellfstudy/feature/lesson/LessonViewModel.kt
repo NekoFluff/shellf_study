@@ -69,6 +69,10 @@ data class LessonUiState(
     val isAbandoned: Boolean = false,
     val showPitchAccent: Boolean = true,
     val showSubjectTypeLabel: Boolean = false,
+    val showTotalTimer: Boolean = false,
+    val showQuestionTimer: Boolean = false,
+    val sessionStartTimeMs: Long? = null,
+    val questionStartTimeMs: Long? = null,
     val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
     val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
     val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap(),
@@ -127,7 +131,12 @@ class LessonViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
                 _uiState.update {
-                    it.copy(showPitchAccent = settings.showPitchAccent, showSubjectTypeLabel = settings.showSubjectTypeLabel)
+                    it.copy(
+                        showPitchAccent = settings.showPitchAccent,
+                        showSubjectTypeLabel = settings.showSubjectTypeLabel,
+                        showTotalTimer = settings.showTotalTimer,
+                        showQuestionTimer = settings.showQuestionTimer
+                    )
                 }
             }
         }
@@ -253,6 +262,8 @@ class LessonViewModel @Inject constructor(
                 currentQuizItem = next?.item,
                 currentQuestionType = next?.type,
                 isSessionComplete = next == null,
+                sessionStartTimeMs = sessionStartTimeMs,
+                questionStartTimeMs = questionShownAtMs,
                 sessionItemsLearned = summary?.itemsLearned ?: it.sessionItemsLearned,
                 sessionItemsCorrectFirstTry = summary?.correctFirstTry ?: it.sessionItemsCorrectFirstTry,
                 sessionMissedItems = summary?.missedItems ?: it.sessionMissedItems,
@@ -436,7 +447,9 @@ class LessonViewModel @Inject constructor(
                 currentQuestionType = next?.type,
                 answerInput = "",
                 feedback = null,
-                isSessionComplete = next == null
+                isSessionComplete = next == null,
+                sessionStartTimeMs = sessionStartTimeMs,
+                questionStartTimeMs = questionShownAtMs
             )
         }
         applicationScope.runDurably { persistCurrentState() }
@@ -649,7 +662,8 @@ class LessonViewModel @Inject constructor(
                 currentQuestionType = next.type,
                 answerInput = "",
                 feedback = null,
-                remainingQuizCount = quizQueue.size
+                remainingQuizCount = quizQueue.size,
+                questionStartTimeMs = questionShownAtMs
             )
         }
     }

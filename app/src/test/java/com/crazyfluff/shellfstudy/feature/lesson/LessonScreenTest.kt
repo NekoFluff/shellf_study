@@ -375,6 +375,58 @@ class LessonScreenTest {
     }
 
     @Test
+    fun quizPhase_totalTimer_shownWhenSettingEnabledAndSessionInProgress() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                showTotalTimer = true, sessionStartTimeMs = System.currentTimeMillis()
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.TOTAL_TIMER_TEXT).assertIsDisplayed()
+    }
+
+    @Test
+    fun quizPhase_totalTimer_absentWhenSettingDisabled() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                showTotalTimer = false, sessionStartTimeMs = System.currentTimeMillis()
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.TOTAL_TIMER_TEXT).assertCountEquals(0)
+    }
+
+    @Test
+    fun quizPhase_questionTimer_shownWhenSettingEnabledAndSessionInProgress() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                showQuestionTimer = true, questionStartTimeMs = System.currentTimeMillis()
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT).assertIsDisplayed()
+    }
+
+    @Test
+    fun quizPhase_questionTimer_absentWhenSettingDisabled() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                showQuestionTimer = false, questionStartTimeMs = System.currentTimeMillis()
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT).assertCountEquals(0)
+    }
+
+    @Test
     fun quizPhase_feedback_showsContinueButton() {
         var continued = false
         setScreen(

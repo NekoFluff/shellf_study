@@ -23,7 +23,8 @@ data class AppSettings(
     val autoplayPronunciationAudio: Boolean = true,
     val restrictAudioToMp3: Boolean = false,
     val showSubjectTypeLabel: Boolean = false,
-    val showReviewTimer: Boolean = false
+    val showTotalTimer: Boolean = false,
+    val showQuestionTimer: Boolean = false
 )
 
 data class NotificationSettings(
@@ -48,7 +49,8 @@ class SettingsRepository @Inject constructor(
     private val autoplayPronunciationAudioKey = booleanPreferencesKey("autoplay_pronunciation_audio")
     private val restrictAudioToMp3Key = booleanPreferencesKey("restrict_audio_to_mp3")
     private val showSubjectTypeLabelKey = booleanPreferencesKey("show_subject_type_label")
-    private val showReviewTimerKey = booleanPreferencesKey("show_review_timer")
+    private val showTotalTimerKey = booleanPreferencesKey("show_total_timer")
+    private val showQuestionTimerKey = booleanPreferencesKey("show_question_timer")
 
     private val notificationsEnabledKey = booleanPreferencesKey("notifications_enabled")
     private val reviewsAvailableEnabledKey = booleanPreferencesKey("notif_reviews_available_enabled")
@@ -77,7 +79,8 @@ class SettingsRepository @Inject constructor(
             autoplayPronunciationAudio = prefs[autoplayPronunciationAudioKey] ?: true,
             restrictAudioToMp3 = prefs[restrictAudioToMp3Key] ?: false,
             showSubjectTypeLabel = prefs[showSubjectTypeLabelKey] ?: false,
-            showReviewTimer = prefs[showReviewTimerKey] ?: false
+            showTotalTimer = prefs[showTotalTimerKey] ?: false,
+            showQuestionTimer = prefs[showQuestionTimerKey] ?: false
         )
     }.distinctUntilChanged()
 
@@ -120,8 +123,12 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[showSubjectTypeLabelKey] = enabled }
     }
 
-    suspend fun setShowReviewTimer(enabled: Boolean) {
-        dataStore.edit { it[showReviewTimerKey] = enabled }
+    suspend fun setShowTotalTimer(enabled: Boolean) {
+        dataStore.edit { it[showTotalTimerKey] = enabled }
+    }
+
+    suspend fun setShowQuestionTimer(enabled: Boolean) {
+        dataStore.edit { it[showQuestionTimerKey] = enabled }
     }
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {

@@ -83,6 +83,7 @@ import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.ElapsedTimeText
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemRow
@@ -143,6 +144,8 @@ object LessonScreenTestTags {
     const val START_QUIZ_BUTTON = "lesson_start_quiz_button"
     const val QUIZ_CHARACTERS = "lesson_quiz_characters"
     const val QUIZ_PROGRESS_COUNT = "lesson_quiz_progress_count"
+    const val TOTAL_TIMER_TEXT = "lesson_total_timer_text"
+    const val QUESTION_TIMER_TEXT = "lesson_question_timer_text"
     const val ANSWER_FIELD = "lesson_answer_field"
     const val SUBMIT_BUTTON = "lesson_submit_button"
     const val DONT_KNOW_BUTTON = "lesson_dont_know_button"
@@ -1000,19 +1003,40 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
         (uiState.totalQuizCount - uiState.remainingQuizCount).toFloat() / uiState.totalQuizCount
     val accentColor = subjectColor(item.subjectType)
 
-    Text(
-        text = "${uiState.totalQuizCount - uiState.remainingQuizCount} / ${uiState.totalQuizCount}",
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
-            .testTag(LessonScreenTestTags.QUIZ_PROGRESS_COUNT)
-    )
+    val totalStartTimeMs = uiState.sessionStartTimeMs
+    if (uiState.showTotalTimer && totalStartTimeMs != null) {
+        ElapsedTimeText(
+            startTimeMs = totalStartTimeMs,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                .testTag(LessonScreenTestTags.TOTAL_TIMER_TEXT)
+        )
+    }
     LinearProgressIndicator(
         progress = { progress },
         modifier = Modifier.fillMaxWidth(),
         color = accentColor,
         drawStopIndicator = {}
     )
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "${uiState.totalQuizCount - uiState.remainingQuizCount} / ${uiState.totalQuizCount}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag(LessonScreenTestTags.QUIZ_PROGRESS_COUNT)
+        )
+        val questionStartTimeMs = uiState.questionStartTimeMs
+        if (uiState.showQuestionTimer && questionStartTimeMs != null) {
+            ElapsedTimeText(
+                startTimeMs = questionStartTimeMs,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(LessonScreenTestTags.QUESTION_TIMER_TEXT)
+            )
+        }
+    }
 
     Column(
         modifier = Modifier.weight(1f, fill = false).fillMaxWidth().padding(24.dp),
