@@ -1,8 +1,8 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
-import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
-import com.crazyfluff.shellfstudy.core.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.TestRepositories

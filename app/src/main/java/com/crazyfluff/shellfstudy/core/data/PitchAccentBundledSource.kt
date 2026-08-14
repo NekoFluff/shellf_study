@@ -2,7 +2,7 @@ package com.crazyfluff.shellfstudy.core.data
 
 import android.content.Context
 import com.crazyfluff.shellfstudy.R
-import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray

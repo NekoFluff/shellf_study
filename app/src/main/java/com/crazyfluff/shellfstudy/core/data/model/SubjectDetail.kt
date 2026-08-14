@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data.model
 
-import com.crazyfluff.shellfstudy.core.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 /**

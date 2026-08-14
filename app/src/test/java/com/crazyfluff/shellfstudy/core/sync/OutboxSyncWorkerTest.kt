@@ -12,10 +12,10 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
-import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
-import com.crazyfluff.shellfstudy.core.database.SubjectEntity
-import com.crazyfluff.shellfstudy.core.database.outbox.OutboxStatus
-import com.crazyfluff.shellfstudy.core.database.outbox.PendingReviewSubmissionEntity
+import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
+import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxStatus
+import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.TestRepositories

@@ -1,14 +1,28 @@
 package com.crazyfluff.shellfstudy.core.database
 
 import android.content.Context
-import androidx.room.Room
-import com.crazyfluff.shellfstudy.core.database.outbox.OutboxDao
-import com.crazyfluff.shellfstudy.core.database.outbox.OutboxDatabase
-import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentCacheDao
-import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentDatabase
-import com.crazyfluff.shellfstudy.core.database.studyactivity.STUDY_ACTIVITY_MIGRATION_1_2
-import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDao
-import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDatabase
+import com.crazyfluff.shellfstudy.shared.database.AppDatabase
+import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
+import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
+import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
+import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
+import com.crazyfluff.shellfstudy.shared.database.StudyMaterialDao
+import com.crazyfluff.shellfstudy.shared.database.SubjectDao
+import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
+import com.crazyfluff.shellfstudy.shared.database.buildAppDatabase
+import com.crazyfluff.shellfstudy.shared.database.getAppDatabaseBuilder
+import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
+import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDatabase
+import com.crazyfluff.shellfstudy.shared.database.outbox.buildOutboxDatabase
+import com.crazyfluff.shellfstudy.shared.database.outbox.getOutboxDatabaseBuilder
+import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheDao
+import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentDatabase
+import com.crazyfluff.shellfstudy.shared.database.pitchaccent.buildPitchAccentDatabase
+import com.crazyfluff.shellfstudy.shared.database.pitchaccent.getPitchAccentDatabaseBuilder
+import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDao
+import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDatabase
+import com.crazyfluff.shellfstudy.shared.database.studyactivity.buildStudyActivityDatabase
+import com.crazyfluff.shellfstudy.shared.database.studyactivity.getStudyActivityDatabaseBuilder
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,12 +37,7 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, "shellf_study.db")
-            // Local cache only (subjects/assignments/etc. re-fetched from the API), so a
-            // destructive migration on schema changes is simpler than hand-written Migration
-            // objects.
-            .fallbackToDestructiveMigration(dropAllTables = true)
-            .build()
+        buildAppDatabase(getAppDatabaseBuilder(context))
 
     @Provides
     fun provideSubjectDao(db: AppDatabase): SubjectDao = db.subjectDao()
@@ -58,9 +67,7 @@ object DatabaseModule {
         // re-fetched from the API (see StudyActivityDatabase's doc comment). Physical file name is
         // unchanged from this database's original review-history-log incarnation, so the
         // Migration(1, 2) that shrinks it runs in place rather than needing a cross-file move.
-        Room.databaseBuilder(context, StudyActivityDatabase::class.java, "review_history.db")
-            .addMigrations(STUDY_ACTIVITY_MIGRATION_1_2)
-            .build()
+        buildStudyActivityDatabase(getStudyActivityDatabaseBuilder(context))
 
     @Provides
     fun provideStudyActivityDao(db: StudyActivityDatabase): StudyActivityDao = db.studyActivityDao()
@@ -70,8 +77,7 @@ object DatabaseModule {
     fun provideOutboxDatabase(@ApplicationContext context: Context): OutboxDatabase =
         // Not destructive — pending mutations must survive a schema bump (see OutboxDatabase's doc
         // comment). Version 1 has no back-compat burden yet, so no Migration is needed.
-        Room.databaseBuilder(context, OutboxDatabase::class.java, "outbox.db")
-            .build()
+        buildOutboxDatabase(getOutboxDatabaseBuilder(context))
 
     @Provides
     fun provideOutboxDao(db: OutboxDatabase): OutboxDao = db.outboxDao()
@@ -81,8 +87,7 @@ object DatabaseModule {
     fun providePitchAccentDatabase(@ApplicationContext context: Context): PitchAccentDatabase =
         // Re-derivable by re-scraping weblio.jp (see PitchAccentDatabase's doc comment), but a
         // destructive migration would force needless re-scraping, so this uses normal migrations.
-        Room.databaseBuilder(context, PitchAccentDatabase::class.java, "pitch_accent.db")
-            .build()
+        buildPitchAccentDatabase(getPitchAccentDatabaseBuilder(context))
 
     @Provides
     fun providePitchAccentCacheDao(db: PitchAccentDatabase): PitchAccentCacheDao = db.pitchAccentCacheDao()

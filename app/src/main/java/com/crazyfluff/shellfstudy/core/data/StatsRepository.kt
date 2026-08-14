@@ -1,13 +1,13 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import com.crazyfluff.shellfstudy.core.data.model.StudyStreak
-import com.crazyfluff.shellfstudy.core.database.LevelProgressionDao
-import com.crazyfluff.shellfstudy.core.database.LevelProgressionEntity
-import com.crazyfluff.shellfstudy.core.database.ReviewStatisticDao
-import com.crazyfluff.shellfstudy.core.database.ReviewStatisticEntity
-import com.crazyfluff.shellfstudy.core.database.SyncStateDao
-import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDao
-import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDayEntity
+import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
+import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
+import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
+import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
+import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
+import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDao
+import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDayEntity
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.collectAllPages
 import kotlinx.coroutines.Dispatchers

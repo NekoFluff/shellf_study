@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data
 
-import com.crazyfluff.shellfstudy.core.database.SyncStateDao
-import com.crazyfluff.shellfstudy.core.database.SyncStateEntity
+import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
+import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
 import java.time.Duration
 import java.time.Instant
 

@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.fakes
 
-import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentCacheDao
-import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentCacheEntity
+import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheDao
+import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map

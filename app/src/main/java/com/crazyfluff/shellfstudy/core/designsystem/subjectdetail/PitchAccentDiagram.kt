@@ -15,8 +15,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
-import com.crazyfluff.shellfstudy.core.data.model.forReading
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.data.model.forReading
 import com.crazyfluff.shellfstudy.core.designsystem.theme.LocalEinkTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.PitchAccentColors
 

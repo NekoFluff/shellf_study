@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
-import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDayEntity
+import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDayEntity
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse

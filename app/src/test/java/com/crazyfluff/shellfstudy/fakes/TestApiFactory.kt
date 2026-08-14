@@ -6,8 +6,8 @@ import com.crazyfluff.shellfstudy.core.data.StatsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.core.data.WeblioPitchAccentParser
-import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
-import com.crazyfluff.shellfstudy.core.database.SrsSystemEntity
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
 import com.crazyfluff.shellfstudy.shared.network.SrsStageData
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient

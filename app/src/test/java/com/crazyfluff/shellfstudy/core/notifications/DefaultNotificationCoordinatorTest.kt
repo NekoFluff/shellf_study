@@ -7,7 +7,7 @@ import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.StatsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
-import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
+import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationPoster

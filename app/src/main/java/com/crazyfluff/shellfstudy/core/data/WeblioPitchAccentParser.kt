@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.core.data
 
-import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import javax.inject.Inject

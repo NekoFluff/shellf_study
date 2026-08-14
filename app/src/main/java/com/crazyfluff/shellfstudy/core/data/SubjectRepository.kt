@@ -1,17 +1,17 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
-import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.data.model.toPronunciationAudios
-import com.crazyfluff.shellfstudy.core.database.SrsSystemDao
-import com.crazyfluff.shellfstudy.core.database.SrsSystemEntity
-import com.crazyfluff.shellfstudy.core.database.StudyMaterialDao
-import com.crazyfluff.shellfstudy.core.database.StudyMaterialEntity
-import com.crazyfluff.shellfstudy.core.database.SubjectDao
-import com.crazyfluff.shellfstudy.core.database.SubjectEntity
-import com.crazyfluff.shellfstudy.core.database.SyncStateDao
+import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
+import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
+import com.crazyfluff.shellfstudy.shared.database.StudyMaterialDao
+import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
+import com.crazyfluff.shellfstudy.shared.database.SubjectDao
+import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.network.CharacterImageData
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
@@ -154,9 +154,10 @@ class SubjectRepository @Inject constructor(
         subjectDao.observeByIds(listOf(subjectId)).flatMapLatest { entities ->
             val entity = entities.firstOrNull()
             val type = entity?.let { SubjectType.fromWkString(it.subjectType) }
+            val characters = entity?.characters
             val pitchAccentsFlow: Flow<List<PitchAccent>> =
-                if (entity?.characters != null && (type == SubjectType.VOCABULARY || type == SubjectType.KANA_VOCABULARY)) {
-                    pitchAccentRepository.observePitchAccents(entity.characters)
+                if (characters != null && (type == SubjectType.VOCABULARY || type == SubjectType.KANA_VOCABULARY)) {
+                    pitchAccentRepository.observePitchAccents(characters)
                 } else {
                     flowOf(emptyList())
                 }

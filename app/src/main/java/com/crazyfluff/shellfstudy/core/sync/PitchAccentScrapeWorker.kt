@@ -5,8 +5,8 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
-import com.crazyfluff.shellfstudy.core.database.SubjectDao
-import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentCacheDao
+import com.crazyfluff.shellfstudy.shared.database.SubjectDao
+import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheDao
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.delay

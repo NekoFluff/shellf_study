@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.core.sync
 
 import com.crazyfluff.shellfstudy.core.data.ApiResult
-import com.crazyfluff.shellfstudy.core.database.SyncStateEntity
+import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse

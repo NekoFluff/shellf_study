@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.core.quiz
 
-import com.crazyfluff.shellfstudy.core.data.containsKana
+import com.crazyfluff.shellfstudy.shared.data.containsKana
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
 import com.crazyfluff.shellfstudy.core.util.RomajiConverter

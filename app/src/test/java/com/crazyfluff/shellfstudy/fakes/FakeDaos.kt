@@ -1,13 +1,13 @@
 package com.crazyfluff.shellfstudy.fakes
 
-import com.crazyfluff.shellfstudy.core.database.AssignmentDao
-import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
-import com.crazyfluff.shellfstudy.core.database.KanjiLevelUpRow
-import com.crazyfluff.shellfstudy.core.database.LevelProgressItemRow
-import com.crazyfluff.shellfstudy.core.database.SrsStageTypeCount
-import com.crazyfluff.shellfstudy.core.database.SubjectDao
-import com.crazyfluff.shellfstudy.core.database.SubjectEntity
-import com.crazyfluff.shellfstudy.core.database.SubjectTypeCount
+import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
+import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
+import com.crazyfluff.shellfstudy.shared.database.KanjiLevelUpRow
+import com.crazyfluff.shellfstudy.shared.database.LevelProgressItemRow
+import com.crazyfluff.shellfstudy.shared.database.SrsStageTypeCount
+import com.crazyfluff.shellfstudy.shared.database.SubjectDao
+import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.database.SubjectTypeCount
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -71,7 +71,10 @@ class FakeAssignmentDao(
     }
 
     override fun observeDueForReview(nowIso: String): Flow<List<AssignmentEntity>> = assignments.map { map ->
-        map.values.filter { !it.hidden && it.availableAt != null && it.availableAt <= nowIso }
+        map.values.filter {
+            val availableAt = it.availableAt
+            !it.hidden && availableAt != null && availableAt <= nowIso
+        }
     }
 
     override fun observeDueForLesson(): Flow<List<AssignmentEntity>> = assignments.map { map ->
@@ -79,7 +82,10 @@ class FakeAssignmentDao(
     }
 
     override fun observeUpcoming(nowIso: String): Flow<List<AssignmentEntity>> = assignments.map { map ->
-        map.values.filter { !it.hidden && it.availableAt != null && it.availableAt > nowIso }
+        map.values.filter {
+            val availableAt = it.availableAt
+            !it.hidden && availableAt != null && availableAt > nowIso
+        }
     }
 
     override fun observeSrsStageAndTypeCounts(): Flow<List<SrsStageTypeCount>> = assignments.map { map ->
@@ -111,7 +117,10 @@ class FakeAssignmentDao(
     }
 
     override fun observeStartedTodayCount(startOfDayIso: String): Flow<Int> = assignments.map { map ->
-        map.values.count { !it.hidden && it.startedAt != null && it.startedAt >= startOfDayIso }
+        map.values.count {
+            val startedAt = it.startedAt
+            !it.hidden && startedAt != null && startedAt >= startOfDayIso
+        }
     }
 
     override fun observeKanjiLevelUpRows(level: Int): Flow<List<KanjiLevelUpRow>> = assignments.map { map ->

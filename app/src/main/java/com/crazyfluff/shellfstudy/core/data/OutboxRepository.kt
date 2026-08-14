@@ -5,9 +5,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
-import com.crazyfluff.shellfstudy.core.database.outbox.OutboxDao
-import com.crazyfluff.shellfstudy.core.database.outbox.PendingLessonStartEntity
-import com.crazyfluff.shellfstudy.core.database.outbox.PendingReviewSubmissionEntity
+import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
+import com.crazyfluff.shellfstudy.shared.database.outbox.PendingLessonStartEntity
+import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
 import com.crazyfluff.shellfstudy.core.sync.OutboxSyncScheduler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine

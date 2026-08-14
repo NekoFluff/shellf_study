@@ -5,8 +5,8 @@ import com.crazyfluff.shellfstudy.core.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
-import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
-import com.crazyfluff.shellfstudy.core.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
+import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioMetadataData
