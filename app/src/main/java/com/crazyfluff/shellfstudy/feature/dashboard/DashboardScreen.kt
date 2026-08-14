@@ -191,6 +191,28 @@ fun DashboardScreen(
                                 onDismissRequest = { menuExpanded = false },
                                 shape = RoundedCornerShape(16.dp)
                             ) {
+                                if (uiState.hasActiveReviewSession) {
+                                    DropdownMenuItem(
+                                        text = { Text("Abandon review session", color = MaterialTheme.colorScheme.error) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                        },
+                                        onClick = { menuExpanded = false; showAbandonReviewConfirm = true },
+                                        modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM)
+                                    )
+                                    HorizontalDivider()
+                                }
+                                if (uiState.hasActiveLessonSession) {
+                                    DropdownMenuItem(
+                                        text = { Text("Abandon lesson session", color = MaterialTheme.colorScheme.error) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                        },
+                                        onClick = { menuExpanded = false; showAbandonLessonConfirm = true },
+                                        modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM)
+                                    )
+                                    HorizontalDivider()
+                                }
                                 DropdownMenuItem(
                                     text = { Text("Settings") },
                                     leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
@@ -210,28 +232,6 @@ fun DashboardScreen(
                                     onClick = { menuExpanded = false; onLogOut() },
                                     modifier = Modifier.testTag(DashboardScreenTestTags.LOG_OUT_BUTTON)
                                 )
-                                if (uiState.hasActiveReviewSession) {
-                                    HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text("Abandon review session", color = MaterialTheme.colorScheme.error) },
-                                        leadingIcon = {
-                                            Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                                        },
-                                        onClick = { menuExpanded = false; showAbandonReviewConfirm = true },
-                                        modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM)
-                                    )
-                                }
-                                if (uiState.hasActiveLessonSession) {
-                                    if (!uiState.hasActiveReviewSession) HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text("Abandon lesson session", color = MaterialTheme.colorScheme.error) },
-                                        leadingIcon = {
-                                            Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                                        },
-                                        onClick = { menuExpanded = false; showAbandonLessonConfirm = true },
-                                        modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM)
-                                    )
-                                }
                             }
                         }
                     }
