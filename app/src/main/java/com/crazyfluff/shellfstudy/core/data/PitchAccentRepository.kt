@@ -9,8 +9,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Orchestrates the two pitch-accent sources: the bundled dictionary (always available, static)
@@ -24,8 +22,7 @@ import javax.inject.Singleton
  * asset via a real Context. [parser] itself (unlike before) is portable, now that it's built on
  * Ksoup rather than jsoup.
  */
-@Singleton
-class PitchAccentRepository @Inject constructor(
+class PitchAccentRepository(
     private val bundledSource: PitchAccentBundledSource,
     private val cacheDao: PitchAccentCacheDao,
     private val weblioApi: WeblioApi,

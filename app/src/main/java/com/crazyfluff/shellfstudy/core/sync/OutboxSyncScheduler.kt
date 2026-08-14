@@ -9,16 +9,12 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkRequest
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val OUTBOX_SYNC_WORK_NAME = "outbox_sync"
 
-@Singleton
-class WorkManagerOutboxSyncScheduler @Inject constructor(
-    @ApplicationContext private val context: Context
+class WorkManagerOutboxSyncScheduler(
+    private val context: Context
 ) : OutboxSyncScheduler {
     override fun requestSync() {
         val request = OneTimeWorkRequestBuilder<OutboxSyncWorker>()

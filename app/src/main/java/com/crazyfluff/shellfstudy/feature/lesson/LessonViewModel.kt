@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
-import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
@@ -33,7 +32,6 @@ import com.crazyfluff.shellfstudy.core.quiz.QuizQueue
 import com.crazyfluff.shellfstudy.core.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.core.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.core.quiz.questionTypesFor
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -45,7 +43,6 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** Default number of lessons pre-selected on the picker, matching WaniKani's own default batch size. */
 private const val DEFAULT_LESSON_SELECTION_SIZE = 5
@@ -108,8 +105,7 @@ private class LessonItemProgress(val item: LessonItem) {
 
 private data class LessonAnsweredQuestionRecord(val item: LessonItem, val type: QuestionType, val isCorrect: Boolean, val elapsedMs: Long)
 
-@HiltViewModel
-class LessonViewModel @Inject constructor(
+class LessonViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val outboxRepository: OutboxRepository,
     private val lessonSessionRepository: LessonSessionRepository,
@@ -119,7 +115,7 @@ class LessonViewModel @Inject constructor(
     private val strokeOrderRepository: StrokeOrderRepository,
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val appForegroundTracker: AppForegroundTracker,
-    @ApplicationScope private val applicationScope: CoroutineScope
+    private val applicationScope: CoroutineScope
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LessonUiState())

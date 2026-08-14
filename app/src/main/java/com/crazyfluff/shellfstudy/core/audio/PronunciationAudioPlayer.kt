@@ -10,18 +10,16 @@ import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Backed by one reusable [ExoPlayer] instance (injected already configured with HTTP caching and
  * automatic audio-focus handling — see AudioModule). Calling [play] while a clip is already playing
  * just replaces the current media item rather than overlapping two clips. The [PronunciationAudioPlayer]
- * interface itself lives in :shared; only this ExoPlayer-based implementation stays Android-only
- * until an AVPlayer-backed iOS actual is written.
+ * interface itself lives in :shared, alongside an AVPlayer-backed iOS implementation
+ * ([com.crazyfluff.shellfstudy.shared.data.IosPronunciationAudioPlayer]) — this ExoPlayer-based one
+ * stays Android-only.
  */
-@Singleton
-class RealPronunciationAudioPlayer @Inject constructor(
+class RealPronunciationAudioPlayer(
     private val exoPlayer: ExoPlayer
 ) : PronunciationAudioPlayer {
 

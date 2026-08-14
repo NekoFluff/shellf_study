@@ -11,9 +11,6 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.crazyfluff.shellfstudy.MainActivity
 import com.crazyfluff.shellfstudy.R
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * The one genuinely Android/untestable seam of the notification system — isolated behind an
@@ -27,9 +24,8 @@ interface NotificationPoster {
     fun cancel(id: Int)
 }
 
-@Singleton
-class SystemNotificationPoster @Inject constructor(
-    @ApplicationContext private val context: Context
+class SystemNotificationPoster(
+    private val context: Context
 ) : NotificationPoster {
 
     override fun canPost(): Boolean {

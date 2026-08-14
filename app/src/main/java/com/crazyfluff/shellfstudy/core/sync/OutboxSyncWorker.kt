@@ -1,7 +1,6 @@
 package com.crazyfluff.shellfstudy.core.sync
 
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
@@ -13,8 +12,6 @@ import com.crazyfluff.shellfstudy.shared.data.isTerminalRejection
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 
 /**
  * Drains the durable outbox (queued review submissions / lesson starts) once connectivity allows
@@ -22,10 +19,9 @@ import dagger.assisted.AssistedInject
  * actually online. Lesson starts are drained before review submissions (a review's assignment
  * must already be started, so this is the natural precedence), each in creation order.
  */
-@HiltWorker
-class OutboxSyncWorker @AssistedInject constructor(
-    @Assisted appContext: Context,
-    @Assisted params: WorkerParameters,
+class OutboxSyncWorker(
+    appContext: Context,
+    params: WorkerParameters,
     private val outboxDao: OutboxDao,
     private val waniKaniRepository: WaniKaniRepository,
     private val assignmentRepository: AssignmentRepository,

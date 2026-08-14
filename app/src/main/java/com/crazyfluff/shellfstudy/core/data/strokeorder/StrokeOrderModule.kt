@@ -1,16 +1,10 @@
 package com.crazyfluff.shellfstudy.core.data.strokeorder
 
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
-import dagger.Binds
-import dagger.Module
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
-import javax.inject.Singleton
+import org.koin.android.ext.koin.androidContext
+import org.koin.dsl.bind
+import org.koin.dsl.module
 
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class StrokeOrderModule {
-    @Binds
-    @Singleton
-    abstract fun bindStrokeOrderRepository(impl: AndroidStrokeOrderRepository): StrokeOrderRepository
+val strokeOrderModule = module {
+    single { AndroidStrokeOrderRepository(androidContext()) } bind StrokeOrderRepository::class
 }

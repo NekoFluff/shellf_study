@@ -29,7 +29,7 @@
             </intent-filter>
         </activity>
 
-        <!-- ShellfStudyApplication implements Configuration.Provider for Hilt-injected Workers,
+        <!-- ShellfStudyApplication implements Configuration.Provider for Koin-injected Workers,
              so WorkManager's default eager initializer must be removed in favor of on-demand init. -->
         <provider
             android:name="androidx.startup.InitializationProvider"

@@ -56,7 +56,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.tracing.trace
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
@@ -359,7 +359,7 @@ fun SubjectDetailSheet(
 
 /**
  * The actual subject-detail content, plus its back/drill-down handling and the close (X) button —
- * split out from [SubjectDetailSheet] so [hiltViewModel] (and the [SubjectDetailViewModel] fetch it
+ * split out from [SubjectDetailSheet] so [koinViewModel] (and the [SubjectDetailViewModel] fetch it
  * triggers) is only ever invoked once the sheet is genuinely open, not merely because the
  * always-present handle bar exists.
  */
@@ -371,7 +371,7 @@ private fun ColumnScope.SubjectDetailBody(
     questionType: DetailQuestionType?,
     onCollapse: () -> Unit,
     autoPlayStrokeOrder: Boolean,
-    viewModel: SubjectDetailViewModel = hiltViewModel()
+    viewModel: SubjectDetailViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 

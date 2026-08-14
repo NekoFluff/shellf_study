@@ -4,7 +4,6 @@ import android.content.Context
 import com.crazyfluff.shellfstudy.R
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -12,8 +11,6 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Reads the bundled pitch-accent dictionary (res/raw/pitch_info.json, compiled offline by the
@@ -26,9 +23,8 @@ import javax.inject.Singleton
  * [PitchAccentBundledSource] interface itself lives in :shared; only this Context-based
  * implementation stays Android-only until an NSBundle-backed iOS actual is written.
  */
-@Singleton
-class AndroidPitchAccentBundledSource @Inject constructor(
-    @ApplicationContext private val context: Context
+class AndroidPitchAccentBundledSource(
+    private val context: Context
 ) : PitchAccentBundledSource {
     private val entries: Map<String, List<PitchAccent>> by lazy { loadEntries() }
 

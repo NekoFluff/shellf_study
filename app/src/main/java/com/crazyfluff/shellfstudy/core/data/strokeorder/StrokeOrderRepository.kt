@@ -4,14 +4,11 @@ import android.content.Context
 import com.crazyfluff.shellfstudy.R
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Reads the bundled stroke-order dictionary (res/raw/stroke_data.json, compiled offline by
@@ -34,9 +31,8 @@ import javax.inject.Singleton
  * lives in :shared since callers on the (future) iOS target need it too; only this Context-based
  * implementation stays Android-only until an NSBundle-backed iOS actual is written.
  */
-@Singleton
-class AndroidStrokeOrderRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+class AndroidStrokeOrderRepository(
+    private val context: Context
 ) : StrokeOrderRepository {
 
     private val mutex = Mutex()

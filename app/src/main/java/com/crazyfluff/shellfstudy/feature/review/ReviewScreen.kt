@@ -60,7 +60,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.tracing.Trace
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
@@ -164,8 +164,8 @@ sealed interface ReviewScreenEvent {
 fun ReviewRoute(
     onSessionComplete: () -> Unit,
     onBack: () -> Unit,
-    viewModel: ReviewViewModel = hiltViewModel(),
-    searchViewModel: SearchViewModel = hiltViewModel()
+    viewModel: ReviewViewModel = koinViewModel(),
+    searchViewModel: SearchViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()

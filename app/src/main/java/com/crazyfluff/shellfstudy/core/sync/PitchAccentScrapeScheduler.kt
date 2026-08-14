@@ -6,10 +6,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Duration
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val PITCH_ACCENT_SCRAPE_WORK_NAME = "pitch_accent_scrape"
 
@@ -23,9 +20,8 @@ interface PitchAccentScrapeScheduler {
     fun cancelPeriodicScrape()
 }
 
-@Singleton
-class WorkManagerPitchAccentScrapeScheduler @Inject constructor(
-    @ApplicationContext private val context: Context
+class WorkManagerPitchAccentScrapeScheduler(
+    private val context: Context
 ) : PitchAccentScrapeScheduler {
     override fun schedulePeriodicScrape() {
         val request = PeriodicWorkRequestBuilder<PitchAccentScrapeWorker>(

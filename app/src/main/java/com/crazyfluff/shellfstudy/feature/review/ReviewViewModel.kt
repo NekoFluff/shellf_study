@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.tracing.trace
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
-import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
@@ -31,8 +30,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -93,8 +90,7 @@ private class ItemProgress(val item: ReviewItem) {
 
 private data class AnsweredQuestionRecord(val item: ReviewItem, val type: QuestionType, val isCorrect: Boolean, val elapsedMs: Long)
 
-@HiltViewModel
-class ReviewViewModel @Inject constructor(
+class ReviewViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val outboxRepository: OutboxRepository,
     private val statsRepository: StatsRepository,
@@ -102,7 +98,7 @@ class ReviewViewModel @Inject constructor(
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val settingsRepository: SettingsRepository,
     private val appForegroundTracker: AppForegroundTracker,
-    @ApplicationScope private val applicationScope: CoroutineScope
+    private val applicationScope: CoroutineScope
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReviewUiState())

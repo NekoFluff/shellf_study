@@ -1,19 +1,15 @@
 package com.crazyfluff.shellfstudy.core.sync
 
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 
-@HiltWorker
-class SyncWorker @AssistedInject constructor(
-    @Assisted appContext: Context,
-    @Assisted params: WorkerParameters,
+class SyncWorker(
+    appContext: Context,
+    params: WorkerParameters,
     private val syncOrchestrator: SyncOrchestrator,
     private val notificationCoordinator: NotificationCoordinator,
     private val outboxSyncScheduler: OutboxSyncScheduler

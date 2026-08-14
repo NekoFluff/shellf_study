@@ -7,16 +7,13 @@ import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * The single place that sequences a full sync pass across every repository — both the periodic
  * [SyncWorker] and manual triggers (app open, pull-to-refresh) call this instead of duplicating the
  * ordering themselves.
  */
-@Singleton
-class SyncOrchestrator @Inject constructor(
+class SyncOrchestrator(
     private val subjectRepository: SubjectRepository,
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,

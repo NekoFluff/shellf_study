@@ -30,7 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 
 private const val PERSONAL_ACCESS_TOKENS_URL = "https://www.wanikani.com/settings/personal_access_tokens"
@@ -46,7 +46,7 @@ object AuthScreenTestTags {
 @Composable
 fun AuthRoute(
     onAuthenticated: () -> Unit,
-    viewModel: AuthViewModel = hiltViewModel()
+    viewModel: AuthViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 

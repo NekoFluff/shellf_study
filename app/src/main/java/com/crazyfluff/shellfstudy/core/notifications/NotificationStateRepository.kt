@@ -10,8 +10,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
-import javax.inject.Inject
-import javax.inject.Singleton
 
 data class NotificationState(
     val lastNotifiedReviewCount: Int = 0,
@@ -24,8 +22,7 @@ data class NotificationState(
  * (which is user-facing preferences) since this is internal state the user never edits directly.
  * Shares the same DataStore<Preferences> instance via [com.crazyfluff.shellfstudy.core.data.DataStoreModule].
  */
-@Singleton
-class NotificationStateRepository @Inject constructor(
+class NotificationStateRepository(
     private val dataStore: DataStore<Preferences>
 ) {
     private val lastNotifiedReviewCountKey = intPreferencesKey("notif_last_notified_review_count")

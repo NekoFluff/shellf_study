@@ -56,7 +56,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
@@ -98,8 +98,8 @@ fun DashboardRoute(
     onLoggedOut: () -> Unit,
     pendingDestination: String? = null,
     onPendingDestinationConsumed: () -> Unit = {},
-    viewModel: DashboardViewModel = hiltViewModel(),
-    searchViewModel: SearchViewModel = hiltViewModel()
+    viewModel: DashboardViewModel = koinViewModel(),
+    searchViewModel: SearchViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val searchUiState by searchViewModel.uiState.collectAsStateWithLifecycle()

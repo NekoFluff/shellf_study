@@ -6,10 +6,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Duration
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val SYNC_WORK_NAME = "wanikani_sync"
 
@@ -23,9 +20,8 @@ interface SyncScheduler {
     fun cancelPeriodicSync()
 }
 
-@Singleton
-class WorkManagerSyncScheduler @Inject constructor(
-    @ApplicationContext private val context: Context
+class WorkManagerSyncScheduler(
+    private val context: Context
 ) : SyncScheduler {
     override fun schedulePeriodicSync() {
         val request = PeriodicWorkRequestBuilder<SyncWorker>(

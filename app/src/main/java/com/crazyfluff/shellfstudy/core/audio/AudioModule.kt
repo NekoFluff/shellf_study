@@ -1,6 +1,5 @@
 package com.crazyfluff.shellfstudy.core.audio
 
-import android.content.Context
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
@@ -11,44 +10,30 @@ import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.components.SingletonComponent
+import org.koin.android.ext.koin.androidContext
+import org.koin.dsl.bind
+import org.koin.dsl.module
 import java.io.File
-import javax.inject.Singleton
 
 private const val AUDIO_CACHE_MAX_BYTES = 50L * 1024 * 1024
 
-@Module
-@InstallIn(SingletonComponent::class)
 @UnstableApi
-object AudioModule {
-
-    @Provides
-    @Singleton
-    fun provideAudioCache(@ApplicationContext context: Context): SimpleCache =
+val audioModule = module {
+    single {
         SimpleCache(
-            File(context.cacheDir, "pronunciation_audio"),
+            File(androidContext().cacheDir, "pronunciation_audio"),
             LeastRecentlyUsedCacheEvictor(AUDIO_CACHE_MAX_BYTES)
         )
-
-    @Provides
-    @Singleton
-    fun provideAudioCacheDataSourceFactory(cache: SimpleCache): CacheDataSource.Factory =
+    }
+    single<CacheDataSource.Factory> {
         CacheDataSource.Factory()
-            .setCache(cache)
+            .setCache(get())
             .setUpstreamDataSourceFactory(DefaultHttpDataSource.Factory())
-
-    @Provides
-    @Singleton
-    fun provideExoPlayer(
-        @ApplicationContext context: Context,
-        cacheDataSourceFactory: CacheDataSource.Factory
-    ): ExoPlayer =
+    }
+    single {
+        val context = androidContext()
         ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(cacheDataSourceFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(get()))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -57,8 +42,6 @@ object AudioModule {
                 /* handleAudioFocus = */ true
             )
             .build()
-
-    @Provides
-    @Singleton
-    fun providePronunciationAudioPlayer(impl: RealPronunciationAudioPlayer): PronunciationAudioPlayer = impl
+    }
+    single { RealPronunciationAudioPlayer(get()) } bind PronunciationAudioPlayer::class
 }

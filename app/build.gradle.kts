@@ -4,8 +4,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
     alias(libs.plugins.firebase.appdistribution)
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
@@ -24,7 +22,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "com.crazyfluff.shellfstudy.HiltTestRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -76,15 +74,14 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.navigation.compose)
 
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
-    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(platform(libs.koin.bom))
+    implementation(libs.koin.android)
+    implementation(libs.koin.androidx.compose)
+    implementation(libs.koin.androidx.workmanager)
 
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.androidx.hilt.work)
-    ksp(libs.androidx.hilt.compiler)
 
     implementation(libs.okhttp.core)
     implementation(libs.kotlinx.serialization.json)
@@ -108,8 +105,9 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.work.testing)
-    testImplementation(libs.hilt.android.testing)
-    kspTest(libs.hilt.compiler)
+    testImplementation(platform(libs.koin.bom))
+    testImplementation(libs.koin.test)
+    testImplementation(libs.koin.test.junit4)
     // Stateless Compose screen tests run under Robolectric here instead of on a device/emulator —
     // see DashboardScreenTest/LessonScreenTest. Tests needing real device behavior (Keystore,
     // Espresso system back) stay in androidTest.
@@ -128,8 +126,8 @@ dependencies {
     androidTestImplementation(libs.truth)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.okhttp.mockwebserver)
-    androidTestImplementation(libs.hilt.android.testing)
-    kspAndroidTest(libs.hilt.compiler)
+    androidTestImplementation(platform(libs.koin.bom))
+    androidTestImplementation(libs.koin.android)
 
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)

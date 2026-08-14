@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +15,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 private const val RESULT_CAP = 50
 private const val QUERY_DEBOUNCE_MILLIS = 200L
@@ -29,8 +27,7 @@ data class SearchUiState(
 )
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-@HiltViewModel
-class SearchViewModel @Inject constructor(
+class SearchViewModel(
     private val subjectRepository: SubjectRepository
 ) : ViewModel() {
 

@@ -5,36 +5,17 @@ import com.crazyfluff.shellfstudy.shared.network.AuthTokenProvider
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient
 import com.crazyfluff.shellfstudy.shared.network.waniKaniJson
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
-import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.serialization.json.Json
-import javax.inject.Singleton
+import org.koin.dsl.module
 
-@Module
-@InstallIn(SingletonComponent::class)
-object NetworkModule {
-
+val networkModule = module {
     /** Also used outside networking — e.g. ReviewSessionRepository/LessonSessionRepository persist
      *  local quiz-session state as JSON via DataStore. */
-    @Provides
-    @Singleton
-    fun provideJson(): Json = waniKaniJson()
+    single { waniKaniJson() }
 
-    @Provides
-    @Singleton
-    fun provideAuthTokenProvider(tokenRepository: TokenRepository): AuthTokenProvider =
-        AuthTokenProvider { tokenRepository.tokenFlow.firstOrNull() }
+    single { AuthTokenProvider { get<TokenRepository>().tokenFlow.firstOrNull() } }
 
-    @Provides
-    @Singleton
-    fun provideWaniKaniHttpClient(authTokenProvider: AuthTokenProvider, json: Json): HttpClient =
-        createWaniKaniHttpClient(tokenProvider = authTokenProvider, json = json)
+    single { createWaniKaniHttpClient(tokenProvider = get(), json = get()) }
 
-    @Provides
-    @Singleton
-    fun provideWaniKaniApi(httpClient: HttpClient): WaniKaniApi = WaniKaniApi(httpClient)
+    single { WaniKaniApi(get()) }
 }

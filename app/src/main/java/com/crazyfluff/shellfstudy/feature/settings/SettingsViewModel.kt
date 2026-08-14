@@ -8,8 +8,6 @@ import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,8 +37,7 @@ data class SettingsUiState(
     val fullRefreshError: String? = null
 )
 
-@HiltViewModel
-class SettingsViewModel @Inject constructor(
+class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val notificationCoordinator: NotificationCoordinator,
     private val notificationScheduler: NotificationScheduler,

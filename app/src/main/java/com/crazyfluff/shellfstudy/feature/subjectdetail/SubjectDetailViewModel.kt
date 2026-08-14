@@ -13,7 +13,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +24,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class SubjectDetailUiState(
     val isLoading: Boolean = true,
@@ -56,8 +54,7 @@ private data class DetailAndRelated(
  * swaps which subject is loaded.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@HiltViewModel
-class SubjectDetailViewModel @Inject constructor(
+class SubjectDetailViewModel(
     private val subjectRepository: SubjectRepository,
     private val assignmentRepository: AssignmentRepository,
     private val settingsRepository: SettingsRepository,

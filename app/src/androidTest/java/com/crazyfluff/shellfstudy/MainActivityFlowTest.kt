@@ -10,35 +10,31 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.feature.auth.AuthScreenTestTags
-import dagger.hilt.android.testing.HiltAndroidRule
-import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import javax.inject.Inject
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 /**
  * End-to-end smoke test for real app launch/navigation, using Espresso for the back-press
- * interaction (Compose has no native equivalent for system back navigation).
+ * interaction (Compose has no native equivalent for system back navigation). Koin is already
+ * started by the real Application by the time this test runs (the default AndroidJUnitRunner
+ * launches it unmodified), so this just resolves TokenRepository off the running instance rather
+ * than needing its own test-only DI setup.
  */
-@HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
-class MainActivityFlowTest {
+class MainActivityFlowTest : KoinComponent {
 
-    @get:Rule(order = 0)
-    val hiltRule = HiltAndroidRule(this)
-
-    @get:Rule(order = 1)
+    @get:Rule
     val composeTestRule = createEmptyComposeRule()
 
-    @Inject
-    lateinit var tokenRepository: TokenRepository
+    private val tokenRepository: TokenRepository by inject()
 
     @Before
     fun setUp() {
-        hiltRule.inject()
         // Ensure a clean slate regardless of what a previous test run left on the device.
         runBlocking { tokenRepository.clearToken() }
     }

@@ -1,14 +1,11 @@
 package com.crazyfluff.shellfstudy.core.sync
 
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheDao
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.Instant
@@ -23,10 +20,9 @@ private const val REQUEST_SPACING_MS = 750L
  * periodic schedule (see [PitchAccentScrapeScheduler]) rather than per-view, and rate-limits itself
  * with an explicit delay between requests since there's no shared task queue to lean on here.
  */
-@HiltWorker
-class PitchAccentScrapeWorker @AssistedInject constructor(
-    @Assisted appContext: Context,
-    @Assisted params: WorkerParameters,
+class PitchAccentScrapeWorker(
+    appContext: Context,
+    params: WorkerParameters,
     private val subjectDao: SubjectDao,
     private val pitchAccentCacheDao: PitchAccentCacheDao,
     private val pitchAccentRepository: PitchAccentRepository

@@ -10,7 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 
 object SplashScreenTestTags {
@@ -21,7 +21,7 @@ object SplashScreenTestTags {
 fun SplashRoute(
     onNavigateToAuth: () -> Unit,
     onNavigateToDashboard: () -> Unit,
-    viewModel: SplashViewModel = hiltViewModel()
+    viewModel: SplashViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 

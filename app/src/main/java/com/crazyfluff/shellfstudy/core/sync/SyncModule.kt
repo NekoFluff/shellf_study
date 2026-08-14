@@ -1,22 +1,20 @@
 package com.crazyfluff.shellfstudy.core.sync
 
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
-import dagger.Binds
-import dagger.Module
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
+import org.koin.android.ext.koin.androidContext
+import org.koin.dsl.bind
+import org.koin.dsl.module
 
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class SyncModule {
-    @Binds
-    abstract fun bindSyncScheduler(impl: WorkManagerSyncScheduler): SyncScheduler
-
-    @Binds
-    abstract fun bindPitchAccentScrapeScheduler(
-        impl: WorkManagerPitchAccentScrapeScheduler
-    ): PitchAccentScrapeScheduler
-
-    @Binds
-    abstract fun bindOutboxSyncScheduler(impl: WorkManagerOutboxSyncScheduler): OutboxSyncScheduler
+val syncModule = module {
+    single { WorkManagerSyncScheduler(androidContext()) } bind SyncScheduler::class
+    single { WorkManagerPitchAccentScrapeScheduler(androidContext()) } bind PitchAccentScrapeScheduler::class
+    single { WorkManagerOutboxSyncScheduler(androidContext()) } bind OutboxSyncScheduler::class
+    single {
+        SyncOrchestrator(
+            subjectRepository = get(),
+            assignmentRepository = get(),
+            statsRepository = get(),
+            syncStateDao = get()
+        )
+    }
 }

@@ -1,125 +1,76 @@
 package com.crazyfluff.shellfstudy.core.data
 
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
-import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
-import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
-import kotlinx.serialization.json.Json
-import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
-import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
-import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
-import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
-import com.crazyfluff.shellfstudy.shared.database.StudyMaterialDao
-import com.crazyfluff.shellfstudy.shared.database.SubjectDao
-import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
-import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
-import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDao
-import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
-import dagger.Binds
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
-import javax.inject.Singleton
+import org.koin.dsl.bind
+import org.koin.dsl.module
 
 /**
- * Explicit @Provides bindings for repositories that live in :shared as plain classes (no
- * javax.inject annotations there — that library doesn't support Kotlin/Native, so DI wiring for
- * anything in commonMain has to happen here instead of via @Inject constructor).
+ * Explicit registrations for repositories that live in :shared as plain classes (Koin has no
+ * constructor scanning, so every injectable class — whether it lives here or in :shared — needs
+ * an explicit `single { }`/`viewModel { }`/`worker { }` entry somewhere in this app's Koin graph).
  */
-@Module
-@InstallIn(SingletonComponent::class)
-object RepositoryModule {
+val repositoryModule = module {
+    single { WaniKaniRepository(get()) }
 
-    @Provides
-    @Singleton
-    fun provideWaniKaniRepository(api: WaniKaniApi): WaniKaniRepository = WaniKaniRepository(api)
+    single {
+        SubjectRepository(
+            api = get(),
+            subjectDao = get(),
+            srsSystemDao = get(),
+            studyMaterialDao = get(),
+            syncStateDao = get(),
+            pitchAccentProvider = get()
+        )
+    }
 
-    @Provides
-    @Singleton
-    fun provideSubjectRepository(
-        api: WaniKaniApi,
-        subjectDao: SubjectDao,
-        srsSystemDao: SrsSystemDao,
-        studyMaterialDao: StudyMaterialDao,
-        syncStateDao: SyncStateDao,
-        pitchAccentProvider: PitchAccentProvider
-    ): SubjectRepository = SubjectRepository(api, subjectDao, srsSystemDao, studyMaterialDao, syncStateDao, pitchAccentProvider)
+    single {
+        AssignmentRepository(
+            api = get(),
+            assignmentDao = get(),
+            subjectDao = get(),
+            syncStateDao = get(),
+            subjectRepository = get(),
+            srsSystemDao = get()
+        )
+    }
 
-    @Provides
-    @Singleton
-    fun provideAssignmentRepository(
-        api: WaniKaniApi,
-        assignmentDao: AssignmentDao,
-        subjectDao: SubjectDao,
-        syncStateDao: SyncStateDao,
-        subjectRepository: SubjectRepository,
-        srsSystemDao: SrsSystemDao
-    ): AssignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao)
+    single {
+        StatsRepository(
+            api = get(),
+            reviewStatisticDao = get(),
+            levelProgressionDao = get(),
+            studyActivityDao = get(),
+            syncStateDao = get()
+        )
+    }
 
-    @Provides
-    @Singleton
-    fun provideStatsRepository(
-        api: WaniKaniApi,
-        reviewStatisticDao: ReviewStatisticDao,
-        levelProgressionDao: LevelProgressionDao,
-        studyActivityDao: StudyActivityDao,
-        syncStateDao: SyncStateDao
-    ): StatsRepository = StatsRepository(api, reviewStatisticDao, levelProgressionDao, studyActivityDao, syncStateDao)
+    single { SettingsRepository(get()) }
+    single { TokenRepository(get(), get()) }
+    single { OutboxRepository(outboxDao = get(), outboxSyncScheduler = get(), dataStore = get()) }
+    single { WeblioPitchAccentParser() }
+    single { DashboardCacheRepository(get()) }
+    single { LessonSessionRepository(dataStore = get(), json = get()) }
+    single { ReviewSessionRepository(dataStore = get(), json = get()) }
 
-    @Provides
-    @Singleton
-    fun provideSettingsRepository(dataStore: DataStore<Preferences>): SettingsRepository =
-        SettingsRepository(dataStore)
-
-    @Provides
-    @Singleton
-    fun provideTokenRepository(dataStore: DataStore<Preferences>, tokenCipher: TokenCipher): TokenRepository =
-        TokenRepository(dataStore, tokenCipher)
-
-    @Provides
-    @Singleton
-    fun provideOutboxRepository(
-        outboxDao: OutboxDao,
-        outboxSyncScheduler: OutboxSyncScheduler,
-        dataStore: DataStore<Preferences>
-    ): OutboxRepository = OutboxRepository(outboxDao, outboxSyncScheduler, dataStore)
-
-    @Provides
-    @Singleton
-    fun provideWeblioPitchAccentParser(): WeblioPitchAccentParser = WeblioPitchAccentParser()
-
-    @Provides
-    @Singleton
-    fun provideDashboardCacheRepository(dataStore: DataStore<Preferences>): DashboardCacheRepository =
-        DashboardCacheRepository(dataStore)
-
-    @Provides
-    @Singleton
-    fun provideLessonSessionRepository(dataStore: DataStore<Preferences>, json: Json): LessonSessionRepository =
-        LessonSessionRepository(dataStore, json)
-
-    @Provides
-    @Singleton
-    fun provideReviewSessionRepository(dataStore: DataStore<Preferences>, json: Json): ReviewSessionRepository =
-        ReviewSessionRepository(dataStore, json)
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-interface PitchAccentProviderModule {
-    @Binds
-    fun bindPitchAccentProvider(impl: PitchAccentRepository): PitchAccentProvider
+    // Implements PitchAccentProvider (the small interface SubjectRepository actually needs) since
+    // this class itself isn't portable yet — see PitchAccentRepository's own doc comment.
+    single {
+        PitchAccentRepository(
+            bundledSource = get(),
+            cacheDao = get(),
+            weblioApi = get(),
+            parser = get()
+        )
+    } bind PitchAccentProvider::class
 }

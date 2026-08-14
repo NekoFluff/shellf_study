@@ -5,12 +5,9 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val REVIEW_CHECK_WORK_NAME = "review_notification_check"
 private const val DAILY_REMINDER_WORK_NAME = "daily_streak_reminder"
@@ -43,9 +40,8 @@ interface NotificationScheduler {
     fun cancelAll()
 }
 
-@Singleton
-class WorkManagerNotificationScheduler @Inject constructor(
-    @ApplicationContext private val context: Context
+class WorkManagerNotificationScheduler(
+    private val context: Context
 ) : NotificationScheduler {
 
     override fun scheduleNextReviewCheck(targetInstant: Instant?) {

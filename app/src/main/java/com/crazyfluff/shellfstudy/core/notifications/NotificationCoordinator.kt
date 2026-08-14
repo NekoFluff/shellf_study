@@ -8,8 +8,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlin.time.toJavaInstant
 import kotlinx.coroutines.flow.first
 
@@ -36,8 +34,7 @@ interface NotificationCoordinator {
     suspend fun evaluateStudyReminder()
 }
 
-@Singleton
-class DefaultNotificationCoordinator @Inject constructor(
+class DefaultNotificationCoordinator(
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
     private val settingsRepository: SettingsRepository,

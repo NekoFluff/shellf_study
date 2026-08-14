@@ -9,13 +9,11 @@ import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class AuthUiState(
     val tokenInput: String = "",
@@ -26,8 +24,7 @@ data class AuthUiState(
     val isLoading: Boolean get() = isSubmitting
 }
 
-@HiltViewModel
-class AuthViewModel @Inject constructor(
+class AuthViewModel(
     private val tokenRepository: TokenRepository,
     private val waniKaniRepository: WaniKaniRepository,
     private val syncScheduler: SyncScheduler,

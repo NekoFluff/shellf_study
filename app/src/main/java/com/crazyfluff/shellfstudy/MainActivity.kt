@@ -13,14 +13,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.notifications.NotificationDeepLink
 import com.crazyfluff.shellfstudy.navigation.ShellfStudyNavHost
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
-import dagger.hilt.android.AndroidEntryPoint
+import org.koin.androidx.compose.koinViewModel
 
-@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     // Tracks a notification tap's target screen. android:launchMode is the default ("standard"),
@@ -33,7 +31,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         pendingDestination = intent?.getStringExtra(NotificationDeepLink.EXTRA_DESTINATION)
         setContent {
-            val themeViewModel: ThemeViewModel = hiltViewModel()
+            val themeViewModel: ThemeViewModel = koinViewModel()
             val themeMode by themeViewModel.themeMode.collectAsState()
             val darkTheme = when (themeMode) {
                 ThemeMode.LIGHT -> false

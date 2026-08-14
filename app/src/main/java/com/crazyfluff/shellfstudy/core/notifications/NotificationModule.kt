@@ -1,19 +1,21 @@
 package com.crazyfluff.shellfstudy.core.notifications
 
-import dagger.Binds
-import dagger.Module
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
+import org.koin.android.ext.koin.androidContext
+import org.koin.dsl.bind
+import org.koin.dsl.module
 
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class NotificationModule {
-    @Binds
-    abstract fun bindNotificationScheduler(impl: WorkManagerNotificationScheduler): NotificationScheduler
-
-    @Binds
-    abstract fun bindNotificationPoster(impl: SystemNotificationPoster): NotificationPoster
-
-    @Binds
-    abstract fun bindNotificationCoordinator(impl: DefaultNotificationCoordinator): NotificationCoordinator
+val notificationModule = module {
+    single { WorkManagerNotificationScheduler(androidContext()) } bind NotificationScheduler::class
+    single { SystemNotificationPoster(androidContext()) } bind NotificationPoster::class
+    single { NotificationStateRepository(get()) }
+    single {
+        DefaultNotificationCoordinator(
+            assignmentRepository = get(),
+            statsRepository = get(),
+            settingsRepository = get(),
+            notificationStateRepository = get(),
+            notificationScheduler = get(),
+            notificationPoster = get()
+        )
+    } bind NotificationCoordinator::class
 }

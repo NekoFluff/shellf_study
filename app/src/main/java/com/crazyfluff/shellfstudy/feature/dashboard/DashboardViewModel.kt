@@ -25,7 +25,6 @@ import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +43,6 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
-import javax.inject.Inject
 import kotlin.math.ceil
 import kotlin.time.Clock
 
@@ -146,8 +144,7 @@ private data class LevelDependentState(
     val levelProgress: LevelProgress? = null
 )
 
-@HiltViewModel
-class DashboardViewModel @Inject constructor(
+class DashboardViewModel(
     private val waniKaniRepository: WaniKaniRepository,
     private val tokenRepository: TokenRepository,
     private val reviewSessionRepository: ReviewSessionRepository,

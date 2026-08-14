@@ -6,14 +6,12 @@ import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 enum class SplashDestination { AUTH, DASHBOARD }
 
@@ -24,8 +22,7 @@ data class SplashUiState(val destination: SplashDestination? = null)
  * user with a stored token never waits on (or is silently logged out by) a startup validation
  * round-trip. Dashboard's own refresh() is the real validation point once past here.
  */
-@HiltViewModel
-class SplashViewModel @Inject constructor(
+class SplashViewModel(
     private val tokenRepository: TokenRepository,
     private val syncScheduler: SyncScheduler,
     private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,

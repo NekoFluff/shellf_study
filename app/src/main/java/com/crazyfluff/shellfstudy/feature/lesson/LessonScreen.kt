@@ -70,7 +70,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
@@ -189,7 +189,7 @@ sealed interface LessonScreenEvent {
 fun LessonRoute(
     onSessionComplete: () -> Unit,
     onBack: () -> Unit,
-    viewModel: LessonViewModel = hiltViewModel()
+    viewModel: LessonViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
