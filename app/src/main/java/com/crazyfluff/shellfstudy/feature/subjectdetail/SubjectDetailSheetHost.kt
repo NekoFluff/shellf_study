@@ -44,10 +44,15 @@ fun SubjectDetailSheetHost(state: SubjectDetailSheetState) {
     state.subjectId?.let { lastShownSubjectId = it }
 
     lastShownSubjectId?.let { id ->
+        // A gesture-driven settle mismatch and a discrete close both mean exactly the same thing
+        // here ("hide it") — unlike Review's mid-quiz sheet, this state has no separate "toggle open
+        // via gesture" case to distinguish onToggle from onDismiss.
+        val dismiss = { state.dismiss() }
         SubjectDetailSheet(
             subjectId = id,
             expanded = state.subjectId != null,
-            onToggle = { state.dismiss() },
+            onToggle = dismiss,
+            onDismiss = dismiss,
             revealMode = DetailRevealMode.FULL,
             isAnswered = true,
             questionType = null,

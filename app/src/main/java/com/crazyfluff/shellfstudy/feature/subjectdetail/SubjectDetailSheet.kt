@@ -43,7 +43,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -64,7 +63,6 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMo
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectDetailContent
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectDetailTestTags
 import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** Height of the always-present grab strip in its collapsed "peek" state — labeled with "Swipe up
@@ -111,6 +109,20 @@ private enum class SheetAnchor { Collapsed, Open }
  * the dim scrim) stay visible through the whole close gesture and its animation, never disappearing
  * until the sheet has truly come to rest.
  *
+ * [onToggle] and [onDismiss] look redundant but answer different questions, and must not be
+ * collapsed into one. A drag/fling settling somewhere other than [expanded] is the *gesture* telling
+ * the caller which way it ended up — genuinely bidirectional (Review's peek handle can settle either
+ * Open or Collapsed), so [onToggle] has to be a real flip. The scrim tap, close button, and back
+ * handler are discrete actions that always mean "close", never "toggle" — routing them through
+ * [onToggle] would risk re-opening the sheet if it ever fired while already collapsed, and previously
+ * routing them through a local `collapse()` helper that only animated [dragState] (relying on the
+ * settle-mismatch sync above to eventually notice and call [onToggle]) left a real window where a
+ * second animateTo could interrupt the first before settledValue ever registered the change, so that
+ * sync never fired and [expanded] got stuck out of sync with the now-collapsed sheet. [onDismiss]
+ * closes that gap by updating the caller's authoritative state directly and immediately, the same way
+ * the handle's own tap-to-toggle already did — the animation is then just a reaction to that change,
+ * not a prerequisite for it.
+ *
  * [SubjectDetailViewModel] (and the network/DB work behind it) is only ever created once the sheet
  * has actually been asked to open — see [SubjectDetailBody] — not merely because this handle exists,
  * so answering a question you never peek at never pays for a subject-detail fetch.
@@ -141,6 +153,7 @@ fun SubjectDetailSheet(
     subjectId: Long,
     expanded: Boolean,
     onToggle: () -> Unit,
+    onDismiss: () -> Unit,
     revealMode: DetailRevealMode,
     isAnswered: Boolean,
     questionType: DetailQuestionType?,
@@ -150,7 +163,6 @@ fun SubjectDetailSheet(
     active: Boolean = true
 ) {
     val density = LocalDensity.current
-    val scope = rememberCoroutineScope()
 
     // navigationBarsPadding on the Surface below already reserves the bottom system-bar clearance,
     // so it's subtracted here too, otherwise the sheet would be pushed that same amount past the
@@ -186,8 +198,6 @@ fun SubjectDetailSheet(
             }
         }
     }
-
-    val collapse: () -> Unit = { scope.launch { dragState.animateTo(SheetAnchor.Collapsed) } }
 
     // External (non-gesture) changes to `expanded` — the initial swipe/tap that first reveals this
     // composable, SubjectDetailSheetHost mounting it already expanded, or a future caller-driven
@@ -262,10 +272,17 @@ fun SubjectDetailSheet(
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.32f))
                     .clickable(
-                        enabled = active,
+                        // Gated on settledValue, not just isOpenIsh/active — the scrim mounts (and
+                        // covers whatever triggered the open, e.g. a search result row) as soon as
+                        // the open animateTo *starts*, well before it settles. onDismiss (below) is
+                        // what makes a stray tap here safe even mid-animation — this gate is purely
+                        // to stop a fast second tap from reading as "immediately undo the open you
+                        // just triggered": until the sheet has visibly finished opening, that tap
+                        // passes through to whatever's underneath instead of dismissing.
+                        enabled = active && dragState.settledValue == SheetAnchor.Open,
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
-                        onClick = collapse
+                        onClick = onDismiss
                     )
             )
         }
@@ -331,7 +348,7 @@ fun SubjectDetailSheet(
                         revealMode = revealMode,
                         isAnswered = isAnswered,
                         questionType = questionType,
-                        onCollapse = collapse,
+                        onCollapse = onDismiss,
                         autoPlayStrokeOrder = strokeOrderSettled
                     )
                 }

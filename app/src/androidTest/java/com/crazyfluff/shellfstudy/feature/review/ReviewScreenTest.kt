@@ -47,6 +47,7 @@ class ReviewScreenTest {
         onContinue: () -> Unit = {},
         onUndo: () -> Unit = {},
         onToggleDetails: () -> Unit = {},
+        onCloseDetails: () -> Unit = {},
         onRetry: () -> Unit = {},
         onWrapUp: () -> Unit = {},
         onAbandon: () -> Unit = {},
@@ -64,6 +65,7 @@ class ReviewScreenTest {
                         ReviewScreenEvent.Continue -> onContinue()
                         ReviewScreenEvent.Undo -> onUndo()
                         ReviewScreenEvent.ToggleDetails -> onToggleDetails()
+                        ReviewScreenEvent.CloseDetails -> onCloseDetails()
                         ReviewScreenEvent.Retry -> onRetry()
                         ReviewScreenEvent.WrapUp -> onWrapUp()
                         ReviewScreenEvent.Abandon -> onAbandon()

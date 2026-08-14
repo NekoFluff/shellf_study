@@ -260,6 +260,14 @@ class ReviewViewModel @Inject constructor(
         _uiState.update { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
     }
 
+    /** Unlike [toggleDetails] (a real flip, driven by the swipe handle/gesture-settle sync), this is
+     *  the definitively-directional close used by the scrim tap, the close button, and the back
+     *  handler — those always mean "close", never "toggle", so they must not risk re-opening the
+     *  sheet if called while it's already collapsed. */
+    fun closeDetails() {
+        _uiState.update { it.copy(isDetailsExpanded = false) }
+    }
+
     fun submitAnswer() {
         val state = _uiState.value
         if (state.feedback != null) return

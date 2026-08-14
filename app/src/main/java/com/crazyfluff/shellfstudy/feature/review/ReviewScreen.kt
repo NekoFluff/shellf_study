@@ -151,6 +151,7 @@ sealed interface ReviewScreenEvent {
     data object Continue : ReviewScreenEvent
     data object Undo : ReviewScreenEvent
     data object ToggleDetails : ReviewScreenEvent
+    data object CloseDetails : ReviewScreenEvent
     data object Retry : ReviewScreenEvent
     data object WrapUp : ReviewScreenEvent
     data object Abandon : ReviewScreenEvent
@@ -183,6 +184,7 @@ fun ReviewRoute(
                 ReviewScreenEvent.Continue -> viewModel.onContinue()
                 ReviewScreenEvent.Undo -> viewModel.undoLastAnswer()
                 ReviewScreenEvent.ToggleDetails -> viewModel.toggleDetails()
+                ReviewScreenEvent.CloseDetails -> viewModel.closeDetails()
                 ReviewScreenEvent.Retry -> viewModel.loadOrResume()
                 ReviewScreenEvent.WrapUp -> viewModel.wrapUp()
                 ReviewScreenEvent.Abandon -> viewModel.abandonSession()
@@ -208,6 +210,7 @@ fun ReviewScreen(
     val onContinue = { onEvent(ReviewScreenEvent.Continue) }
     val onUndo = { onEvent(ReviewScreenEvent.Undo) }
     val onToggleDetails = { onEvent(ReviewScreenEvent.ToggleDetails) }
+    val onCloseDetails = { onEvent(ReviewScreenEvent.CloseDetails) }
     val onRetry = { onEvent(ReviewScreenEvent.Retry) }
     val onWrapUp = { onEvent(ReviewScreenEvent.WrapUp) }
     val onAbandon = { onEvent(ReviewScreenEvent.Abandon) }
@@ -370,6 +373,7 @@ fun ReviewScreen(
                     active = active,
                     expanded = uiState.isDetailsExpanded,
                     onToggle = onToggleDetails,
+                    onDismiss = onCloseDetails,
                     revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
                     isAnswered = true,
                     questionType = questionType.toDetailQuestionType(),

@@ -406,6 +406,33 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `toggleDetails flips both ways, closeDetails always ends up false`() = runTest(mainDispatcherRule.dispatcher) {
+        // closeDetails is the definitively-directional close used by SubjectDetailSheet's scrim
+        // tap, close button, and back handler — those must never risk re-opening the sheet, unlike
+        // toggleDetails (the swipe handle's real flip). Regression coverage for that distinction.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.isDetailsExpanded).isFalse()
+
+            viewModel.toggleDetails()
+            assertThat(awaitItem().isDetailsExpanded).isTrue()
+
+            viewModel.toggleDetails()
+            assertThat(awaitItem().isDetailsExpanded).isFalse()
+
+            viewModel.closeDetails()
+            // Already false — closeDetails is idempotent, not a toggle, so this must not flip it
+            // back to true.
+            expectNoEvents()
+        }
+    }
+
+    @Test
     fun `dontKnowAnswer does nothing once feedback is already showing`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
