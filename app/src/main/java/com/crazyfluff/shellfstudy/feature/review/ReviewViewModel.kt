@@ -3,7 +3,7 @@ package com.crazyfluff.shellfstudy.feature.review
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.tracing.trace
-import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.coroutines.runDurably

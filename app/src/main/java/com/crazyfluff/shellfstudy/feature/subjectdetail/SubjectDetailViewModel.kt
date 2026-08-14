@@ -2,8 +2,8 @@ package com.crazyfluff.shellfstudy.feature.subjectdetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.crazyfluff.shellfstudy.core.audio.PlaybackState
-import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.shared.data.PlaybackState
+import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
