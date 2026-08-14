@@ -22,6 +22,7 @@ import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.AnswerOutcome
@@ -40,6 +41,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -72,7 +74,13 @@ data class LessonUiState(
     val showSubjectTypeLabel: Boolean = false,
     val showTotalTimer: Boolean = false,
     val showQuestionTimer: Boolean = false,
-    val sessionStartTimeMs: Long? = null,
+    // Active time accumulated before the current viewing segment, and (while non-null) when that
+    // segment began — see PausableElapsedTimeText and LessonViewModel's activeElapsedMs /
+    // activeSegmentStartMs, which these mirror exactly. Segment goes null while the session isn't
+    // actively being viewed (app backgrounded, or navigated off-screen), freezing the total timer
+    // instead of letting it count straight through that gap.
+    val sessionActiveElapsedMs: Long = 0L,
+    val sessionActiveSegmentStartMs: Long? = null,
     val questionStartTimeMs: Long? = null,
     // Non-null once the current question has been answered — freezes the "time on this question"
     // display at this value instead of letting it keep ticking through the feedback screen. Reset
@@ -110,6 +118,7 @@ class LessonViewModel @Inject constructor(
     private val subjectRepository: SubjectRepository,
     private val strokeOrderRepository: StrokeOrderRepository,
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
+    private val appForegroundTracker: AppForegroundTracker,
     @ApplicationScope private val applicationScope: CoroutineScope
 ) : ViewModel() {
 
@@ -125,10 +134,16 @@ class LessonViewModel @Inject constructor(
     private val progressByAssignmentId = mutableMapOf<Long, LessonItemProgress>()
     // Individual per-answer records (used for the "slowest answers" summary) stay in-memory only —
     // a resume starts this list fresh, so that card only reflects answers given since the most
-    // recent resume. sessionStartTimeMs, by contrast, is restored from persisted state on resume
-    // (see resumeQuizPhase) so the total/average time summaries stay accurate across a resume.
+    // recent resume. activeElapsedMs, by contrast, is restored from persisted state on resume (see
+    // resumeQuizPhase) so the total/average time summaries stay accurate across a resume.
     private val answeredQuestions = mutableListOf<LessonAnsweredQuestionRecord>()
-    private var sessionStartTimeMs: Long = 0L
+
+    // Together, these track only the time the quiz was actively being viewed: activeElapsedMs is
+    // the accumulated total as of the end of the last viewing segment, and activeSegmentStartMs —
+    // non-null exactly while actively viewing — is when the current one began. currentActiveElapsedMs
+    // combines them; see it, resumeActiveSegment, and pauseActiveSegment for how the two ever change.
+    private var activeElapsedMs: Long = 0L
+    private var activeSegmentStartMs: Long? = null
     private var questionShownAtMs: Long = 0L
 
     init {
@@ -143,6 +158,14 @@ class LessonViewModel @Inject constructor(
                         showQuestionTimer = settings.showQuestionTimer
                     )
                 }
+            }
+        }
+        // The initial value is handled by beginQuiz/resumeQuizPhase/resumeActiveSegment below instead
+        // — dropped here so a ViewModel created while already in the foreground (the overwhelmingly
+        // common case) doesn't publish a redundant extra uiState emission for it.
+        viewModelScope.launch {
+            appForegroundTracker.isForeground.drop(1).collect { isForeground ->
+                if (isForeground) resumeActiveSegment() else pauseActiveSegment()
             }
         }
     }
@@ -245,12 +268,12 @@ class LessonViewModel @Inject constructor(
             }
         }
         answeredQuestions.clear()
-        // Restores the session's original start time rather than restarting the clock — a resume
-        // (backing out mid-quiz and returning, or a process death) previously reset this to now,
-        // silently undercounting sessionTotalElapsedMs/sessionAverageTimePerItemMs by however long
-        // the session had been away. Falls back to now only for pre-existing persisted data that
-        // predates this field (sessionStartTimeMs == 0L).
-        sessionStartTimeMs = persisted.sessionStartTimeMs.takeIf { it > 0L } ?: System.currentTimeMillis()
+        // Restores the quiz's accumulated active time rather than restarting the clock — this is
+        // deliberately *not* wall-clock time since the quiz began; time spent away (backgrounded, or
+        // navigated off and back) must not count. resumeActiveSegment then starts a fresh viewing
+        // segment on top of that restored base, so the clock resumes right where it left off.
+        activeElapsedMs = persisted.sessionActiveElapsedMs
+        resumeActiveSegment()
         questionShownAtMs = System.currentTimeMillis()
         totalQuizCount = persisted.totalQuizCount
         val next = quizQueue.current
@@ -267,7 +290,8 @@ class LessonViewModel @Inject constructor(
                 currentQuizItem = next?.item,
                 currentQuestionType = next?.type,
                 isSessionComplete = next == null,
-                sessionStartTimeMs = sessionStartTimeMs,
+                sessionActiveElapsedMs = activeElapsedMs,
+                sessionActiveSegmentStartMs = activeSegmentStartMs,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null,
                 sessionItemsLearned = summary?.itemsLearned ?: it.sessionItemsLearned,
@@ -440,8 +464,9 @@ class LessonViewModel @Inject constructor(
         progressByAssignmentId.clear()
         items.forEach { item -> progressByAssignmentId[item.assignmentId] = LessonItemProgress(item) }
         answeredQuestions.clear()
-        sessionStartTimeMs = System.currentTimeMillis()
-        questionShownAtMs = sessionStartTimeMs
+        activeElapsedMs = 0L
+        resumeActiveSegment()
+        questionShownAtMs = System.currentTimeMillis()
 
         val next = quizQueue.current
         _uiState.update {
@@ -454,7 +479,8 @@ class LessonViewModel @Inject constructor(
                 answerInput = "",
                 feedback = null,
                 isSessionComplete = next == null,
-                sessionStartTimeMs = sessionStartTimeMs,
+                sessionActiveElapsedMs = activeElapsedMs,
+                sessionActiveSegmentStartMs = activeSegmentStartMs,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null
             )
@@ -578,7 +604,7 @@ class LessonViewModel @Inject constructor(
             PersistedLessonItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },
         totalQuizCount = totalQuizCount,
-        sessionStartTimeMs = sessionStartTimeMs
+        sessionActiveElapsedMs = currentActiveElapsedMs()
     )
 
     private suspend fun persistSnapshot(snapshot: PersistedLessonSession) {
@@ -614,6 +640,42 @@ class LessonViewModel @Inject constructor(
         }
     }
 
+    /** The single source of truth for "how long has this quiz actually been viewed" — both the
+     *  live-ticking total timer (via [PausableElapsedTimeText] reading the mirrored uiState fields)
+     *  and [sessionSummary]'s final total derive from this same formula over the same two fields, so
+     *  they can never disagree. */
+    private fun currentActiveElapsedMs(nowMs: Long = System.currentTimeMillis()): Long =
+        activeElapsedMs + (activeSegmentStartMs?.let { nowMs - it } ?: 0L)
+
+    /** Starts a fresh viewing segment — called once the quiz is actually being looked at (right
+     *  after beginning/resuming it, and whenever [appForegroundTracker] reports the app came back to
+     *  the foreground). Idempotent: a no-op if a segment is already running. */
+    private fun resumeActiveSegment() {
+        if (activeSegmentStartMs != null) return
+        val now = System.currentTimeMillis()
+        activeSegmentStartMs = now
+        _uiState.update { it.copy(sessionActiveSegmentStartMs = now) }
+    }
+
+    /** Folds the current viewing segment into the accumulated total and stops the clock — called
+     *  when the quiz is no longer being actively viewed ([appForegroundTracker] reports the app
+     *  backgrounded, or this ViewModel is cleared because the user navigated away). Persists via
+     *  [applicationScope] rather than [viewModelScope] since the latter may already be in the
+     *  process of being cancelled by the time this runs (see [onCleared]). Idempotent: a no-op if no
+     *  segment is running (including during the STUDY phase, before the quiz clock has started). */
+    private fun pauseActiveSegment() {
+        val startedAt = activeSegmentStartMs ?: return
+        activeElapsedMs += System.currentTimeMillis() - startedAt
+        activeSegmentStartMs = null
+        _uiState.update { it.copy(sessionActiveElapsedMs = activeElapsedMs, sessionActiveSegmentStartMs = null) }
+        applicationScope.launch { persistCurrentState() }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        pauseActiveSegment()
+    }
+
     private data class LessonSessionSummary(
         val itemsLearned: Int,
         val correctFirstTry: Int,
@@ -632,7 +694,7 @@ class LessonViewModel @Inject constructor(
         val missedItems = progressByAssignmentId.values
             .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
             .map { it.item }
-        val totalElapsedMs = System.currentTimeMillis() - sessionStartTimeMs
+        val totalElapsedMs = currentActiveElapsedMs()
         val averageTimePerItemMs = if (itemsLearned == 0) 0L else totalElapsedMs / itemsLearned
         val slowestAnswers = answeredQuestions.sortedByDescending { it.elapsedMs }.take(5)
             .map { LessonSlowAnswer(it.item, it.type, it.elapsedMs, it.isCorrect) }

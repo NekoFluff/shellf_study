@@ -181,7 +181,7 @@ class ReviewScreenTest {
             ReviewUiState(
                 isLoading = false, totalCount = 1, remainingCount = 1,
                 currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showTotalTimer = true, sessionStartTimeMs = System.currentTimeMillis()
+                showTotalTimer = true, sessionActiveSegmentStartMs = System.currentTimeMillis()
             )
         )
 
@@ -194,11 +194,26 @@ class ReviewScreenTest {
             ReviewUiState(
                 isLoading = false, totalCount = 1, remainingCount = 1,
                 currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showTotalTimer = false, sessionStartTimeMs = System.currentTimeMillis()
+                showTotalTimer = false, sessionActiveSegmentStartMs = System.currentTimeMillis()
             )
         )
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT).assertCountEquals(0)
+    }
+
+    @Test
+    fun totalTimer_freezesWhilePaused_notTickingWithoutAnActiveSegment() {
+        // sessionActiveSegmentStartMs is null (as if the app were backgrounded, or navigated away
+        // and back) — the timer must show the frozen base, not restart from "0:00".
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                showTotalTimer = true, sessionActiveElapsedMs = 65_000L, sessionActiveSegmentStartMs = null
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT).assertTextEquals("1:05")
     }
 
     @Test

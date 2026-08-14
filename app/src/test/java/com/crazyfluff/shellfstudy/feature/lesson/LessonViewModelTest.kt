@@ -15,7 +15,9 @@ import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
+import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
@@ -56,6 +58,7 @@ class LessonViewModelTest {
     private lateinit var subjectRepository: SubjectRepository
     private var strokeOrderRepository: StrokeOrderRepository = FakeStrokeOrderRepository()
     private lateinit var pronunciationAudioPlayer: FakePronunciationAudioPlayer
+    private lateinit var appForegroundTracker: AppForegroundTracker
 
     @Before
     fun setUp() {
@@ -74,6 +77,7 @@ class LessonViewModelTest {
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         pronunciationAudioPlayer = FakePronunciationAudioPlayer()
+        appForegroundTracker = AppForegroundTracker()
     }
 
     @After
@@ -83,7 +87,7 @@ class LessonViewModelTest {
 
     private fun TestScope.createViewModel() = LessonViewModel(
         assignmentRepository, outboxRepository, lessonSessionRepository, pitchAccentRepository, settingsRepository,
-        subjectRepository, strokeOrderRepository, pronunciationAudioPlayer, backgroundScope
+        subjectRepository, strokeOrderRepository, pronunciationAudioPlayer, appForegroundTracker, backgroundScope
     )
 
     /** Routes by path — refreshing the lesson queue now syncs subjects and assignments, in either order. */
@@ -152,7 +156,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `starting the quiz sets sessionStartTimeMs and questionStartTimeMs`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `starting the quiz sets sessionActiveSegmentStartMs and questionStartTimeMs`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -166,7 +170,7 @@ class LessonViewModelTest {
             viewModel.nextStudyCard()
             val quizState = awaitItem()
 
-            assertThat(quizState.sessionStartTimeMs).isNotNull()
+            assertThat(quizState.sessionActiveSegmentStartMs).isNotNull()
             assertThat(quizState.questionStartTimeMs).isNotNull()
         }
     }
@@ -774,12 +778,13 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `resuming a persisted quiz preserves the original session start time instead of restarting the clock`() = runTest(mainDispatcherRule.dispatcher) {
-        // Regression test: resumeFromPersisted used to stamp sessionStartTimeMs to "now" on every
-        // resume, silently undercounting sessionTotalElapsedMs/sessionAverageTimePerItemMs by
-        // however long the session had been away. It should instead carry over the persisted
-        // value — proven with a fake, unmistakably-in-the-past timestamp rather than comparing
-        // real wall-clock reads, since this whole test can execute within the same millisecond.
+    fun `resuming a persisted quiz preserves the accumulated active time instead of resetting it to zero`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: resumeFromPersisted used to derive elapsed time from an absolute session
+        // start timestamp restored across resumes, which counted 100% of time spent away
+        // (backgrounded, or navigated off and back) as if it were active quiz time. It should
+        // instead carry over only the accumulated *active* time — proven with a fake, unmistakably
+        // large value rather than comparing real wall-clock reads, since this whole test executes
+        // in well under a second.
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val firstViewModel = createViewModel()
@@ -793,17 +798,19 @@ class LessonViewModelTest {
             awaitItem() // quiz begins, persisted
         }
 
-        val fakeOriginalStartTime = 1_000_000L
+        val fakeAccumulatedElapsedMs = 1_000_000L
         val persisted = lessonSessionRepository.load()!!
-        lessonSessionRepository.save(persisted.copy(sessionStartTimeMs = fakeOriginalStartTime))
+        lessonSessionRepository.save(persisted.copy(sessionActiveElapsedMs = fakeAccumulatedElapsedMs))
 
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
             assertThat(state.phase).isEqualTo(LessonPhase.QUIZ)
+            assertThat(state.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)
+            assertThat(state.sessionActiveSegmentStartMs).isNotNull()
 
-            // Forces a fresh persisted snapshot so the resumed sessionStartTimeMs can be inspected.
+            // Forces a fresh persisted snapshot so the resumed accumulated time can be inspected.
             secondViewModel.onAnswerInputChange("Mouth")
             awaitItem()
             secondViewModel.submitAnswer()
@@ -812,7 +819,39 @@ class LessonViewModelTest {
 
         val resumedSnapshot = lessonSessionRepository.load()
         assertThat(resumedSnapshot).isNotNull()
-        assertThat(resumedSnapshot!!.sessionStartTimeMs).isEqualTo(fakeOriginalStartTime)
+        // At least the restored base — the fresh viewing segment since resume adds a little more
+        // real wall-clock time on top, never less.
+        assertThat(resumedSnapshot!!.sessionActiveElapsedMs).isAtLeast(fakeAccumulatedElapsedMs)
+    }
+
+    @Test
+    fun `backgrounding the app pauses the total timer, and returning to it resumes without resetting the accumulated time`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            val quizState = awaitItem() // quiz begins
+            assertThat(quizState.sessionActiveSegmentStartMs).isNotNull()
+
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            val pausedState = awaitItem()
+            assertThat(pausedState.sessionActiveSegmentStartMs).isNull()
+            val elapsedWhilePaused = pausedState.sessionActiveElapsedMs
+
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+            val resumedState = awaitItem()
+            assertThat(resumedState.sessionActiveSegmentStartMs).isNotNull()
+            // Resumes right where it left off — the time spent "away" (backgrounded) must not have
+            // been folded in as if it were active quiz time.
+            assertThat(resumedState.sessionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+        }
     }
 
     @Test

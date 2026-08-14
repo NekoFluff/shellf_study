@@ -34,12 +34,12 @@ data class PersistedLessonSession(
     val quizQueue: List<PersistedLessonQuestion> = emptyList(),
     val progress: List<PersistedLessonItemProgress> = emptyList(),
     val totalQuizCount: Int = 0,
-    // In-memory in ReviewViewModel/LessonViewModel prior to this field's addition, which reset the
-    // session clock on every resume instead of restoring how much time had already elapsed — see
-    // LessonViewModel.resumeFromPersisted. 0 means "not started yet" (a STUDY-phase snapshot, where
-    // the quiz clock hasn't started) or "no value was ever persisted" (pre-existing data from before
-    // this field existed); resumeFromPersisted falls back to the current time in both cases.
-    val sessionStartTimeMs: Long = 0L
+    // Active time accumulated so far in the quiz phase, excluding any time spent away from the
+    // session (backgrounded, or navigated off-screen) — see LessonViewModel's
+    // activeElapsedMs/AppForegroundTracker. 0 means "not started yet" (a STUDY-phase snapshot, where
+    // the quiz clock hasn't started) or "no value was ever persisted" (data from before this field
+    // existed).
+    val sessionActiveElapsedMs: Long = 0L
 )
 
 /**

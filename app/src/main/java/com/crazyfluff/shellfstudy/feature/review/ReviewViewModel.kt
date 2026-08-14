@@ -19,6 +19,7 @@ import com.crazyfluff.shellfstudy.core.data.StatsRepository
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.AnswerOutcome
@@ -35,6 +36,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -61,7 +63,13 @@ data class ReviewUiState(
     val showSubjectTypeLabel: Boolean = false,
     val showTotalTimer: Boolean = false,
     val showQuestionTimer: Boolean = false,
-    val sessionStartTimeMs: Long? = null,
+    // Active time accumulated before the current viewing segment, and (while non-null) when that
+    // segment began — see PausableElapsedTimeText and ReviewViewModel's activeElapsedMs /
+    // activeSegmentStartMs, which these mirror exactly. Segment goes null while the session isn't
+    // actively being viewed (app backgrounded, or navigated off-screen), freezing the total timer
+    // instead of letting it count straight through that gap.
+    val sessionActiveElapsedMs: Long = 0L,
+    val sessionActiveSegmentStartMs: Long? = null,
     val questionStartTimeMs: Long? = null,
     // Non-null once the current question has been answered — freezes the "time on this question"
     // display at this value instead of letting it keep ticking through the feedback screen. Reset
@@ -93,6 +101,7 @@ class ReviewViewModel @Inject constructor(
     private val reviewSessionRepository: ReviewSessionRepository,
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val settingsRepository: SettingsRepository,
+    private val appForegroundTracker: AppForegroundTracker,
     @ApplicationScope private val applicationScope: CoroutineScope
 ) : ViewModel() {
 
@@ -107,10 +116,16 @@ class ReviewViewModel @Inject constructor(
 
     // Individual per-answer records (used for the "slowest answers" summary) stay in-memory only —
     // a resume starts this list fresh, so that card only reflects answers given since the most
-    // recent resume. sessionStartTimeMs, by contrast, is restored from persisted state on resume
-    // (see resumeFromPersisted) so the total/average time summaries stay accurate across a resume.
+    // recent resume. activeElapsedMs, by contrast, is restored from persisted state on resume (see
+    // resumeFromPersisted) so the total/average time summaries stay accurate across a resume.
     private val answeredQuestions = mutableListOf<AnsweredQuestionRecord>()
-    private var sessionStartTimeMs: Long = 0L
+
+    // Together, these track only the time the session was actively being viewed: activeElapsedMs is
+    // the accumulated total as of the end of the last viewing segment, and activeSegmentStartMs —
+    // non-null exactly while actively viewing — is when the current one began. currentActiveElapsedMs
+    // combines them; see it, resumeActiveSegment, and pauseActiveSegment for how the two ever change.
+    private var activeElapsedMs: Long = 0L
+    private var activeSegmentStartMs: Long? = null
     private var questionShownAtMs: Long = 0L
 
     // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
@@ -135,6 +150,14 @@ class ReviewViewModel @Inject constructor(
                         showQuestionTimer = settings.showQuestionTimer
                     )
                 }
+            }
+        }
+        // The initial value is handled by loadOrResume/resumeActiveSegment below instead — dropped
+        // here so a ViewModel created while already in the foreground (the overwhelmingly common
+        // case) doesn't publish a redundant extra uiState emission for it.
+        viewModelScope.launch {
+            appForegroundTracker.isForeground.drop(1).collect { isForeground ->
+                if (isForeground) resumeActiveSegment() else pauseActiveSegment()
             }
         }
     }
@@ -201,12 +224,12 @@ class ReviewViewModel @Inject constructor(
         }
         totalQuestions = persisted.totalQuestions
         answeredQuestions.clear()
-        // Restores the session's original start time rather than restarting the clock — a resume
-        // (backing out mid-session and returning, or a process death) previously reset this to now,
-        // silently undercounting sessionTotalElapsedMs/sessionAverageTimePerItemMs by however long
-        // the session had been away. Falls back to now only for pre-existing persisted data that
-        // predates this field (sessionStartTimeMs == 0L).
-        sessionStartTimeMs = persisted.sessionStartTimeMs.takeIf { it > 0L } ?: System.currentTimeMillis()
+        // Restores the session's accumulated active time rather than restarting the clock — this is
+        // deliberately *not* wall-clock time since the session began; time spent away (backgrounded,
+        // or navigated off and back) must not count. resumeActiveSegment then starts a fresh viewing
+        // segment on top of that restored base, so the clock resumes right where it left off.
+        activeElapsedMs = persisted.sessionActiveElapsedMs
+        resumeActiveSegment()
         advanceToNextQuestion()
     }
 
@@ -214,7 +237,8 @@ class ReviewViewModel @Inject constructor(
         queue.clear()
         progressByAssignmentId.clear()
         answeredQuestions.clear()
-        sessionStartTimeMs = System.currentTimeMillis()
+        activeElapsedMs = 0L
+        resumeActiveSegment()
 
         items.forEach { item -> progressByAssignmentId[item.assignmentId] = ItemProgress(item) }
         queue.build(items, typesFor = { item -> questionTypesFor(item.subjectType) })
@@ -415,6 +439,42 @@ class ReviewViewModel @Inject constructor(
     private fun completedQuestionCount(): Int =
         progressByAssignmentId.values.sumOf { (if (it.meaningDone) 1 else 0) + (if (it.readingDone) 1 else 0) }
 
+    /** The single source of truth for "how long has this session actually been viewed" — both the
+     *  live-ticking total timer (via [PausableElapsedTimeText] reading the mirrored uiState fields)
+     *  and [sessionSummary]'s final total derive from this same formula over the same two fields, so
+     *  they can never disagree. */
+    private fun currentActiveElapsedMs(nowMs: Long = System.currentTimeMillis()): Long =
+        activeElapsedMs + (activeSegmentStartMs?.let { nowMs - it } ?: 0L)
+
+    /** Starts a fresh viewing segment — called once the session is actually being looked at (right
+     *  after loading/resuming, and whenever [appForegroundTracker] reports the app came back to the
+     *  foreground). Idempotent: a no-op if a segment is already running. */
+    private fun resumeActiveSegment() {
+        if (activeSegmentStartMs != null) return
+        val now = System.currentTimeMillis()
+        activeSegmentStartMs = now
+        _uiState.update { it.copy(sessionActiveSegmentStartMs = now) }
+    }
+
+    /** Folds the current viewing segment into the accumulated total and stops the clock — called
+     *  when the session is no longer being actively viewed ([appForegroundTracker] reports the app
+     *  backgrounded, or this ViewModel is cleared because the user navigated away). Persists via
+     *  [applicationScope] rather than [viewModelScope] since the latter may already be in the
+     *  process of being cancelled by the time this runs (see [onCleared]). Idempotent: a no-op if no
+     *  segment is running. */
+    private fun pauseActiveSegment() {
+        val startedAt = activeSegmentStartMs ?: return
+        activeElapsedMs += System.currentTimeMillis() - startedAt
+        activeSegmentStartMs = null
+        _uiState.update { it.copy(sessionActiveElapsedMs = activeElapsedMs, sessionActiveSegmentStartMs = null) }
+        applicationScope.launch { persistCurrentState() }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        pauseActiveSegment()
+    }
+
     private data class SessionSummary(
         val itemsReviewed: Int,
         val correctFirstTry: Int,
@@ -428,14 +488,21 @@ class ReviewViewModel @Inject constructor(
      *  and timing — total session time, average time per item reviewed, and the slowest answers.
      *  The average divides total wall-clock session time (start to finish, including feedback
      *  screens and rank-change animations between questions) by the count of distinct items
-     *  reviewed — that's what a user actually means by "average time per item." */
+     *  reviewed — that's what a user actually means by "average time per item."
+     *
+     *  Only counts items with [ItemProgress.hasAnyProgress] — progressByAssignmentId is seeded with
+     *  an entry for every item in the original queue up front (see buildQueue), so after a wrapUp()
+     *  drops never-attempted items from the queue, their still-present-but-untouched entries here
+     *  must not be counted as "reviewed", or this would overcount items reviewed and, in turn,
+     *  understate the average time spent per item actually reviewed. */
     private fun sessionSummary(): SessionSummary {
-        val itemsReviewed = progressByAssignmentId.size
-        val correctFirstTry = progressByAssignmentId.values.count { !it.hadIncorrectMeaning && !it.hadIncorrectReading }
-        val missedItems = progressByAssignmentId.values
+        val reviewedProgress = progressByAssignmentId.values.filter { it.hasAnyProgress }
+        val itemsReviewed = reviewedProgress.size
+        val correctFirstTry = reviewedProgress.count { !it.hadIncorrectMeaning && !it.hadIncorrectReading }
+        val missedItems = reviewedProgress
             .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
             .map { it.item }
-        val totalElapsedMs = System.currentTimeMillis() - sessionStartTimeMs
+        val totalElapsedMs = currentActiveElapsedMs()
         val averageTimePerItemMs = if (itemsReviewed == 0) 0L else totalElapsedMs / itemsReviewed
         val slowestAnswers = answeredQuestions.sortedByDescending { it.elapsedMs }.take(5)
             .map { SlowAnswer(it.item, it.type, it.elapsedMs, it.isCorrect) }
@@ -485,7 +552,8 @@ class ReviewViewModel @Inject constructor(
                 isDetailsExpanded = false,
                 totalCount = totalQuestions,
                 remainingCount = queue.size,
-                sessionStartTimeMs = sessionStartTimeMs,
+                sessionActiveElapsedMs = activeElapsedMs,
+                sessionActiveSegmentStartMs = activeSegmentStartMs,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null
             )
@@ -494,14 +562,17 @@ class ReviewViewModel @Inject constructor(
 
     /** Captures the current queue/progress as an immutable, ready-to-persist value — safe to hold
      *  across a suspension point even if the live queue/progressByAssignmentId are mutated by
-     *  something else afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). */
+     *  something else afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). Folds
+     *  in the currently-running viewing segment (if any) rather than the possibly-stale
+     *  [activeElapsedMs] alone, so an abrupt process death loses at most the time since this
+     *  snapshot, not the whole segment since the last pause. */
     private fun currentPersistSnapshot(): PersistedReviewSession = PersistedReviewSession(
         queue = queue.toList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
         progress = progressByAssignmentId.map { (id, p) ->
             PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },
         totalQuestions = totalQuestions,
-        sessionStartTimeMs = sessionStartTimeMs
+        sessionActiveElapsedMs = currentActiveElapsedMs()
     )
 
     private suspend fun persistSnapshot(snapshot: PersistedReviewSession) {

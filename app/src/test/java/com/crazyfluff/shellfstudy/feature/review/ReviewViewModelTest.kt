@@ -14,8 +14,10 @@ import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.StatsRepository
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
+import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
+import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
@@ -52,6 +54,7 @@ class ReviewViewModelTest {
     private lateinit var reviewSessionRepository: ReviewSessionRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var pronunciationAudioPlayer: FakePronunciationAudioPlayer
+    private lateinit var appForegroundTracker: AppForegroundTracker
     private lateinit var repositories: TestRepositories
 
     @Before
@@ -73,6 +76,7 @@ class ReviewViewModelTest {
         )
         settingsRepository = SettingsRepository(settingsDataStore)
         pronunciationAudioPlayer = FakePronunciationAudioPlayer()
+        appForegroundTracker = AppForegroundTracker()
     }
 
     @After
@@ -82,7 +86,7 @@ class ReviewViewModelTest {
 
     private fun TestScope.createViewModel() = ReviewViewModel(
         assignmentRepository, outboxRepository, statsRepository, reviewSessionRepository, pronunciationAudioPlayer, settingsRepository,
-        backgroundScope
+        appForegroundTracker, backgroundScope
     )
 
     /** Routes by path — refreshing the review queue now syncs subjects and assignments, in either order. */
@@ -677,7 +681,7 @@ class ReviewViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
-            assertThat(state.sessionStartTimeMs).isNotNull()
+            assertThat(state.sessionActiveSegmentStartMs).isNotNull()
             assertThat(state.questionStartTimeMs).isNotNull()
 
             // Miss the first question drawn (whichever type it is), then work through both question
@@ -875,12 +879,13 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `resuming a persisted session preserves the original session start time instead of restarting the clock`() = runTest(mainDispatcherRule.dispatcher) {
-        // Regression test: resumeFromPersisted used to stamp sessionStartTimeMs to "now" on every
-        // resume, silently undercounting sessionTotalElapsedMs/sessionAverageTimePerItemMs by
-        // however long the session had been away. It should instead carry over the persisted
-        // value — proven with a fake, unmistakably-in-the-past timestamp rather than comparing
-        // real wall-clock reads, since this whole test can execute within the same millisecond.
+    fun `resuming a persisted session preserves the accumulated active time instead of resetting it to zero`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: resumeFromPersisted used to derive elapsed time from an absolute session
+        // start timestamp restored across resumes, which counted 100% of time spent away
+        // (backgrounded, or navigated off and back) as if it were active review time. It should
+        // instead carry over only the accumulated *active* time — proven with a fake, unmistakably
+        // large value rather than comparing real wall-clock reads, since this whole test executes
+        // in well under a second.
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val firstViewModel = createViewModel()
@@ -889,16 +894,18 @@ class ReviewViewModelTest {
             while (state.isLoading) state = awaitItem()
         }
 
-        val fakeOriginalStartTime = 1_000_000L
+        val fakeAccumulatedElapsedMs = 1_000_000L
         val persisted = reviewSessionRepository.load()!!
-        reviewSessionRepository.save(persisted.copy(sessionStartTimeMs = fakeOriginalStartTime))
+        reviewSessionRepository.save(persisted.copy(sessionActiveElapsedMs = fakeAccumulatedElapsedMs))
 
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
+            assertThat(state.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)
+            assertThat(state.sessionActiveSegmentStartMs).isNotNull()
 
-            // Forces a fresh persisted snapshot so the resumed sessionStartTimeMs can be inspected.
+            // Forces a fresh persisted snapshot so the resumed accumulated time can be inspected.
             secondViewModel.onAnswerInputChange("wrong")
             awaitItem()
             secondViewModel.submitAnswer()
@@ -907,8 +914,151 @@ class ReviewViewModelTest {
 
         val resumedSnapshot = reviewSessionRepository.load()
         assertThat(resumedSnapshot).isNotNull()
-        assertThat(resumedSnapshot!!.sessionStartTimeMs).isEqualTo(fakeOriginalStartTime)
+        // At least the restored base — the fresh viewing segment since resume adds a little more
+        // real wall-clock time on top, never less.
+        assertThat(resumedSnapshot!!.sessionActiveElapsedMs).isAtLeast(fakeAccumulatedElapsedMs)
     }
+
+    @Test
+    fun `backgrounding the app pauses the total timer, and returning to it resumes without resetting the accumulated time`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.sessionActiveSegmentStartMs).isNotNull()
+
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            val pausedState = awaitItem()
+            assertThat(pausedState.sessionActiveSegmentStartMs).isNull()
+            val elapsedWhilePaused = pausedState.sessionActiveElapsedMs
+
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+            val resumedState = awaitItem()
+            assertThat(resumedState.sessionActiveSegmentStartMs).isNotNull()
+            // Resumes right where it left off — the time spent "away" (backgrounded) must not have
+            // been folded in as if it were active review time.
+            assertThat(resumedState.sessionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+        }
+    }
+
+    @Test
+    fun `wrapUp only counts items with actual progress in the final summary, not untouched ones it drops from the queue`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: sessionSummary() used to read every entry in progressByAssignmentId,
+        // which is seeded for the whole original queue up front (see buildQueue) — after wrapUp()
+        // drops never-attempted items from the queue, their still-present-but-untouched entries were
+        // still being counted as "reviewed", inflating sessionItemsReviewed and, in turn,
+        // understating sessionAverageTimePerItemMs.
+        dispatch(jsonResponse(threeRadicalAssignmentsJson()), jsonResponse(threeRadicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            // Fully complete one item before wrapping up.
+            viewModel.onAnswerInputChange(state.currentItem!!.meanings.first())
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+            viewModel.onContinue()
+            state = awaitItem()
+
+            // Two items remain, both still completely untouched. wrapUp() retains only whichever is
+            // now "current" and drops the other outright.
+            viewModel.wrapUp()
+            val wrappedState = awaitItem()
+            assertThat(wrappedState.totalCount).isEqualTo(2)
+            assertThat(wrappedState.remainingCount).isEqualTo(1)
+
+            // Finish the one retained item.
+            viewModel.onAnswerInputChange(wrappedState.currentItem!!.meanings.first())
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+            viewModel.onContinue()
+            val finalState = awaitItem()
+
+            assertThat(finalState.isSessionComplete).isTrue()
+            // Exactly the two items actually answered — not the third, dropped-while-untouched one.
+            assertThat(finalState.sessionItemsReviewed).isEqualTo(2)
+            assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(2)
+            assertThat(finalState.sessionMissedItems).isEmpty()
+        }
+    }
+
+    private fun threeRadicalAssignmentsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 3,
+          "data": [
+            {
+              "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "radical",
+                "srs_stage": 1, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            },
+            {
+              "id": 102, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/102",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 2, "subject_type": "radical",
+                "srs_stage": 1, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            },
+            {
+              "id": 103, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/103",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 3, "subject_type": "radical",
+                "srs_stage": 1, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            }
+          ]
+        }
+    """.trimIndent()
+
+    private fun threeRadicalSubjectsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 3,
+          "data": [
+            {
+              "id": 1, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/1",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "mouth",
+                "characters": "口",
+                "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
+                "readings": []
+              }
+            },
+            {
+              "id": 2, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/2",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "ground",
+                "characters": "一",
+                "meanings": [{"meaning": "Ground", "primary": true, "accepted_meaning": true}],
+                "readings": []
+              }
+            },
+            {
+              "id": 3, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/3",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "tree",
+                "characters": "木",
+                "meanings": [{"meaning": "Tree", "primary": true, "accepted_meaning": true}],
+                "readings": []
+              }
+            }
+          ]
+        }
+    """.trimIndent()
 
     private fun radicalAssignmentsJson() = """
         {

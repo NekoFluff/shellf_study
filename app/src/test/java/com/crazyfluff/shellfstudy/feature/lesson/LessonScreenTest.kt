@@ -440,7 +440,7 @@ class LessonScreenTest {
             LessonUiState(
                 isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
                 currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showTotalTimer = true, sessionStartTimeMs = System.currentTimeMillis()
+                showTotalTimer = true, sessionActiveSegmentStartMs = System.currentTimeMillis()
             )
         )
 
@@ -453,11 +453,26 @@ class LessonScreenTest {
             LessonUiState(
                 isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
                 currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showTotalTimer = false, sessionStartTimeMs = System.currentTimeMillis()
+                showTotalTimer = false, sessionActiveSegmentStartMs = System.currentTimeMillis()
             )
         )
 
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.TOTAL_TIMER_TEXT).assertCountEquals(0)
+    }
+
+    @Test
+    fun quizPhase_totalTimer_freezesWhilePaused_notTickingWithoutAnActiveSegment() {
+        // sessionActiveSegmentStartMs is null (as if the app were backgrounded, or navigated away
+        // and back) — the timer must show the frozen base, not restart from "0:00".
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                showTotalTimer = true, sessionActiveElapsedMs = 65_000L, sessionActiveSegmentStartMs = null
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.TOTAL_TIMER_TEXT).assertTextEquals("1:05")
     }
 
     @Test

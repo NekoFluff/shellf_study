@@ -78,6 +78,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.ElapsedTimeText
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.PausableElapsedTimeText
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.QuizAnswerField
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
@@ -989,10 +990,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
         (uiState.totalQuizCount - uiState.remainingQuizCount).toFloat() / uiState.totalQuizCount
     val accentColor = subjectColor(item.subjectType)
 
-    val totalStartTimeMs = uiState.sessionStartTimeMs
-    if (uiState.showTotalTimer && totalStartTimeMs != null) {
-        ElapsedTimeText(
-            startTimeMs = totalStartTimeMs,
+    if (uiState.showTotalTimer) {
+        PausableElapsedTimeText(
+            baseElapsedMs = uiState.sessionActiveElapsedMs,
+            segmentStartMs = uiState.sessionActiveSegmentStartMs,
             style = MaterialTheme.typography.labelMedium.copy(textAlign = TextAlign.End),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp)
