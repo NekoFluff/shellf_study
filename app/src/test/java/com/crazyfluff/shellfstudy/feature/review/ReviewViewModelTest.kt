@@ -945,6 +945,41 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `backgrounding the app after completing a session does not resurrect a resumable session`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: pauseActiveSegment (triggered by the app backgrounding, or by this
+        // ViewModel being cleared when the user navigates off the complete screen) used to
+        // unconditionally re-persist a session snapshot even after advanceToNextQuestion had
+        // already cleared the repository on completion — resurrecting a stale, empty-queue
+        // "active session" record. The dashboard would then offer to resume a 0-review session
+        // that, once opened, immediately re-completed.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat(reviewSessionRepository.load()).isNull()
+
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            val pausedState = awaitItem()
+            assertThat(pausedState.isSessionComplete).isTrue()
+        }
+
+        assertThat(reviewSessionRepository.load()).isNull()
+    }
+
+    @Test
     fun `wrapUp only counts items with actual progress in the final summary, not untouched ones it drops from the queue`() = runTest(mainDispatcherRule.dispatcher) {
         // Regression test: sessionSummary() used to read every entry in progressByAssignmentId,
         // which is seeded for the whole original queue up front (see buildQueue) — after wrapUp()

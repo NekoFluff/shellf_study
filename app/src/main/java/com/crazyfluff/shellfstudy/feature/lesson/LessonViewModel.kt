@@ -668,6 +668,12 @@ class LessonViewModel @Inject constructor(
         activeElapsedMs += System.currentTimeMillis() - startedAt
         activeSegmentStartMs = null
         _uiState.update { it.copy(sessionActiveElapsedMs = activeElapsedMs, sessionActiveSegmentStartMs = null) }
+        // The quiz-complete branch already cleared lessonSessionRepository once the session
+        // finished — re-persisting here (this fires from onCleared when the user navigates off the
+        // complete screen, or from the app backgrounding while still on it) would resurrect a
+        // stale, empty-queue "active session" record. The dashboard would then offer to resume a
+        // 0-lesson session that, once opened, immediately re-completes.
+        if (_uiState.value.isSessionComplete) return
         applicationScope.launch { persistCurrentState() }
     }
 

@@ -855,6 +855,45 @@ class LessonViewModelTest {
     }
 
     @Test
+    fun `backgrounding the app after completing the quiz does not resurrect a resumable session`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: pauseActiveSegment (triggered by the app backgrounding, or by this
+        // ViewModel being cleared when the user navigates off the complete screen) used to
+        // unconditionally re-persist a session snapshot even after the quiz-complete branch had
+        // already cleared the repository — resurrecting a stale, empty-queue "active session"
+        // record. The dashboard would then offer to resume a 0-lesson session that, once opened,
+        // immediately re-completed.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat(lessonSessionRepository.load()).isNull()
+
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            val pausedState = awaitItem()
+            assertThat(pausedState.isSessionComplete).isTrue()
+        }
+
+        assertThat(lessonSessionRepository.load()).isNull()
+    }
+
+    @Test
     fun `submitting a reading into a meaning question rejects it instead of grading a miss`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
