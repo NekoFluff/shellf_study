@@ -64,6 +64,10 @@ data class ReviewUiState(
     val showQuestionTimer: Boolean = false,
     val sessionStartTimeMs: Long? = null,
     val questionStartTimeMs: Long? = null,
+    // Non-null once the current question has been answered — freezes the "time on this question"
+    // display at this value instead of letting it keep ticking through the feedback screen. Reset
+    // to null whenever a fresh, unanswered question is shown (see advanceToNextQuestion, undo).
+    val questionElapsedMs: Long? = null,
     val sessionMissedItems: List<ReviewItem> = emptyList(),
     val sessionTotalElapsedMs: Long = 0L,
     val sessionAverageTimePerItemMs: Long = 0L,
@@ -295,7 +299,8 @@ class ReviewViewModel @Inject constructor(
     ) {
         val (grade, snapshot) = trace("gradeAnswer:computeAndPublish") {
             val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress(item) }
-            answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, System.currentTimeMillis() - questionShownAtMs))
+            val questionElapsedMs = System.currentTimeMillis() - questionShownAtMs
+            answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, questionElapsedMs))
 
             queue.removeCurrent()
             if (isCorrect) {
@@ -335,7 +340,12 @@ class ReviewViewModel @Inject constructor(
                     feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
                     remainingCount = queue.size,
                     isDetailsExpanded = it.isDetailsExpanded || expandDetails,
-                    rankChange = newRankChange ?: it.rankChange
+                    rankChange = newRankChange ?: it.rankChange,
+                    // Freezes the "time on this question" display the instant feedback appears,
+                    // rather than letting it keep ticking while the feedback/Continue screen is up
+                    // — matches the elapsedMs recorded for the slowest-answers summary above, which
+                    // is stamped at this same moment.
+                    questionElapsedMs = questionElapsedMs
                 )
             }
 
@@ -389,7 +399,8 @@ class ReviewViewModel @Inject constructor(
                     answerInput = "",
                     remainingCount = queue.size,
                     undoCounter = it.undoCounter + 1,
-                    questionStartTimeMs = questionShownAtMs
+                    questionStartTimeMs = questionShownAtMs,
+                    questionElapsedMs = null
                 )
             }
         }
@@ -497,7 +508,8 @@ class ReviewViewModel @Inject constructor(
                 totalCount = totalQuestions,
                 remainingCount = queue.size,
                 sessionStartTimeMs = sessionStartTimeMs,
-                questionStartTimeMs = questionShownAtMs
+                questionStartTimeMs = questionShownAtMs,
+                questionElapsedMs = null
             )
         }
     }

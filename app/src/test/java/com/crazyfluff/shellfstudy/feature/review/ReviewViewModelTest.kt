@@ -718,6 +718,52 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `submitting an answer freezes questionElapsedMs, and advancing to the next question resets it`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.questionElapsedMs).isNull()
+
+            val answer = if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+            viewModel.onAnswerInputChange(answer)
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.questionElapsedMs).isNotNull()
+
+            viewModel.onContinue()
+            val nextState = awaitItem()
+            assertThat(nextState.questionElapsedMs).isNull()
+        }
+    }
+
+    @Test
+    fun `undo clears the frozen questionElapsedMs`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("typo")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.questionElapsedMs).isNotNull()
+
+            viewModel.undoLastAnswer()
+            val undoneState = awaitItem()
+            assertThat(undoneState.questionElapsedMs).isNull()
+        }
+    }
+
+    @Test
     fun `undo removes the just-recorded incorrect answer from session timing`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 

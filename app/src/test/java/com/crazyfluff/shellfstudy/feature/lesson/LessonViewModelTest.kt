@@ -430,6 +430,41 @@ class LessonViewModelTest {
     }
 
     @Test
+    fun `submitting an answer freezes questionElapsedMs, and advancing to the next question resets it`() = runTest(mainDispatcherRule.dispatcher) {
+        // Two single-question (radical) items, so answering the first correctly advances to a
+        // genuine next question rather than completing the session — the reset only happens on
+        // that "next question" path, not the session-complete one.
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // studyIndex 1
+            viewModel.nextStudyCard()
+            val quizState = awaitItem() // quiz begins
+            assertThat(quizState.questionElapsedMs).isNull()
+
+            val item = quizState.currentQuizItem!!
+            viewModel.onAnswerInputChange(item.meanings.first())
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.questionElapsedMs).isNotNull()
+
+            viewModel.onContinue()
+            val nextState = awaitItem()
+            assertThat(nextState.isSessionComplete).isFalse()
+            assertThat(nextState.questionElapsedMs).isNull()
+        }
+    }
+
+    @Test
     fun `dontKnowAnswer grades as incorrect and requeues`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 

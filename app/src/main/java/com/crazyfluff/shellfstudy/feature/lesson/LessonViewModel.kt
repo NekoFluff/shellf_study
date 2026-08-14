@@ -73,6 +73,10 @@ data class LessonUiState(
     val showQuestionTimer: Boolean = false,
     val sessionStartTimeMs: Long? = null,
     val questionStartTimeMs: Long? = null,
+    // Non-null once the current question has been answered — freezes the "time on this question"
+    // display at this value instead of letting it keep ticking through the feedback screen. Reset
+    // to null whenever a fresh, unanswered question is shown (see beginQuiz, advanceQuiz).
+    val questionElapsedMs: Long? = null,
     val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
     val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
     val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap(),
@@ -264,6 +268,7 @@ class LessonViewModel @Inject constructor(
                 isSessionComplete = next == null,
                 sessionStartTimeMs = sessionStartTimeMs,
                 questionStartTimeMs = questionShownAtMs,
+                questionElapsedMs = null,
                 sessionItemsLearned = summary?.itemsLearned ?: it.sessionItemsLearned,
                 sessionItemsCorrectFirstTry = summary?.correctFirstTry ?: it.sessionItemsCorrectFirstTry,
                 sessionMissedItems = summary?.missedItems ?: it.sessionMissedItems,
@@ -449,7 +454,8 @@ class LessonViewModel @Inject constructor(
                 feedback = null,
                 isSessionComplete = next == null,
                 sessionStartTimeMs = sessionStartTimeMs,
-                questionStartTimeMs = questionShownAtMs
+                questionStartTimeMs = questionShownAtMs,
+                questionElapsedMs = null
             )
         }
         applicationScope.runDurably { persistCurrentState() }
@@ -499,7 +505,8 @@ class LessonViewModel @Inject constructor(
         wasCloseMatch: Boolean = false
     ) {
         val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { LessonItemProgress(item) }
-        answeredQuestions.add(LessonAnsweredQuestionRecord(item, type, isCorrect, System.currentTimeMillis() - questionShownAtMs))
+        val questionElapsedMs = System.currentTimeMillis() - questionShownAtMs
+        answeredQuestions.add(LessonAnsweredQuestionRecord(item, type, isCorrect, questionElapsedMs))
 
         quizQueue.removeCurrent()
         val justCompletedItem = if (!isCorrect) {
@@ -533,7 +540,12 @@ class LessonViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
-                remainingQuizCount = quizQueue.size
+                remainingQuizCount = quizQueue.size,
+                // Freezes the "time on this question" display the instant feedback appears, rather
+                // than letting it keep ticking while the feedback/Continue screen is up — matches
+                // the elapsedMs recorded for the slowest-answers summary above, stamped at this
+                // same moment.
+                questionElapsedMs = questionElapsedMs
             )
         }
 
@@ -663,7 +675,8 @@ class LessonViewModel @Inject constructor(
                 answerInput = "",
                 feedback = null,
                 remainingQuizCount = quizQueue.size,
-                questionStartTimeMs = questionShownAtMs
+                questionStartTimeMs = questionShownAtMs,
+                questionElapsedMs = null
             )
         }
     }

@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
@@ -223,6 +225,24 @@ class ReviewScreenTest {
         )
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertCountEquals(0)
+    }
+
+    @Test
+    fun questionTimer_freezesAtAnsweredElapsedTime_onceFeedbackIsShown() {
+        // questionStartTimeMs is a full minute in the past — if the timer were still live-ticking
+        // from it, it would show "1:00". The frozen questionElapsedMs must win instead.
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                showQuestionTimer = true,
+                questionStartTimeMs = System.currentTimeMillis() - 60_000,
+                questionElapsedMs = 5_000L,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals(formatElapsedClock(5_000L))
     }
 
     @Test

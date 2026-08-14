@@ -77,6 +77,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.ElapsedTimeText
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemRow
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemsCard
@@ -464,13 +465,25 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.testTag(ReviewScreenTestTags.PROGRESS_COUNT)
         )
-        val questionStartTimeMs = uiState.questionStartTimeMs
-        if (uiState.showQuestionTimer && questionStartTimeMs != null) {
-            ElapsedTimeText(
-                startTimeMs = questionStartTimeMs,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT)
-            )
+        if (uiState.showQuestionTimer) {
+            val questionElapsedMs = uiState.questionElapsedMs
+            val questionStartTimeMs = uiState.questionStartTimeMs
+            if (questionElapsedMs != null) {
+                // Frozen at the instant the question was answered, matching the elapsedMs recorded
+                // for the slowest-answers summary, rather than continuing to tick through feedback.
+                Text(
+                    text = formatElapsedClock(questionElapsedMs),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT)
+                )
+            } else if (questionStartTimeMs != null) {
+                ElapsedTimeText(
+                    startTimeMs = questionStartTimeMs,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT)
+                )
+            }
         }
     }
 

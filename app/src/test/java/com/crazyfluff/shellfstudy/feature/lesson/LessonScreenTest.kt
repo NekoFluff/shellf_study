@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.core.data.model.LessonItem
 import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.network.SubjectType
@@ -424,6 +426,24 @@ class LessonScreenTest {
         )
 
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT).assertCountEquals(0)
+    }
+
+    @Test
+    fun quizPhase_questionTimer_freezesAtAnsweredElapsedTime_onceFeedbackIsShown() {
+        // questionStartTimeMs is a full minute in the past — if the timer were still live-ticking
+        // from it, it would show "1:00". The frozen questionElapsedMs must win instead.
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                showQuestionTimer = true,
+                questionStartTimeMs = System.currentTimeMillis() - 60_000,
+                questionElapsedMs = 5_000L,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals(formatElapsedClock(5_000L))
     }
 
     @Test

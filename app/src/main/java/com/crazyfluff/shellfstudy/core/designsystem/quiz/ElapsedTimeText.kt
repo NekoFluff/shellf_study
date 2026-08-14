@@ -25,17 +25,25 @@ fun ElapsedTimeText(
     style: TextStyle = MaterialTheme.typography.labelMedium,
     color: Color = LocalContentColor.current
 ) {
-    var elapsedSeconds by remember(startTimeMs) { mutableStateOf((System.currentTimeMillis() - startTimeMs) / 1000) }
+    var elapsedMs by remember(startTimeMs) { mutableStateOf(System.currentTimeMillis() - startTimeMs) }
     LaunchedEffect(startTimeMs) {
         while (true) {
-            elapsedSeconds = (System.currentTimeMillis() - startTimeMs) / 1000
+            elapsedMs = System.currentTimeMillis() - startTimeMs
             delay(1000)
         }
     }
     Text(
-        text = "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
+        text = formatElapsedClock(elapsedMs),
         style = style,
         color = color,
         modifier = modifier
     )
+}
+
+/** Same "m:ss" clock format [ElapsedTimeText] ticks with — shared so a frozen elapsed time (e.g.
+ *  the per-question timer once an answer's been submitted) reads identically to the live version
+ *  it replaces, instead of jarringly changing format the instant it stops ticking. */
+fun formatElapsedClock(elapsedMs: Long): String {
+    val elapsedSeconds = elapsedMs / 1000
+    return "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60)
 }
