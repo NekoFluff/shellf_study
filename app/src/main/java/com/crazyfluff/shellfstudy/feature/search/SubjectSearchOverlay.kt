@@ -54,8 +54,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
-import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
-import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 
 object SearchOverlayTestTags {
     const val TRIGGER_BUTTON = "search_trigger_button"

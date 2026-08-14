@@ -17,7 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
-import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 
 /**
  * A titled, wrapping grid of [SubjectTile]s — renders nothing when [subjects] is empty. The title

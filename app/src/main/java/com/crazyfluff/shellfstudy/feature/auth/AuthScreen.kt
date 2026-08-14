@@ -31,7 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import org.koin.androidx.compose.koinViewModel
-import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
 
 private const val PERSONAL_ACCESS_TOKENS_URL = "https://www.wanikani.com/settings/personal_access_tokens"
 

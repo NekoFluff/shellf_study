@@ -17,8 +17,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.forReading
-import com.crazyfluff.shellfstudy.core.designsystem.theme.LocalEinkTheme
-import com.crazyfluff.shellfstudy.core.designsystem.theme.PitchAccentColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.PitchAccentColors
 
 object PitchAccentTestTags {
     const val DIAGRAM = "pitch_accent_diagram"

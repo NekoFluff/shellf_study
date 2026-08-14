@@ -29,10 +29,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
-import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
-import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
-import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkStageColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 /** One row of a [SessionSlowestAnswersCard] — a single graded answer, already reduced to display-ready fields. */

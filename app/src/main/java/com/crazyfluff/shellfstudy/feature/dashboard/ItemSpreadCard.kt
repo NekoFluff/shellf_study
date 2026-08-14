@@ -26,9 +26,9 @@ import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.designsystem.components.SegmentedBar
-import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor
-import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.srsStageColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 object ItemSpreadTestTags {

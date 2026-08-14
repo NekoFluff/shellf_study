@@ -22,8 +22,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
-import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
 import kotlin.time.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone

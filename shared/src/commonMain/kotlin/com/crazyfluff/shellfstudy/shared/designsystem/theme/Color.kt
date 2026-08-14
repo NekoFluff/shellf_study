@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.theme
+package com.crazyfluff.shellfstudy.shared.designsystem.theme
 
 import androidx.compose.ui.graphics.Color
 

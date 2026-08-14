@@ -38,9 +38,9 @@ import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
 import com.crazyfluff.shellfstudy.shared.data.model.formatHourOfDay
 import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
-import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
-import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime

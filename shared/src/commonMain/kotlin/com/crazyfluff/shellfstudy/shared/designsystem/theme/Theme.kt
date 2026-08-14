@@ -1,17 +1,13 @@
-package com.crazyfluff.shellfstudy.core.designsystem.theme
+package com.crazyfluff.shellfstudy.shared.designsystem.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 
 private val DarkColorScheme = darkColorScheme(
@@ -62,20 +58,11 @@ fun themeAwareColor(default: Color, einkValue: Color): Color =
 fun ShellfStudyTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Off by default: this app has its own brand palette (see SubjectTypeColors / SrsStageColors)
-    // that we don't want overridden by the device wallpaper's Material You colors.
-    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val isEink = themeMode == ThemeMode.EINK
     val colorScheme = when {
         isEink -> EinkColorScheme
-
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
@@ -83,7 +70,7 @@ fun ShellfStudyTheme(
     CompositionLocalProvider(LocalEinkTheme provides isEink, LocalDarkTheme provides (darkTheme && !isEink)) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = Typography,
+            typography = appTypography(),
             content = content
         )
     }
