@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Shellf Study"
 include(":app")
+include(":shared")
