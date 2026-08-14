@@ -1007,8 +1007,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
     if (uiState.showTotalTimer && totalStartTimeMs != null) {
         ElapsedTimeText(
             startTimeMs = totalStartTimeMs,
+            style = MaterialTheme.typography.labelMedium.copy(textAlign = TextAlign.End),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp)
                 .testTag(LessonScreenTestTags.TOTAL_TIMER_TEXT)
         )
     }

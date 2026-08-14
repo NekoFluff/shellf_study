@@ -65,6 +65,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
@@ -441,8 +442,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
     if (uiState.showTotalTimer && totalStartTimeMs != null) {
         ElapsedTimeText(
             startTimeMs = totalStartTimeMs,
+            style = MaterialTheme.typography.labelMedium.copy(textAlign = TextAlign.End),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp)
                 .testTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT)
         )
     }
