@@ -16,7 +16,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.feature.search.SearchOverlayTestTags

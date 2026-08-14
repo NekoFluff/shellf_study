@@ -8,7 +8,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import org.junit.Assert.assertTrue

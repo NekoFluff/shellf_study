@@ -1,10 +1,10 @@
-package com.crazyfluff.shellfstudy.core.network
+package com.crazyfluff.shellfstudy.shared.network
 
 /**
  * Follows a paginated WaniKani collection endpoint's `pages.next_url` until exhausted, accumulating
  * every item across all pages. Kept per-resource-typed (called with each endpoint's own typed
- * lambdas) rather than one fully generic Retrofit method, since kotlinx.serialization + Retrofit
- * need a concrete reified response type per call.
+ * lambdas) rather than one fully generic method, since kotlinx.serialization needs a concrete
+ * reified response type per call.
  */
 suspend fun <T> collectAllPages(
     firstPage: suspend () -> WkCollectionResponse<T>,

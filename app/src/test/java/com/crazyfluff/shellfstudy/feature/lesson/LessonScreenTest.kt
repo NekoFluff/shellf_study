@@ -19,7 +19,7 @@ import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import org.junit.Rule

@@ -8,8 +8,8 @@ import com.crazyfluff.shellfstudy.core.database.ReviewStatisticEntity
 import com.crazyfluff.shellfstudy.core.database.SyncStateDao
 import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDao
 import com.crazyfluff.shellfstudy.core.database.studyactivity.StudyActivityDayEntity
-import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
-import com.crazyfluff.shellfstudy.core.network.collectAllPages
+import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
+import com.crazyfluff.shellfstudy.shared.network.collectAllPages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn

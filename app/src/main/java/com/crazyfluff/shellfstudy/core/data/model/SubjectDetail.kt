@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data.model
 
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 /**
  * The full "everything we know about this subject" model backing the shared subject detail view.

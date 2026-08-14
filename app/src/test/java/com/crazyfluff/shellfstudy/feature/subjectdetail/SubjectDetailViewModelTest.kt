@@ -10,10 +10,10 @@ import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
-import com.crazyfluff.shellfstudy.core.network.MeaningData
-import com.crazyfluff.shellfstudy.core.network.PronunciationAudioData
-import com.crazyfluff.shellfstudy.core.network.PronunciationAudioMetadataData
-import com.crazyfluff.shellfstudy.core.network.ReadingData
+import com.crazyfluff.shellfstudy.shared.network.MeaningData
+import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioData
+import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioMetadataData
+import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories

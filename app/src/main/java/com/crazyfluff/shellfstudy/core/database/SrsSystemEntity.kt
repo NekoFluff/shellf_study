@@ -6,7 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
-import com.crazyfluff.shellfstudy.core.network.SrsStageData
+import com.crazyfluff.shellfstudy.shared.network.SrsStageData
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "srs_systems")

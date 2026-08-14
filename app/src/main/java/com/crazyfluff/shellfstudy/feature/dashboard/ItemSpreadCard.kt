@@ -29,7 +29,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.components.SegmentedBar
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 object ItemSpreadTestTags {
     const val CARD = "item_spread_card"

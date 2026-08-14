@@ -40,7 +40,7 @@ import com.crazyfluff.shellfstudy.core.data.model.reviewForecastSummary
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter

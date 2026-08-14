@@ -16,8 +16,8 @@ import com.crazyfluff.shellfstudy.core.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.database.outbox.OutboxStatus
 import com.crazyfluff.shellfstudy.core.database.outbox.PendingReviewSubmissionEntity
-import com.crazyfluff.shellfstudy.core.network.MeaningData
-import com.crazyfluff.shellfstudy.core.network.ReadingData
+import com.crazyfluff.shellfstudy.shared.network.MeaningData
+import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse

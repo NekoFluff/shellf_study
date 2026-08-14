@@ -1,55 +1,40 @@
 package com.crazyfluff.shellfstudy.core.network
 
+import com.crazyfluff.shellfstudy.core.data.TokenRepository
+import com.crazyfluff.shellfstudy.shared.network.AuthTokenProvider
+import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
+import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient
+import com.crazyfluff.shellfstudy.shared.network.waniKaniJson
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import io.ktor.client.HttpClient
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import javax.inject.Singleton
-
-private const val WANIKANI_BASE_URL = "https://api.wanikani.com/v2/"
 
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
+    /** Also used outside networking — e.g. ReviewSessionRepository/LessonSessionRepository persist
+     *  local quiz-session state as JSON via DataStore. */
     @Provides
     @Singleton
-    fun provideJson(): Json = Json {
-        ignoreUnknownKeys = true
-        coerceInputValues = true
-        explicitNulls = false
-    }
+    fun provideJson(): Json = waniKaniJson()
 
     @Provides
     @Singleton
-    fun provideLoggingInterceptor(): HttpLoggingInterceptor =
-        HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
+    fun provideAuthTokenProvider(tokenRepository: TokenRepository): AuthTokenProvider =
+        AuthTokenProvider { tokenRepository.tokenFlow.firstOrNull() }
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(
-        authInterceptor: AuthInterceptor,
-        loggingInterceptor: HttpLoggingInterceptor
-    ): OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(authInterceptor)
-        .addInterceptor(loggingInterceptor)
-        .build()
+    fun provideWaniKaniHttpClient(authTokenProvider: AuthTokenProvider, json: Json): HttpClient =
+        createWaniKaniHttpClient(tokenProvider = authTokenProvider, json = json)
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit = Retrofit.Builder()
-        .baseUrl(WANIKANI_BASE_URL)
-        .client(okHttpClient)
-        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-        .build()
-
-    @Provides
-    @Singleton
-    fun provideWaniKaniApi(retrofit: Retrofit): WaniKaniApi = retrofit.create(WaniKaniApi::class.java)
+    fun provideWaniKaniApi(httpClient: HttpClient): WaniKaniApi = WaniKaniApi(httpClient)
 }

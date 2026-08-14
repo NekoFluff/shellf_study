@@ -1,9 +1,6 @@
 package com.crazyfluff.shellfstudy.fakes
 
-import com.crazyfluff.shellfstudy.core.network.weblio.WeblioApi
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.ResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
+import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi
 import java.io.IOException
 
 /**
@@ -14,7 +11,6 @@ import java.io.IOException
 class FakeWeblioApi(
     private val pagesByQuery: Map<String, String> = emptyMap()
 ) : WeblioApi {
-    override suspend fun getEntry(query: String): ResponseBody =
-        pagesByQuery[query]?.toResponseBody("text/html".toMediaType())
-            ?: throw IOException("no fake response configured for query: $query")
+    override suspend fun getEntry(query: String): String =
+        pagesByQuery[query] ?: throw IOException("no fake response configured for query: $query")
 }

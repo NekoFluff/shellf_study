@@ -3,10 +3,10 @@ package com.crazyfluff.shellfstudy.core.data
 import com.crazyfluff.shellfstudy.core.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.WaniKaniUser
-import com.crazyfluff.shellfstudy.core.network.ReviewResultData
-import com.crazyfluff.shellfstudy.core.network.ReviewSubmissionBody
-import com.crazyfluff.shellfstudy.core.network.ReviewSubmissionRequest
-import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
+import com.crazyfluff.shellfstudy.shared.network.ReviewResultData
+import com.crazyfluff.shellfstudy.shared.network.ReviewSubmissionBody
+import com.crazyfluff.shellfstudy.shared.network.ReviewSubmissionRequest
+import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import javax.inject.Inject
 import javax.inject.Singleton
 

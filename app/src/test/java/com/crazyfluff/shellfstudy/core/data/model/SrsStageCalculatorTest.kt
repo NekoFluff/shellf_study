@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data.model
 
 import com.crazyfluff.shellfstudy.core.database.SrsSystemEntity
-import com.crazyfluff.shellfstudy.core.network.SrsStageData
+import com.crazyfluff.shellfstudy.shared.network.SrsStageData
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import java.time.Duration

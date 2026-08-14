@@ -105,7 +105,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSection
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.core.quiz.label

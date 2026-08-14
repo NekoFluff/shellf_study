@@ -1,12 +1,12 @@
 package com.crazyfluff.shellfstudy.core.database
 
 import androidx.room.TypeConverter
-import com.crazyfluff.shellfstudy.core.network.AuxiliaryMeaningData
-import com.crazyfluff.shellfstudy.core.network.ContextSentenceData
-import com.crazyfluff.shellfstudy.core.network.MeaningData
-import com.crazyfluff.shellfstudy.core.network.PronunciationAudioData
-import com.crazyfluff.shellfstudy.core.network.ReadingData
-import com.crazyfluff.shellfstudy.core.network.SrsStageData
+import com.crazyfluff.shellfstudy.shared.network.AuxiliaryMeaningData
+import com.crazyfluff.shellfstudy.shared.network.ContextSentenceData
+import com.crazyfluff.shellfstudy.shared.network.MeaningData
+import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioData
+import com.crazyfluff.shellfstudy.shared.network.ReadingData
+import com.crazyfluff.shellfstudy.shared.network.SrsStageData
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 

@@ -13,7 +13,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 private val markupTagRegex = Regex("<(/?)([a-zA-Z_]+)>")
 

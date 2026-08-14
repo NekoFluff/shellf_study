@@ -2,7 +2,7 @@ package com.crazyfluff.shellfstudy.core.designsystem.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 @Composable
 fun subjectColor(type: SubjectType): Color = when (type) {

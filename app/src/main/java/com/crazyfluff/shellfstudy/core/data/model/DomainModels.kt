@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.core.data.model
 
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlin.math.ceil
 
 data class WaniKaniUser(

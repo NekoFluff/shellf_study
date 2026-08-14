@@ -12,10 +12,10 @@ import com.crazyfluff.shellfstudy.core.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.core.database.SubjectDao
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
 import com.crazyfluff.shellfstudy.core.database.SyncStateDao
-import com.crazyfluff.shellfstudy.core.network.CharacterImageData
-import com.crazyfluff.shellfstudy.core.network.SubjectType
-import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
-import com.crazyfluff.shellfstudy.core.network.collectAllPages
+import com.crazyfluff.shellfstudy.shared.network.CharacterImageData
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
+import com.crazyfluff.shellfstudy.shared.network.collectAllPages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow

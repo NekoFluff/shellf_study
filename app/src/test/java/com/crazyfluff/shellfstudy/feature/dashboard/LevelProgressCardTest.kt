@@ -15,7 +15,7 @@ import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.data.model.SubjectTypeProgress
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.network
+package com.crazyfluff.shellfstudy.shared.network
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

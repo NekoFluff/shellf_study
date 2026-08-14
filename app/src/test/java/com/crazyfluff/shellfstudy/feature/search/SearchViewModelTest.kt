@@ -2,8 +2,8 @@ package com.crazyfluff.shellfstudy.feature.search
 
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.core.database.SubjectEntity
-import com.crazyfluff.shellfstudy.core.network.MeaningData
-import com.crazyfluff.shellfstudy.core.network.ReadingData
+import com.crazyfluff.shellfstudy.shared.network.MeaningData
+import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.advanceUntilIdle

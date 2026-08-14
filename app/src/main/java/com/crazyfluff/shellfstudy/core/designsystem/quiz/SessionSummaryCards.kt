@@ -33,7 +33,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 /** One row of a [SessionSlowestAnswersCard] — a single graded answer, already reduced to display-ready fields. */
 data class SessionAnswerRow(

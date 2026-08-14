@@ -3,7 +3,7 @@ package com.crazyfluff.shellfstudy.core.data
 import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentCacheDao
 import com.crazyfluff.shellfstudy.core.database.pitchaccent.PitchAccentCacheEntity
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
-import com.crazyfluff.shellfstudy.core.network.weblio.WeblioApi
+import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -30,7 +30,7 @@ class PitchAccentRepository @Inject constructor(
 
     /** Fetches and caches weblio's pitch data for [characters]. Fails silently — a bad scrape just leaves the bundled fallback in place. */
     suspend fun scrapeAndCache(characters: String, now: Long) {
-        val scraped = runCatching { parser.parse(weblioApi.getEntry(characters).string()) }.getOrNull()
+        val scraped = runCatching { parser.parse(weblioApi.getEntry(characters)) }.getOrNull()
         cacheDao.upsert(
             PitchAccentCacheEntity(
                 characters = characters,

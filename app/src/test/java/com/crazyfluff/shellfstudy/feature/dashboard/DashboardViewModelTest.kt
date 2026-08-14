@@ -20,7 +20,7 @@ import com.crazyfluff.shellfstudy.core.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler

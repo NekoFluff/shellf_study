@@ -8,41 +8,32 @@ import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.core.data.WeblioPitchAccentParser
 import com.crazyfluff.shellfstudy.core.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.database.SrsSystemEntity
-import com.crazyfluff.shellfstudy.core.network.SrsStageData
-import com.crazyfluff.shellfstudy.core.network.WaniKaniApi
+import com.crazyfluff.shellfstudy.shared.network.SrsStageData
+import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
+import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient
 import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
-import kotlinx.serialization.json.Json
 import mockwebserver3.MockResponse
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import retrofit2.Retrofit
-import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
-/** mockwebserver3 (OkHttp5)'s [MockResponse] is immutable and built via [MockResponse.Builder]. */
+/**
+ * mockwebserver3 (OkHttp5)'s [MockResponse] is immutable and built via [MockResponse.Builder].
+ * The explicit Content-Type is required for Ktor's ContentNegotiation to deserialize the body —
+ * unlike Retrofit's converter, it won't guess a type for a response with none.
+ */
 fun jsonResponse(body: String, code: Int = 200): MockResponse =
-    MockResponse.Builder().code(code).body(body).build()
+    MockResponse.Builder().code(code).addHeader("Content-Type", "application/json").body(body).build()
 
 fun emptyResponse(code: Int): MockResponse =
     MockResponse.Builder().code(code).build()
 
 /** Builds a real [WaniKaniApi] pointed at a local MockWebServer instance for tests. */
 fun buildTestApi(baseUrl: String): WaniKaniApi {
-    val json = Json {
-        ignoreUnknownKeys = true
-        coerceInputValues = true
-        explicitNulls = false
-    }
-    val retrofit = Retrofit.Builder()
-        .baseUrl(baseUrl)
-        .client(OkHttpClient.Builder().build())
-        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-        .build()
-    return retrofit.create(WaniKaniApi::class.java)
+    val httpClient = createWaniKaniHttpClient(tokenProvider = { null })
+    return WaniKaniApi(httpClient, baseUrl = baseUrl)
 }
 
 /**
  * The standard WaniKani SRS system fixtures implicitly rely on: JSON test fixtures for subjects
- * never specify `spaced_repetition_system_id`, so it defaults to 0 (see [com.crazyfluff.shellfstudy.core.network.SubjectData]) —
+ * never specify `spaced_repetition_system_id`, so it defaults to 0 (see [com.crazyfluff.shellfstudy.shared.network.SubjectData]) —
  * seeding id=0 here means optimistic-grading logic (which needs a cached SRS system to predict a
  * stage transition) works out of the box for every existing test fixture without each one needing
  * to seed its own.

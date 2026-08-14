@@ -7,7 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.core.data.model.ItemSpreadBucket
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

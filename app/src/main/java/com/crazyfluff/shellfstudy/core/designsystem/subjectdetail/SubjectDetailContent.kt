@@ -36,7 +36,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.text.lookUpInAkebiContextMen
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSection
-import com.crazyfluff.shellfstudy.core.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 /** Whether the sheet shows everything (browse/study contexts) or hides the currently-tested field (mid-quiz). */
 enum class DetailRevealMode { FULL, HIDE_UNTIL_ANSWERED }
