@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.di
 
-import com.crazyfluff.shellfstudy.ThemeViewModel
+import com.crazyfluff.shellfstudy.shared.ThemeViewModel
 import com.crazyfluff.shellfstudy.core.coroutines.APPLICATION_SCOPE
 import com.crazyfluff.shellfstudy.feature.auth.AuthViewModel
 import com.crazyfluff.shellfstudy.feature.dashboard.DashboardViewModel

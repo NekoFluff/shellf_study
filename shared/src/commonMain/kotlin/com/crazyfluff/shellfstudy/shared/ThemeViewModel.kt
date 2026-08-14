@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy
+package com.crazyfluff.shellfstudy.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
