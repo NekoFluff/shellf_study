@@ -1,6 +1,6 @@
 # Shellf Study
 
-Another [WaniKani](https://www.wanikani.com/) client for Android. Aim to be modern and minimalistic. Written/generated primarily using Claude.
+Another [WaniKani](https://www.wanikani.com/) client for Android. Aim to be modern and minimalistic. Written/generated primarily using Claude. I intend to keep this rather lightweight/minimalistic, but who knows what the future holds.
 
 ## Stack
 
