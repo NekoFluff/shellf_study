@@ -1,19 +1,15 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Stores the user's WaniKani API token, encrypted at rest via [TokenCipher]. */
-@Singleton
-class TokenRepository @Inject constructor(
+class TokenRepository(
     private val dataStore: DataStore<Preferences>,
     private val tokenCipher: TokenCipher
 ) {

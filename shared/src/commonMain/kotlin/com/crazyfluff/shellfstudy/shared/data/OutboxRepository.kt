@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -8,24 +8,20 @@ import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingLessonStartEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
-import com.crazyfluff.shellfstudy.core.sync.OutboxSyncScheduler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import java.time.Instant
-import javax.inject.Inject
-import javax.inject.Singleton
+import kotlin.time.Clock
 
 private val BLOCKED_ON_AUTH_KEY = booleanPreferencesKey("outbox_blocked_on_auth")
 
 /**
  * The single place "user just graded a review / started a lesson" turns into a durable local
  * write plus a background sync request — the only thing the review/lesson ViewModels talk to
- * directly. Never touches the network itself; that's [com.crazyfluff.shellfstudy.core.sync.OutboxSyncWorker]'s job.
+ * directly. Never touches the network itself; that's the outbox sync worker's job.
  */
-@Singleton
-class OutboxRepository @Inject constructor(
+class OutboxRepository(
     private val outboxDao: OutboxDao,
     private val outboxSyncScheduler: OutboxSyncScheduler,
     private val dataStore: DataStore<Preferences>
@@ -37,7 +33,7 @@ class OutboxRepository @Inject constructor(
                 subjectId = subjectId,
                 incorrectMeaningAnswers = if (grade.meaningCorrect) 0 else 1,
                 incorrectReadingAnswers = if (grade.readingCorrect) 0 else 1,
-                gradedAt = Instant.now().toString()
+                gradedAt = Clock.System.now().toString()
             )
         )
         outboxSyncScheduler.requestSync()
@@ -45,7 +41,7 @@ class OutboxRepository @Inject constructor(
 
     suspend fun enqueueLessonStart(assignmentId: Long, subjectId: Long) {
         outboxDao.insertLessonStart(
-            PendingLessonStartEntity(assignmentId = assignmentId, subjectId = subjectId, startedAt = Instant.now().toString())
+            PendingLessonStartEntity(assignmentId = assignmentId, subjectId = subjectId, startedAt = Clock.System.now().toString())
         )
         outboxSyncScheduler.requestSync()
     }

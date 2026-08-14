@@ -8,9 +8,9 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
-import com.crazyfluff.shellfstudy.core.data.OutboxRepository
+import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
-import com.crazyfluff.shellfstudy.core.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository

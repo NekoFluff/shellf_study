@@ -12,7 +12,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import com.crazyfluff.shellfstudy.core.data.ThemeMode
+import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 
 private val DarkColorScheme = darkColorScheme(
     primary = VocabularyLight,

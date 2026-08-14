@@ -52,9 +52,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.crazyfluff.shellfstudy.core.data.ThemeMode
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 
 object SettingsScreenTestTags {
     const val BACK_BUTTON = "settings_back_button"

@@ -1,17 +1,17 @@
 package com.crazyfluff.shellfstudy.core.notifications
 
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
-import com.crazyfluff.shellfstudy.core.data.NotificationSettings
-import com.crazyfluff.shellfstudy.core.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
+import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
-import kotlinx.coroutines.flow.first
-import kotlin.time.toJavaInstant
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.toJavaInstant
+import kotlinx.coroutines.flow.first
 
 /**
  * All real notification decision-making lives here — the workers in this package are thin

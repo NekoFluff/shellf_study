@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -9,8 +9,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 const val DEFAULT_DAILY_LESSON_GOAL = 15
 
@@ -39,8 +37,7 @@ data class NotificationSettings(
     val quietHoursEndHour: Int = 7
 )
 
-@Singleton
-class SettingsRepository @Inject constructor(
+class SettingsRepository(
     private val dataStore: DataStore<Preferences>
 ) {
     private val dailyLessonGoalKey = intPreferencesKey("daily_lesson_goal")
@@ -62,12 +59,12 @@ class SettingsRepository @Inject constructor(
     private val quietHoursStartHourKey = intPreferencesKey("notif_quiet_hours_start_hour")
     private val quietHoursEndHourKey = intPreferencesKey("notif_quiet_hours_end_hour")
 
-    // dataStore is a single app-wide DataStore<Preferences> instance (see DataStoreModule) shared
-    // by every repository that persists key-value state — ReviewSessionRepository, OutboxRepository,
-    // TokenRepository, etc. dataStore.data re-emits on *every* write to that shared file, regardless
-    // of which key changed, so without distinctUntilChanged() here, an unrelated write elsewhere
-    // (e.g. persisting the review queue mid-session) would re-trigger every collector of these
-    // flows — including ReviewViewModel/LessonViewModel's settings collector, which calls
+    // dataStore is a single app-wide DataStore<Preferences> instance shared by every repository
+    // that persists key-value state — ReviewSessionRepository, OutboxRepository, TokenRepository,
+    // etc. dataStore.data re-emits on *every* write to that shared file, regardless of which key
+    // changed, so without distinctUntilChanged() here, an unrelated write elsewhere (e.g.
+    // persisting the review queue mid-session) would re-trigger every collector of these flows —
+    // including ReviewViewModel/LessonViewModel's settings collector, which calls
     // _uiState.update() on each emission. That spurious recomposition landing mid-animation (the
     // rank-change badge's entrance, in particular) is what caused visibly dropped frames.
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->

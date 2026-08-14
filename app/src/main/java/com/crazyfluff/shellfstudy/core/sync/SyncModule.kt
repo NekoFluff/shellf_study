@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.core.sync
 
+import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

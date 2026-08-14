@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.core.network
 
-import com.crazyfluff.shellfstudy.core.data.TokenRepository
+import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.network.AuthTokenProvider
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient

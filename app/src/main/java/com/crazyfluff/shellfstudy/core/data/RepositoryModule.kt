@@ -1,9 +1,16 @@
 package com.crazyfluff.shellfstudy.core.data
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
+import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
+import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
+import com.crazyfluff.shellfstudy.shared.data.TokenCipher
+import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
@@ -12,6 +19,7 @@ import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
 import com.crazyfluff.shellfstudy.shared.database.StudyMaterialDao
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
+import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDao
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import dagger.Binds
@@ -65,6 +73,24 @@ object RepositoryModule {
         studyActivityDao: StudyActivityDao,
         syncStateDao: SyncStateDao
     ): StatsRepository = StatsRepository(api, reviewStatisticDao, levelProgressionDao, studyActivityDao, syncStateDao)
+
+    @Provides
+    @Singleton
+    fun provideSettingsRepository(dataStore: DataStore<Preferences>): SettingsRepository =
+        SettingsRepository(dataStore)
+
+    @Provides
+    @Singleton
+    fun provideTokenRepository(dataStore: DataStore<Preferences>, tokenCipher: TokenCipher): TokenRepository =
+        TokenRepository(dataStore, tokenCipher)
+
+    @Provides
+    @Singleton
+    fun provideOutboxRepository(
+        outboxDao: OutboxDao,
+        outboxSyncScheduler: OutboxSyncScheduler,
+        dataStore: DataStore<Preferences>
+    ): OutboxRepository = OutboxRepository(outboxDao, outboxSyncScheduler, dataStore)
 }
 
 @Module

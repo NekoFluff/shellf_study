@@ -2,36 +2,37 @@ package com.crazyfluff.shellfstudy.feature.review
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.tracing.trace
 import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.coroutines.runDurably
-import com.crazyfluff.shellfstudy.shared.data.ApiResult
-import com.crazyfluff.shellfstudy.core.data.AppSettings
-import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
-import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.core.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.core.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
-import com.crazyfluff.shellfstudy.core.data.SettingsRepository
-import com.crazyfluff.shellfstudy.shared.data.StatsRepository
-import com.crazyfluff.shellfstudy.shared.data.model.RankChange
-import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
-import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
-import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.AnswerOutcome
-import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.core.quiz.PendingQuestion
+import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.core.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.core.quiz.QuizQueue
 import com.crazyfluff.shellfstudy.core.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.core.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.core.quiz.questionTypesFor
-import androidx.tracing.trace
+import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.AppSettings
+import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
+import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.StatsRepository
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,7 +41,6 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class ReviewUiState(
     val isLoading: Boolean = true,

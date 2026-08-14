@@ -3,7 +3,7 @@ package com.crazyfluff.shellfstudy.feature.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
-import com.crazyfluff.shellfstudy.core.data.TokenRepository
+import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
