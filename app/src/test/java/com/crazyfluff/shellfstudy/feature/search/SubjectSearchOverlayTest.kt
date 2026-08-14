@@ -1,9 +1,14 @@
 package com.crazyfluff.shellfstudy.feature.search
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -147,5 +152,45 @@ class SubjectSearchOverlayTest {
 
         composeTestRule.onNodeWithTag(SearchOverlayTestTags.CLOSE_BUTTON).performClick()
         assert(!active)
+    }
+
+    @Test
+    fun reopeningSearch_clearsThePreviousQuery() {
+        var active by mutableStateOf(false)
+        var query by mutableStateOf("stale query")
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = active,
+                onActiveChange = { active = it },
+                uiState = SearchUiState(query = query),
+                onQueryChange = { query = it },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        active = true
+        composeTestRule.waitForIdle()
+
+        assert(query == "")
+    }
+
+    @Test
+    fun selectingResult_clearsFocusFromQueryField() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = "water", results = listOf(sampleResult)),
+                onQueryChange = {},
+                onSubjectClick = {},
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.QUERY_FIELD).assertIsFocused()
+
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.RESULT_ROW_PREFIX + "440").performClick()
+
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.QUERY_FIELD).assertIsNotFocused()
     }
 }

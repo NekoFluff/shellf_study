@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
@@ -57,7 +58,16 @@ fun SubjectGlyph(
             )
         }
         characterImageUrl != null -> Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
-            AsyncImage(model = characterImageUrl, contentDescription = null, modifier = Modifier.size(size))
+            // These SVGs are flat monochrome line art (fill:none, a single stroke color) baked to a
+            // hardcoded fallback black by SvgCssVariableInterceptor — tinting to the same
+            // subject-type color the text-glyph branch above uses keeps them visible and consistent
+            // across light/dark/e-ink themes instead of stuck black.
+            AsyncImage(
+                model = characterImageUrl,
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(subjectColor(subjectType)),
+                modifier = Modifier.size(size)
+            )
         }
         else -> Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
             Text(text = "?", style = textStyle.copy(fontSize = maxFontSize), color = subjectColor(subjectType))

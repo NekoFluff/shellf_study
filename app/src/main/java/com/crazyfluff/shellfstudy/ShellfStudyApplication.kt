@@ -7,15 +7,18 @@ import androidx.work.Configuration
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.svg.SvgDecoder
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
+import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SvgCssVariableInterceptor
 import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.notifications.NotificationChannels
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 
 @HiltAndroidApp
 class ShellfStudyApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
@@ -30,10 +33,20 @@ class ShellfStudyApplication : Application(), Configuration.Provider, SingletonI
 
     // Radicals with no Unicode glyph (e.g. "Death Star") render via character_images, which the
     // WaniKani API only ever supplies as SVG — the decoder must be registered explicitly here.
+    // A dedicated OkHttpClient (rather than the default one coil-network-okhttp would otherwise
+    // use) carries SvgCssVariableInterceptor, which works around AndroidSVG's lack of CSS var()
+    // support — see that class for why these SVGs render blank without it.
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
-            .components { add(SvgDecoder.Factory()) }
+            .components {
+                add(OkHttpNetworkFetcherFactory(callFactory = { svgOkHttpClient }))
+                add(SvgDecoder.Factory())
+            }
             .build()
+
+    private val svgOkHttpClient by lazy {
+        OkHttpClient.Builder().addInterceptor(SvgCssVariableInterceptor).build()
+    }
 
     override fun onCreate() {
         super.onCreate()

@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -83,8 +84,14 @@ fun SubjectSearchOverlay(
     onSubjectClick: (Long) -> Unit = {}
 ) {
     val queryFocusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    // Every (re)open starts from a clean slate — otherwise reopening via the trigger icon after a
+    // previous search left the old query (and its results) sitting there under the keyboard.
     LaunchedEffect(active) {
-        if (active) queryFocusRequester.requestFocus()
+        if (active) {
+            onQueryChange("")
+            queryFocusRequester.requestFocus()
+        }
     }
 
     // This is a plain inline overlay, not a Dialog, so it shares the host Activity's
@@ -215,7 +222,14 @@ fun SubjectSearchOverlay(
                         Column(modifier = Modifier.fillMaxSize()) {
                             LazyColumn(modifier = Modifier.weight(1f)) {
                                 items(uiState.results, key = { it.subjectId }) { subject ->
-                                    SubjectResultRow(subject, onSubjectClick)
+                                    SubjectResultRow(subject) { subjectId ->
+                                        // Selecting a result opens the detail sheet on top of this
+                                        // overlay (it doesn't close) — without this, the query field
+                                        // stays focused underneath and the keyboard pops back up as
+                                        // soon as the sheet is dismissed.
+                                        focusManager.clearFocus()
+                                        onSubjectClick(subjectId)
+                                    }
                                 }
                             }
                             if (uiState.totalMatchCount > uiState.results.size) {
