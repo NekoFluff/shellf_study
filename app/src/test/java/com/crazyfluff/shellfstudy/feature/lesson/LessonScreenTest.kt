@@ -377,6 +377,64 @@ class LessonScreenTest {
     }
 
     @Test
+    fun typeMismatchWarning_showsExpectingMeaning_forMeaningQuestion() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                answerTypeMismatchCount = 1
+            )
+        )
+
+        // OutlinedTextField sets MergeDescendants on its root node, so the supportingText's own tag
+        // collapses into it in the default merged tree — this needs the unmerged tree to be
+        // individually queryable, same as ReviewScreenTest's equivalent.
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Expecting the meaning", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun typeMismatchWarning_showsExpectingReading_forReadingQuestion() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.READING,
+                answerTypeMismatchCount = 1
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Expecting the reading", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun typeMismatchWarning_absentBeforeAnyMismatch() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun typeMismatchWarning_clearsOnceUserEditsTheAnswer() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                answerTypeMismatchCount = 1
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_FIELD).performTextInput("W")
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
     fun quizPhase_totalTimer_shownWhenSettingEnabledAndSessionInProgress() {
         setScreen(
             LessonUiState(

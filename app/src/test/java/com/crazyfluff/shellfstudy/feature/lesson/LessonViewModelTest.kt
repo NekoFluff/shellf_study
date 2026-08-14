@@ -815,6 +815,159 @@ class LessonViewModelTest {
         assertThat(resumedSnapshot!!.sessionStartTimeMs).isEqualTo(fakeOriginalStartTime)
     }
 
+    @Test
+    fun `submitting a reading into a meaning question rejects it instead of grading a miss`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            val quizState = awaitItem() // quiz begins
+            assertThat(quizState.currentQuestionType).isEqualTo(QuestionType.MEANING)
+
+            viewModel.onAnswerInputChange("くち")
+            awaitItem()
+            viewModel.submitAnswer()
+            val mismatchState = awaitItem()
+            assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
+            // Rejected outright, not graded as a miss — feedback stays null and the question isn't
+            // consumed (remainingQuizCount unchanged, no requeue).
+            assertThat(mismatchState.feedback).isNull()
+            assertThat(mismatchState.remainingQuizCount).isEqualTo(1)
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat(correctState.feedback?.isCorrect).isTrue()
+        }
+    }
+
+    @Test
+    fun `submitting a romaji reading into a meaning question rejects it instead of grading a miss`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            // Queue order is shuffled — answer reading questions correctly until meaning comes up.
+            while (state.currentQuestionType != QuestionType.MEANING) {
+                viewModel.onAnswerInputChange("mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+            val remainingBeforeMismatch = state.remainingQuizCount
+
+            viewModel.onAnswerInputChange("mizu")
+            awaitItem()
+            viewModel.submitAnswer()
+            val mismatchState = awaitItem()
+            assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
+            // Rejected outright, not graded as a miss — feedback stays null and the question isn't
+            // consumed (remainingQuizCount unchanged, no requeue).
+            assertThat(mismatchState.feedback).isNull()
+            assertThat(mismatchState.remainingQuizCount).isEqualTo(remainingBeforeMismatch)
+
+            viewModel.onAnswerInputChange("Water")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat(correctState.feedback?.isCorrect).isTrue()
+        }
+    }
+
+    @Test
+    fun `submitting a meaning into a reading question rejects it instead of grading a miss`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            // Queue order is shuffled — answer meaning questions correctly until reading comes up.
+            while (state.currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange("Water")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+            // Captured before the mismatch submission — if the reading question happened to be
+            // drawn first, the meaning question is still outstanding, so this is 2, not 1.
+            val remainingBeforeMismatch = state.remainingQuizCount
+
+            viewModel.onAnswerInputChange("Water")
+            awaitItem()
+            viewModel.submitAnswer()
+            val mismatchState = awaitItem()
+            assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
+            assertThat(mismatchState.feedback).isNull()
+            // Rejected outright, not graded as a miss — the queue is untouched.
+            assertThat(mismatchState.remainingQuizCount).isEqualTo(remainingBeforeMismatch)
+
+            viewModel.onAnswerInputChange("mizu")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat(correctState.feedback?.isCorrect).isTrue()
+        }
+    }
+
+    private fun kanjiAssignmentsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
+          "data": [{
+            "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "kanji",
+              "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun kanjiSubjectsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
+          "data": [{
+            "id": 1, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/1",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2020-01-01T00:00:00.000000Z", "level": 3, "slug": "water",
+              "characters": "水",
+              "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
+              "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}]
+            }
+          }]
+        }
+    """.trimIndent()
+
     private fun radicalAssignmentsJson() = """
         {
           "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,

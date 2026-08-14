@@ -9,7 +9,6 @@ import com.crazyfluff.shellfstudy.core.coroutines.runDurably
 import com.crazyfluff.shellfstudy.core.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.AppSettings
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
-import com.crazyfluff.shellfstudy.core.data.containsKana
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.core.data.PersistedQuestion
@@ -22,14 +21,14 @@ import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.core.quiz.AnswerOutcome
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.core.quiz.PendingQuestion
 import com.crazyfluff.shellfstudy.core.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.core.quiz.QuizQueue
 import com.crazyfluff.shellfstudy.core.quiz.candidatesFor
-import com.crazyfluff.shellfstudy.core.quiz.convertReadingSafely
+import com.crazyfluff.shellfstudy.core.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.core.quiz.questionTypesFor
-import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
 import androidx.tracing.trace
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -246,32 +245,11 @@ class ReviewViewModel @Inject constructor(
 
         gradingGuard.launchIfIdle {
             val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-            if (type == QuestionType.MEANING) {
-                // A small typo is graded as correct but flagged, rather than a flat miss — readings
-                // stay exact-match, matching WaniKani's own convention for kana.
-                val match = CloseEnoughMatcher.match(state.answerInput, candidates)
-                val readingCandidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, QuestionType.READING)
-                // Typing a reading into a meaning answer is a habit slip, not a genuine miss — reject
-                // it outright rather than spending an SRS attempt on it. Kana is one unambiguous
-                // tell; a wrong guess that romaji-converts into this item's own reading is the same
-                // slip, just typed in Latin letters.
-                val looksLikeReading = state.answerInput.containsKana() ||
-                    CloseEnoughMatcher.match(convertReadingSafely(state.answerInput.trim()), readingCandidates).isMatch
-                if (!match.isMatch && looksLikeReading) {
+            when (val outcome = evaluateAnswer(state.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings)) {
+                AnswerOutcome.TypeMismatch ->
                     _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
-                    return@launchIfIdle
-                }
-                gradeAnswer(item, type, match.isMatch, candidates, expandDetails = false, wasCloseMatch = match.isMatch && !match.isExact)
-            } else {
-                val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
-                val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
-                // Same idea in reverse: a wrong reading that closely matches this item's own meaning
-                // is almost certainly the other question type typed by habit, not a real miss.
-                if (!isCorrect && CloseEnoughMatcher.match(state.answerInput, candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, QuestionType.MEANING)).isMatch) {
-                    _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
-                    return@launchIfIdle
-                }
-                gradeAnswer(item, type, isCorrect, candidates, expandDetails = false)
+                is AnswerOutcome.Graded ->
+                    gradeAnswer(item, type, outcome.isCorrect, candidates, expandDetails = false, wasCloseMatch = outcome.wasCloseMatch)
             }
         }
     }

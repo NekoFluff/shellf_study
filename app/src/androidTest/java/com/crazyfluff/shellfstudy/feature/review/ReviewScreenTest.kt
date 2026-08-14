@@ -329,8 +329,11 @@ class ReviewScreenTest {
             )
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Expecting the meaning").assertIsDisplayed()
+        // OutlinedTextField sets MergeDescendants on its root node, so the supportingText's own tag
+        // collapses into it in the default merged tree — needs the unmerged tree to be individually
+        // queryable.
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Expecting the meaning", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -343,8 +346,8 @@ class ReviewScreenTest {
             )
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Expecting the reading").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Expecting the reading", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -356,7 +359,7 @@ class ReviewScreenTest {
             )
         )
 
-        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test
@@ -369,9 +372,9 @@ class ReviewScreenTest {
             )
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).performTextInput("W")
-        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test

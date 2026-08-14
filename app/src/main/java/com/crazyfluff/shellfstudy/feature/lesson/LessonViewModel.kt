@@ -24,14 +24,14 @@ import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.core.quiz.AnswerOutcome
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.core.quiz.PendingQuestion
 import com.crazyfluff.shellfstudy.core.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.core.quiz.QuizQueue
 import com.crazyfluff.shellfstudy.core.quiz.candidatesFor
-import com.crazyfluff.shellfstudy.core.quiz.convertReadingSafely
+import com.crazyfluff.shellfstudy.core.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.core.quiz.questionTypesFor
-import com.crazyfluff.shellfstudy.core.util.CloseEnoughMatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -63,6 +63,7 @@ data class LessonUiState(
     val currentQuestionType: QuestionType? = null,
     val answerInput: String = "",
     val feedback: AnswerFeedback? = null,
+    val answerTypeMismatchCount: Int = 0,
     val totalQuizCount: Int = 0,
     val remainingQuizCount: Int = 0,
     val isSessionComplete: Boolean = false,
@@ -474,13 +475,11 @@ class LessonViewModel @Inject constructor(
 
         gradingGuard.launchIfIdle {
             val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-            if (type == QuestionType.MEANING) {
-                val match = CloseEnoughMatcher.match(state.answerInput, candidates)
-                gradeAnswer(item, type, match.isMatch, candidates, wasCloseMatch = match.isMatch && !match.isExact)
-            } else {
-                val normalizedAnswer = convertReadingSafely(state.answerInput.trim())
-                val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
-                gradeAnswer(item, type, isCorrect, candidates)
+            when (val outcome = evaluateAnswer(state.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings)) {
+                AnswerOutcome.TypeMismatch ->
+                    _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
+                is AnswerOutcome.Graded ->
+                    gradeAnswer(item, type, outcome.isCorrect, candidates, wasCloseMatch = outcome.wasCloseMatch)
             }
         }
     }

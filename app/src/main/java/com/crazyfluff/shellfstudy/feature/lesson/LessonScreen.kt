@@ -25,10 +25,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.selection.rememberSelectionState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -51,7 +49,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -66,13 +63,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -85,6 +78,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.ElapsedTimeText
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.QuizAnswerField
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemRow
@@ -102,7 +96,6 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.VocabReadingRow
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.componentsLabel
-import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
 import com.crazyfluff.shellfstudy.core.designsystem.text.lookUpInAkebiContextMenu
 import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
@@ -114,6 +107,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSecti
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
+import com.crazyfluff.shellfstudy.core.quiz.label
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
@@ -148,6 +142,7 @@ object LessonScreenTestTags {
     const val TOTAL_TIMER_TEXT = "lesson_total_timer_text"
     const val QUESTION_TIMER_TEXT = "lesson_question_timer_text"
     const val ANSWER_FIELD = "lesson_answer_field"
+    const val TYPE_MISMATCH_TEXT = "lesson_type_mismatch_text"
     const val SUBMIT_BUTTON = "lesson_submit_button"
     const val DONT_KNOW_BUTTON = "lesson_dont_know_button"
     const val FEEDBACK_TEXT = "lesson_feedback_text"
@@ -507,11 +502,6 @@ private fun LessonItem.toMissedItemRow(): SessionMissedItemRow = SessionMissedIt
     subjectId = subjectId,
     subjectType = subjectType
 )
-
-private val QuestionType.label: String get() = when (this) {
-    QuestionType.MEANING -> "meaning"
-    QuestionType.READING -> "reading"
-}
 
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
@@ -995,11 +985,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
     val item = uiState.currentQuizItem ?: return
     val questionType = uiState.currentQuestionType ?: return
 
-    val answerFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(uiState.currentQuizItem, uiState.currentQuestionType) {
-        answerFocusRequester.requestFocus()
-    }
-
     val progress = if (uiState.totalQuizCount == 0) 0f else
         (uiState.totalQuizCount - uiState.remainingQuizCount).toFloat() / uiState.totalQuizCount
     val accentColor = subjectColor(item.subjectType)
@@ -1079,26 +1064,20 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             .padding(horizontal = 24.dp)
     ) {
         Text(
-            text = if (questionType == QuestionType.MEANING) "What is the meaning?" else "What is the reading?",
+            text = "What is the ${questionType.label}?",
             style = MaterialTheme.typography.bodyLarge
         )
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
+        QuizAnswerField(
             value = uiState.answerInput,
             onValueChange = onAnswerInputChange,
-            label = { Text("答え") },
-            singleLine = true,
-            enabled = uiState.feedback == null,
-            visualTransformation = if (questionType == QuestionType.READING) {
-                RomajiVisualTransformation(isComplete = uiState.feedback != null)
-            } else {
-                VisualTransformation.None
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { if (uiState.feedback == null) onSubmit() }),
-            modifier = Modifier.fillMaxWidth()
-                .focusRequester(answerFocusRequester)
-                .testTag(LessonScreenTestTags.ANSWER_FIELD)
+            questionType = questionType,
+            isAnswered = uiState.feedback != null,
+            answerTypeMismatchCount = uiState.answerTypeMismatchCount,
+            onSubmit = onSubmit,
+            answerFieldTestTag = LessonScreenTestTags.ANSWER_FIELD,
+            typeMismatchTextTestTag = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
+            focusResetKey = item.assignmentId to questionType
         )
 
         Spacer(modifier = Modifier.height(16.dp))

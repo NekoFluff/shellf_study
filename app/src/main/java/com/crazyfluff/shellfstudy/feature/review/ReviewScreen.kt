@@ -1,7 +1,6 @@
 package com.crazyfluff.shellfstudy.feature.review
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -17,13 +16,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -44,7 +40,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,17 +53,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tracing.Trace
@@ -77,6 +67,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.ElapsedTimeText
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.GatedContinueButton
+import com.crazyfluff.shellfstudy.core.designsystem.quiz.QuizAnswerField
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionAnswerRow
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionMissedItemRow
@@ -88,7 +79,6 @@ import com.crazyfluff.shellfstudy.core.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
-import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
 import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.core.data.model.RankChange
 import com.crazyfluff.shellfstudy.core.data.model.SrsStage
@@ -102,6 +92,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.core.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
+import com.crazyfluff.shellfstudy.core.quiz.label
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
@@ -110,7 +101,6 @@ import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailHandleHeigh
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
-import kotlin.math.roundToInt
 
 /** Arbitrary non-null value used only to warm up [RankChangeChip]'s first composition ahead of
  *  time — see its call site in [ReviewQuestionContent]. Never actually shown. */
@@ -414,27 +404,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
     val item = uiState.currentItem ?: return
     val questionType = uiState.currentQuestionType ?: return
 
-    val answerFocusRequester = remember { FocusRequester() }
-    // Also keyed on undoCounter: undo clears the field and re-enables it without changing
-    // currentItem/currentQuestionType, so this effect wouldn't otherwise refire and the user would
-    // be left tapped-out of the field they just asked to retry.
-    LaunchedEffect(uiState.currentItem, uiState.currentQuestionType, uiState.undoCounter) {
-        answerFocusRequester.requestFocus()
-    }
-
-    val shakeOffset = remember { Animatable(0f) }
-    var showTypeMismatchWarning by remember(uiState.currentItem, uiState.currentQuestionType) { mutableStateOf(false) }
-    // Keyed on the count (not a boolean) so back-to-back identical mistakes still retrigger the
-    // shake — a plain boolean wouldn't change value between two consecutive "wrong type" submits.
-    LaunchedEffect(uiState.answerTypeMismatchCount) {
-        if (uiState.answerTypeMismatchCount == 0) return@LaunchedEffect
-        showTypeMismatchWarning = true
-        shakeOffset.snapTo(0f)
-        listOf(-12f, 12f, -8f, 8f, -4f, 0f).forEach { target ->
-            shakeOffset.animateTo(target, animationSpec = tween(durationMillis = 40))
-        }
-    }
-
     val progress = if (uiState.totalCount == 0) 0f else
         (uiState.totalCount - uiState.remainingCount).toFloat() / uiState.totalCount
     val accentColor = subjectColor(item.subjectType)
@@ -579,20 +548,19 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         Spacer(modifier = Modifier.height(8.dp))
         val feedbackForField = uiState.feedback
         val canUndo = feedbackForField != null && !feedbackForField.isCorrect
-        OutlinedTextField(
+        QuizAnswerField(
             value = uiState.answerInput,
-            onValueChange = {
-                showTypeMismatchWarning = false
-                onAnswerInputChange(it)
-            },
-            label = { Text("答え") },
-            singleLine = true,
-            enabled = uiState.feedback == null,
-            visualTransformation = if (questionType == QuestionType.READING) {
-                RomajiVisualTransformation(isComplete = feedbackForField != null)
-            } else {
-                VisualTransformation.None
-            },
+            onValueChange = onAnswerInputChange,
+            questionType = questionType,
+            isAnswered = feedbackForField != null,
+            answerTypeMismatchCount = uiState.answerTypeMismatchCount,
+            onSubmit = onSubmit,
+            answerFieldTestTag = ReviewScreenTestTags.ANSWER_FIELD,
+            typeMismatchTextTestTag = ReviewScreenTestTags.TYPE_MISMATCH_TEXT,
+            // Also includes undoCounter: undo clears the field and re-enables it without changing
+            // item/questionType, so the field's focus-restoring effect wouldn't otherwise refire and
+            // the user would be left tapped-out of the field they just asked to retry.
+            focusResetKey = Triple(item.assignmentId, questionType, uiState.undoCounter),
             trailingIcon = if (feedbackForField != null) {
                 {
                     IconButton(
@@ -603,22 +571,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
                         Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo last answer")
                     }
                 }
-            } else null,
-            supportingText = if (showTypeMismatchWarning) {
-                {
-                    Text(
-                        text = "Expecting the ${questionType.label}",
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.testTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT)
-                    )
-                }
-            } else null,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { if (uiState.feedback == null) onSubmit() }),
-            modifier = Modifier.fillMaxWidth()
-                .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
-                .focusRequester(answerFocusRequester)
-                .testTag(ReviewScreenTestTags.ANSWER_FIELD)
+            } else null
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -779,11 +732,6 @@ private fun ReviewItem.toMissedItemRow(): SessionMissedItemRow = SessionMissedIt
 private fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
     QuestionType.MEANING -> DetailQuestionType.MEANING
     QuestionType.READING -> DetailQuestionType.READING
-}
-
-private val QuestionType.label: String get() = when (this) {
-    QuestionType.MEANING -> "meaning"
-    QuestionType.READING -> "reading"
 }
 
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)
