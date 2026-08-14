@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.androidx.room)
@@ -8,6 +10,10 @@ plugins {
 
 room {
     schemaDirectory("$projectDir/schemas")
+}
+
+compose.resources {
+    packageOfResClass = "com.crazyfluff.shellfstudy.shared.generated.resources"
 }
 
 kotlin {
@@ -21,6 +27,11 @@ kotlin {
         }
 
         withHostTestBuilder {}.configure {}
+
+        // Works around https://youtrack.jetbrains.com/issue/CMP-9547: without this, Compose
+        // Multiplatform's composeResources bundle (.cvr assets) silently never makes it into the
+        // Android APK when using AGP9's com.android.kotlin.multiplatform.library plugin.
+        experimentalProperties["android.experimental.kmp.enableAndroidResources"] = true
     }
 
     val iosTargets = listOf(
@@ -47,6 +58,11 @@ kotlin {
             api(libs.androidx.datastore.preferences.core)
             implementation(libs.okio)
             implementation(libs.ksoup)
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.material3)
+            implementation(compose.ui)
+            implementation(compose.components.resources)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
