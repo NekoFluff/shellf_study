@@ -1,9 +1,8 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
-import javax.inject.Inject
+import com.fleeksoft.ksoup.Ksoup
+import com.fleeksoft.ksoup.nodes.Element
 
 private val PITCH_NUMBER_PATTERN = Regex("［(\\d+)］")
 private val END_OF_READING_PATTERN = Regex("[【】［］〔〕]")
@@ -17,12 +16,13 @@ private fun isKana(c: Char): Boolean =
  * Ported from Smouldering Durtles' `PitchInfoUtil.parseWeblioPage` — same weblio.jp markup
  * conventions (`.NetDicHead` for the reading + pitch-number heading, `.NetDicBody` for
  * part-of-speech variants), same regexes. Fragile to weblio changing their page markup, same as
- * the original.
+ * the original. Uses Ksoup rather than jsoup so this stays usable from the iOS target — jsoup is
+ * JVM-only.
  */
-class WeblioPitchAccentParser @Inject constructor() {
+class WeblioPitchAccentParser {
 
     fun parse(html: String): List<PitchAccent> {
-        val doc = Jsoup.parse(html)
+        val doc = Ksoup.parse(html)
         val heads = doc.getElementsByClass("NetDicHead")
         if (heads.isEmpty()) return emptyList()
 

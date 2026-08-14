@@ -12,6 +12,7 @@ import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
@@ -91,6 +92,10 @@ object RepositoryModule {
         outboxSyncScheduler: OutboxSyncScheduler,
         dataStore: DataStore<Preferences>
     ): OutboxRepository = OutboxRepository(outboxDao, outboxSyncScheduler, dataStore)
+
+    @Provides
+    @Singleton
+    fun provideWeblioPitchAccentParser(): WeblioPitchAccentParser = WeblioPitchAccentParser()
 }
 
 @Module

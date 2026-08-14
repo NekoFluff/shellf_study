@@ -1,24 +1,25 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
-import com.google.common.truth.Truth.assertThat
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class WeblioPitchAccentParserTest {
 
     private val parser = WeblioPitchAccentParser()
 
     @Test
-    fun `parse extracts reading and pitch number from a NetDicHead heading`() {
+    fun parseExtractsReadingAndPitchNumberFromANetDicHeadHeading() {
         val html = """<div class="NetDicHead">ミズ<span style="font-size:75%;">［0］</span></div>"""
 
         val result = parser.parse(html)
 
-        assertThat(result).containsExactly(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+        assertEquals(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)), result)
     }
 
     @Test
-    fun `parse extracts part-of-speech variants from the sibling NetDicBody when the heading has no pitch number`() {
+    fun parseExtractsPartOfSpeechVariantsFromTheSiblingNetDicBodyWhenTheHeadingHasNoPitchNumber() {
         val html = """
             <div class="NetDicHead">タベル</div>
             <div class="NetDicBody">
@@ -28,25 +29,25 @@ class WeblioPitchAccentParserTest {
 
         val result = parser.parse(html)
 
-        assertThat(result).containsExactly(PitchAccent(reading = "タベル", partOfSpeech = "動詞", pitchNumber = 2))
+        assertEquals(listOf(PitchAccent(reading = "タベル", partOfSpeech = "動詞", pitchNumber = 2)), result)
     }
 
     @Test
-    fun `parse strips stray non-kana characters embedded ahead of the pitch marker`() {
+    fun parseStripsStrayNonKanaCharactersEmbeddedAheadOfThePitchMarker() {
         val html = """<div class="NetDicHead">ミズ1<span style="font-size:75%;">［1］</span></div>"""
 
         val result = parser.parse(html)
 
-        assertThat(result).containsExactly(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 1))
+        assertEquals(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 1)), result)
     }
 
     @Test
-    fun `parse returns an empty list when the page has no NetDicHead entries`() {
-        assertThat(parser.parse("<html><body>not a dictionary page</body></html>")).isEmpty()
+    fun parseReturnsAnEmptyListWhenThePageHasNoNetDicHeadEntries() {
+        assertTrue(parser.parse("<html><body>not a dictionary page</body></html>").isEmpty())
     }
 
     @Test
-    fun `parse skips a NetDicBody variant when its background-color-black span is missing`() {
+    fun parseSkipsANetDicBodyVariantWhenItsBackgroundColorBlackSpanIsMissing() {
         val html = """
             <div class="NetDicHead">タベル</div>
             <div class="NetDicBody">
@@ -54,6 +55,6 @@ class WeblioPitchAccentParserTest {
             </div>
         """.trimIndent()
 
-        assertThat(parser.parse(html)).isEmpty()
+        assertTrue(parser.parse(html).isEmpty())
     }
 }

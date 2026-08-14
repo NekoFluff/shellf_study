@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentBundledSource
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentCacheDao

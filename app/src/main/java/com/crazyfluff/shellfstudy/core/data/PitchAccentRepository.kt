@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheDa
 import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheEntity
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
+import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi
 import kotlinx.coroutines.flow.Flow
@@ -20,7 +21,8 @@ import javax.inject.Singleton
  *
  * Implements [PitchAccentProvider] (the small interface [com.crazyfluff.shellfstudy.shared.data.SubjectRepository]
  * actually needs) since this class itself isn't portable yet — [bundledSource] loads an Android
- * asset and [parser] depends on jsoup.
+ * asset via a real Context. [parser] itself (unlike before) is portable, now that it's built on
+ * Ksoup rather than jsoup.
  */
 @Singleton
 class PitchAccentRepository @Inject constructor(
