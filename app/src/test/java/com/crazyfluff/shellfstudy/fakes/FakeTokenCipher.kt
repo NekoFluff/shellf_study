@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.fakes
 
-import com.crazyfluff.shellfstudy.core.data.TokenCipher
+import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 
 /** No-op stand-in for [TokenCipher] — real AES/Keystore crypto isn't available on the JVM test runner. */
 class FakeTokenCipher : TokenCipher {

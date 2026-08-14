@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -8,13 +8,6 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import javax.inject.Inject
-
-/** Encrypts/decrypts short secrets such as the WaniKani API token before they hit disk. */
-interface TokenCipher {
-    fun encrypt(plainText: String): String
-    fun decrypt(encoded: String): String
-}
 
 private const val ANDROID_KEYSTORE = "AndroidKeyStore"
 private const val KEY_ALIAS = "shellf_study_api_token_key"
@@ -27,7 +20,7 @@ private const val GCM_IV_LENGTH_BYTES = 12
  * leaves hardware-backed storage. Ciphertext (IV + tag + bytes) is Base64-encoded so it can be
  * stored as a plain string in DataStore.
  */
-class AndroidKeystoreTokenCipher @Inject constructor() : TokenCipher {
+class AndroidKeystoreTokenCipher : TokenCipher {
 
     private val secretKey: SecretKey by lazy { getOrCreateKey() }
 

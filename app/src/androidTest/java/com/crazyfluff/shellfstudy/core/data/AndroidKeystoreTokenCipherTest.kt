@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.shared.data.AndroidKeystoreTokenCipher
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith

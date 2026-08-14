@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.crazyfluff.shellfstudy.shared.data.AndroidKeystoreTokenCipher
+import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -25,10 +27,13 @@ object DataStoreModule {
 
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class TokenCipherModule {
-    @Binds
+object TokenCipherModule {
+    // @Provides, not @Binds — AndroidKeystoreTokenCipher lives in :shared, so it has no
+    // javax.inject annotations for Hilt to see (that library isn't available on Kotlin/Native,
+    // and Hilt's codegen doesn't run over :shared's own compilation anyway).
+    @Provides
     @Singleton
-    abstract fun bindTokenCipher(impl: AndroidKeystoreTokenCipher): TokenCipher
+    fun provideTokenCipher(): TokenCipher = AndroidKeystoreTokenCipher()
 }
 
 @Module
