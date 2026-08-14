@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -38,14 +40,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectTypeLabel
@@ -251,6 +258,8 @@ fun SubjectSearchOverlay(
     }
 }
 
+private const val ResultRowGlyphInlineId = "glyph"
+
 @Composable
 private fun SubjectResultRow(subject: SubjectSummary, onClick: (Long) -> Unit) {
     Column(
@@ -262,16 +271,44 @@ private fun SubjectResultRow(subject: SubjectSummary, onClick: (Long) -> Unit) {
     ) {
         // The main line spans the full row width instead of sharing it with a leading glyph
         // column, so a long vocabulary word like お誕生日おめでとう has room to render on one line
-        // instead of wrapping character-by-character in a narrow fixed-width slot.
+        // instead of wrapping character-by-character in a narrow fixed-width slot. A radical with
+        // no Unicode character (e.g. Death Star, Yurt) has nothing to put there instead, so it
+        // falls back to its character_images SVG rendered inline at the same spot, tinted to match
+        // — same treatment SubjectGlyph gives it everywhere else (detail sheet, related-subject
+        // tiles, level progress chips), just embedded in the text run instead of a separate icon
+        // slot, to preserve the room-for-long-vocab behavior above.
+        val imageGlyphUrl = subject.characterImageUrl.takeIf { subject.characters == null }
         Text(
             text = buildAnnotatedString {
-                if (subject.characters != null) {
-                    withStyle(SpanStyle(color = subjectColor(subject.subjectType))) {
-                        append(subject.characters)
+                when {
+                    subject.characters != null -> {
+                        withStyle(SpanStyle(color = subjectColor(subject.subjectType))) {
+                            append(subject.characters)
+                        }
+                        append(" — ")
                     }
-                    append(" — ")
+                    imageGlyphUrl != null -> {
+                        appendInlineContent(ResultRowGlyphInlineId, "[glyph]")
+                        append(" — ")
+                    }
                 }
                 append(subject.meanings.joinToString(", "))
+            },
+            inlineContent = if (imageGlyphUrl != null) {
+                mapOf(
+                    ResultRowGlyphInlineId to InlineTextContent(
+                        Placeholder(width = 20.sp, height = 20.sp, placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter)
+                    ) {
+                        AsyncImage(
+                            model = imageGlyphUrl,
+                            contentDescription = null,
+                            colorFilter = ColorFilter.tint(subjectColor(subject.subjectType)),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                )
+            } else {
+                emptyMap()
             },
             style = MaterialTheme.typography.bodyLarge,
             maxLines = 1,

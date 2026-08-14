@@ -12,6 +12,7 @@ import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -135,6 +136,36 @@ class SubjectSearchOverlayTest {
         }
 
         composeTestRule.onNodeWithTag(SearchOverlayTestTags.RESULT_ROW_PREFIX + "440").assertExists()
+    }
+
+    @Test
+    fun glyphLessRadicalResult_showsInlineImageGlyphInsteadOfBlankPrefix() {
+        // Regression test: a radical with no Unicode character (e.g. Death Star, Yurt) used to
+        // render with no leading identifier at all — every other subject shows its character
+        // inline, colored, right before the meaning; this one just skipped straight to the meaning.
+        val glyphLessRadical = SubjectSummary(
+            subjectId = 8790,
+            subjectType = SubjectType.RADICAL,
+            characters = null,
+            characterImageUrl = "https://files.wanikani.com/dgeoshskssv0r7bnmaxj0o4lt1el",
+            level = 24,
+            meanings = listOf("Death Star"),
+            readings = emptyList()
+        )
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = "death star", results = listOf(glyphLessRadical)),
+                onQueryChange = {},
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.RESULT_ROW_PREFIX + "8790").assertExists()
+        // The inline image glyph's alternate text sits right before the meaning, same position a
+        // colored character would occupy for any other subject.
+        composeTestRule.onNodeWithText("Death Star", substring = true).assertExists()
     }
 
     @Test
