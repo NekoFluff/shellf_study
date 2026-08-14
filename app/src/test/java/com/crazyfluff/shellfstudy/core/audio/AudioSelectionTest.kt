@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.core.audio
 
-import com.crazyfluff.shellfstudy.core.data.model.PronunciationAudio
+import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 

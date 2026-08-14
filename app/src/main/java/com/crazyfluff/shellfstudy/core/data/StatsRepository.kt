@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.core.data
 
-import com.crazyfluff.shellfstudy.core.data.model.StudyStreak
+import com.crazyfluff.shellfstudy.shared.data.model.StudyStreak
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao

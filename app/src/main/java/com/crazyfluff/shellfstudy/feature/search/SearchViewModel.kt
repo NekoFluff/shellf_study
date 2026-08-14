@@ -3,7 +3,7 @@ package com.crazyfluff.shellfstudy.feature.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
-import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview

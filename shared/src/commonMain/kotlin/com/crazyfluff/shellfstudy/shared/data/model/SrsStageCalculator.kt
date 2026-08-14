@@ -1,8 +1,11 @@
-package com.crazyfluff.shellfstudy.core.data.model
+package com.crazyfluff.shellfstudy.shared.data.model
 
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
-import java.time.Duration
-import java.time.Instant
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /**
  * Predicts the next SRS stage locally, before any network round trip — used to patch the cached
@@ -33,17 +36,15 @@ object SrsStageCalculator {
     fun availableAtFor(stagePosition: Int, srsSystem: SrsSystemEntity, from: Instant): Instant? {
         val stage = srsSystem.stages.firstOrNull { it.position == stagePosition } ?: return null
         val interval = stage.interval ?: return null
-        // Instant only supports time-based additions (up to days) — larger units are converted to
-        // a Duration by hand rather than passed as a ChronoUnit, which Instant.plus would reject.
         val duration = when (stage.intervalUnit) {
-            "seconds" -> Duration.ofSeconds(interval)
-            "minutes" -> Duration.ofMinutes(interval)
-            "hours" -> Duration.ofHours(interval)
-            "days" -> Duration.ofDays(interval)
-            "weeks" -> Duration.ofDays(interval * 7)
-            "months" -> Duration.ofDays(interval * 30)
+            "seconds" -> interval.seconds
+            "minutes" -> interval.minutes
+            "hours" -> interval.hours
+            "days" -> interval.days
+            "weeks" -> (interval * 7).days
+            "months" -> (interval * 30).days
             else -> return null
         }
-        return from.plus(duration)
+        return from + duration
     }
 }

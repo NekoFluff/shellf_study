@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.data.model
+package com.crazyfluff.shellfstudy.shared.data.model
 
 /** WaniKani's SRS stage scale (0-9): 0 is locked/not yet started, 1-4 are the four Apprentice
  *  sub-stages, 5-6 are the two Guru sub-stages, then Master, Enlightened, and Burned. */

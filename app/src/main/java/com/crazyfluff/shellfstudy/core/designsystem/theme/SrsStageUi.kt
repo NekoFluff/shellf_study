@@ -34,8 +34,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.core.data.model.RankChange
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import kotlinx.coroutines.delay
 
 /** Shared with [RankChangeChip]'s call site in ReviewScreen so the chip's internal color-morph

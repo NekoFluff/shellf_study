@@ -58,7 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
-import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors

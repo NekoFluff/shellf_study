@@ -1,8 +1,8 @@
 package com.crazyfluff.shellfstudy.core.data
 
-import com.crazyfluff.shellfstudy.core.data.model.DashboardSummary
-import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
-import com.crazyfluff.shellfstudy.core.data.model.WaniKaniUser
+import com.crazyfluff.shellfstudy.shared.data.model.DashboardSummary
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
+import com.crazyfluff.shellfstudy.shared.data.model.WaniKaniUser
 import com.crazyfluff.shellfstudy.shared.network.ReviewResultData
 import com.crazyfluff.shellfstudy.shared.network.ReviewSubmissionBody
 import com.crazyfluff.shellfstudy.shared.network.ReviewSubmissionRequest

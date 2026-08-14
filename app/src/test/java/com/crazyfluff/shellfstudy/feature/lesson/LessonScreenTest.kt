@@ -14,8 +14,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.crazyfluff.shellfstudy.core.data.model.LessonItem
-import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
+import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState

@@ -6,7 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test

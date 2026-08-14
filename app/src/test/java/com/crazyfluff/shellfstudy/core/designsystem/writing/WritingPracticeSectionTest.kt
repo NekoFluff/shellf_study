@@ -11,7 +11,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import org.junit.Rule
 import org.junit.Test

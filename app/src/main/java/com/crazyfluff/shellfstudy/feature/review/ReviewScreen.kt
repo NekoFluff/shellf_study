@@ -62,7 +62,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tracing.Trace
-import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.ElapsedTimeText
@@ -81,8 +81,8 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestion
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.core.designsystem.theme.EinkStageColors
-import com.crazyfluff.shellfstudy.core.data.model.RankChange
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.designsystem.theme.RankChangeChip
 import com.crazyfluff.shellfstudy.core.designsystem.theme.RankChangeChipEnterDurationMs
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme

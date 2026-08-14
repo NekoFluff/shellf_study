@@ -12,8 +12,8 @@ import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.StatsRepository
-import com.crazyfluff.shellfstudy.core.data.model.RankChange
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType

@@ -27,9 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
-import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
-import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.text.lookUpInAkebiContextMenu
@@ -126,8 +126,12 @@ fun SubjectDetailContent(
             detail.onyomiReadings.isNotEmpty() || detail.kunyomiReadings.isNotEmpty() || detail.nanoriReadings.isNotEmpty()
         val showMeaningZone = revealMeaning
         val showReadingZone = revealReading && hasReadings
-        val hasMeaningMnemonic = !detail.meaningMnemonic.isNullOrBlank()
-        val hasReadingMnemonic = !detail.readingMnemonic.isNullOrBlank()
+        val meaningMnemonic = detail.meaningMnemonic
+        val readingMnemonic = detail.readingMnemonic
+        val meaningHint = detail.meaningHint
+        val readingHint = detail.readingHint
+        val hasMeaningMnemonic = !meaningMnemonic.isNullOrBlank()
+        val hasReadingMnemonic = !readingMnemonic.isNullOrBlank()
 
         // Meaning and Reading are deliberately structured the same way — title, then its own
         // mnemonic right underneath — so the two read as parallel, equal-weight sections rather than
@@ -154,9 +158,9 @@ fun SubjectDetailContent(
                 if (hasMeaningMnemonic) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         SectionEyebrow("Meaning mnemonic")
-                        WkMnemonicText(detail.meaningMnemonic, style = MaterialTheme.typography.bodyMedium)
-                        if (!detail.meaningHint.isNullOrBlank()) {
-                            WkMnemonicText(detail.meaningHint, style = MaterialTheme.typography.bodySmall)
+                        WkMnemonicText(meaningMnemonic, style = MaterialTheme.typography.bodyMedium)
+                        if (!meaningHint.isNullOrBlank()) {
+                            WkMnemonicText(meaningHint, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -202,9 +206,9 @@ fun SubjectDetailContent(
                 if (hasReadingMnemonic) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         SectionEyebrow("Reading mnemonic")
-                        WkMnemonicText(detail.readingMnemonic, style = MaterialTheme.typography.bodyMedium)
-                        if (!detail.readingHint.isNullOrBlank()) {
-                            WkMnemonicText(detail.readingHint, style = MaterialTheme.typography.bodySmall)
+                        WkMnemonicText(readingMnemonic, style = MaterialTheme.typography.bodyMedium)
+                        if (!readingHint.isNullOrBlank()) {
+                            WkMnemonicText(readingHint, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

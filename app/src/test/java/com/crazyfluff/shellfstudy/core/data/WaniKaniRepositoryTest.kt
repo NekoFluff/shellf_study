@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.core.data
 
-import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse

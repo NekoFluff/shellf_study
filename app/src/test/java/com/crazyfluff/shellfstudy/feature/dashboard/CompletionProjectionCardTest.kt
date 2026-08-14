@@ -4,12 +4,16 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.crazyfluff.shellfstudy.core.data.model.CompletionProjection
+import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
-import java.time.LocalDate
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
+import kotlin.time.Clock
 
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
@@ -29,7 +33,8 @@ class CompletionProjectionCardTest {
             CompletionProjectionCard(
                 projection = CompletionProjection(
                     totalItems = 9000, itemsSeen = 1200, dailyPace = 15,
-                    daysRemaining = 520, projectedCompletionDate = LocalDate.now().plusDays(520)
+                    daysRemaining = 520,
+                    projectedCompletionDate = Clock.System.todayIn(TimeZone.currentSystemDefault()).plus(520, DateTimeUnit.DAY)
                 )
             )
         }
@@ -43,7 +48,7 @@ class CompletionProjectionCardTest {
             CompletionProjectionCard(
                 projection = CompletionProjection(
                     totalItems = 100, itemsSeen = 100, dailyPace = 15,
-                    daysRemaining = 0, projectedCompletionDate = LocalDate.now()
+                    daysRemaining = 0, projectedCompletionDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
                 )
             )
         }

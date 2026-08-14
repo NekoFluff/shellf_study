@@ -26,7 +26,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 
 object WritingPracticeTestTags {
     const val SECTION = "writing_practice_section"

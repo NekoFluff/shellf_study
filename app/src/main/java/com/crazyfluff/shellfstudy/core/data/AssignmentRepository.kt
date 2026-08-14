@@ -1,22 +1,22 @@
 package com.crazyfluff.shellfstudy.core.data
 
-import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
-import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
-import com.crazyfluff.shellfstudy.core.data.model.ItemSpreadBucket
-import com.crazyfluff.shellfstudy.core.data.model.foldKana
-import com.crazyfluff.shellfstudy.core.data.model.LessonItem
-import com.crazyfluff.shellfstudy.core.data.model.LevelItem
-import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
-import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
-import com.crazyfluff.shellfstudy.core.data.model.RankChange
-import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
-import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
-import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
-import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
-import com.crazyfluff.shellfstudy.core.data.model.SrsStageCalculator
-import com.crazyfluff.shellfstudy.core.data.model.SubjectTypeProgress
-import com.crazyfluff.shellfstudy.core.data.model.toPronunciationAudios
+import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
+import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
+import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
+import com.crazyfluff.shellfstudy.shared.data.model.foldKana
+import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
+import com.crazyfluff.shellfstudy.shared.data.model.LevelItem
+import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStageCalculator
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectTypeProgress
+import com.crazyfluff.shellfstudy.shared.data.model.toPronunciationAudios
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlin.time.toKotlinInstant
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -290,7 +291,7 @@ class AssignmentRepository @Inject constructor(
                 }
                 ReviewForecastBucket(
                     hoursFromNow = hourOffset,
-                    availableAt = bucketStart,
+                    availableAt = bucketStart.toKotlinInstant(),
                     newlyAvailableCount = inBucket.size,
                     countsByType = inBucket.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
                 )
@@ -414,7 +415,7 @@ private fun SubjectEntity.whitelistAuxiliaryMeanings(): List<String> =
  *  post-sync reconciliation), so they can't drift out of sync with each other. */
 private fun AssignmentEntity.withStageTransition(newStage: Int, srsSystem: SrsSystemEntity, now: Instant): AssignmentEntity {
     val nowIso = now.toString()
-    val availableAt = SrsStageCalculator.availableAtFor(newStage, srsSystem, now)?.toString()
+    val availableAt = SrsStageCalculator.availableAtFor(newStage, srsSystem, now.toKotlinInstant())?.toString()
     return copy(
         srsStage = newStage,
         startedAt = startedAt ?: nowIso,

@@ -14,13 +14,13 @@ import com.crazyfluff.shellfstudy.core.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.core.data.isAuthError
-import com.crazyfluff.shellfstudy.core.data.model.CompletionProjection
-import com.crazyfluff.shellfstudy.core.data.model.DashboardSummary
-import com.crazyfluff.shellfstudy.core.data.model.ItemSpread
-import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
-import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
-import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
-import com.crazyfluff.shellfstudy.core.data.model.WaniKaniUser
+import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
+import com.crazyfluff.shellfstudy.shared.data.model.DashboardSummary
+import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
+import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.data.model.WaniKaniUser
 import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
@@ -40,9 +40,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalDate
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
 import javax.inject.Inject
 import kotlin.math.ceil
+import kotlin.time.Clock
 
 data class DashboardUiState(
     val isRefreshing: Boolean = true,
@@ -477,6 +481,7 @@ private fun buildCompletionProjection(totalItems: Int, itemsSeen: Int, dailyLess
         itemsSeen = itemsSeen,
         dailyPace = dailyLessonGoal,
         daysRemaining = daysRemaining,
-        projectedCompletionDate = LocalDate.now().plusDays(daysRemaining.toLong())
+        projectedCompletionDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            .plus(daysRemaining, DateTimeUnit.DAY)
     )
 }

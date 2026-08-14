@@ -21,11 +21,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.core.data.model.CompletionProjection
+import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+import kotlin.time.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.format.MonthNames
+import kotlinx.datetime.format.Padding
+import kotlinx.datetime.format.char
+import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
 
 object CompletionProjectionTestTags {
     const val CARD = "completion_projection_card"
@@ -33,7 +39,13 @@ object CompletionProjectionTestTags {
     const val SUMMARY_TEXT = "completion_projection_summary"
 }
 
-private val DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM d, yyyy")
+private val DATE_FORMATTER = kotlinx.datetime.LocalDate.Format {
+    monthName(MonthNames.ENGLISH_ABBREVIATED)
+    char(' ')
+    day(Padding.NONE)
+    chars(", ")
+    year()
+}
 
 @Composable
 fun CompletionProjectionCard(projection: CompletionProjection?, modifier: Modifier = Modifier) {
@@ -74,7 +86,7 @@ fun CompletionProjectionCard(projection: CompletionProjection?, modifier: Modifi
                     Column(modifier = Modifier.testTag(CompletionProjectionTestTags.SUMMARY_TEXT)) {
                         if (projection.dailyPace > 0) {
                             Text(
-                                text = projection.projectedCompletionDate.format(DATE_FORMATTER),
+                                text = DATE_FORMATTER.format(projection.projectedCompletionDate),
                                 style = MaterialTheme.typography.bodyLarge
                             )
                             Text(
@@ -107,7 +119,9 @@ private fun CompletionProjectionCardPreview() {
         CompletionProjectionCard(
             projection = CompletionProjection(
                 totalItems = 9000, itemsSeen = 1200, dailyPace = 15,
-                daysRemaining = 520, projectedCompletionDate = LocalDate.now().plusDays(520)
+                daysRemaining = 520,
+                projectedCompletionDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
+                    .plus(520, DateTimeUnit.DAY)
             )
         )
     }

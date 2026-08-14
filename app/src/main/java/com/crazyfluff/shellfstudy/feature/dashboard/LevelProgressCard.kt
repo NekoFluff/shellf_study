@@ -44,11 +44,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.core.data.model.LevelItem
-import com.crazyfluff.shellfstudy.core.data.model.LevelProgress
-import com.crazyfluff.shellfstudy.core.data.model.LevelUpProgress
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
-import com.crazyfluff.shellfstudy.core.data.model.SubjectTypeProgress
+import com.crazyfluff.shellfstudy.shared.data.model.LevelItem
+import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectTypeProgress
 import com.crazyfluff.shellfstudy.core.designsystem.components.SegmentedBar
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
@@ -242,9 +242,10 @@ private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
                 .align(Alignment.Center),
             contentAlignment = Alignment.Center
         ) {
+            val characters = item.characters
             when {
-                item.characters != null -> Text(
-                    text = item.characters,
+                characters != null -> Text(
+                    text = characters,
                     style = MaterialTheme.typography.titleMedium,
                     color = if (item.passed) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

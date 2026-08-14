@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.fakes
 
-import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 
 /** In-memory stand-in for [StrokeOrderRepository] — real asset reading needs Robolectric/Context. */

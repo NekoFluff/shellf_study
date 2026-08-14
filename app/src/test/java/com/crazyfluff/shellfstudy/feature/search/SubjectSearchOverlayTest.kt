@@ -16,7 +16,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import org.junit.Rule
 import org.junit.Test

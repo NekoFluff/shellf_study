@@ -8,9 +8,9 @@ import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.SubjectRepository
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
-import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
-import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import dagger.hilt.android.lifecycle.HiltViewModel

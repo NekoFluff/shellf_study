@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.data.model
+package com.crazyfluff.shellfstudy.shared.data.model
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test

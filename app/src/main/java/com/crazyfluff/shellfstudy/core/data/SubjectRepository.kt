@@ -1,10 +1,10 @@
 package com.crazyfluff.shellfstudy.core.data
 
-import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
+import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
-import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
-import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
-import com.crazyfluff.shellfstudy.core.data.model.toPronunciationAudios
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.data.model.toPronunciationAudios
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
 import com.crazyfluff.shellfstudy.shared.database.StudyMaterialDao

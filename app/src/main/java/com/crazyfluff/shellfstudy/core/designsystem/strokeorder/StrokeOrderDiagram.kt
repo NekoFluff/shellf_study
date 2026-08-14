@@ -38,7 +38,7 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlinx.coroutines.delay

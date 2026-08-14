@@ -71,8 +71,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.crazyfluff.shellfstudy.core.data.model.ContextSentence
-import com.crazyfluff.shellfstudy.core.data.model.LessonItem
+import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
+import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
@@ -894,12 +894,14 @@ private fun LessonMeaningSection(item: LessonItem) {
                 )
             }
         }
-        if (!item.meaningMnemonic.isNullOrBlank()) {
+        val meaningMnemonic = item.meaningMnemonic
+        val meaningHint = item.meaningHint
+        if (!meaningMnemonic.isNullOrBlank()) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SectionEyebrow("Meaning mnemonic")
-                WkMnemonicText(item.meaningMnemonic, style = MaterialTheme.typography.bodyMedium)
-                if (!item.meaningHint.isNullOrBlank()) {
-                    WkMnemonicText(item.meaningHint, style = MaterialTheme.typography.bodySmall)
+                WkMnemonicText(meaningMnemonic, style = MaterialTheme.typography.bodyMedium)
+                if (!meaningHint.isNullOrBlank()) {
+                    WkMnemonicText(meaningHint, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -938,12 +940,14 @@ private fun LessonReadingSection(
                 else -> Text(item.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
             }
         }
-        if (!item.readingMnemonic.isNullOrBlank()) {
+        val readingMnemonic = item.readingMnemonic
+        val readingHint = item.readingHint
+        if (!readingMnemonic.isNullOrBlank()) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SectionEyebrow("Reading mnemonic")
-                WkMnemonicText(item.readingMnemonic, style = MaterialTheme.typography.bodyMedium)
-                if (!item.readingHint.isNullOrBlank()) {
-                    WkMnemonicText(item.readingHint, style = MaterialTheme.typography.bodySmall)
+                WkMnemonicText(readingMnemonic, style = MaterialTheme.typography.bodyMedium)
+                if (!readingHint.isNullOrBlank()) {
+                    WkMnemonicText(readingHint, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

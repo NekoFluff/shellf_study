@@ -1,11 +1,11 @@
 package com.crazyfluff.shellfstudy.core.notifications
 
-import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
-import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
-import com.crazyfluff.shellfstudy.core.data.model.reviewForecastSummary
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
+import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
 import com.google.common.truth.Truth.assertThat
-import java.time.Instant
 import org.junit.Test
+import kotlin.time.Clock
 
 class NotificationBuilderTest {
 
@@ -13,7 +13,7 @@ class NotificationBuilderTest {
     fun `reviewsAvailable reuses the shared forecast summary as its body`() {
         val forecast = ReviewForecast(
             reviewsAvailableNow = 4,
-            buckets = listOf(ReviewForecastBucket(hoursFromNow = 1, availableAt = Instant.now(), newlyAvailableCount = 0))
+            buckets = listOf(ReviewForecastBucket(hoursFromNow = 1, availableAt = Clock.System.now(), newlyAvailableCount = 0))
         )
         val spec = NotificationBuilder.reviewsAvailable(forecast = forecast)
 

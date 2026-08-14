@@ -2,7 +2,7 @@ package com.crazyfluff.shellfstudy.core.data.strokeorder
 
 import android.content.Context
 import com.crazyfluff.shellfstudy.R
-import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex

@@ -1,6 +1,6 @@
-package com.crazyfluff.shellfstudy.core.data.model
+package com.crazyfluff.shellfstudy.shared.data.model
 
-import java.time.LocalDate
+import kotlinx.datetime.LocalDate
 
 data class StudyStreak(
     val currentStreakDays: Int,

@@ -34,17 +34,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
-import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
-import com.crazyfluff.shellfstudy.core.data.model.reviewForecastSummary
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
+import com.crazyfluff.shellfstudy.shared.data.model.formatHourOfDay
+import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
 import com.crazyfluff.shellfstudy.core.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.core.designsystem.theme.SubjectTypeColors
 import com.crazyfluff.shellfstudy.core.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 object ReviewForecastTestTags {
     const val CARD = "review_forecast_card"
@@ -53,13 +55,11 @@ object ReviewForecastTestTags {
     const val SUMMARY = "review_forecast_summary"
 }
 
-private val TIME_FORMATTER = DateTimeFormatter.ofPattern("h a", Locale.getDefault())
-
 /** "3p"/"11a" — deliberately compact so it fits a narrow axis-label slot on one line. */
 private fun compactHourLabel(instant: Instant): String {
-    val time = instant.atZone(ZoneId.systemDefault())
-    val hour12 = if (time.hour % 12 == 0) 12 else time.hour % 12
-    val suffix = if (time.hour < 12) "a" else "p"
+    val hour = instant.toLocalDateTime(TimeZone.currentSystemDefault()).hour
+    val hour12 = if (hour % 12 == 0) 12 else hour % 12
+    val suffix = if (hour < 12) "a" else "p"
     return "$hour12$suffix"
 }
 
@@ -116,7 +116,7 @@ private fun summaryText(forecast: ReviewForecast?, selectedIndex: Int?): String 
             "${forecast.reviewsAvailableNow} due right now"
         } else {
             val bucket = forecast.buckets[selectedIndex - 1]
-            val time = TIME_FORMATTER.format(bucket.availableAt.atZone(ZoneId.systemDefault()))
+            val time = formatHourOfDay(bucket.availableAt)
             // Cumulative — everything due by this point in time, not just what newly becomes
             // available in this one hour's bucket — since "how many reviews would I have if I
             // waited until X" is the more useful number to plan around.
@@ -290,7 +290,11 @@ private fun ReviewForecastCardPreview() {
             forecast = ReviewForecast(
                 reviewsAvailableNow = 5,
                 buckets = (1..24).map { hour ->
-                    ReviewForecastBucket(hoursFromNow = hour, availableAt = Instant.now().plusSeconds(hour * 3600L), newlyAvailableCount = (hour % 6))
+                    ReviewForecastBucket(
+                        hoursFromNow = hour,
+                        availableAt = Clock.System.now() + hour.hours,
+                        newlyAvailableCount = (hour % 6)
+                    )
                 }
             )
         )

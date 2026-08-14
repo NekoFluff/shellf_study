@@ -5,6 +5,7 @@ import com.crazyfluff.shellfstudy.core.data.NotificationSettings
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.StatsRepository
 import kotlinx.coroutines.flow.first
+import kotlin.time.toJavaInstant
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalTime
@@ -77,7 +78,7 @@ class DefaultNotificationCoordinator @Inject constructor(
         }
         val forecast = assignmentRepository.observeReviewForecast().first()
         val nextBucket = forecast.buckets.firstOrNull { it.newlyAvailableCount > 0 }
-        notificationScheduler.scheduleNextReviewCheck(nextBucket?.availableAt)
+        notificationScheduler.scheduleNextReviewCheck(nextBucket?.availableAt?.toJavaInstant())
     }
 
     override suspend fun evaluateReviewsAndBacklog() {

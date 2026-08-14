@@ -1,10 +1,8 @@
-package com.crazyfluff.shellfstudy.core.data.model
+package com.crazyfluff.shellfstudy.shared.data.model
 
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-
-private val TIME_FORMATTER = DateTimeFormatter.ofPattern("h a", Locale.getDefault())
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 /**
  * "N due now · M more in the next 24h" / "Next up: N at 3 PM" / "All caught up" — shared by
@@ -19,9 +17,17 @@ fun reviewForecastSummary(forecast: ReviewForecast): String {
         forecast.reviewsAvailableNow > 0 -> "${forecast.reviewsAvailableNow} due now"
         upcomingTotal > 0 -> {
             val next = forecast.buckets.first { it.newlyAvailableCount > 0 }
-            val time = TIME_FORMATTER.format(next.availableAt.atZone(ZoneId.systemDefault()))
-            "Next up: ${next.newlyAvailableCount} at $time"
+            "Next up: ${next.newlyAvailableCount} at ${formatHourOfDay(next.availableAt)}"
         }
         else -> "All caught up — nothing due in the next 24h"
     }
+}
+
+/** 12-hour "3 PM"-style formatting of [instant] in the device's local time zone (no minutes —
+ *  matches the original `DateTimeFormatter.ofPattern("h a")` behavior this replaces). */
+fun formatHourOfDay(instant: Instant): String {
+    val hour24 = instant.toLocalDateTime(TimeZone.currentSystemDefault()).hour
+    val amPm = if (hour24 < 12) "AM" else "PM"
+    val hour12 = if (hour24 % 12 == 0) 12 else hour24 % 12
+    return "$hour12 $amPm"
 }

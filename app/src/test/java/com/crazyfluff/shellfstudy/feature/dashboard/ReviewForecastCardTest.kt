@@ -4,13 +4,13 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
-import com.crazyfluff.shellfstudy.core.data.model.ReviewForecastBucket
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
-import java.time.Instant
+import kotlin.time.Clock
 
 /** Runs under Robolectric (JVM) — state-driven, no device features needed. Pinned per project convention. */
 @RunWith(AndroidJUnit4::class)
@@ -33,7 +33,7 @@ class ReviewForecastCardTest {
             ReviewForecastCard(
                 forecast = ReviewForecast(
                     reviewsAvailableNow = 0,
-                    buckets = (1..24).map { ReviewForecastBucket(it, Instant.now(), newlyAvailableCount = 0) }
+                    buckets = (1..24).map { ReviewForecastBucket(it, Clock.System.now(), newlyAvailableCount = 0) }
                 )
             )
         }
@@ -47,7 +47,7 @@ class ReviewForecastCardTest {
             ReviewForecastCard(
                 forecast = ReviewForecast(
                     reviewsAvailableNow = 5,
-                    buckets = (1..24).map { ReviewForecastBucket(it, Instant.now(), newlyAvailableCount = 1) }
+                    buckets = (1..24).map { ReviewForecastBucket(it, Clock.System.now(), newlyAvailableCount = 1) }
                 )
             )
         }

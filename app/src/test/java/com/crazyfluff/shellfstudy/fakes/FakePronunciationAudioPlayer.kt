@@ -2,7 +2,7 @@ package com.crazyfluff.shellfstudy.fakes
 
 import com.crazyfluff.shellfstudy.core.audio.PlaybackState
 import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.core.data.model.PronunciationAudio
+import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 

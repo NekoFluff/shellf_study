@@ -1,10 +1,10 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
-import com.crazyfluff.shellfstudy.core.data.model.ItemSpreadBucket
-import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
-import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
@@ -22,9 +22,12 @@ import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import java.time.Duration
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
+
+private fun Instant.truncatedToHour(): Instant = Instant.fromEpochSeconds((epochSeconds / 3600) * 3600)
 
 class AssignmentRepositoryTest {
 
@@ -261,7 +264,7 @@ class AssignmentRepositoryTest {
 
     @Test
     fun `observeLessonsCompletedToday counts assignments started today`() = runTest {
-        val now = Instant.now().toString()
+        val now = Clock.System.now().toString()
         server.enqueue(jsonResponse(assignmentJson(id = 1, startedAt = now)))
 
         repository.syncAssignments(force = true)
@@ -387,7 +390,7 @@ class AssignmentRepositoryTest {
         // reading almost an hour behind the actual on-the-hour availableAt they described. They
         // must instead land on the real clock hour the assignment becomes due.
         seedSubject(id = 1, characters = "一", meaning = "One", reading = "いち")
-        val nextHour = Instant.now().truncatedTo(ChronoUnit.HOURS).plus(Duration.ofHours(1))
+        val nextHour = Clock.System.now().truncatedToHour() + 1.hours
         server.enqueue(
             jsonResponse(
                 collectionJson(listOf(assignmentData(id = 1, subjectId = 1, availableAt = nextHour.toString())))
@@ -405,8 +408,8 @@ class AssignmentRepositoryTest {
 
     @Test
     fun `observeReviewForecast groups both the now-count and each bucket's count by subject type`() = runTest {
-        val now = Instant.now()
-        val nextHour = now.truncatedTo(ChronoUnit.HOURS).plus(Duration.ofHours(1))
+        val now = Clock.System.now()
+        val nextHour = now.truncatedToHour() + 1.hours
         repositories.assignmentDao.upsertAll(
             listOf(
                 AssignmentEntity(
@@ -419,7 +422,7 @@ class AssignmentRepositoryTest {
                 ),
                 AssignmentEntity(
                     id = 3, subjectId = 3, subjectType = "vocabulary", srsStage = 1,
-                    createdAt = "2026-01-01T00:00:00.000000Z", availableAt = now.minusSeconds(60).toString(), hidden = false
+                    createdAt = "2026-01-01T00:00:00.000000Z", availableAt = (now - 60.seconds).toString(), hidden = false
                 )
             )
         )

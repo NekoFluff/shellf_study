@@ -5,9 +5,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
-import com.crazyfluff.shellfstudy.core.data.model.RankChange
-import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
-import com.crazyfluff.shellfstudy.core.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType

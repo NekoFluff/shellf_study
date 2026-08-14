@@ -16,9 +16,9 @@ import com.crazyfluff.shellfstudy.core.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.StatsRepository
-import com.crazyfluff.shellfstudy.core.data.model.RankChange
-import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
-import com.crazyfluff.shellfstudy.core.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback

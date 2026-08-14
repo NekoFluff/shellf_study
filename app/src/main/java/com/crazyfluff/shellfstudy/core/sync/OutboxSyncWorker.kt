@@ -10,7 +10,7 @@ import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.core.data.isAuthError
 import com.crazyfluff.shellfstudy.core.data.isTerminalRejection
-import com.crazyfluff.shellfstudy.core.data.model.ReviewGrade
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
 import dagger.assisted.Assisted

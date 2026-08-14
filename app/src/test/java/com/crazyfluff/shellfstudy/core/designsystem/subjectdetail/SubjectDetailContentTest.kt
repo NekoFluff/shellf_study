@@ -13,10 +13,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
-import com.crazyfluff.shellfstudy.core.data.model.PronunciationAudio
-import com.crazyfluff.shellfstudy.core.data.model.StrokeOrderStroke
-import com.crazyfluff.shellfstudy.core.data.model.SubjectDetail
-import com.crazyfluff.shellfstudy.core.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
+import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeTestTags

@@ -4,7 +4,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import com.crazyfluff.shellfstudy.core.data.model.PronunciationAudio
+import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

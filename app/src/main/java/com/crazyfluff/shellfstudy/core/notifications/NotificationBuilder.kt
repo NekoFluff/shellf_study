@@ -1,8 +1,8 @@
 package com.crazyfluff.shellfstudy.core.notifications
 
 import androidx.core.app.NotificationCompat
-import com.crazyfluff.shellfstudy.core.data.model.ReviewForecast
-import com.crazyfluff.shellfstudy.core.data.model.reviewForecastSummary
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
 
 /**
  * Plain description of a notification to post — no [android.content.Context] dependency, so
