@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
@@ -7,12 +7,9 @@ import com.crazyfluff.shellfstudy.shared.network.ReviewResultData
 import com.crazyfluff.shellfstudy.shared.network.ReviewSubmissionBody
 import com.crazyfluff.shellfstudy.shared.network.ReviewSubmissionRequest
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Account/session facade — user profile, dashboard summary counts, and review submission. */
-@Singleton
-class WaniKaniRepository @Inject constructor(
+class WaniKaniRepository(
     private val api: WaniKaniApi
 ) {
     suspend fun fetchUser(): ApiResult<WaniKaniUser> = safeApiCall {
@@ -32,8 +29,8 @@ class WaniKaniRepository @Inject constructor(
         )
     }
 
-    /** Network-only — no local DB side effects. Only called by [com.crazyfluff.shellfstudy.core.sync.OutboxSyncWorker];
-     *  the UI path writes to the outbox instead (see [OutboxRepository]) and never calls this directly. */
+    /** Network-only — no local DB side effects. Only called by the outbox sync worker; the UI path
+     *  writes to the outbox instead and never calls this directly. */
     suspend fun submitReview(assignmentId: Long, grade: ReviewGrade): ApiResult<ReviewResultData> = safeApiCall {
         api.submitReview(
             ReviewSubmissionRequest(

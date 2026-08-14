@@ -1,9 +1,9 @@
 package com.crazyfluff.shellfstudy.core.sync
 
-import com.crazyfluff.shellfstudy.core.data.ApiResult
-import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
-import com.crazyfluff.shellfstudy.core.data.StatsRepository
-import com.crazyfluff.shellfstudy.core.data.SubjectRepository
+import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.StatsRepository
+import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async

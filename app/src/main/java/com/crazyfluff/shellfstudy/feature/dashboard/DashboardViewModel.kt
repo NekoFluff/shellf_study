@@ -2,18 +2,18 @@ package com.crazyfluff.shellfstudy.feature.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.crazyfluff.shellfstudy.core.data.ApiResult
-import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
-import com.crazyfluff.shellfstudy.core.data.StatsRepository
-import com.crazyfluff.shellfstudy.core.data.SubjectRepository
+import com.crazyfluff.shellfstudy.shared.data.StatsRepository
+import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.core.data.TokenRepository
-import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
-import com.crazyfluff.shellfstudy.core.data.isAuthError
+import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
 import com.crazyfluff.shellfstudy.shared.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread

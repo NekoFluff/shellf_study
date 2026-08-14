@@ -6,8 +6,8 @@ import com.crazyfluff.shellfstudy.core.audio.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.core.coroutines.ApplicationScope
 import com.crazyfluff.shellfstudy.core.coroutines.runDurably
-import com.crazyfluff.shellfstudy.core.data.ApiResult
-import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
 import com.crazyfluff.shellfstudy.core.data.PersistedLessonItemProgress
@@ -16,7 +16,7 @@ import com.crazyfluff.shellfstudy.core.data.PersistedLessonQuestion
 import com.crazyfluff.shellfstudy.core.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
-import com.crazyfluff.shellfstudy.core.data.SubjectRepository
+import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary

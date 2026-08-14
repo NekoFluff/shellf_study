@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.core.data
 
+import com.crazyfluff.shellfstudy.shared.data.ApiResult
+
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity

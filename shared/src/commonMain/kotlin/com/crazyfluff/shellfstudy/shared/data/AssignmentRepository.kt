@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
@@ -39,22 +39,20 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlin.time.toKotlinInstant
-import java.time.Duration
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.temporal.ChronoUnit
-import javax.inject.Inject
-import javax.inject.Singleton
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.todayIn
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 private const val RESOURCE_ASSIGNMENTS = "assignments"
-private val ASSIGNMENTS_STALENESS = Duration.ofHours(1)
+private val ASSIGNMENTS_STALENESS = 1.hours
 
 /** Guru or higher is what counts toward leveling up. */
 private val GURU_SRS_STAGE = SrsStage.GURU_1.raw
 
-/** Which item-spread bucket a stage's count rolls up into — mirrors [com.crazyfluff.shellfstudy.core.designsystem.theme.srsStageColor]'s bucketing. */
+/** Which item-spread bucket a stage's count rolls up into — mirrors the dashboard theme's own SRS-stage bucketing. */
 private fun bucketFor(stage: SrsStage): ItemSpreadBucket = when (stage) {
     SrsStage.LOCKED -> ItemSpreadBucket.LOCKED
     SrsStage.APPRENTICE_1, SrsStage.APPRENTICE_2, SrsStage.APPRENTICE_3, SrsStage.APPRENTICE_4 -> ItemSpreadBucket.APPRENTICE
@@ -64,9 +62,10 @@ private fun bucketFor(stage: SrsStage): ItemSpreadBucket = when (stage) {
     SrsStage.BURNED -> ItemSpreadBucket.BURNED
 }
 
+private fun Instant.truncatedToHour(): Instant = Instant.fromEpochSeconds((epochSeconds / 3600) * 3600)
+
 /** Owns the full assignment mirror — SRS progress for every subject the user has encountered. */
-@Singleton
-class AssignmentRepository @Inject constructor(
+class AssignmentRepository(
     private val api: WaniKaniApi,
     private val assignmentDao: AssignmentDao,
     private val subjectDao: SubjectDao,
@@ -124,7 +123,7 @@ class AssignmentRepository @Inject constructor(
         } else {
             SrsStageCalculator.nextStageOnIncorrect(assignment.srsStage, srsSystem)
         }
-        assignmentDao.upsertAll(listOf(assignment.withStageTransition(nextStage, srsSystem, Instant.now())))
+        assignmentDao.upsertAll(listOf(assignment.withStageTransition(nextStage, srsSystem, Clock.System.now())))
         return RankChange(SrsStage.fromRaw(assignment.srsStage), SrsStage.fromRaw(nextStage))
     }
 
@@ -134,7 +133,7 @@ class AssignmentRepository @Inject constructor(
     suspend fun applyOptimisticLessonStart(assignmentId: Long, srsSystemId: Long): RankChange? {
         val assignment = assignmentDao.getById(assignmentId) ?: return null
         val srsSystem = srsSystemById(srsSystemId) ?: return null
-        assignmentDao.upsertAll(listOf(assignment.withStageTransition(srsSystem.startingStagePosition, srsSystem, Instant.now())))
+        assignmentDao.upsertAll(listOf(assignment.withStageTransition(srsSystem.startingStagePosition, srsSystem, Clock.System.now())))
         return RankChange(SrsStage.LOCKED, SrsStage.fromRaw(srsSystem.startingStagePosition))
     }
 
@@ -182,7 +181,7 @@ class AssignmentRepository @Inject constructor(
     suspend fun reconcileAfterReviewResult(result: ReviewResultData) {
         val assignment = assignmentDao.getById(result.assignmentId) ?: return
         val srsSystem = srsSystemFor(assignment.subjectId) ?: return
-        assignmentDao.upsertAll(listOf(assignment.withStageTransition(result.endingSrsStage, srsSystem, Instant.now())))
+        assignmentDao.upsertAll(listOf(assignment.withStageTransition(result.endingSrsStage, srsSystem, Clock.System.now())))
     }
 
     /** Targeted single-assignment refetch — used when a pending outbox mutation is terminally
@@ -198,7 +197,7 @@ class AssignmentRepository @Inject constructor(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeReviewQueue(): Flow<List<ReviewItem>> =
-        assignmentDao.observeDueForReview(Instant.now().toString()).flatMapLatest { assignments ->
+        assignmentDao.observeDueForReview(Clock.System.now().toString()).flatMapLatest { assignments ->
             if (assignments.isEmpty()) {
                 flowOf(emptyList())
             } else {
@@ -271,27 +270,27 @@ class AssignmentRepository @Inject constructor(
         assignmentDao.observeBySubjectId(subjectId).map { assignment -> assignment?.let { SrsStage.fromRaw(it.srsStage) } }
 
     fun observeReviewForecast(hours: Int = 24): Flow<ReviewForecast> {
-        val now = Instant.now()
+        val now = Clock.System.now()
         val nowIso = now.toString()
         // WaniKani assignments only ever become available on the hour, so buckets are aligned to
         // clock-hour boundaries (not rolling 1h windows from `now`) — otherwise a bucket labeled
         // e.g. "3 PM" would actually span 2:47-3:47, and the label would read an hour behind the
         // reviews it describes.
-        val currentHourStart = now.truncatedTo(ChronoUnit.HOURS)
+        val currentHourStart = now.truncatedToHour()
         return combine(
             assignmentDao.observeDueForReview(nowIso),
             assignmentDao.observeUpcoming(nowIso)
         ) { availableNow, upcoming ->
             val buckets = (1..hours).map { hourOffset ->
-                val bucketStart = currentHourStart.plus(Duration.ofHours(hourOffset.toLong()))
-                val bucketEnd = bucketStart.plus(Duration.ofHours(1))
+                val bucketStart = currentHourStart + hourOffset.hours
+                val bucketEnd = bucketStart + 1.hours
                 val inBucket = upcoming.filter { assignment ->
                     val availableAt = assignment.availableAt?.let(Instant::parse) ?: return@filter false
-                    !availableAt.isBefore(bucketStart) && availableAt.isBefore(bucketEnd)
+                    availableAt >= bucketStart && availableAt < bucketEnd
                 }
                 ReviewForecastBucket(
                     hoursFromNow = hourOffset,
-                    availableAt = bucketStart.toKotlinInstant(),
+                    availableAt = bucketStart,
                     newlyAvailableCount = inBucket.size,
                     countsByType = inBucket.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
                 )
@@ -389,8 +388,10 @@ class AssignmentRepository @Inject constructor(
             )
         }.flowOn(Dispatchers.Default)
 
-    private fun startOfTodayIso(): String =
-        LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toString()
+    private fun startOfTodayIso(): String {
+        val timeZone = TimeZone.currentSystemDefault()
+        return Clock.System.todayIn(timeZone).atStartOfDayIn(timeZone).toString()
+    }
 }
 
 /** Meanings WaniKani actually accepts as a correct answer — excludes any explicitly flagged
@@ -415,7 +416,7 @@ private fun SubjectEntity.whitelistAuxiliaryMeanings(): List<String> =
  *  post-sync reconciliation), so they can't drift out of sync with each other. */
 private fun AssignmentEntity.withStageTransition(newStage: Int, srsSystem: SrsSystemEntity, now: Instant): AssignmentEntity {
     val nowIso = now.toString()
-    val availableAt = SrsStageCalculator.availableAtFor(newStage, srsSystem, now.toKotlinInstant())?.toString()
+    val availableAt = SrsStageCalculator.availableAtFor(newStage, srsSystem, now)?.toString()
     return copy(
         srsStage = newStage,
         startedAt = startedAt ?: nowIso,

@@ -1,9 +1,9 @@
 package com.crazyfluff.shellfstudy.core.notifications
 
-import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.NotificationSettings
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
-import com.crazyfluff.shellfstudy.core.data.StatsRepository
+import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import kotlinx.coroutines.flow.first
 import kotlin.time.toJavaInstant
 import java.time.Duration

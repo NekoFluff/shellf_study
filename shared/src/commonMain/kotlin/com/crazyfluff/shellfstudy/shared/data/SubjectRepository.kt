@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
@@ -25,25 +25,23 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import java.time.Duration
-import javax.inject.Inject
-import javax.inject.Singleton
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 
 private const val RESOURCE_SUBJECTS = "subjects"
 private const val RESOURCE_SRS_SYSTEMS = "srs_systems"
 private const val RESOURCE_STUDY_MATERIALS = "study_materials"
-private val SUBJECTS_STALENESS = Duration.ofDays(1)
-private val STUDY_MATERIALS_STALENESS = Duration.ofHours(1)
+private val SUBJECTS_STALENESS = 1.days
+private val STUDY_MATERIALS_STALENESS = 1.hours
 
 /** Owns subjects, SRS systems, and study materials — the full WaniKani content library. */
-@Singleton
-class SubjectRepository @Inject constructor(
+class SubjectRepository(
     private val api: WaniKaniApi,
     private val subjectDao: SubjectDao,
     private val srsSystemDao: SrsSystemDao,
     private val studyMaterialDao: StudyMaterialDao,
     private val syncStateDao: SyncStateDao,
-    private val pitchAccentRepository: PitchAccentRepository
+    private val pitchAccentProvider: PitchAccentProvider
 ) {
     private val _isSyncingSubjectLibrary = MutableStateFlow(false)
     fun observeIsSyncingSubjectLibrary(): Flow<Boolean> = _isSyncingSubjectLibrary.asStateFlow()
@@ -157,7 +155,7 @@ class SubjectRepository @Inject constructor(
             val characters = entity?.characters
             val pitchAccentsFlow: Flow<List<PitchAccent>> =
                 if (characters != null && (type == SubjectType.VOCABULARY || type == SubjectType.KANA_VOCABULARY)) {
-                    pitchAccentRepository.observePitchAccents(characters)
+                    pitchAccentProvider.observePitchAccents(characters)
                 } else {
                     flowOf(emptyList())
                 }

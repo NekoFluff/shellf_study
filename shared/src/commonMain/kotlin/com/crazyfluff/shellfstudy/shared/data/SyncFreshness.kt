@@ -1,20 +1,21 @@
-package com.crazyfluff.shellfstudy.core.data
+package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
-import java.time.Duration
-import java.time.Instant
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Instant
 
 /** Whether [resource] needs syncing now: always true when forced or never synced before. */
 suspend fun shouldSync(syncStateDao: SyncStateDao, resource: String, force: Boolean, staleness: Duration): Boolean {
     if (force) return true
     val lastSuccess = syncStateDao.get(resource)?.lastSyncSuccessAt?.let(Instant::parse) ?: return true
-    return Instant.now().isAfter(lastSuccess.plus(staleness))
+    return Clock.System.now() > lastSuccess + staleness
 }
 
 /** Records a successful sync pass, storing [cursor] (the next `updated_after` value) if given. */
 suspend fun recordSyncSuccess(syncStateDao: SyncStateDao, resource: String, cursor: String? = null) {
-    val now = Instant.now().toString()
+    val now = Clock.System.now().toString()
     val previous = syncStateDao.get(resource)
     syncStateDao.upsert(
         SyncStateEntity(
@@ -47,7 +48,7 @@ suspend fun runSync(
     if (!shouldSync(syncStateDao, resource, force, staleness)) return ApiResult.Success(Unit)
     return safeApiCall {
         val cursor = if (useCursor) syncCursor(syncStateDao, resource) else null
-        val startedAt = Instant.now().toString()
+        val startedAt = Clock.System.now().toString()
         fetchAndPersist(cursor)
         recordSyncSuccess(syncStateDao, resource, cursor = if (useCursor) startedAt else null)
     }

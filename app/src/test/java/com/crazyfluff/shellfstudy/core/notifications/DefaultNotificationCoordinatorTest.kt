@@ -3,10 +3,10 @@ package com.crazyfluff.shellfstudy.core.notifications
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
-import com.crazyfluff.shellfstudy.core.data.StatsRepository
-import com.crazyfluff.shellfstudy.core.data.SubjectRepository
+import com.crazyfluff.shellfstudy.shared.data.StatsRepository
+import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao

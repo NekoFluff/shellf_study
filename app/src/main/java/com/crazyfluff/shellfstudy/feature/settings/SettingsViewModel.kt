@@ -2,7 +2,7 @@ package com.crazyfluff.shellfstudy.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.crazyfluff.shellfstudy.core.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.core.data.SettingsRepository
 import com.crazyfluff.shellfstudy.core.data.ThemeMode
 import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator

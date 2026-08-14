@@ -4,12 +4,12 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.crazyfluff.shellfstudy.core.data.ApiResult
-import com.crazyfluff.shellfstudy.core.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.core.data.OutboxRepository
-import com.crazyfluff.shellfstudy.core.data.WaniKaniRepository
-import com.crazyfluff.shellfstudy.core.data.isAuthError
-import com.crazyfluff.shellfstudy.core.data.isTerminalRejection
+import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.shared.data.isAuthError
+import com.crazyfluff.shellfstudy.shared.data.isTerminalRejection
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
