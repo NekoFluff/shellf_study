@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.fakes
 
-import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
+import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
 
 /** No-op stand-in for [PitchAccentScrapeScheduler] — the real one needs WorkManager/a real Context to run. */
 class FakePitchAccentScrapeScheduler : PitchAccentScrapeScheduler {

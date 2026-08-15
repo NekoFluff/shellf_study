@@ -6,19 +6,10 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import java.time.Duration
 
 private const val SYNC_WORK_NAME = "wanikani_sync"
-
-/**
- * Schedules the hourly background sync — enqueued on login, cancelled on logout. An interface
- * (rather than a concrete class) so ViewModel unit tests can supply a no-op fake instead of
- * exercising the real WorkManager, which needs a real Android Context to run.
- */
-interface SyncScheduler {
-    fun schedulePeriodicSync()
-    fun cancelPeriodicSync()
-}
 
 class WorkManagerSyncScheduler(
     private val context: Context

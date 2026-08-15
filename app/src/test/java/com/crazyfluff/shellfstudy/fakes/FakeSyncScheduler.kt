@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.fakes
 
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
-import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
+import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 
 /** No-op stand-in for [SyncScheduler] — the real one needs WorkManager/a real Context to run. */
 class FakeSyncScheduler : SyncScheduler {

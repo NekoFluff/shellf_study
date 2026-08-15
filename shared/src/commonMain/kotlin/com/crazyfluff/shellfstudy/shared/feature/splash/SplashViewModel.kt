@@ -1,11 +1,11 @@
-package com.crazyfluff.shellfstudy.feature.splash
+package com.crazyfluff.shellfstudy.shared.feature.splash
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
-import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
-import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
+import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
+import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,11 +17,6 @@ enum class SplashDestination { AUTH, DASHBOARD }
 
 data class SplashUiState(val destination: SplashDestination? = null)
 
-/**
- * Decides AUTH vs. DASHBOARD from local token presence only — no network call — so a returning
- * user with a stored token never waits on (or is silently logged out by) a startup validation
- * round-trip. Dashboard's own refresh() is the real validation point once past here.
- */
 class SplashViewModel(
     private val tokenRepository: TokenRepository,
     private val syncScheduler: SyncScheduler,

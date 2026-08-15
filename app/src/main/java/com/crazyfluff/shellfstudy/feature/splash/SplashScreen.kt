@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import org.koin.androidx.compose.koinViewModel
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.shared.feature.splash.SplashDestination
+import com.crazyfluff.shellfstudy.shared.feature.splash.SplashViewModel
 
 object SplashScreenTestTags {
     const val LOADING_INDICATOR = "splash_loading_indicator"

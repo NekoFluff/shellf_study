@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.feature.auth
+package com.crazyfluff.shellfstudy.shared.feature.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -7,8 +7,8 @@ import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
-import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
-import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
+import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
+import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

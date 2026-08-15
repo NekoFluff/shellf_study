@@ -12,6 +12,7 @@ import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
+import com.crazyfluff.shellfstudy.shared.feature.auth.AuthViewModel
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat

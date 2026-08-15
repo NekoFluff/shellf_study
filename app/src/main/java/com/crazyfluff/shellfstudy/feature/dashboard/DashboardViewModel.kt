@@ -23,8 +23,8 @@ import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.WaniKaniUser
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
-import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
-import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
+import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
+import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -6,19 +6,10 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
 import java.time.Duration
 
 private const val PITCH_ACCENT_SCRAPE_WORK_NAME = "pitch_accent_scrape"
-
-/**
- * Schedules the daily background pitch-accent scrape — enqueued/cancelled alongside
- * [SyncScheduler] (same login/logout lifecycle), so vocab pitch data keeps filling in over time
- * without a per-view trigger. An interface for the same testability reason as [SyncScheduler].
- */
-interface PitchAccentScrapeScheduler {
-    fun schedulePeriodicScrape()
-    fun cancelPeriodicScrape()
-}
 
 class WorkManagerPitchAccentScrapeScheduler(
     private val context: Context
