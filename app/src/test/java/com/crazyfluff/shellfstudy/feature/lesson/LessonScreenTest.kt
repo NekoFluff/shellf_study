@@ -1,6 +1,9 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPhase
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreen
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenEvent
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenTestTags
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSlowAnswer
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
 import androidx.compose.ui.test.assertCountEquals

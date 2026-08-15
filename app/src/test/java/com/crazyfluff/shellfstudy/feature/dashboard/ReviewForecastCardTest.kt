@@ -11,6 +11,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import kotlin.time.Clock
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.ReviewForecastCard
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.ReviewForecastTestTags
 
 /** Runs under Robolectric (JVM) — state-driven, no device features needed. Pinned per project convention. */
 @RunWith(AndroidJUnit4::class)

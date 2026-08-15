@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.fakes
 
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
-import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository

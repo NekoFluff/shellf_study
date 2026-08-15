@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.core.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.crazyfluff.shellfstudy.shared.data.AndroidKeystoreTokenCipher
+import com.crazyfluff.shellfstudy.shared.data.CmpPitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 import com.crazyfluff.shellfstudy.shared.data.getPreferencesDataStore
@@ -17,5 +18,5 @@ val dataStoreModule = module {
     // that library isn't available on Kotlin/Native), hence the explicit registration here.
     single<TokenCipher> { AndroidKeystoreTokenCipher() }
 
-    single { AndroidPitchAccentBundledSource(androidContext()) } bind PitchAccentBundledSource::class
+    single { CmpPitchAccentBundledSource() } bind PitchAccentBundledSource::class
 }

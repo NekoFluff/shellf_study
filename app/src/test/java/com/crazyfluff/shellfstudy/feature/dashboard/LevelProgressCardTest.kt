@@ -20,6 +20,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.LevelProgressCard
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.LevelProgressTestTags
 
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")

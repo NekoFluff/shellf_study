@@ -17,7 +17,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
+import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import org.junit.Rule
 import org.junit.Test

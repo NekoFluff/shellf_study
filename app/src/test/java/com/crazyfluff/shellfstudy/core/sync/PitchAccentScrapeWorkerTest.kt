@@ -8,7 +8,7 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import app.cash.turbine.test
-import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheEntity

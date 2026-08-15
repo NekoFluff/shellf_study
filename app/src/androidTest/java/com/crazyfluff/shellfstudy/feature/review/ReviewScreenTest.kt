@@ -1,6 +1,9 @@
 package com.crazyfluff.shellfstudy.feature.review
 
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewUiState
+import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreen
+import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreenEvent
+import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreenTestTags
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -20,7 +23,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
-import com.crazyfluff.shellfstudy.feature.search.SearchOverlayTestTags
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import org.junit.Rule
 import org.junit.Test
 

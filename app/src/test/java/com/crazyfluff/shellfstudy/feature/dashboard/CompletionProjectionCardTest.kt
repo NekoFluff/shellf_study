@@ -13,6 +13,8 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.CompletionProjectionCard
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.CompletionProjectionTestTags
 import kotlin.time.Clock
 
 @RunWith(AndroidJUnit4::class)

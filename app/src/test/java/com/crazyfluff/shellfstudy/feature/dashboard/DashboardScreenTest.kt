@@ -10,8 +10,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreen
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreenTestTags
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardUiState
-import com.crazyfluff.shellfstudy.feature.search.SearchOverlayTestTags
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

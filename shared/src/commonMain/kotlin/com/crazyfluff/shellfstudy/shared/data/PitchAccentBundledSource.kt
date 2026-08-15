@@ -4,5 +4,5 @@ import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 
 /** Looks up bundled/pre-scraped pitch-accent entries for a vocabulary word, keyed by its characters. */
 interface PitchAccentBundledSource {
-    fun get(characters: String): List<PitchAccent>
+    suspend fun get(characters: String): List<PitchAccent>
 }

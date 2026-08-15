@@ -7,5 +7,5 @@ import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 class FakePitchAccentBundledSource(
     private val entries: Map<String, List<PitchAccent>> = emptyMap()
 ) : PitchAccentBundledSource {
-    override fun get(characters: String): List<PitchAccent> = entries[characters].orEmpty()
+    override suspend fun get(characters: String): List<PitchAccent> = entries[characters].orEmpty()
 }

@@ -22,7 +22,7 @@ import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncStateDao
 import com.crazyfluff.shellfstudy.fakes.FakeWeblioApi
 import com.crazyfluff.shellfstudy.fakes.buildTestApi
-import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
 import com.crazyfluff.shellfstudy.shared.notifications.DefaultNotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationChannels

@@ -8,6 +8,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
+import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreen
+import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreenTestTags
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsUiState
 import org.junit.Rule
 import org.junit.Test

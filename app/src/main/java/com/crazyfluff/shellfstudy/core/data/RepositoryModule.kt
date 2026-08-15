@@ -5,6 +5,7 @@ import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
@@ -63,8 +64,6 @@ val repositoryModule = module {
     single { LessonSessionRepository(dataStore = get(), json = get()) }
     single { ReviewSessionRepository(dataStore = get(), json = get()) }
 
-    // Implements PitchAccentProvider (the small interface SubjectRepository actually needs) since
-    // this class itself isn't portable yet — see PitchAccentRepository's own doc comment.
     single {
         PitchAccentRepository(
             bundledSource = get(),

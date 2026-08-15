@@ -9,7 +9,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.svg.SvgDecoder
-import com.crazyfluff.shellfstudy.core.coroutines.APPLICATION_SCOPE
+import com.crazyfluff.shellfstudy.shared.di.APPLICATION_SCOPE
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SvgCssVariableInterceptor
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.notifications.AndroidNotificationChannels

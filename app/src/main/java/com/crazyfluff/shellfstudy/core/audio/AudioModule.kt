@@ -27,13 +27,13 @@ val audioModule = module {
     }
     single<CacheDataSource.Factory> {
         CacheDataSource.Factory()
-            .setCache(get())
+            .setCache(get<SimpleCache>())
             .setUpstreamDataSourceFactory(DefaultHttpDataSource.Factory())
     }
     single {
         val context = androidContext()
         ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(get()))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(get<CacheDataSource.Factory>()))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
