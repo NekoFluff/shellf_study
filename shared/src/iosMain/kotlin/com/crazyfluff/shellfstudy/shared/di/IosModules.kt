@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.di
 
 import com.crazyfluff.shellfstudy.shared.data.CmpPitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.IosPronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
@@ -29,6 +30,7 @@ import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import kotlin.time.Instant
+import kotlinx.coroutines.launch
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
@@ -62,9 +64,11 @@ private val iosAudioModule = module {
     single { IosPronunciationAudioPlayer() } bind PronunciationAudioPlayer::class
 }
 
-/** Background sync is handled via BGTaskScheduler on iOS — stubbed as no-ops here until that
- *  scheduler is wired up. Reviews and subjects still sync whenever the app foregrounds via the
- *  existing SyncOrchestrator calls from the Dashboard. */
+/** Periodic background sync (BGTaskScheduler) and pitch-accent scraping are stubbed — they fire
+ *  opportunistically from the Dashboard instead. The outbox scheduler, however, needs to actually
+ *  drain, so it launches the drainer in the app-level coroutine scope whenever called. Network
+ *  errors are handled inside OutboxDrainer; the launch is fire-and-forget (duplicates are harmless,
+ *  the drainer is idempotent). */
 private val iosSyncModule = module {
     single<SyncScheduler> { object : SyncScheduler {
         override fun schedulePeriodicSync() = Unit
@@ -74,7 +78,16 @@ private val iosSyncModule = module {
         override fun schedulePeriodicScrape() = Unit
         override fun cancelPeriodicScrape() = Unit
     }}
-    single<OutboxSyncScheduler> { OutboxSyncScheduler { } }
+    single<OutboxSyncScheduler> {
+        val appScope = get<kotlinx.coroutines.CoroutineScope>(APPLICATION_SCOPE)
+        val drainer = OutboxDrainer(
+            outboxDao = get(),
+            waniKaniRepository = get(),
+            assignmentRepository = get(),
+            outboxRepository = get()
+        )
+        OutboxSyncScheduler { appScope.launch { drainer.drain() } }
+    }
     single {
         SyncOrchestrator(
             subjectRepository = get(),

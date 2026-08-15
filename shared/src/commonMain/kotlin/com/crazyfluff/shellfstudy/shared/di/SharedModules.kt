@@ -150,6 +150,7 @@ val viewModelModule = module {
             statsRepository = get(),
             dashboardCacheRepository = get(),
             outboxRepository = get(),
+            outboxSyncScheduler = get(),
             syncOrchestrator = get(),
             syncScheduler = get(),
             pitchAccentScrapeScheduler = get(),

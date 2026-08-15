@@ -7,6 +7,7 @@ import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
+import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
@@ -138,6 +139,7 @@ class DashboardViewModel(
     private val statsRepository: StatsRepository,
     private val dashboardCacheRepository: DashboardCacheRepository,
     private val outboxRepository: OutboxRepository,
+    private val outboxSyncScheduler: OutboxSyncScheduler,
     private val syncOrchestrator: SyncOrchestrator,
     private val syncScheduler: SyncScheduler,
     private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,
@@ -297,6 +299,8 @@ class DashboardViewModel(
 
     fun onDashboardResumed() {
         viewModelScope.launch {
+            outboxSyncScheduler.requestSync()
+
             if (!hasCompletedInitialSync) {
                 hasCompletedInitialSync = true
                 performForcedRefresh()

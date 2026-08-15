@@ -1,11 +1,10 @@
 package com.crazyfluff.shellfstudy.shared.data
 
 /**
- * Requests an outbox drain — constrained on connectivity, so calling this while offline just
- * leaves the request queued until the network comes back, no polling needed. An interface (rather
- * than a concrete class) since the real implementation needs WorkManager (Android-only for now —
- * see [com.crazyfluff.shellfstudy.core.sync.WorkManagerOutboxSyncScheduler]), and so ViewModel/
- * repository unit tests can use a no-op fake instead.
+ * Requests an outbox drain. On Android this enqueues a WorkManager job constrained on connectivity
+ * (see [com.crazyfluff.shellfstudy.core.sync.WorkManagerOutboxSyncScheduler]); on iOS it launches
+ * the drain in the app-level coroutine scope. Either way, safe to call while offline — transient
+ * network failures are handled inside the drainer. Unit tests use a no-op fake instead.
  */
 fun interface OutboxSyncScheduler {
     fun requestSync()

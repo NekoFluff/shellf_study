@@ -11,6 +11,7 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
@@ -62,19 +63,23 @@ class OutboxSyncWorkerTest {
         server.shutdown()
     }
 
-    private fun buildWorker(): OutboxSyncWorker =
-        TestListenableWorkerBuilder<OutboxSyncWorker>(context)
+    private fun buildWorker(): OutboxSyncWorker {
+        val drainer = OutboxDrainer(
+            outboxDao = repositories.outboxDao,
+            waniKaniRepository = repositories.waniKaniRepository,
+            assignmentRepository = repositories.assignmentRepository,
+            outboxRepository = outboxRepository
+        )
+        return TestListenableWorkerBuilder<OutboxSyncWorker>(context)
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(
                     appContext: Context,
                     workerClassName: String,
                     workerParameters: WorkerParameters
-                ): ListenableWorker = OutboxSyncWorker(
-                    appContext, workerParameters,
-                    repositories.outboxDao, repositories.waniKaniRepository, repositories.assignmentRepository, outboxRepository
-                )
+                ): ListenableWorker = OutboxSyncWorker(appContext, workerParameters, drainer)
             })
             .build()
+    }
 
     /** Seeds both the assignment and its subject — optimistic/reconciliation logic needs the
      *  subject cached to resolve the (default, id=0) SRS system [buildTestRepositories] seeds. */

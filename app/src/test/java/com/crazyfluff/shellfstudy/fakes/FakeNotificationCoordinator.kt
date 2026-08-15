@@ -29,7 +29,12 @@ class FakeNotificationCoordinator : NotificationCoordinator {
         rescheduleNextReviewCheckCallCount++
     }
 
-    override suspend fun evaluateReviewsAndBacklog() = Unit
+    var evaluateReviewsAndBacklogCallCount = 0
+        private set
+
+    override suspend fun evaluateReviewsAndBacklog() {
+        evaluateReviewsAndBacklogCallCount++
+    }
 
     override suspend fun evaluateStudyReminder() = Unit
 }

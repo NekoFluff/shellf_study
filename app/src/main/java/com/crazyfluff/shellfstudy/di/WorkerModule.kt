@@ -6,24 +6,31 @@ import com.crazyfluff.shellfstudy.core.notifications.ReviewNotificationWorker
 import com.crazyfluff.shellfstudy.core.sync.OutboxSyncWorker
 import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeWorker
 import com.crazyfluff.shellfstudy.core.sync.SyncWorker
+import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
+import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.dsl.worker
 import org.koin.dsl.module
 
+// In Koin 4.x, KoinWorkerFactory only passes WorkerParameters to the factory's `it` — appContext
+// is no longer included. Use androidContext() (Koin's bound Application context) for appContext,
+// and it.get() for the WorkerParameters.
 val workerModule = module {
     worker {
         OutboxSyncWorker(
-            appContext = it.get(),
+            appContext = androidContext(),
             params = it.get(),
-            outboxDao = get(),
-            waniKaniRepository = get(),
-            assignmentRepository = get(),
-            outboxRepository = get()
+            outboxDrainer = OutboxDrainer(
+                outboxDao = get(),
+                waniKaniRepository = get(),
+                assignmentRepository = get(),
+                outboxRepository = get()
+            )
         )
     }
 
     worker {
         PitchAccentScrapeWorker(
-            appContext = it.get(),
+            appContext = androidContext(),
             params = it.get(),
             subjectDao = get(),
             pitchAccentCacheDao = get(),
@@ -33,7 +40,7 @@ val workerModule = module {
 
     worker {
         SyncWorker(
-            appContext = it.get(),
+            appContext = androidContext(),
             params = it.get(),
             syncOrchestrator = get(),
             notificationCoordinator = get(),
@@ -43,7 +50,7 @@ val workerModule = module {
 
     worker {
         DailyStreakReminderWorker(
-            appContext = it.get(),
+            appContext = androidContext(),
             params = it.get(),
             notificationCoordinator = get()
         )
@@ -51,7 +58,7 @@ val workerModule = module {
 
     worker {
         DeferredNotificationWorker(
-            appContext = it.get(),
+            appContext = androidContext(),
             params = it.get(),
             notificationCoordinator = get()
         )
@@ -59,7 +66,7 @@ val workerModule = module {
 
     worker {
         ReviewNotificationWorker(
-            appContext = it.get(),
+            appContext = androidContext(),
             params = it.get(),
             notificationCoordinator = get()
         )

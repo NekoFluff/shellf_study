@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
@@ -61,6 +62,7 @@ class DashboardViewModelTest {
     private lateinit var lessonSessionRepository: LessonSessionRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var dashboardCacheRepository: DashboardCacheRepository
+    private lateinit var outboxRepository: OutboxRepository
     private lateinit var syncScheduler: FakeSyncScheduler
     private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
     private lateinit var notificationCoordinator: FakeNotificationCoordinator
@@ -76,6 +78,7 @@ class DashboardViewModelTest {
         )
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
         repositories = buildTestRepositories(server.url("/").toString())
+        outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         settingsRepository = SettingsRepository(dataStore)
@@ -118,7 +121,8 @@ class DashboardViewModelTest {
                     assignmentRepository = repositories.assignmentRepository,
                     statsRepository = repositories.statsRepository,
                     dashboardCacheRepository = dashboardCacheRepository,
-                    outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore),
+                    outboxRepository = outboxRepository,
+                    outboxSyncScheduler = repositories.outboxSyncScheduler,
                     syncOrchestrator = repositories.syncOrchestrator,
                     syncScheduler = syncScheduler,
                     pitchAccentScrapeScheduler = pitchAccentScrapeScheduler,
@@ -171,6 +175,7 @@ class DashboardViewModelTest {
             assertThat(state.errorMessage).isNull()
             cancelAndIgnoreRemainingEvents()
         }
+        assertThat(repositories.outboxSyncScheduler.requestCount).isAtLeast(1)
     }
 
     @Test
@@ -540,6 +545,50 @@ class DashboardViewModelTest {
             val projection = state.completionProjection!!
             assertThat(projection.totalItems).isEqualTo(2)
             assertThat(projection.dailyPace).isEqualTo(15)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `bannerState is PendingSync with the correct count when there are outbox rows`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        // Two pending rows seeded before ViewModel observes, so the flow starts non-zero.
+        repositories.outboxDao.insertReviewSubmission(
+            com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity(
+                assignmentId = 1, subjectId = 1, incorrectMeaningAnswers = 0, incorrectReadingAnswers = 0,
+                gradedAt = "2026-01-01T00:00:00.000000Z"
+            )
+        )
+        repositories.outboxDao.insertReviewSubmission(
+            com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity(
+                assignmentId = 2, subjectId = 2, incorrectMeaningAnswers = 1, incorrectReadingAnswers = 0,
+                gradedAt = "2026-01-01T00:00:00.000000Z"
+            )
+        )
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.pendingSyncCount == 0) state = awaitItem()
+
+            assertThat(state.bannerState).isEqualTo(DashboardBannerState.PendingSync(2))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `bannerState is SyncBlockedOnAuth when the outbox is blocked on an auth error`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        outboxRepository.setBlockedOnAuth(true)
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (!state.syncBlockedOnAuth) state = awaitItem()
+
+            assertThat(state.bannerState).isEqualTo(DashboardBannerState.SyncBlockedOnAuth)
             cancelAndIgnoreRemainingEvents()
         }
     }
