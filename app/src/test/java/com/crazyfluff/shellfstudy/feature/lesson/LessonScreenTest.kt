@@ -1,5 +1,8 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPhase
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSlowAnswer
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -18,10 +21,10 @@ import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
-import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
-import com.crazyfluff.shellfstudy.core.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

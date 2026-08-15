@@ -4,7 +4,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
-import com.crazyfluff.shellfstudy.core.util.RomajiConverter
+import com.crazyfluff.shellfstudy.shared.util.RomajiConverter
 
 /**
  * Renders the user's raw romaji keystrokes as their live hiragana conversion, without touching

@@ -35,7 +35,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 
 /**
  * Ungraded, ephemeral stylus practice for a subject's glyph, slotted right next to the reference

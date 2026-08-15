@@ -11,7 +11,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.svg.SvgDecoder
 import com.crazyfluff.shellfstudy.core.coroutines.APPLICATION_SCOPE
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SvgCssVariableInterceptor
-import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
+import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.notifications.AndroidNotificationChannels
 import com.crazyfluff.shellfstudy.di.appModules
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository

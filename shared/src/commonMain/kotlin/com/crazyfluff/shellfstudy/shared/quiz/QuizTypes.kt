@@ -1,6 +1,5 @@
-package com.crazyfluff.shellfstudy.core.quiz
+package com.crazyfluff.shellfstudy.shared.quiz
 
-/** Shared between the lesson quiz and the review quiz — both ask a subject's meaning and/or reading. */
 enum class QuestionType { MEANING, READING }
 
 val QuestionType.label: String get() = when (this) {

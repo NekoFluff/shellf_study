@@ -1,10 +1,10 @@
-package com.crazyfluff.shellfstudy.feature.lesson
+package com.crazyfluff.shellfstudy.shared.feature.lesson
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
-import com.crazyfluff.shellfstudy.core.coroutines.runDurably
+import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
+import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
@@ -13,25 +13,26 @@ import com.crazyfluff.shellfstudy.shared.data.PersistedLessonItemProgress
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonPhase
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
-import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
-import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
-import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
+import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
-import com.crazyfluff.shellfstudy.core.quiz.AnswerOutcome
-import com.crazyfluff.shellfstudy.core.quiz.QuestionType
-import com.crazyfluff.shellfstudy.core.quiz.PendingQuestion
-import com.crazyfluff.shellfstudy.core.quiz.QuizGradingGuard
-import com.crazyfluff.shellfstudy.core.quiz.QuizQueue
-import com.crazyfluff.shellfstudy.core.quiz.candidatesFor
-import com.crazyfluff.shellfstudy.core.quiz.evaluateAnswer
-import com.crazyfluff.shellfstudy.core.quiz.questionTypesFor
+import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.shared.quiz.AnswerOutcome
+import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
+import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
+import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
+import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
+import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
+import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
+import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -109,7 +110,7 @@ class LessonViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val outboxRepository: OutboxRepository,
     private val lessonSessionRepository: LessonSessionRepository,
-    private val pitchAccentRepository: PitchAccentRepository,
+    private val pitchAccentRepository: PitchAccentProvider,
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
     private val strokeOrderRepository: StrokeOrderRepository,
@@ -270,7 +271,7 @@ class LessonViewModel(
         // segment on top of that restored base, so the clock resumes right where it left off.
         activeElapsedMs = persisted.sessionActiveElapsedMs
         resumeActiveSegment()
-        questionShownAtMs = System.currentTimeMillis()
+        questionShownAtMs = Clock.System.now().toEpochMilliseconds()
         totalQuizCount = persisted.totalQuizCount
         val next = quizQueue.current
         // A persisted queue is only ever written mid-quiz (see advanceQuiz's completion branch,
@@ -462,7 +463,7 @@ class LessonViewModel(
         answeredQuestions.clear()
         activeElapsedMs = 0L
         resumeActiveSegment()
-        questionShownAtMs = System.currentTimeMillis()
+        questionShownAtMs = Clock.System.now().toEpochMilliseconds()
 
         val next = quizQueue.current
         _uiState.update {
@@ -526,7 +527,7 @@ class LessonViewModel(
         wasCloseMatch: Boolean = false
     ) {
         val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { LessonItemProgress(item) }
-        val questionElapsedMs = System.currentTimeMillis() - questionShownAtMs
+        val questionElapsedMs = Clock.System.now().toEpochMilliseconds() - questionShownAtMs
         answeredQuestions.add(LessonAnsweredQuestionRecord(item, type, isCorrect, questionElapsedMs))
 
         quizQueue.removeCurrent()
@@ -640,7 +641,7 @@ class LessonViewModel(
      *  live-ticking total timer (via [PausableElapsedTimeText] reading the mirrored uiState fields)
      *  and [sessionSummary]'s final total derive from this same formula over the same two fields, so
      *  they can never disagree. */
-    private fun currentActiveElapsedMs(nowMs: Long = System.currentTimeMillis()): Long =
+    private fun currentActiveElapsedMs(nowMs: Long = Clock.System.now().toEpochMilliseconds()): Long =
         activeElapsedMs + (activeSegmentStartMs?.let { nowMs - it } ?: 0L)
 
     /** Starts a fresh viewing segment — called once the quiz is actually being looked at (right
@@ -648,7 +649,7 @@ class LessonViewModel(
      *  the foreground). Idempotent: a no-op if a segment is already running. */
     private fun resumeActiveSegment() {
         if (activeSegmentStartMs != null) return
-        val now = System.currentTimeMillis()
+        val now = Clock.System.now().toEpochMilliseconds()
         activeSegmentStartMs = now
         _uiState.update { it.copy(sessionActiveSegmentStartMs = now) }
     }
@@ -661,7 +662,7 @@ class LessonViewModel(
      *  segment is running (including during the STUDY phase, before the quiz clock has started). */
     private fun pauseActiveSegment() {
         val startedAt = activeSegmentStartMs ?: return
-        activeElapsedMs += System.currentTimeMillis() - startedAt
+        activeElapsedMs += Clock.System.now().toEpochMilliseconds() - startedAt
         activeSegmentStartMs = null
         _uiState.update { it.copy(sessionActiveElapsedMs = activeElapsedMs, sessionActiveSegmentStartMs = null) }
         // The quiz-complete branch already cleared lessonSessionRepository once the session
@@ -730,7 +731,7 @@ class LessonViewModel(
             }
             return
         }
-        questionShownAtMs = System.currentTimeMillis()
+        questionShownAtMs = Clock.System.now().toEpochMilliseconds()
         _uiState.update {
             it.copy(
                 currentQuizItem = next.item,

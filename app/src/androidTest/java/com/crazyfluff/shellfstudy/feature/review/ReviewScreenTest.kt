@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.feature.review
 
+import com.crazyfluff.shellfstudy.shared.feature.review.ReviewUiState
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -17,8 +18,8 @@ import androidx.compose.ui.test.swipeUp
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
-import com.crazyfluff.shellfstudy.core.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.feature.search.SearchOverlayTestTags
 import org.junit.Rule
 import org.junit.Test

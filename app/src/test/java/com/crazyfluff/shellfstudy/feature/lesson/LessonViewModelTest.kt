@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPhase
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -14,9 +16,9 @@ import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
-import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
-import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
-import com.crazyfluff.shellfstudy.core.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
+import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository

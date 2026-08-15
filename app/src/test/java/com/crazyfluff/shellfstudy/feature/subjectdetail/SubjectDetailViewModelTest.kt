@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.feature.subjectdetail
 
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailUiState
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailViewModel
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -9,7 +11,7 @@ import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
-import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioMetadataData

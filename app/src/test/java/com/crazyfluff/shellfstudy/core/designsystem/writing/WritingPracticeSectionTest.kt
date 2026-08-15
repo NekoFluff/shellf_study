@@ -12,7 +12,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
-import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

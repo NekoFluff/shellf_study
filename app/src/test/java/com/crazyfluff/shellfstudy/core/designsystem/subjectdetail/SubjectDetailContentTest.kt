@@ -18,7 +18,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
-import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeTestTags
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.google.common.truth.Truth.assertThat

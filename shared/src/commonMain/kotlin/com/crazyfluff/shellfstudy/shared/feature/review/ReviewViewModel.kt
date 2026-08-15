@@ -1,25 +1,24 @@
-package com.crazyfluff.shellfstudy.feature.review
+package com.crazyfluff.shellfstudy.shared.feature.review
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.tracing.trace
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.core.audio.selectAudioFor
-import com.crazyfluff.shellfstudy.core.coroutines.runDurably
+import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
+import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
-import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
-import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
-import com.crazyfluff.shellfstudy.core.quiz.AnswerOutcome
-import com.crazyfluff.shellfstudy.core.quiz.PendingQuestion
-import com.crazyfluff.shellfstudy.core.quiz.QuestionType
-import com.crazyfluff.shellfstudy.core.quiz.QuizGradingGuard
-import com.crazyfluff.shellfstudy.core.quiz.QuizQueue
-import com.crazyfluff.shellfstudy.core.quiz.candidatesFor
-import com.crazyfluff.shellfstudy.core.quiz.evaluateAnswer
-import com.crazyfluff.shellfstudy.core.quiz.questionTypesFor
+import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
+import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.shared.quiz.AnswerOutcome
+import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
+import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
+import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
+import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
+import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
+import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
@@ -30,6 +29,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
+import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -303,9 +303,9 @@ class ReviewViewModel(
         expandDetails: Boolean,
         wasCloseMatch: Boolean = false
     ) {
-        val (grade, snapshot) = trace("gradeAnswer:computeAndPublish") {
+        val (grade, snapshot) = run {
             val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress(item) }
-            val questionElapsedMs = System.currentTimeMillis() - questionShownAtMs
+            val questionElapsedMs = Clock.System.now().toEpochMilliseconds() - questionShownAtMs
             answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, questionElapsedMs))
 
             queue.removeCurrent()
@@ -368,7 +368,7 @@ class ReviewViewModel(
             }
         }
 
-        trace("gradeAnswer:persistDurabilityWork") { persistDurabilityWork(grade, item, snapshot) }
+        persistDurabilityWork(grade, item, snapshot)
     }
 
     /** Reverts the most recent incorrect answer — for a typo, not a genuine miss. */
@@ -393,7 +393,7 @@ class ReviewViewModel(
             // Undo removes the incorrect attempt just recorded by gradeAnswer, and restarts this
             // question's clock so the retry's timing doesn't inherit time spent before the undo.
             answeredQuestions.removeLastOrNull()
-            questionShownAtMs = System.currentTimeMillis()
+            questionShownAtMs = Clock.System.now().toEpochMilliseconds()
 
             applicationScope.runDurably { persistCurrentState() }
             // undoCounter changes even though currentItem/currentQuestionType don't — this is what
@@ -447,7 +447,7 @@ class ReviewViewModel(
      *  live-ticking total timer (via [PausableElapsedTimeText] reading the mirrored uiState fields)
      *  and [sessionSummary]'s final total derive from this same formula over the same two fields, so
      *  they can never disagree. */
-    private fun currentActiveElapsedMs(nowMs: Long = System.currentTimeMillis()): Long =
+    private fun currentActiveElapsedMs(nowMs: Long = Clock.System.now().toEpochMilliseconds()): Long =
         activeElapsedMs + (activeSegmentStartMs?.let { nowMs - it } ?: 0L)
 
     /** Starts a fresh viewing segment — called once the session is actually being looked at (right
@@ -455,7 +455,7 @@ class ReviewViewModel(
      *  foreground). Idempotent: a no-op if a segment is already running. */
     private fun resumeActiveSegment() {
         if (activeSegmentStartMs != null) return
-        val now = System.currentTimeMillis()
+        val now = Clock.System.now().toEpochMilliseconds()
         activeSegmentStartMs = now
         _uiState.update { it.copy(sessionActiveSegmentStartMs = now) }
     }
@@ -468,7 +468,7 @@ class ReviewViewModel(
      *  segment is running. */
     private fun pauseActiveSegment() {
         val startedAt = activeSegmentStartMs ?: return
-        activeElapsedMs += System.currentTimeMillis() - startedAt
+        activeElapsedMs += Clock.System.now().toEpochMilliseconds() - startedAt
         activeSegmentStartMs = null
         _uiState.update { it.copy(sessionActiveElapsedMs = activeElapsedMs, sessionActiveSegmentStartMs = null) }
         // advanceToNextQuestion() already cleared reviewSessionRepository once the session
@@ -550,7 +550,7 @@ class ReviewViewModel(
             }
             return
         }
-        questionShownAtMs = System.currentTimeMillis()
+        questionShownAtMs = Clock.System.now().toEpochMilliseconds()
         _uiState.update {
             it.copy(
                 isLoading = false,

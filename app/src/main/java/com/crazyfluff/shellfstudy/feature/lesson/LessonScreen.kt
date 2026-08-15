@@ -1,5 +1,9 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPhase
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSlowAnswer
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -89,7 +93,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionSlowestAnswersCa
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.core.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
-import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.ReadingTypeRow
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.RelatedSubjectsSection
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SectionEyebrow
@@ -106,9 +110,9 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
-import com.crazyfluff.shellfstudy.core.quiz.QuestionType
-import com.crazyfluff.shellfstudy.core.quiz.label
+import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.label
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState
@@ -329,7 +333,7 @@ fun LessonScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = uiState.errorMessage,
+                            text = uiState.errorMessage ?: "",
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.testTag(LessonScreenTestTags.ERROR_TEXT)
                         )

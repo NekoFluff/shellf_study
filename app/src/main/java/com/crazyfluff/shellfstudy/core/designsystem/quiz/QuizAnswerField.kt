@@ -23,13 +23,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.IntOffset
 import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
-import com.crazyfluff.shellfstudy.core.quiz.QuestionType
-import com.crazyfluff.shellfstudy.core.quiz.label
+import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.label
 import kotlin.math.roundToInt
 
 /** The answer input shared by review sessions and lesson quizzes — a WaniKani-romaji-aware text
  *  field that shakes and warns when the typed answer looks like the *other* question type (see
- *  [com.crazyfluff.shellfstudy.core.quiz.evaluateAnswer]), rather than silently grading it as a miss. */
+ *  [com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer]), rather than silently grading it as a miss. */
 @Composable
 fun QuizAnswerField(
     value: String,

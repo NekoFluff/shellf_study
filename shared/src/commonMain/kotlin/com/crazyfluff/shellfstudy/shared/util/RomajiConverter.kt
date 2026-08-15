@@ -1,18 +1,10 @@
-package com.crazyfluff.shellfstudy.core.util
+package com.crazyfluff.shellfstudy.shared.util
 
-/**
- * Converts romaji (Latin-alphabet) input to hiragana as the user types, the same way the
- * WaniKani web/mobile clients do for reading answers. Designed to be re-run on the *whole*
- * current input on every keystroke: already-converted hiragana characters don't match any
- * romaji rule and simply pass through untouched, so only the trailing, not-yet-complete romaji
- * portion is affected.
- */
 object RomajiConverter {
 
     private val VOWELS = setOf('a', 'i', 'u', 'e', 'o')
     private val DOUBLING_CONSONANTS = setOf('k', 's', 't', 'p', 'g', 'z', 'd', 'b', 'c', 'j', 'f', 'h', 'm', 'r', 'y', 'w')
 
-    // Longest matches first within each length group; grouped by length below for clarity.
     private val THREE_CHAR_RULES = mapOf(
         "kya" to "きゃ", "kyu" to "きゅ", "kyo" to "きょ",
         "sha" to "しゃ", "shu" to "しゅ", "sho" to "しょ",
@@ -56,25 +48,8 @@ object RomajiConverter {
         "n" to "ん"
     )
 
-    /**
-     * Result of a conversion pass: the hiragana [output], plus parallel cumulative-length
-     * boundary arrays recording how each conversion step's raw input span maps to its hiragana
-     * output span — e.g. `rawBoundaries[k]`/`hiraganaBoundaries[k]` is the raw/hiragana length
-     * consumed/produced after the first `k` steps. Lets a [androidx.compose.ui.text.input.OffsetMapping]
-     * translate cursor/selection offsets between the two without guessing at a many-to-many
-     * mapping, since every offset the user could tap into falls on or between these boundaries.
-     */
     data class Conversion(val output: String, val rawBoundaries: IntArray, val hiraganaBoundaries: IntArray)
 
-    /**
-     * @param isComplete Whether [input] is the final, finished string (e.g. a submitted answer)
-     * rather than still being typed. Only affects a trailing "n" with nothing after it: when
-     * `false` (the live-typing preview), it's left as a bare "n" rather than eagerly guessing ん,
-     * since a vowel could still arrive next and turn it into な/に/ぬ/ね/の instead — see
-     * [com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation]. When `true`
-     * (the default, used for grading a submitted answer) there's nothing left to arrive, so a
-     * trailing "n" unambiguously means ん (e.g. "san" -> さん).
-     */
     fun convert(input: String, isComplete: Boolean = true): Conversion {
         val result = StringBuilder()
         val rawBoundaries = mutableListOf(0)
@@ -99,44 +74,26 @@ object RomajiConverter {
                     i += 2
                 }
 
-                // Doubled consonant -> small tsu (e.g. "kitte" -> き + っ + て).
                 next != null && current == next && current.lowercaseChar() in DOUBLING_CONSONANTS && current != 'n' -> {
                     result.append('っ')
                     i += 1
                 }
 
-                // "n'" explicitly forces ん and drops the apostrophe, so a following vowel or "y"
-                // stays its own mora instead of merging into な/に/ぬ/ね/の/にゃ... — the standard
-                // IME escape hatch for words like 権威 (けんい), typed "ken'i". Without this,
-                // "ni" always greedily reads as に (via the two-char rule above) and ん + い is
-                // otherwise unreachable no matter how many n's precede it.
                 current == 'n' && next == '\'' -> {
                     result.append('ん')
                     i += 2
                 }
 
-                // Doubled "n" is the standard escape for ん directly before a vowel or "y" (alongside
-                // "n'"), e.g. "ganni" -> がんい, and unconditionally means ん regardless of what (if
-                // anything) follows — unlike a lone trailing "n", it can never merge into
-                // な/に/ぬ/ね/の, so there's nothing to look ahead for. This deliberately shadows the
-                // more common case where "nn" is just ん naturally followed by a な/に/ぬ/ね/の-row
-                // syllable (三人 "sannin" would now read さんいん instead of さんにん) — an accepted
-                // tradeoff so double-n reliably means "force ん" rather than being ambiguous with the
-                // next syllable.
                 current == 'n' && next == 'n' -> {
                     result.append('ん')
                     i += 2
                 }
 
-                // A lone "n" converts to ん once we know it isn't the start of "na/ni/nu/ne/no/nya...":
-                // when followed by a known consonant or another "n" (that doesn't itself force
-                // ん-before-vowel above).
                 current == 'n' && next != null && next !in VOWELS && next != 'y' -> {
                     result.append('ん')
                     i += 1
                 }
 
-                // A trailing "n" with nothing typed after it yet — see [isComplete]'s doc.
                 current == 'n' && next == null && isComplete -> {
                     result.append('ん')
                     i += 1
@@ -148,7 +105,6 @@ object RomajiConverter {
                         result.append(oneChar)
                         i += 1
                     } else {
-                        // Not (yet) a complete romaji syllable, or already hiragana/other text — pass through.
                         result.append(current)
                         i += 1
                     }

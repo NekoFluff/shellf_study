@@ -1,5 +1,8 @@
 package com.crazyfluff.shellfstudy.feature.review
 
+import com.crazyfluff.shellfstudy.shared.feature.review.ReviewUiState
+import com.crazyfluff.shellfstudy.shared.feature.review.ReviewViewModel
+import com.crazyfluff.shellfstudy.shared.feature.review.SlowAnswer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -91,9 +94,9 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
-import com.crazyfluff.shellfstudy.core.quiz.QuestionType
-import com.crazyfluff.shellfstudy.core.quiz.label
+import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.label
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
@@ -308,7 +311,7 @@ fun ReviewScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = uiState.errorMessage,
+                            text = uiState.errorMessage ?: "",
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.testTag(ReviewScreenTestTags.ERROR_TEXT)
                         )

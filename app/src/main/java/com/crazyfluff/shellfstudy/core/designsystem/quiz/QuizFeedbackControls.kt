@@ -23,7 +23,7 @@ import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
+import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 
 /** Time an incorrect answer's Continue button stays disabled for, so a reflexive fast tap can't
  *  blow past feedback before it's been registered. Correct answers never lock. */

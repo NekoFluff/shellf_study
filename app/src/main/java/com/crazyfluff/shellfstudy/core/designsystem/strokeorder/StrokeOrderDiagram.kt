@@ -39,16 +39,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlinx.coroutines.delay
-
-/** State for the "Stroke order" section of the subject detail view. */
-sealed interface StrokeOrderUiState {
-    data object Loading : StrokeOrderUiState
-    data object Unavailable : StrokeOrderUiState
-    data class Available(val strokes: List<StrokeOrderStroke>) : StrokeOrderUiState
-}
 
 object StrokeOrderTestTags {
     const val SECTION = "stroke_order_section"

@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.feature.subjectdetail
 
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailUiState
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailViewModel
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
