@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
+package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.text.selection.rememberSelectionState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -32,11 +30,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
-import com.crazyfluff.shellfstudy.core.designsystem.text.lookUpInAkebiContextMenu
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentReadingRow
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.RelatedSubjectsSection
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.WkMnemonicText
+import androidx.compose.foundation.text.selection.SelectionContainer
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSection
@@ -225,11 +219,7 @@ fun SubjectDetailContent(
                 SectionEyebrow("Context sentences")
                 // 20dp between example sentences (vs. 2dp between a sentence's own JP/EN pair) so
                 // each example reads as its own distinct card of information while scanning.
-                val contextSentenceSelectionState = rememberSelectionState()
-                SelectionContainer(
-                    state = contextSentenceSelectionState,
-                    modifier = Modifier.lookUpInAkebiContextMenu(contextSentenceSelectionState),
-                ) {
+                SelectionContainer {
                     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         detail.contextSentences.forEach { sentence ->
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {

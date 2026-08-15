@@ -94,13 +94,13 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.ReadingTypeRow
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.ReadingTypeRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.RelatedSubjectsSection
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SectionEyebrow
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SectionEyebrow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.VocabReadingRow
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.VocabReadingRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.WkMnemonicText
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.componentsLabel
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.componentsLabel
 import com.crazyfluff.shellfstudy.core.designsystem.text.lookUpInAkebiContextMenu
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme

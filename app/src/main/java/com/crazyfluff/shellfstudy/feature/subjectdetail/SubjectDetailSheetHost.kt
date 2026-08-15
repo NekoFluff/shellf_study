@@ -6,7 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 
 /** Which subject (if any) the shared "browse" [SubjectDetailSheet] is currently showing. */
 @Stable

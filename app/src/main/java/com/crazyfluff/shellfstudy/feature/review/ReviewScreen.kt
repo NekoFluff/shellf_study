@@ -80,8 +80,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionOverviewCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSlowestAnswersCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.feedbackDetailPrefix
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkStageColors
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange

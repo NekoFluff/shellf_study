@@ -60,10 +60,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import org.koin.androidx.compose.koinViewModel
 import androidx.tracing.trace
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailQuestionType
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.DetailRevealMode
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectDetailContent
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectDetailTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
 import kotlinx.coroutines.flow.drop
 import kotlin.math.roundToInt
 
