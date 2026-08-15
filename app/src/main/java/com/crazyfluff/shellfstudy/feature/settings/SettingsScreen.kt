@@ -51,6 +51,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsUiState
+import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsViewModel
 import org.koin.androidx.compose.koinViewModel
 import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
@@ -419,9 +421,10 @@ fun SettingsScreen(
                         Icon(Icons.Default.Sync, contentDescription = null)
                     }
                 }
-                if (uiState.fullRefreshError != null) {
+                val fullRefreshError = uiState.fullRefreshError
+                if (fullRefreshError != null) {
                     Text(
-                        text = uiState.fullRefreshError,
+                        text = fullRefreshError,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag(SettingsScreenTestTags.FULL_REFRESH_ERROR_TEXT)

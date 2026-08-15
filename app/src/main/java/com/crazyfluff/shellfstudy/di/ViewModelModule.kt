@@ -7,7 +7,7 @@ import com.crazyfluff.shellfstudy.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.feature.lesson.LessonViewModel
 import com.crazyfluff.shellfstudy.feature.review.ReviewViewModel
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
-import com.crazyfluff.shellfstudy.feature.settings.SettingsViewModel
+import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsViewModel
 import com.crazyfluff.shellfstudy.feature.splash.SplashViewModel
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailViewModel
 import org.koin.core.module.dsl.viewModel

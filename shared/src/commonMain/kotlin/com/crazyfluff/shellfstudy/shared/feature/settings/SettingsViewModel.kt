@@ -1,13 +1,13 @@
-package com.crazyfluff.shellfstudy.feature.settings
+package com.crazyfluff.shellfstudy.shared.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
-import com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler
-import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler
+import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
