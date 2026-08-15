@@ -92,7 +92,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionOverviewCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSlowestAnswersCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.feedbackDetailPrefix
-import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
+import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.ReadingTypeRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.RelatedSubjectsSection
