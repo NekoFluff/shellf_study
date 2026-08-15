@@ -65,6 +65,7 @@ kotlin {
             implementation(compose.materialIconsExtended)
             implementation(compose.ui)
             implementation(compose.components.resources)
+            implementation(libs.coil.compose)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

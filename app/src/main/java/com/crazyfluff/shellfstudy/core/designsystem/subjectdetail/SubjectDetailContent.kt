@@ -34,6 +34,8 @@ import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSecti
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.text.lookUpInAkebiContextMenu
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentReadingRow
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.RelatedSubjectsSection
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
