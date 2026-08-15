@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.fakes
 
-import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
 
 /** Call-count spy stand-in for [NotificationCoordinator], used by ViewModel tests that only care whether the right lifecycle hook fired. */
 class FakeNotificationCoordinator : NotificationCoordinator {

@@ -5,7 +5,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
-import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 
 class SyncWorker(
     appContext: Context,

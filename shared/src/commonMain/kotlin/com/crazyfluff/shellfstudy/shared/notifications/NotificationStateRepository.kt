@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.notifications
+package com.crazyfluff.shellfstudy.shared.notifications
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -8,8 +8,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import java.time.Instant
-import java.time.LocalDate
+import kotlinx.datetime.LocalDate
+import kotlin.time.Instant
 
 data class NotificationState(
     val lastNotifiedReviewCount: Int = 0,
@@ -18,9 +18,10 @@ data class NotificationState(
 )
 
 /**
- * Dedupe/watermark bookkeeping for the notification system — separate from [com.crazyfluff.shellfstudy.core.data.SettingsRepository]
- * (which is user-facing preferences) since this is internal state the user never edits directly.
- * Shares the same DataStore<Preferences> instance via [com.crazyfluff.shellfstudy.core.data.DataStoreModule].
+ * Dedupe/watermark bookkeeping for the notification system — separate from
+ * [com.crazyfluff.shellfstudy.shared.data.SettingsRepository] (which is user-facing preferences)
+ * since this is internal state the user never edits directly. Shares the same
+ * DataStore<Preferences> instance via :app's DataStoreModule.
  */
 class NotificationStateRepository(
     private val dataStore: DataStore<Preferences>

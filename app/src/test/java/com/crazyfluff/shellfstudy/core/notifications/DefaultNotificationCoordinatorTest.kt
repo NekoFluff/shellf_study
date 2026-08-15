@@ -24,13 +24,19 @@ import com.crazyfluff.shellfstudy.fakes.FakeWeblioApi
 import com.crazyfluff.shellfstudy.fakes.buildTestApi
 import com.crazyfluff.shellfstudy.core.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
+import com.crazyfluff.shellfstudy.shared.notifications.DefaultNotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationChannels
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationStateRepository
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import kotlin.time.Clock
 
 class DefaultNotificationCoordinatorTest {
 
@@ -159,7 +165,7 @@ class DefaultNotificationCoordinatorTest {
         enableNotifications()
         // A 23-hour window starting at the current hour always covers "now", regardless of when
         // this test runs — keeps the assertion time-independent without injecting a clock.
-        val nowHour = java.time.LocalTime.now(java.time.ZoneId.systemDefault()).hour
+        val nowHour = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).hour
         settingsRepository.setQuietHoursEnabled(true)
         settingsRepository.setQuietHoursStartHour(nowHour)
         settingsRepository.setQuietHoursEndHour((nowHour + 23) % 24)

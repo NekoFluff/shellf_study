@@ -21,8 +21,8 @@ import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.WaniKaniUser
-import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
-import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi

@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.fakes
 
-import com.crazyfluff.shellfstudy.core.notifications.NotificationScheduler
-import java.time.Instant
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler
+import kotlin.time.Instant
 
 /** No-op stand-in for [NotificationScheduler] — the real one needs WorkManager/a real Context to run. */
 class FakeNotificationScheduler : NotificationScheduler {

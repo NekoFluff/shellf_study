@@ -1,9 +1,12 @@
 package com.crazyfluff.shellfstudy.core.notifications
 
+import com.crazyfluff.shellfstudy.shared.notifications.BacklogPolicy
+import com.crazyfluff.shellfstudy.shared.notifications.WatermarkDecision
+import com.crazyfluff.shellfstudy.shared.notifications.WatermarkPolicy
 import com.google.common.truth.Truth.assertThat
-import java.time.Duration
-import java.time.Instant
 import org.junit.Test
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 class NotificationPoliciesTest {
 
@@ -32,7 +35,7 @@ class NotificationPoliciesTest {
             threshold = 50,
             lastNotifiedAt = null,
             now = Instant.parse("2026-08-10T12:00:00Z"),
-            cooldown = Duration.ofHours(6)
+            cooldown = 6.hours
         )
         assertThat(result).isFalse()
     }
@@ -44,7 +47,7 @@ class NotificationPoliciesTest {
             threshold = 50,
             lastNotifiedAt = null,
             now = Instant.parse("2026-08-10T12:00:00Z"),
-            cooldown = Duration.ofHours(6)
+            cooldown = 6.hours
         )
         assertThat(result).isTrue()
     }
@@ -55,9 +58,9 @@ class NotificationPoliciesTest {
         val result = BacklogPolicy.shouldNotify(
             currentCount = 60,
             threshold = 50,
-            lastNotifiedAt = now.minus(Duration.ofHours(2)),
+            lastNotifiedAt = now.minus(2.hours),
             now = now,
-            cooldown = Duration.ofHours(6)
+            cooldown = 6.hours
         )
         assertThat(result).isFalse()
     }
@@ -68,9 +71,9 @@ class NotificationPoliciesTest {
         val result = BacklogPolicy.shouldNotify(
             currentCount = 60,
             threshold = 50,
-            lastNotifiedAt = now.minus(Duration.ofHours(7)),
+            lastNotifiedAt = now.minus(7.hours),
             now = now,
-            cooldown = Duration.ofHours(6)
+            cooldown = 6.hours
         )
         assertThat(result).isTrue()
     }

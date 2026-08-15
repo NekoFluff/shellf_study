@@ -3,7 +3,7 @@ package com.crazyfluff.shellfstudy.feature.splash
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
-import com.crazyfluff.shellfstudy.core.notifications.NotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.core.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.core.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow

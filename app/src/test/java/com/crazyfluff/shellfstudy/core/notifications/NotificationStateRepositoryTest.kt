@@ -4,13 +4,18 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationState
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationStateRepository
 import com.google.common.truth.Truth.assertThat
-import java.time.Instant
-import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class NotificationStateRepositoryTest {
 
@@ -59,7 +64,7 @@ class NotificationStateRepositoryTest {
     @Test
     fun `recordStreakReminderSent persists a round-trippable date`() = runTest {
         val repository = createRepository()
-        val date = LocalDate.of(2026, 8, 10)
+        val date = LocalDate(2026, 8, 10)
 
         repository.recordStreakReminderSent(date)
 
@@ -72,8 +77,8 @@ class NotificationStateRepositoryTest {
     fun `clear resets all fields back to defaults`() = runTest {
         val repository = createRepository()
         repository.updateReviewWatermark(12)
-        repository.recordBacklogNotified(Instant.now())
-        repository.recordStreakReminderSent(LocalDate.now())
+        repository.recordBacklogNotified(Clock.System.now())
+        repository.recordStreakReminderSent(Clock.System.todayIn(TimeZone.currentSystemDefault()))
 
         repository.clear()
 

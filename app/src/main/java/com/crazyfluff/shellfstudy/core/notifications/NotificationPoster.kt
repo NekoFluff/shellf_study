@@ -11,18 +11,10 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.crazyfluff.shellfstudy.MainActivity
 import com.crazyfluff.shellfstudy.R
-
-/**
- * The one genuinely Android/untestable seam of the notification system — isolated behind an
- * interface the same way [com.crazyfluff.shellfstudy.core.sync.SyncScheduler] isolates WorkManager,
- * so [NotificationCoordinator] can be tested against a fake instead of the real
- * `NotificationManagerCompat`.
- */
-interface NotificationPoster {
-    fun canPost(): Boolean
-    fun post(spec: NotificationSpec)
-    fun cancel(id: Int)
-}
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationPoster
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationPriority
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationSpec
 
 class SystemNotificationPoster(
     private val context: Context
@@ -61,7 +53,7 @@ class SystemNotificationPoster(
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(spec.title)
             .setContentText(spec.body)
-            .setPriority(spec.priority)
+            .setPriority(spec.priority.toNotificationCompatPriority())
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .build()
@@ -71,5 +63,10 @@ class SystemNotificationPoster(
 
     override fun cancel(id: Int) {
         NotificationManagerCompat.from(context).cancel(id)
+    }
+
+    private fun NotificationPriority.toNotificationCompatPriority(): Int = when (this) {
+        NotificationPriority.DEFAULT -> NotificationCompat.PRIORITY_DEFAULT
+        NotificationPriority.HIGH -> NotificationCompat.PRIORITY_HIGH
     }
 }

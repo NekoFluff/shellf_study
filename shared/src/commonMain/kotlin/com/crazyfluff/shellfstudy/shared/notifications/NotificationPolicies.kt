@@ -1,7 +1,7 @@
-package com.crazyfluff.shellfstudy.core.notifications
+package com.crazyfluff.shellfstudy.shared.notifications
 
-import java.time.Duration
-import java.time.Instant
+import kotlin.time.Duration
+import kotlin.time.Instant
 
 /** Decision produced by [WatermarkPolicy.decide] for count-based notifications (reviews, lessons). */
 sealed interface WatermarkDecision {
@@ -41,6 +41,6 @@ object BacklogPolicy {
     ): Boolean {
         if (currentCount < threshold) return false
         if (lastNotifiedAt == null) return true
-        return Duration.between(lastNotifiedAt, now) >= cooldown
+        return (now - lastNotifiedAt) >= cooldown
     }
 }

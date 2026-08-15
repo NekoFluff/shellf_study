@@ -12,7 +12,7 @@ import coil3.svg.SvgDecoder
 import com.crazyfluff.shellfstudy.core.coroutines.APPLICATION_SCOPE
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SvgCssVariableInterceptor
 import com.crazyfluff.shellfstudy.core.lifecycle.AppForegroundTracker
-import com.crazyfluff.shellfstudy.core.notifications.NotificationChannels
+import com.crazyfluff.shellfstudy.core.notifications.AndroidNotificationChannels
 import com.crazyfluff.shellfstudy.di.appModules
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import kotlinx.coroutines.CoroutineScope
@@ -60,7 +60,7 @@ class ShellfStudyApplication : Application(), Configuration.Provider, SingletonI
             }
         }
 
-        NotificationChannels.ensureCreated(this)
+        AndroidNotificationChannels.ensureCreated(this)
         val appForegroundTracker: AppForegroundTracker = get()
         ProcessLifecycleOwner.get().lifecycle.addObserver(appForegroundTracker)
         // Parses the ~8MB bundled stroke-order dictionary ahead of the first subject detail sheet

@@ -1,13 +1,16 @@
-package com.crazyfluff.shellfstudy.core.notifications
+package com.crazyfluff.shellfstudy.shared.notifications
 
-import androidx.core.app.NotificationCompat
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
 
+/** Mirrors `androidx.core.app.NotificationCompat`'s priority levels without depending on it —
+ *  [com.crazyfluff.shellfstudy.core.notifications.SystemNotificationPoster] maps this back to the
+ *  real Android constant when actually posting. */
+enum class NotificationPriority { DEFAULT, HIGH }
+
 /**
- * Plain description of a notification to post — no [android.content.Context] dependency, so
- * [NotificationBuilder] is fully JVM-testable. [NotificationPoster] turns this into a real
- * [android.app.Notification].
+ * Plain description of a notification to post — no Android dependency, so [NotificationBuilder]
+ * is fully JVM-testable. The platform-specific poster turns this into a real notification.
  */
 data class NotificationSpec(
     val id: Int,
@@ -15,7 +18,7 @@ data class NotificationSpec(
     val title: String,
     val body: String,
     val destination: String,
-    val priority: Int = NotificationCompat.PRIORITY_DEFAULT
+    val priority: NotificationPriority = NotificationPriority.DEFAULT
 )
 
 object NotificationBuilder {
@@ -33,7 +36,7 @@ object NotificationBuilder {
         title = "Your reviews miss you",
         body = "$totalDueNow are waiting — more than usual. A few rounds now will make a big dent.",
         destination = NotificationDeepLink.DESTINATION_REVIEW,
-        priority = NotificationCompat.PRIORITY_HIGH
+        priority = NotificationPriority.HIGH
     )
 
     fun studyReminder(currentStreakDays: Int): NotificationSpec = NotificationSpec(

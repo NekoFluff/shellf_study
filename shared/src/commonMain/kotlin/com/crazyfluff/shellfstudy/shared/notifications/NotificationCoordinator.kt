@@ -1,18 +1,19 @@
-package com.crazyfluff.shellfstudy.core.notifications
+package com.crazyfluff.shellfstudy.shared.notifications
 
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
-import java.time.Duration
-import java.time.Instant
-import java.time.LocalTime
-import java.time.ZoneId
-import kotlin.time.toJavaInstant
 import kotlinx.coroutines.flow.first
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 /**
- * All real notification decision-making lives here — the workers in this package are thin
+ * All real notification decision-making lives here — the workers that call this are thin
  * delegates (mirroring [com.crazyfluff.shellfstudy.core.sync.SyncWorker]'s existing thinness), and
  * ViewModels depend on this interface so tests can substitute a call-count fake instead of
  * exercising real repositories/WorkManager.
@@ -75,7 +76,7 @@ class DefaultNotificationCoordinator(
         }
         val forecast = assignmentRepository.observeReviewForecast().first()
         val nextBucket = forecast.buckets.firstOrNull { it.newlyAvailableCount > 0 }
-        notificationScheduler.scheduleNextReviewCheck(nextBucket?.availableAt?.toJavaInstant())
+        notificationScheduler.scheduleNextReviewCheck(nextBucket?.availableAt)
     }
 
     override suspend fun evaluateReviewsAndBacklog() {
@@ -83,7 +84,7 @@ class DefaultNotificationCoordinator(
         if (!settings.notificationsEnabled) return
         val forecast = assignmentRepository.observeReviewForecast().first()
         val state = notificationStateRepository.state.first()
-        val now = Instant.now()
+        val now = Clock.System.now()
 
         if (settings.reviewsAvailableEnabled) {
             when (val decision = WatermarkPolicy.decide(forecast.reviewsAvailableNow, state.lastNotifiedReviewCount)) {
@@ -125,11 +126,12 @@ class DefaultNotificationCoordinator(
         val streak = statsRepository.observeStudyStreak().first()
         if (streak.isActiveToday) return
 
-        val today = java.time.LocalDate.now()
+        val zone = TimeZone.currentSystemDefault()
+        val today = Clock.System.todayIn(zone)
         val state = notificationStateRepository.state.first()
         if (state.lastStreakReminderSentDate == today) return
 
-        val now = Instant.now()
+        val now = Clock.System.now()
         if (isQuiet(settings, now)) return // the next daily-reminder wakeup already lands at a fixed local hour
         notificationPoster.post(NotificationBuilder.studyReminder(streak.currentStreakDays))
         notificationStateRepository.recordStreakReminderSent(today)
@@ -137,25 +139,22 @@ class DefaultNotificationCoordinator(
 
     private fun isQuiet(settings: NotificationSettings, now: Instant): Boolean {
         if (!settings.quietHoursEnabled) return false
-        val localTime = now.atZone(ZoneId.systemDefault()).toLocalTime()
-        return QuietHours.isQuietNow(
-            localTime,
-            LocalTime.of(settings.quietHoursStartHour, 0),
-            LocalTime.of(settings.quietHoursEndHour, 0)
-        )
+        val zone = TimeZone.currentSystemDefault()
+        val nowHour = now.toLocalDateTime(zone).hour
+        return QuietHours.isQuietNow(nowHour, settings.quietHoursStartHour, settings.quietHoursEndHour)
     }
 
     private fun quietHoursEnd(settings: NotificationSettings, now: Instant): Instant {
-        val zone = ZoneId.systemDefault()
+        val zone = TimeZone.currentSystemDefault()
         return QuietHours.nextEndInstant(
-            now.atZone(zone).toLocalDateTime(),
+            now.toLocalDateTime(zone),
             zone,
-            LocalTime.of(settings.quietHoursStartHour, 0),
-            LocalTime.of(settings.quietHoursEndHour, 0)
+            settings.quietHoursStartHour,
+            settings.quietHoursEndHour
         )
     }
 
     private companion object {
-        val BACKLOG_COOLDOWN: Duration = Duration.ofHours(6)
+        val BACKLOG_COOLDOWN = 6.hours
     }
 }

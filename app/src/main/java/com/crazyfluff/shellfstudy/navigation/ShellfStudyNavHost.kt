@@ -9,7 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.getValue
-import com.crazyfluff.shellfstudy.core.notifications.NotificationDeepLink
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
 import com.crazyfluff.shellfstudy.feature.auth.AuthRoute
 import com.crazyfluff.shellfstudy.feature.dashboard.DashboardRoute
 import com.crazyfluff.shellfstudy.feature.lesson.LessonRoute

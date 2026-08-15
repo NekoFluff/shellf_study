@@ -1,5 +1,10 @@
 package com.crazyfluff.shellfstudy.core.notifications
 
+import com.crazyfluff.shellfstudy.shared.notifications.DefaultNotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationPoster
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationStateRepository
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.bind
 import org.koin.dsl.module

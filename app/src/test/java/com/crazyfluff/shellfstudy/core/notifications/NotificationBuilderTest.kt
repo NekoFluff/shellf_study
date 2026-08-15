@@ -3,6 +3,10 @@ package com.crazyfluff.shellfstudy.core.notifications
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
 import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationBuilder
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationChannels
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationIds
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import kotlin.time.Clock

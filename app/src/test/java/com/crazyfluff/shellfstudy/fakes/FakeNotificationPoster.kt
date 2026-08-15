@@ -1,7 +1,7 @@
 package com.crazyfluff.shellfstudy.fakes
 
-import com.crazyfluff.shellfstudy.core.notifications.NotificationPoster
-import com.crazyfluff.shellfstudy.core.notifications.NotificationSpec
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationPoster
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationSpec
 
 /** In-memory stand-in for [NotificationPoster] — the real one needs a real Context/NotificationManager. */
 class FakeNotificationPoster(private var canPostValue: Boolean = true) : NotificationPoster {

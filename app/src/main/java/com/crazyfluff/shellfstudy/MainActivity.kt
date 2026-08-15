@@ -15,7 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.crazyfluff.shellfstudy.shared.ThemeViewModel
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.core.notifications.NotificationDeepLink
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
 import com.crazyfluff.shellfstudy.navigation.ShellfStudyNavHost
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 import org.koin.androidx.compose.koinViewModel

@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.sync
+package com.crazyfluff.shellfstudy.shared.sync
 
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
@@ -10,8 +10,8 @@ import kotlinx.coroutines.async
 
 /**
  * The single place that sequences a full sync pass across every repository — both the periodic
- * [SyncWorker] and manual triggers (app open, pull-to-refresh) call this instead of duplicating the
- * ordering themselves.
+ * `SyncWorker` and manual triggers (app open, pull-to-refresh) call this instead of duplicating
+ * the ordering themselves.
  */
 class SyncOrchestrator(
     private val subjectRepository: SubjectRepository,

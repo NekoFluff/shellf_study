@@ -11,7 +11,7 @@ import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
 import com.crazyfluff.shellfstudy.shared.network.SrsStageData
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient
-import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
+import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import mockwebserver3.MockResponse
 
 /**

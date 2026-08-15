@@ -5,7 +5,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
-import com.crazyfluff.shellfstudy.core.sync.SyncOrchestrator
+import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationScheduler
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories

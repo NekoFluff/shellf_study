@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.sync
 
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
+import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.bind
 import org.koin.dsl.module
