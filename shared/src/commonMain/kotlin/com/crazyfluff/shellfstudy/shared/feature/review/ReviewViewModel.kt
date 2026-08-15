@@ -424,7 +424,11 @@ class ReviewViewModel(
     /** Stops introducing brand-new items; only the current item and ones already attempted remain. */
     fun wrapUp() {
         viewModelScope.launch {
-            queue.retainCurrentAndMatching { progressByAssignmentId[it.item.assignmentId]?.hasAnyProgress == true }
+            val currentAssignmentId = queue.current?.item?.assignmentId
+            queue.retainCurrentAndMatching {
+                progressByAssignmentId[it.item.assignmentId]?.hasAnyProgress == true ||
+                    it.item.assignmentId == currentAssignmentId
+            }
             totalQuestions = queue.size + completedQuestionCount()
 
             applicationScope.runDurably { persistCurrentState() }
