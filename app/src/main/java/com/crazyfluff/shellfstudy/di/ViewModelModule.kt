@@ -3,7 +3,7 @@ package com.crazyfluff.shellfstudy.di
 import com.crazyfluff.shellfstudy.shared.ThemeViewModel
 import com.crazyfluff.shellfstudy.core.coroutines.APPLICATION_SCOPE
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthViewModel
-import com.crazyfluff.shellfstudy.feature.dashboard.DashboardViewModel
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.feature.lesson.LessonViewModel
 import com.crazyfluff.shellfstudy.feature.review.ReviewViewModel
 import com.crazyfluff.shellfstudy.feature.search.SearchViewModel

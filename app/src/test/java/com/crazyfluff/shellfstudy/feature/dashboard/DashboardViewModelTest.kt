@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
@@ -536,7 +537,7 @@ class DashboardViewModelTest {
             var state = awaitItem()
             while (state.completionProjection?.totalItems != 2) state = awaitItem()
 
-            val projection = state.completionProjection
+            val projection = state.completionProjection!!
             assertThat(projection.totalItems).isEqualTo(2)
             assertThat(projection.dailyPace).isEqualTo(15)
             cancelAndIgnoreRemainingEvents()
