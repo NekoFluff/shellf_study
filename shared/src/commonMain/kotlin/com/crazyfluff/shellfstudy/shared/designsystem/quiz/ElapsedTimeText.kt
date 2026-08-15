@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.delay
+import kotlin.time.Clock
 
 /** A running "m:ss" clock counting up from [startTimeMs] — used for both the total-session and
  *  per-question timers on the Review/Lesson quiz screens (see [ElapsedTimeText]'s call sites).
@@ -25,10 +26,10 @@ fun ElapsedTimeText(
     style: TextStyle = MaterialTheme.typography.labelMedium,
     color: Color = LocalContentColor.current
 ) {
-    var elapsedMs by remember(startTimeMs) { mutableStateOf(System.currentTimeMillis() - startTimeMs) }
+    var elapsedMs by remember(startTimeMs) { mutableStateOf(Clock.System.now().toEpochMilliseconds() - startTimeMs) }
     LaunchedEffect(startTimeMs) {
         while (true) {
-            elapsedMs = System.currentTimeMillis() - startTimeMs
+            elapsedMs = Clock.System.now().toEpochMilliseconds() - startTimeMs
             delay(1000)
         }
     }
@@ -45,7 +46,8 @@ fun ElapsedTimeText(
  *  it replaces, instead of jarringly changing format the instant it stops ticking. */
 fun formatElapsedClock(elapsedMs: Long): String {
     val elapsedSeconds = elapsedMs / 1000
-    return "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60)
+    val seconds = (elapsedSeconds % 60).toString().padStart(2, '0')
+    return "${elapsedSeconds / 60}:$seconds"
 }
 
 /** Like [ElapsedTimeText], but for a clock that can pause — the total session timer, which should
@@ -63,12 +65,12 @@ fun PausableElapsedTimeText(
     color: Color = LocalContentColor.current
 ) {
     var elapsedMs by remember(baseElapsedMs, segmentStartMs) {
-        mutableStateOf(baseElapsedMs + (segmentStartMs?.let { System.currentTimeMillis() - it } ?: 0L))
+        mutableStateOf(baseElapsedMs + (segmentStartMs?.let { Clock.System.now().toEpochMilliseconds() - it } ?: 0L))
     }
     LaunchedEffect(baseElapsedMs, segmentStartMs) {
         if (segmentStartMs == null) return@LaunchedEffect
         while (true) {
-            elapsedMs = baseElapsedMs + (System.currentTimeMillis() - segmentStartMs)
+            elapsedMs = baseElapsedMs + (Clock.System.now().toEpochMilliseconds() - segmentStartMs)
             delay(1000)
         }
     }

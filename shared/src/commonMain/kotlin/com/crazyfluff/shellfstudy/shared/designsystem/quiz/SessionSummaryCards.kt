@@ -200,5 +200,5 @@ fun formatDuration(ms: Long): String {
     val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
-    return if (minutes > 0) "%d:%02d".format(minutes, seconds) else "${seconds}s"
+    return if (minutes > 0) "$minutes:${seconds.toString().padStart(2, '0')}" else "${seconds}s"
 }
