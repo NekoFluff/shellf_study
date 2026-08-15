@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.dialog
+package com.crazyfluff.shellfstudy.shared.designsystem.dialog
 
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text

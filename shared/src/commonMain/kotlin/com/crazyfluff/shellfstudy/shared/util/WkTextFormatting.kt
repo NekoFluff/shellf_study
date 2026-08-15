@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.util
+package com.crazyfluff.shellfstudy.shared.util
 
 private val markupTagRegex = Regex("</?[a-zA-Z][a-zA-Z0-9]*>")
 

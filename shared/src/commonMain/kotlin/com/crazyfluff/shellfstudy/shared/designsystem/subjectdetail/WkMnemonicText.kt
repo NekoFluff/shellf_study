@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
+package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text

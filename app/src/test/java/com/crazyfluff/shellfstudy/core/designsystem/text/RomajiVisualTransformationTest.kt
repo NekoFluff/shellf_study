@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.designsystem.text
 
 import androidx.compose.ui.text.AnnotatedString
+import com.crazyfluff.shellfstudy.shared.designsystem.text.RomajiVisualTransformation
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 

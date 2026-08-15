@@ -54,7 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsUiState
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsViewModel
 import org.koin.androidx.compose.koinViewModel
-import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
+import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 

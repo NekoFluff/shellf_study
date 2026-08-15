@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.util
+package com.crazyfluff.shellfstudy.shared.util
 
 private const val MAX_DISPLAYED_ANSWERS = 3
 

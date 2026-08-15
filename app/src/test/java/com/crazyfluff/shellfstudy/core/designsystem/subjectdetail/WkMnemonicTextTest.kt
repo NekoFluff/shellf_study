@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.parseWkMarkup
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test

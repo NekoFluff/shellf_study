@@ -61,9 +61,9 @@ import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardContentState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardUiState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
-import com.crazyfluff.shellfstudy.core.designsystem.components.CompactTopBar
+import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
-import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
+import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink

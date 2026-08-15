@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.quiz
+package com.crazyfluff.shellfstudy.shared.designsystem.quiz
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -22,7 +22,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.IntOffset
-import com.crazyfluff.shellfstudy.core.designsystem.text.RomajiVisualTransformation
+import com.crazyfluff.shellfstudy.shared.designsystem.text.RomajiVisualTransformation
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.label
 import kotlin.math.roundToInt

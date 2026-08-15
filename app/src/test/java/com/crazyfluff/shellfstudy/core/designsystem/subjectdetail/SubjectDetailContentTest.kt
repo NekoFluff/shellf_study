@@ -13,13 +13,14 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
-import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeTestTags
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule

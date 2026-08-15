@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.core.designsystem.dialog
 
+import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText

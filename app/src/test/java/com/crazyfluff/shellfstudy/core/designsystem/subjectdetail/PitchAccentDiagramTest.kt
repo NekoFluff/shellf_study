@@ -9,6 +9,11 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentDiagram
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentReadingRow
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.isHighMora
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.splitIntoMorae
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test

@@ -49,7 +49,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectTypeProgress
-import com.crazyfluff.shellfstudy.core.designsystem.components.SegmentedBar
+import com.crazyfluff.shellfstudy.shared.designsystem.components.SegmentedBar
 import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.srsStageColor

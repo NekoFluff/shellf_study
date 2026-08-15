@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.writing
+package com.crazyfluff.shellfstudy.shared.designsystem.writing
 
 import androidx.compose.ui.geometry.Offset
 

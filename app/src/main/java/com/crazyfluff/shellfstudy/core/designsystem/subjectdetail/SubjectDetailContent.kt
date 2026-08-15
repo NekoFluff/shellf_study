@@ -33,9 +33,11 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.core.designsystem.text.lookUpInAkebiContextMenu
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentReadingRow
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
-import com.crazyfluff.shellfstudy.core.designsystem.writing.WritingPracticeSection
+import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 /** Whether the sheet shows everything (browse/study contexts) or hides the currently-tested field (mid-quiz). */

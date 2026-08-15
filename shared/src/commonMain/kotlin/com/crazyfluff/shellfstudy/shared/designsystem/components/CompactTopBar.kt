@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.components
+package com.crazyfluff.shellfstudy.shared.designsystem.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row

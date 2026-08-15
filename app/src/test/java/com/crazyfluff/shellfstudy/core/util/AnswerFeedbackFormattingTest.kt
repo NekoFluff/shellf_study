@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.core.util
 
+import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 

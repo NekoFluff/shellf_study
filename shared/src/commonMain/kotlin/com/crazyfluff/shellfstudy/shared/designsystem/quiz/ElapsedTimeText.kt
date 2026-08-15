@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.quiz
+package com.crazyfluff.shellfstudy.shared.designsystem.quiz
 
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme

@@ -1,6 +1,8 @@
 package com.crazyfluff.shellfstudy.core.designsystem.writing
 
 import androidx.compose.ui.geometry.Offset
+import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeState
+import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingStroke
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 

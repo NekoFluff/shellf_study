@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.quiz
+package com.crazyfluff.shellfstudy.shared.designsystem.quiz
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

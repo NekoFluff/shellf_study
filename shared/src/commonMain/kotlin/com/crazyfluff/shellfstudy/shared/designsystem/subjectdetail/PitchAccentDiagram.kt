@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
+package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
@@ -28,7 +28,7 @@ private val COMBINING_SMALL_KANA =
     setOf('ゃ', 'ゅ', 'ょ', 'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ', 'ゎ', 'ャ', 'ュ', 'ョ', 'ァ', 'ィ', 'ゥ', 'ェ', 'ォ', 'ヮ')
 
 /** Splits a kana reading into morae — a combining small kana (きゃ, しゅ, ちょ, ...) merges with the mora before it. */
-internal fun splitIntoMorae(reading: String): List<String> {
+fun splitIntoMorae(reading: String): List<String> {
     val morae = mutableListOf<String>()
     for (c in reading) {
         if (c in COMBINING_SMALL_KANA && morae.isNotEmpty()) {
@@ -41,7 +41,7 @@ internal fun splitIntoMorae(reading: String): List<String> {
 }
 
 /** True if [moraIndex] (0-based) is pronounced high, per standard Japanese pitch-accent rules. */
-internal fun isHighMora(moraIndex: Int, pitchNumber: Int, moraCount: Int): Boolean = when {
+fun isHighMora(moraIndex: Int, pitchNumber: Int, moraCount: Int): Boolean = when {
     pitchNumber == 0 -> moraIndex != 0
     pitchNumber == 1 -> moraIndex == 0
     else -> moraIndex in 1 until pitchNumber

@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.text
+package com.crazyfluff.shellfstudy.shared.designsystem.text
 
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.OffsetMapping
