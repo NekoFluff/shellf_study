@@ -67,8 +67,8 @@ import com.crazyfluff.shellfstudy.core.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
-import com.crazyfluff.shellfstudy.feature.search.SearchUiState
-import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.feature.subjectdetail.rememberSubjectDetailSheetState

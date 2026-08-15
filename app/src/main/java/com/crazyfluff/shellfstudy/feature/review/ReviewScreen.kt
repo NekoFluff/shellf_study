@@ -95,8 +95,8 @@ import com.crazyfluff.shellfstudy.core.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.core.quiz.QuestionType
 import com.crazyfluff.shellfstudy.core.quiz.label
 import com.crazyfluff.shellfstudy.core.util.formatAnswerList
-import com.crazyfluff.shellfstudy.feature.search.SearchUiState
-import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailHandleHeight
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailSheet

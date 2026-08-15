@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.feature.search
+package com.crazyfluff.shellfstudy.shared.feature.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -64,8 +64,6 @@ class SearchViewModel(
         }
     }
 
-    // Query text updates immediately so the field never appears to swallow keystrokes; only the
-    // (debounced) search results above lag behind while the user is still typing.
     fun onQueryChange(value: String) {
         query.value = value
         _uiState.update { it.copy(query = value) }

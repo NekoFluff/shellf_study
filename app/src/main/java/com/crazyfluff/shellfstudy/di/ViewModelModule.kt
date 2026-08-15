@@ -6,7 +6,7 @@ import com.crazyfluff.shellfstudy.shared.feature.auth.AuthViewModel
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.feature.lesson.LessonViewModel
 import com.crazyfluff.shellfstudy.feature.review.ReviewViewModel
-import com.crazyfluff.shellfstudy.feature.search.SearchViewModel
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsViewModel
 import com.crazyfluff.shellfstudy.shared.feature.splash.SplashViewModel
 import com.crazyfluff.shellfstudy.feature.subjectdetail.SubjectDetailViewModel
