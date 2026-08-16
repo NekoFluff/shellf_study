@@ -106,6 +106,33 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `kana vocabulary item is meaning-only and completes the session without asking for a reading`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(kanaVocabAssignmentsJson()), jsonResponse(kanaVocabSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            assertThat(state.totalCount).isEqualTo(1)
+            assertThat(state.currentQuestionType).isEqualTo(QuestionType.MEANING)
+
+            viewModel.onAnswerInputChange("Rain")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            // If the kana_vocabulary fix is absent, isFullyDone would return false here
+            // (requiresReading was true) and the session would not complete.
+            assertThat(finalState.isSessionComplete).isTrue()
+        }
+    }
+
+    @Test
     fun `radical item is a single meaning-only question that completes the session when answered correctly`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
@@ -1285,6 +1312,36 @@ class ReviewViewModelTest {
                   "metadata": {"gender": "female", "pronunciation": "みず"}
                 }
               ]
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun kanaVocabAssignmentsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
+          "data": [{
+            "id": 202, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/202",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 9001, "subject_type": "kana_vocabulary",
+              "srs_stage": 2, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun kanaVocabSubjectsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
+          "data": [{
+            "id": 9001, "object": "kana_vocabulary", "url": "https://api.wanikani.com/v2/subjects/9001",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "rain",
+              "characters": "あめ",
+              "meanings": [{"meaning": "Rain", "primary": true, "accepted_meaning": true}],
+              "readings": []
             }
           }]
         }
