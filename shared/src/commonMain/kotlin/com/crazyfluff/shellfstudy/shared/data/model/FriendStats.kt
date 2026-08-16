@@ -17,7 +17,7 @@ data class ActivityStats(
     }
 }
 
-enum class LeaderboardMetric { LEARNED, REVIEWS, LEVEL, BURNED, ACCURACY }
+enum class LeaderboardMetric { LEARNED, LEVEL, BURNED, ACCURACY }
 
 enum class LeaderboardWindow { WEEK, MONTH, YEAR, ALL_TIME }
 
@@ -32,8 +32,7 @@ data class FriendStats(
     val levelTimeline: List<LevelTimelinePoint>,
     val isCurrentUser: Boolean,
     val learned: ActivityStats = ActivityStats(),
-    val burned: ActivityStats = ActivityStats(),
-    val totalReviews: Int = 0
+    val burned: ActivityStats = ActivityStats()
 )
 
 data class Leaderboard(
@@ -45,7 +44,6 @@ data class Leaderboard(
     fun sorted(by: LeaderboardMetric, window: LeaderboardWindow): Leaderboard {
         val sorted = when (by) {
             LeaderboardMetric.LEARNED -> entries.sortedByDescending { it.learned.forWindow(window) }
-            LeaderboardMetric.REVIEWS -> entries.sortedByDescending { it.totalReviews }
             LeaderboardMetric.LEVEL -> entries.sortedByDescending { it.level }
             LeaderboardMetric.BURNED -> entries.sortedByDescending { it.burned.forWindow(window) }
             LeaderboardMetric.ACCURACY -> entries.sortedByDescending { it.reviewAccuracy }

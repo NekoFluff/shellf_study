@@ -152,7 +152,6 @@ fun LeaderboardScreen(
                                     Text(
                                         text = when (metric) {
                                             LeaderboardMetric.LEARNED -> "Learned"
-                                            LeaderboardMetric.REVIEWS -> "Reviews"
                                             LeaderboardMetric.LEVEL -> "Level"
                                             LeaderboardMetric.BURNED -> "Burned"
                                             LeaderboardMetric.ACCURACY -> "Accuracy"
@@ -298,7 +297,6 @@ private fun FullLeaderboardRow(
 private fun metricValueFull(entry: FriendStats, metric: LeaderboardMetric, window: LeaderboardWindow): String =
     when (metric) {
         LeaderboardMetric.LEARNED -> "${entry.learned.forWindow(window)} items learned"
-        LeaderboardMetric.REVIEWS -> "${entry.totalReviews} reviews"
         LeaderboardMetric.LEVEL -> "Lv. ${entry.level}"
         LeaderboardMetric.BURNED -> "${entry.burned.forWindow(window)} burned"
         LeaderboardMetric.ACCURACY ->

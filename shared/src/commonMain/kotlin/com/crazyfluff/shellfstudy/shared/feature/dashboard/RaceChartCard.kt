@@ -77,7 +77,7 @@ fun RaceChartCard(
         LeaderboardMetric.LEVEL -> LevelRaceChart(leaderboard, modifier)
         LeaderboardMetric.LEARNED -> ActivityWindowChart(leaderboard, "Items Learned", modifier)
         LeaderboardMetric.BURNED -> ActivityWindowChart(leaderboard, "Items Burned", modifier)
-        LeaderboardMetric.REVIEWS, LeaderboardMetric.ACCURACY -> Unit
+        LeaderboardMetric.ACCURACY -> Unit
     }
 }
 

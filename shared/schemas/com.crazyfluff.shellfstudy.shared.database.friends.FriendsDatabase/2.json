@@ -1,0 +1,139 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "7fdc0032c3b4ef0d409c4cf1049133c8",
+    "entities": [
+      {
+        "tableName": "friend_stats",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`friendId` TEXT NOT NULL, `username` TEXT NOT NULL, `level` INTEGER NOT NULL, `reviewAccuracy` REAL NOT NULL, `avgDaysPerLevel` REAL NOT NULL, `daysSinceStart` INTEGER NOT NULL, `levelTimelineJson` TEXT NOT NULL, `fetchedAtMillis` INTEGER NOT NULL, `learnedToday` INTEGER NOT NULL, `learnedWeek` INTEGER NOT NULL, `learnedMonth` INTEGER NOT NULL, `learnedYear` INTEGER NOT NULL, `learnedAllTime` INTEGER NOT NULL, `burnedToday` INTEGER NOT NULL, `burnedWeek` INTEGER NOT NULL, `burnedMonth` INTEGER NOT NULL, `burnedYear` INTEGER NOT NULL, `burnedAllTime` INTEGER NOT NULL, `totalReviews` INTEGER NOT NULL, PRIMARY KEY(`friendId`))",
+        "fields": [
+          {
+            "fieldPath": "friendId",
+            "columnName": "friendId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "username",
+            "columnName": "username",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reviewAccuracy",
+            "columnName": "reviewAccuracy",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "avgDaysPerLevel",
+            "columnName": "avgDaysPerLevel",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "daysSinceStart",
+            "columnName": "daysSinceStart",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "levelTimelineJson",
+            "columnName": "levelTimelineJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtMillis",
+            "columnName": "fetchedAtMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "learnedToday",
+            "columnName": "learnedToday",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "learnedWeek",
+            "columnName": "learnedWeek",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "learnedMonth",
+            "columnName": "learnedMonth",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "learnedYear",
+            "columnName": "learnedYear",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "learnedAllTime",
+            "columnName": "learnedAllTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "burnedToday",
+            "columnName": "burnedToday",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "burnedWeek",
+            "columnName": "burnedWeek",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "burnedMonth",
+            "columnName": "burnedMonth",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "burnedYear",
+            "columnName": "burnedYear",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "burnedAllTime",
+            "columnName": "burnedAllTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalReviews",
+            "columnName": "totalReviews",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "friendId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7fdc0032c3b4ef0d409c4cf1049133c8')"
+    ]
+  }
+}

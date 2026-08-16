@@ -263,8 +263,7 @@ class FriendStatsRepository(
                 month = burnedCounts.month,
                 year = burnedCounts.year,
                 allTime = burnedCounts.allTime
-            ),
-            totalReviews = totalAttempts
+            )
         )
     }
 
@@ -296,8 +295,7 @@ class FriendStatsRepository(
                 month = burnedMonth,
                 year = burnedYear,
                 allTime = burnedAllTime
-            ),
-            totalReviews = totalReviews
+            )
         )
     }
 

@@ -84,7 +84,6 @@ fun HeadToHeadSheet(
                     }
                     val label = when (metric) {
                         LeaderboardMetric.LEARNED -> "Learned"
-                        LeaderboardMetric.REVIEWS -> "Reviews"
                         LeaderboardMetric.LEVEL -> "Level"
                         LeaderboardMetric.BURNED -> "Burned"
                         LeaderboardMetric.ACCURACY -> "Accuracy"
@@ -190,12 +189,6 @@ private fun normalizedValues(
     LeaderboardMetric.LEARNED -> {
         val sv = self.learned.forWindow(window).toFloat()
         val fv = friend.learned.forWindow(window).toFloat()
-        val max = maxOf(sv, fv, 1f)
-        (sv / max) to (fv / max)
-    }
-    LeaderboardMetric.REVIEWS -> {
-        val sv = self.totalReviews.toFloat()
-        val fv = friend.totalReviews.toFloat()
         val max = maxOf(sv, fv, 1f)
         (sv / max) to (fv / max)
     }
