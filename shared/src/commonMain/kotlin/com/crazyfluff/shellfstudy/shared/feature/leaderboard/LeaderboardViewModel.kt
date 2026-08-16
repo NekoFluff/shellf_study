@@ -33,6 +33,7 @@ data class LeaderboardUiState(
     val addFriendToken: String = "",
     val addFriendValidating: Boolean = false,
     val addFriendError: String? = null,
+    val addFriendSuccess: Boolean = false,
     val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
     val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK
 )
@@ -79,7 +80,7 @@ class LeaderboardViewModel(
     }
 
     fun onAddFriendNicknameChange(value: String) {
-        _uiState.update { it.copy(addFriendNickname = value, addFriendError = null) }
+        _uiState.update { it.copy(addFriendNickname = value, addFriendError = null, addFriendSuccess = false) }
     }
 
     fun onAddFriendTokenChange(value: String) {
@@ -110,7 +111,8 @@ class LeaderboardViewModel(
                             addFriendValidating = false,
                             addFriendNickname = "",
                             addFriendToken = "",
-                            addFriendError = null
+                            addFriendError = null,
+                            addFriendSuccess = true
                         )
                     }
                 }

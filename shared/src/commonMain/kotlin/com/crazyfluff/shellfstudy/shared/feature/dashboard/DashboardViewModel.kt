@@ -158,8 +158,6 @@ class DashboardViewModel(
     private val _dashboardData = MutableStateFlow(DashboardUiState())
     private val selectedProgressLevel = MutableStateFlow<Int?>(null)
     private val currentLevel: Flow<Int?> = _dashboardData.map { it.level }.distinctUntilChanged()
-    private val _selectedMetric = MutableStateFlow(LeaderboardMetric.LEARNED)
-    private val _selectedWindow = MutableStateFlow(LeaderboardWindow.WEEK)
     private val _leaderboardRefreshing = MutableStateFlow(false)
 
     private val sessionSyncState: Flow<SessionSyncState> = combine(
@@ -204,15 +202,10 @@ class DashboardViewModel(
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val leaderboardState: Flow<Triple<Leaderboard?, Boolean, Pair<LeaderboardMetric, LeaderboardWindow>>> =
-        combine(
-            combine(_selectedMetric, _selectedWindow) { m, w -> m to w }
-                .flatMapLatest { (metric, window) -> friendStatsRepository.observeLeaderboard(metric, window) },
-            _leaderboardRefreshing,
-            combine(_selectedMetric, _selectedWindow) { m, w -> m to w }
-        ) { leaderboard, refreshing, metricWindow ->
-            Triple(leaderboard, refreshing, metricWindow)
-        }
+    private val leaderboardFlow: Flow<Leaderboard?> = _dashboardData
+        .map { it.selectedMetric to it.selectedWindow }
+        .distinctUntilChanged()
+        .flatMapLatest { (metric, window) -> friendStatsRepository.observeLeaderboard(metric, window) }
 
     val uiState: StateFlow<DashboardUiState> = combine(
         combine(_dashboardData, sessionSyncState, progressStatsState, levelDependentState)
@@ -232,15 +225,10 @@ class DashboardViewModel(
                 levelProgress = levelDependent.levelProgress
             )
         },
-        leaderboardState
-    ) { dashboardState, leaderboardTuple ->
-        val (leaderboard, leaderboardLoading, metricWindow) = leaderboardTuple
-        dashboardState.copy(
-            leaderboard = leaderboard,
-            leaderboardLoading = leaderboardLoading,
-            selectedMetric = metricWindow.first,
-            selectedWindow = metricWindow.second
-        )
+        leaderboardFlow,
+        _leaderboardRefreshing
+    ) { dashboardState, leaderboard, leaderboardLoading ->
+        dashboardState.copy(leaderboard = leaderboard, leaderboardLoading = leaderboardLoading)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
 
     private var hasCompletedInitialSync = false
@@ -256,11 +244,11 @@ class DashboardViewModel(
     }
 
     fun onLeaderboardMetricChange(metric: LeaderboardMetric) {
-        _selectedMetric.value = metric
+        _dashboardData.update { it.copy(selectedMetric = metric) }
     }
 
     fun onLeaderboardWindowChange(window: LeaderboardWindow) {
-        _selectedWindow.value = window
+        _dashboardData.update { it.copy(selectedWindow = window) }
     }
 
     private suspend fun seedFromCache() {

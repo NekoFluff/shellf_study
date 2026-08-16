@@ -36,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -104,6 +105,10 @@ fun LeaderboardScreen(
     var friendToDelete by remember { mutableStateOf<FriendEntry?>(null) }
     val palette = avatarPalette()
 
+    LaunchedEffect(uiState.addFriendSuccess) {
+        if (uiState.addFriendSuccess) showAddFriendDialog = false
+    }
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -170,12 +175,7 @@ fun LeaderboardScreen(
             error = uiState.addFriendError,
             onNicknameChange = onAddFriendNicknameChange,
             onTokenChange = onAddFriendTokenChange,
-            onConfirm = {
-                onAddFriendConfirm()
-                if (uiState.addFriendError == null && !uiState.addFriendValidating) {
-                    showAddFriendDialog = false
-                }
-            },
+            onConfirm = { onAddFriendConfirm() },
             onDismiss = { showAddFriendDialog = false }
         )
     }
