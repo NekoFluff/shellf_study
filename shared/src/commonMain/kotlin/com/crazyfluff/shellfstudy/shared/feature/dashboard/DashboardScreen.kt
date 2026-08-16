@@ -73,7 +73,6 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
-import com.crazyfluff.shellfstudy.shared.feature.leaderboard.HeadToHeadSheet
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
 
@@ -178,7 +177,6 @@ fun DashboardScreen(
     var showAbandonReviewConfirm by remember { mutableStateOf(false) }
     var showAbandonLessonConfirm by remember { mutableStateOf(false) }
     val detailSheetState = rememberSubjectDetailSheetState()
-    var headToHeadFriend by remember { mutableStateOf<FriendStats?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -392,7 +390,6 @@ fun DashboardScreen(
                                     isLoading = uiState.leaderboardLoading,
                                     onMetricChange = onLeaderboardMetricChange,
                                     onWindowChange = onLeaderboardWindowChange,
-                                    onFriendTap = { headToHeadFriend = it },
                                     onSeeAll = onOpenLeaderboard,
                                     selectedMetric = uiState.selectedMetric,
                                     selectedWindow = uiState.selectedWindow,
@@ -443,15 +440,7 @@ fun DashboardScreen(
 
     SubjectDetailSheetHost(detailSheetState)
 
-    val friend = headToHeadFriend
-    val self = uiState.leaderboard?.entries?.firstOrNull { it.isCurrentUser }
-    if (friend != null && self != null) {
-        HeadToHeadSheet(
-            friend = friend,
-            self = self,
-            onDismiss = { headToHeadFriend = null }
-        )
-    }
+
 }
 
 @Composable

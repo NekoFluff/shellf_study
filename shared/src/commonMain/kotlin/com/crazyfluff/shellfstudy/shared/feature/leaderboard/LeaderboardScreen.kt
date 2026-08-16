@@ -1,6 +1,5 @@
 package com.crazyfluff.shellfstudy.shared.feature.leaderboard
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,8 +25,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -40,16 +37,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
-import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
-import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
-import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
-import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
-import com.crazyfluff.shellfstudy.shared.feature.dashboard.LeaderboardCard
-import com.crazyfluff.shellfstudy.shared.feature.dashboard.WindowDropdownButton
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,8 +53,6 @@ fun LeaderboardRoute(
         uiState = uiState,
         onBack = onBack,
         onRefresh = viewModel::onRefresh,
-        onMetricChange = viewModel::onMetricChange,
-        onWindowChange = viewModel::onWindowChange,
         onAddFriendNicknameChange = viewModel::onAddFriendNicknameChange,
         onAddFriendTokenChange = viewModel::onAddFriendTokenChange,
         onAddFriendConfirm = viewModel::onAddFriendConfirm,
@@ -78,8 +66,6 @@ fun LeaderboardScreen(
     uiState: LeaderboardUiState,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
-    onMetricChange: (LeaderboardMetric) -> Unit,
-    onWindowChange: (LeaderboardWindow) -> Unit = {},
     onAddFriendNicknameChange: (String) -> Unit,
     onAddFriendTokenChange: (String) -> Unit,
     onAddFriendConfirm: () -> Unit,
@@ -93,7 +79,7 @@ fun LeaderboardScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Leaderboard") },
+                title = { Text("Friends") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -112,84 +98,39 @@ fun LeaderboardScreen(
             onRefresh = onRefresh,
             modifier = Modifier.padding(paddingValues)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp)
-            ) {
-                if (uiState.leaderboard == null && uiState.friends.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(top = 64.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "No friends yet",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Tap + to add a friend's read-only API token.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                } else {
-                    // Metric tabs
-                    val metrics = LeaderboardMetric.entries
-                    ScrollableTabRow(
-                        selectedTabIndex = metrics.indexOf(uiState.selectedMetric),
-                        edgePadding = 0.dp,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        metrics.forEachIndexed { index, metric ->
-                            Tab(
-                                selected = index == metrics.indexOf(uiState.selectedMetric),
-                                onClick = { onMetricChange(metric) },
-                                text = {
-                                    Text(
-                                        text = when (metric) {
-                                            LeaderboardMetric.LEARNED -> "Learned"
-                                            LeaderboardMetric.LEVEL -> "Level"
-                                            LeaderboardMetric.BURNED -> "Burned"
-                                            LeaderboardMetric.ACCURACY -> "Accuracy"
-                                        }
-                                    )
-                                }
-                            )
-                        }
-                    }
-
-                    if (uiState.selectedMetric != LeaderboardMetric.ACCURACY) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(end = 4.dp),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            WindowDropdownButton(
-                                selectedWindow = uiState.selectedWindow,
-                                onWindowChange = onWindowChange
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    uiState.leaderboard?.entries?.forEachIndexed { index, entry ->
-                        if (index > 0) HorizontalDivider()
-                        FullLeaderboardRow(
-                            rank = index + 1,
-                            entry = entry,
-                            metric = uiState.selectedMetric,
-                            window = uiState.selectedWindow,
-                            friend = uiState.friends.firstOrNull { it.id == entry.friendEntryId },
-                            onDelete = { id -> friendToDelete = uiState.friends.firstOrNull { it.id == id } }
+            if (uiState.friends.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "No friends yet",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Tap + to add a friend's read-only API token.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(80.dp)) // FAB clearance
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 80.dp)
+                ) {
+                    uiState.friends.forEachIndexed { index, friend ->
+                        if (index > 0) HorizontalDivider()
+                        FriendManagementRow(
+                            friend = friend,
+                            onDelete = { friendToDelete = friend }
+                        )
+                    }
+                }
             }
         }
     }
@@ -225,69 +166,32 @@ fun LeaderboardScreen(
 }
 
 @Composable
-private fun FullLeaderboardRow(
-    rank: Int,
-    entry: FriendStats,
-    metric: LeaderboardMetric,
-    window: LeaderboardWindow,
-    friend: FriendEntry?,
-    onDelete: (String) -> Unit,
+private fun FriendManagementRow(
+    friend: FriendEntry,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp, horizontal = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = "#$rank",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.width(36.dp)
-        )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = entry.nickname,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (entry.isCurrentUser) FontWeight.Bold else FontWeight.Normal
+                text = friend.nickname,
+                style = MaterialTheme.typography.bodyLarge
             )
-            if (entry.username.isNotBlank()) {
-                Text(
-                    text = "@${entry.username}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
-        Text(
-            text = metricValueFull(entry, metric, window),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold
-        )
-        if (!entry.isCurrentUser && friend != null) {
-            IconButton(onClick = { onDelete(friend.id) }) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Remove ${entry.nickname}",
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-        } else {
-            Spacer(modifier = Modifier.width(48.dp))
+        IconButton(onClick = onDelete) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = "Remove ${friend.nickname}",
+                tint = MaterialTheme.colorScheme.error
+            )
         }
     }
 }
-
-private fun metricValueFull(entry: FriendStats, metric: LeaderboardMetric, window: LeaderboardWindow): String =
-    when (metric) {
-        LeaderboardMetric.LEARNED -> "${entry.learned.forWindow(window)} items learned"
-        LeaderboardMetric.LEVEL -> "Lv. ${entry.level}"
-        LeaderboardMetric.BURNED -> "${entry.burned.forWindow(window)} burned"
-        LeaderboardMetric.ACCURACY ->
-            if (entry.reviewAccuracy < 0f) "No data" else "${(entry.reviewAccuracy * 100).toInt()}%"
-    }
 
 @Composable
 private fun AddFriendDialog(
@@ -304,11 +208,12 @@ private fun AddFriendDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add a friend") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column {
                 Text(
                     text = "Enter a nickname and their WaniKani read-only API token.",
                     style = MaterialTheme.typography.bodyMedium
                 )
+                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = nickname,
                     onValueChange = onNicknameChange,
@@ -316,6 +221,7 @@ private fun AddFriendDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = token,
                     onValueChange = onTokenChange,
@@ -325,6 +231,7 @@ private fun AddFriendDialog(
                     isError = error != null
                 )
                 if (error != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }

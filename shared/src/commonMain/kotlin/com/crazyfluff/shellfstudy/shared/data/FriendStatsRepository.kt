@@ -8,7 +8,9 @@ import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelTimelinePoint
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
@@ -47,9 +49,10 @@ private data class TimelinePointJson(val daysSinceStart: Int, val level: Int)
 private data class WindowedCounts(val today: Int, val week: Int, val month: Int, val year: Int, val allTime: Int)
 
 private fun computeActivityBuckets(isoTimestamps: List<String?>, nowMillis: Long): ActivityBuckets {
-    val nowDays = nowMillis / DAY_MS
-    val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(TimeZone.currentSystemDefault())
+    val tz = TimeZone.currentSystemDefault()
+    val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(tz)
     val nowTotalMonths = nowDt.year * 12 + (nowDt.monthNumber - 1)
+    val nowLocalDays = nowDt.date.toEpochDays()
 
     val weekDays = IntArray(7)
     val monthDays = IntArray(30)
@@ -57,11 +60,10 @@ private fun computeActivityBuckets(isoTimestamps: List<String?>, nowMillis: Long
 
     for (ts in isoTimestamps) {
         val tsMillis = ts?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() } ?: continue
-        val tsDays = tsMillis / DAY_MS
-        val daysAgo = (nowDays - tsDays).toInt()
+        val tsDt = Instant.fromEpochMilliseconds(tsMillis).toLocalDateTime(tz)
+        val daysAgo = (nowLocalDays - tsDt.date.toEpochDays()).toInt()
         if (daysAgo in 0..6) weekDays[6 - daysAgo]++
         if (daysAgo in 0..29) monthDays[29 - daysAgo]++
-        val tsDt = Instant.fromEpochMilliseconds(tsMillis).toLocalDateTime(TimeZone.currentSystemDefault())
         val monthsAgo = nowTotalMonths - (tsDt.year * 12 + (tsDt.monthNumber - 1))
         if (monthsAgo in 0..11) yearMonths[11 - monthsAgo]++
     }
@@ -70,11 +72,16 @@ private fun computeActivityBuckets(isoTimestamps: List<String?>, nowMillis: Long
 }
 
 private fun computeWindowedCounts(isoTimestamps: List<String?>, nowMillis: Long): WindowedCounts {
+    val tz = TimeZone.currentSystemDefault()
+    val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(tz)
+    // Start of today in local time (midnight)
+    val todayStartMillis = LocalDateTime(nowDt.year, nowDt.month, nowDt.dayOfMonth, 0, 0, 0)
+        .toInstant(tz).toEpochMilliseconds()
     val millis = isoTimestamps.mapNotNull { ts ->
         ts?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
     }
     return WindowedCounts(
-        today = millis.count { nowMillis - it < DAY_MS },
+        today = millis.count { it >= todayStartMillis },
         week = millis.count { nowMillis - it < WEEK_MS },
         month = millis.count { nowMillis - it < MONTH_MS },
         year = millis.count { nowMillis - it < YEAR_MS },
@@ -153,7 +160,6 @@ class FriendStatsRepository(
         val userData = (userResult as? ApiResult.Success)?.data?.data ?: return null
 
         val nowMillis = Clock.System.now().toEpochMilliseconds()
-        val yearAgoIso = Instant.fromEpochMilliseconds(nowMillis - YEAR_MS).toString()
 
         // All burned assignments → all-time + windowed burned counts
         val burnedResult = safeApiCall {
@@ -168,10 +174,10 @@ class FriendStatsRepository(
             .let { it.copy(allTime = burnedItems.size) }
         val burnedBuckets = computeActivityBuckets(burnedTimestamps, nowMillis)
 
-        // Assignments started in the last year → windowed learned counts
+        // All started assignments → all-time + windowed learned counts
         val learnedResult = safeApiCall {
             collectAllPages(
-                firstPage = { api.getAssignments(started = true, startedAfter = yearAgoIso) },
+                firstPage = { api.getAssignments(started = true) },
                 nextPage = { url -> api.getAssignmentsPage(url) }
             )
         }
@@ -196,8 +202,7 @@ class FriendStatsRepository(
         val accuracy = if (totalAttempts > 0) totalCorrect / totalAttempts else -1f
         val totalReviews = totalAttempts
 
-        // learnedAllTime proxy: number of subjects with review statistics
-        val learnedAllTime = statsItems.size
+        val learnedAllTime = learnedItems.size
 
         // Level progressions → timeline + avg speed
         val progressionsResult = safeApiCall { api.getLevelProgressions() }
@@ -252,7 +257,6 @@ class FriendStatsRepository(
 
         val burnedCounts = computeWindowedCounts(burnedTimestamps, nowMillis)
         val learnedCounts = computeWindowedCounts(startedTimestamps, nowMillis)
-            .let { it.copy(allTime = statistics.size) }  // proxy: subjects with review history
         val learnedBuckets = computeActivityBuckets(startedTimestamps, nowMillis)
         val burnedBuckets = computeActivityBuckets(burnedTimestamps, nowMillis)
 

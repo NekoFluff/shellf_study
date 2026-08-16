@@ -83,7 +83,7 @@ fun HeadToHeadSheet(
                         else -> "Tied"
                     }
                     val label = when (metric) {
-                        LeaderboardMetric.LEARNED -> "Learned"
+                        LeaderboardMetric.LEARNED -> "Lessons"
                         LeaderboardMetric.LEVEL -> "Level"
                         LeaderboardMetric.BURNED -> "Burned"
                         LeaderboardMetric.ACCURACY -> "Accuracy"

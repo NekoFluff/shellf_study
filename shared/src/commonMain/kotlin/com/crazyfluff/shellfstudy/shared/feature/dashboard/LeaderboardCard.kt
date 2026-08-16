@@ -19,12 +19,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,7 +53,8 @@ private val leaderboardPalette = listOf(
     Color(0xFF1565C0)
 )
 
-private val metrics = LeaderboardMetric.entries
+private val metrics = listOf(LeaderboardMetric.LEARNED, LeaderboardMetric.BURNED, LeaderboardMetric.LEVEL)
+
 
 @Composable
 fun LeaderboardCard(
@@ -62,7 +62,6 @@ fun LeaderboardCard(
     isLoading: Boolean,
     onMetricChange: (LeaderboardMetric) -> Unit,
     onWindowChange: (LeaderboardWindow) -> Unit,
-    onFriendTap: (FriendStats) -> Unit,
     onSeeAll: () -> Unit,
     selectedMetric: LeaderboardMetric = leaderboard.metric,
     selectedWindow: LeaderboardWindow = leaderboard.window,
@@ -73,6 +72,8 @@ fun LeaderboardCard(
             if (isLoading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
+
+            // Header: title + window dropdown
             Row(
                 modifier = Modifier
                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -85,34 +86,38 @@ fun LeaderboardCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                if (selectedMetric != LeaderboardMetric.ACCURACY) {
-                    WindowDropdownButton(selectedWindow = selectedWindow, onWindowChange = onWindowChange)
-                }
+                WindowDropdownButton(
+                    selectedWindow = selectedWindow,
+                    onWindowChange = onWindowChange
+                )
             }
 
-            ScrollableTabRow(
-                selectedTabIndex = metrics.indexOf(selectedMetric),
-                edgePadding = 16.dp
+            // Compact metric pills
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                metrics.forEachIndexed { index, metric ->
-                    Tab(
-                        selected = index == metrics.indexOf(selectedMetric),
+                metrics.forEach { metric ->
+                    FilterChip(
+                        selected = metric == selectedMetric,
                         onClick = { onMetricChange(metric) },
-                        text = {
+                        label = {
                             Text(
                                 text = when (metric) {
-                                    LeaderboardMetric.LEARNED -> "Learned"
+                                    LeaderboardMetric.LEARNED -> "Lessons"
                                     LeaderboardMetric.LEVEL -> "Level"
                                     LeaderboardMetric.BURNED -> "Burned"
                                     LeaderboardMetric.ACCURACY -> "Accuracy"
-                                }
+                                },
+                                style = MaterialTheme.typography.labelSmall
                             )
                         }
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(4.dp))
 
             val displayEntries = leaderboard.entries.take(3)
             displayEntries.forEachIndexed { index, entry ->
@@ -122,8 +127,7 @@ fun LeaderboardCard(
                     rank = index + 1,
                     color = leaderboardPalette.getOrElse(index) { leaderboardPalette.last() },
                     metric = selectedMetric,
-                    window = selectedWindow,
-                    onTap = { if (!entry.isCurrentUser) onFriendTap(entry) }
+                    window = selectedWindow
                 )
             }
 
@@ -148,7 +152,6 @@ private fun LeaderboardRow(
     color: Color,
     metric: LeaderboardMetric,
     window: LeaderboardWindow,
-    onTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val background = if (entry.isCurrentUser) {
@@ -161,7 +164,6 @@ private fun LeaderboardRow(
         modifier = modifier
             .fillMaxWidth()
             .background(background)
-            .clickable(enabled = !entry.isCurrentUser, onClick = onTap)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -214,11 +216,10 @@ private fun LeaderboardRow(
 
 private fun metricValue(entry: FriendStats, metric: LeaderboardMetric, window: LeaderboardWindow): String =
     when (metric) {
-        LeaderboardMetric.LEARNED -> "${entry.learned.forWindow(window)} learned"
+        LeaderboardMetric.LEARNED -> "${entry.learned.forWindow(window)} lessons"
         LeaderboardMetric.LEVEL -> "Lv. ${entry.level}"
         LeaderboardMetric.BURNED -> "${entry.burned.forWindow(window)} burned"
-        LeaderboardMetric.ACCURACY ->
-            if (entry.reviewAccuracy < 0f) "—" else "${(entry.reviewAccuracy * 100).toInt()}%"
+        LeaderboardMetric.ACCURACY -> "—"
     }
 
 private fun todayDelta(entry: FriendStats, metric: LeaderboardMetric): String? = when (metric) {
