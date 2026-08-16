@@ -92,6 +92,12 @@ interface AssignmentDao {
     @Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND srsStage = 9")
     fun observeBurnedCount(): Flow<Int>
 
+    @Query("SELECT startedAt FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL")
+    fun observeAllStartedTimestamps(): Flow<List<String>>
+
+    @Query("SELECT burnedAt FROM assignments WHERE hidden = 0 AND burnedAt IS NOT NULL")
+    fun observeAllBurnedTimestamps(): Flow<List<String>>
+
     /** Every kanji assignment's SRS stage at [level] — Guru+ (stage >= 5) counts toward leveling up. */
     @Query(
         """

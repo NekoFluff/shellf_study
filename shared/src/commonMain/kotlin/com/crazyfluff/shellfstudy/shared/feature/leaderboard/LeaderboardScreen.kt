@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -46,6 +47,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.LeaderboardCard
 import org.koin.compose.viewmodel.koinViewModel
@@ -62,6 +64,7 @@ fun LeaderboardRoute(
         onBack = onBack,
         onRefresh = viewModel::onRefresh,
         onMetricChange = viewModel::onMetricChange,
+        onWindowChange = viewModel::onWindowChange,
         onAddFriendNicknameChange = viewModel::onAddFriendNicknameChange,
         onAddFriendTokenChange = viewModel::onAddFriendTokenChange,
         onAddFriendConfirm = viewModel::onAddFriendConfirm,
@@ -76,6 +79,7 @@ fun LeaderboardScreen(
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     onMetricChange: (LeaderboardMetric) -> Unit,
+    onWindowChange: (LeaderboardWindow) -> Unit = {},
     onAddFriendNicknameChange: (String) -> Unit,
     onAddFriendTokenChange: (String) -> Unit,
     onAddFriendConfirm: () -> Unit,
@@ -147,10 +151,11 @@ fun LeaderboardScreen(
                                 text = {
                                     Text(
                                         text = when (metric) {
+                                            LeaderboardMetric.LEARNED -> "Learned"
+                                            LeaderboardMetric.REVIEWS -> "Reviews"
                                             LeaderboardMetric.LEVEL -> "Level"
                                             LeaderboardMetric.BURNED -> "Burned"
                                             LeaderboardMetric.ACCURACY -> "Accuracy"
-                                            LeaderboardMetric.SPEED -> "Speed"
                                         }
                                     )
                                 }
@@ -158,7 +163,33 @@ fun LeaderboardScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    if (uiState.selectedMetric == LeaderboardMetric.LEARNED ||
+                        uiState.selectedMetric == LeaderboardMetric.BURNED
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 0.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            LeaderboardWindow.entries.forEach { window ->
+                                FilterChip(
+                                    selected = window == uiState.selectedWindow,
+                                    onClick = { onWindowChange(window) },
+                                    label = {
+                                        Text(
+                                            text = when (window) {
+                                                LeaderboardWindow.WEEK -> "Week"
+                                                LeaderboardWindow.MONTH -> "Month"
+                                                LeaderboardWindow.YEAR -> "Year"
+                                                LeaderboardWindow.ALL_TIME -> "All time"
+                                            }
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     uiState.leaderboard?.entries?.forEachIndexed { index, entry ->
                         if (index > 0) HorizontalDivider()
@@ -166,6 +197,7 @@ fun LeaderboardScreen(
                             rank = index + 1,
                             entry = entry,
                             metric = uiState.selectedMetric,
+                            window = uiState.selectedWindow,
                             friend = uiState.friends.firstOrNull { it.id == entry.friendEntryId },
                             onDelete = { id -> friendToDelete = uiState.friends.firstOrNull { it.id == id } }
                         )
@@ -212,6 +244,7 @@ private fun FullLeaderboardRow(
     rank: Int,
     entry: FriendStats,
     metric: LeaderboardMetric,
+    window: LeaderboardWindow,
     friend: FriendEntry?,
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -244,7 +277,7 @@ private fun FullLeaderboardRow(
             }
         }
         Text(
-            text = metricValueFull(entry, metric),
+            text = metricValueFull(entry, metric, window),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold
         )
@@ -262,17 +295,15 @@ private fun FullLeaderboardRow(
     }
 }
 
-private fun metricValueFull(entry: FriendStats, metric: LeaderboardMetric): String = when (metric) {
-    LeaderboardMetric.LEVEL -> "Lv. ${entry.level}"
-    LeaderboardMetric.BURNED -> "${entry.burnedCount} burned"
-    LeaderboardMetric.ACCURACY ->
-        if (entry.reviewAccuracy < 0f) "No data" else "${(entry.reviewAccuracy * 100).toInt()}%"
-    LeaderboardMetric.SPEED ->
-        entry.avgDaysPerLevel?.let {
-            val tenths = (it * 10f).toInt()
-            "${tenths / 10}.${tenths % 10} days/lv"
-        } ?: "No data"
-}
+private fun metricValueFull(entry: FriendStats, metric: LeaderboardMetric, window: LeaderboardWindow): String =
+    when (metric) {
+        LeaderboardMetric.LEARNED -> "${entry.learned.forWindow(window)} items learned"
+        LeaderboardMetric.REVIEWS -> "${entry.totalReviews} reviews"
+        LeaderboardMetric.LEVEL -> "Lv. ${entry.level}"
+        LeaderboardMetric.BURNED -> "${entry.burned.forWindow(window)} burned"
+        LeaderboardMetric.ACCURACY ->
+            if (entry.reviewAccuracy < 0f) "No data" else "${(entry.reviewAccuracy * 100).toInt()}%"
+    }
 
 @Composable
 private fun AddFriendDialog(

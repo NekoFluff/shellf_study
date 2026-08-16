@@ -19,12 +19,25 @@ data class FriendStatsEntity(
     @PrimaryKey val friendId: String,
     val username: String,
     val level: Int,
-    val burnedCount: Int,
     val reviewAccuracy: Float,
     val avgDaysPerLevel: Float,
     val daysSinceStart: Int,
     val levelTimelineJson: String,
-    val fetchedAtMillis: Long
+    val fetchedAtMillis: Long,
+    // Learned (items started) by time window
+    val learnedToday: Int = 0,
+    val learnedWeek: Int = 0,
+    val learnedMonth: Int = 0,
+    val learnedYear: Int = 0,
+    val learnedAllTime: Int = 0,
+    // Burned by time window
+    val burnedToday: Int = 0,
+    val burnedWeek: Int = 0,
+    val burnedMonth: Int = 0,
+    val burnedYear: Int = 0,
+    val burnedAllTime: Int = 0,
+    // All-time review count
+    val totalReviews: Int = 0
 )
 
 @Dao
@@ -42,7 +55,7 @@ interface FriendStatsDao {
     suspend fun deleteById(id: String)
 }
 
-@Database(entities = [FriendStatsEntity::class], version = 1, exportSchema = true)
+@Database(entities = [FriendStatsEntity::class], version = 2, exportSchema = true)
 @ConstructedBy(FriendsDatabaseConstructor::class)
 abstract class FriendsDatabase : RoomDatabase() {
     abstract fun friendStatsDao(): FriendStatsDao

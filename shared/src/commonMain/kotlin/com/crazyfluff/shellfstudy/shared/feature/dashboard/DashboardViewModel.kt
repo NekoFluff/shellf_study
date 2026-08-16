@@ -21,6 +21,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
@@ -73,7 +74,9 @@ data class DashboardUiState(
     val itemSpread: ItemSpread? = null,
     val completionProjection: CompletionProjection? = null,
     val leaderboard: Leaderboard? = null,
-    val leaderboardLoading: Boolean = false
+    val leaderboardLoading: Boolean = false,
+    val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
+    val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK
 ) {
     val bannerState: DashboardBannerState
         get() = when {
@@ -155,7 +158,8 @@ class DashboardViewModel(
     private val _dashboardData = MutableStateFlow(DashboardUiState())
     private val selectedProgressLevel = MutableStateFlow<Int?>(null)
     private val currentLevel: Flow<Int?> = _dashboardData.map { it.level }.distinctUntilChanged()
-    private val _selectedMetric = MutableStateFlow(LeaderboardMetric.LEVEL)
+    private val _selectedMetric = MutableStateFlow(LeaderboardMetric.LEARNED)
+    private val _selectedWindow = MutableStateFlow(LeaderboardWindow.WEEK)
     private val _leaderboardRefreshing = MutableStateFlow(false)
 
     private val sessionSyncState: Flow<SessionSyncState> = combine(
@@ -200,10 +204,15 @@ class DashboardViewModel(
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val leaderboardState: Flow<Pair<Leaderboard?, Boolean>> = combine(
-        _selectedMetric.flatMapLatest { metric -> friendStatsRepository.observeLeaderboard(metric) },
-        _leaderboardRefreshing
-    ) { leaderboard, refreshing -> leaderboard to refreshing }
+    private val leaderboardState: Flow<Triple<Leaderboard?, Boolean, Pair<LeaderboardMetric, LeaderboardWindow>>> =
+        combine(
+            combine(_selectedMetric, _selectedWindow) { m, w -> m to w }
+                .flatMapLatest { (metric, window) -> friendStatsRepository.observeLeaderboard(metric, window) },
+            _leaderboardRefreshing,
+            combine(_selectedMetric, _selectedWindow) { m, w -> m to w }
+        ) { leaderboard, refreshing, metricWindow ->
+            Triple(leaderboard, refreshing, metricWindow)
+        }
 
     val uiState: StateFlow<DashboardUiState> = combine(
         combine(_dashboardData, sessionSyncState, progressStatsState, levelDependentState)
@@ -224,8 +233,14 @@ class DashboardViewModel(
             )
         },
         leaderboardState
-    ) { dashboardState, (leaderboard, leaderboardLoading) ->
-        dashboardState.copy(leaderboard = leaderboard, leaderboardLoading = leaderboardLoading)
+    ) { dashboardState, leaderboardTuple ->
+        val (leaderboard, leaderboardLoading, metricWindow) = leaderboardTuple
+        dashboardState.copy(
+            leaderboard = leaderboard,
+            leaderboardLoading = leaderboardLoading,
+            selectedMetric = metricWindow.first,
+            selectedWindow = metricWindow.second
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
 
     private var hasCompletedInitialSync = false
@@ -242,6 +257,10 @@ class DashboardViewModel(
 
     fun onLeaderboardMetricChange(metric: LeaderboardMetric) {
         _selectedMetric.value = metric
+    }
+
+    fun onLeaderboardWindowChange(window: LeaderboardWindow) {
+        _selectedWindow.value = window
     }
 
     private suspend fun seedFromCache() {

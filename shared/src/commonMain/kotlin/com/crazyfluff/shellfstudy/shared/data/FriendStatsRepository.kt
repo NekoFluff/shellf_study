@@ -1,9 +1,11 @@
 package com.crazyfluff.shellfstudy.shared.data
 
+import com.crazyfluff.shellfstudy.shared.data.model.ActivityStats
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelTimelinePoint
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
@@ -21,6 +23,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -29,9 +33,28 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 private val FRIEND_STATS_TTL = 30.minutes
+private const val DAY_MS = 86_400_000L
+private const val WEEK_MS = 7 * DAY_MS
+private const val MONTH_MS = 30 * DAY_MS
+private const val YEAR_MS = 365 * DAY_MS
 
 @Serializable
 private data class TimelinePointJson(val daysSinceStart: Int, val level: Int)
+
+private data class WindowedCounts(val today: Int, val week: Int, val month: Int, val year: Int, val allTime: Int)
+
+private fun computeWindowedCounts(isoTimestamps: List<String?>, nowMillis: Long): WindowedCounts {
+    val millis = isoTimestamps.mapNotNull { ts ->
+        ts?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
+    }
+    return WindowedCounts(
+        today = millis.count { nowMillis - it < DAY_MS },
+        week = millis.count { nowMillis - it < WEEK_MS },
+        month = millis.count { nowMillis - it < MONTH_MS },
+        year = millis.count { nowMillis - it < YEAR_MS },
+        allTime = millis.size
+    )
+}
 
 class FriendStatsRepository(
     private val friendRepository: FriendRepository,
@@ -41,14 +64,26 @@ class FriendStatsRepository(
     private val selfReviewStatisticDao: ReviewStatisticDao,
     private val selfLevelProgressionDao: LevelProgressionDao
 ) {
-    fun observeLeaderboard(metric: LeaderboardMetric = LeaderboardMetric.LEVEL): Flow<Leaderboard?> =
+    // Pre-built self-stats flow; shared across all observeLeaderboard subscriptions so Room
+    // doesn't open duplicate queries when metric/window changes (only the re-sort changes).
+    private val selfStatsFlow: Flow<FriendStats> = combine(
+        selfAssignmentDao.observeAllBurnedTimestamps(),
+        selfAssignmentDao.observeAllStartedTimestamps(),
+        selfReviewStatisticDao.observeAll(),
+        selfLevelProgressionDao.observeAll()
+    ) { burnedTs, startedTs, statistics, progressions ->
+        buildSelfStats(burnedTs, startedTs, statistics, progressions)
+    }.flowOn(Dispatchers.Default)
+
+    fun observeLeaderboard(
+        metric: LeaderboardMetric = LeaderboardMetric.LEARNED,
+        window: LeaderboardWindow = LeaderboardWindow.WEEK
+    ): Flow<Leaderboard?> =
         combine(
             friendRepository.friendsFlow,
             friendStatsDao.observeAll(),
-            selfAssignmentDao.observeBurnedCount(),
-            selfReviewStatisticDao.observeAll(),
-            selfLevelProgressionDao.observeAll()
-        ) { friends, cachedStats, selfBurned, selfStatistics, selfProgressions ->
+            selfStatsFlow
+        ) { friends, cachedStats, selfStats ->
             if (friends.isEmpty()) return@combine null
 
             val statsByFriendId = cachedStats.associateBy { it.friendId }
@@ -56,10 +91,10 @@ class FriendStatsRepository(
                 statsByFriendId[entry.id]?.toFriendStats(nickname = entry.nickname)
             }
 
-            val selfStats = buildSelfStats(selfBurned, selfStatistics, selfProgressions)
             val all = listOf(selfStats) + friendEntries
-            Leaderboard(entries = all, metric = metric, selfRank = null).sorted(metric)
-        }
+            Leaderboard(entries = all, metric = metric, window = window, selfRank = null)
+                .sorted(by = metric, window = window)
+        }.flowOn(Dispatchers.Default)
 
     suspend fun refreshAllIfStale() {
         val friends = friendRepository.friendsFlow.first()
@@ -91,31 +126,51 @@ class FriendStatsRepository(
         val userResult = safeApiCall { api.getUser() }
         val userData = (userResult as? ApiResult.Success)?.data?.data ?: return null
 
+        val nowMillis = Clock.System.now().toEpochMilliseconds()
+        val yearAgoIso = Instant.fromEpochMilliseconds(nowMillis - YEAR_MS).toString()
+
+        // All burned assignments → all-time + windowed burned counts
         val burnedResult = safeApiCall {
             collectAllPages(
                 firstPage = { api.getAssignments(burned = true) },
                 nextPage = { url -> api.getAssignmentsPage(url) }
             )
         }
-        val burnedCount = (burnedResult as? ApiResult.Success)?.data?.size ?: 0
+        val burnedItems = (burnedResult as? ApiResult.Success)?.data ?: emptyList()
+        val burnedCounts = computeWindowedCounts(burnedItems.map { it.data.burnedAt }, nowMillis)
+            .let { it.copy(allTime = burnedItems.size) }
 
+        // Assignments started in the last year → windowed learned counts
+        val learnedResult = safeApiCall {
+            collectAllPages(
+                firstPage = { api.getAssignments(started = true, startedAfter = yearAgoIso) },
+                nextPage = { url -> api.getAssignmentsPage(url) }
+            )
+        }
+        val learnedItems = (learnedResult as? ApiResult.Success)?.data ?: emptyList()
+        val learnedCounts = computeWindowedCounts(learnedItems.map { it.data.startedAt }, nowMillis)
+
+        // Review statistics → accuracy + all-time totals
         val statsResult = safeApiCall {
             collectAllPages(
                 firstPage = { api.getReviewStatistics() },
                 nextPage = { url -> api.getReviewStatisticsPage(url) }
             )
         }
-        val accuracy = (statsResult as? ApiResult.Success)?.data?.let { items ->
-            val totalCorrect = items.sumOf { it.data.meaningCorrect + it.data.readingCorrect }.toFloat()
-            val totalAttempts = items.sumOf {
-                it.data.meaningCorrect + it.data.meaningIncorrect +
-                    it.data.readingCorrect + it.data.readingIncorrect
-            }.toFloat()
-            if (totalAttempts > 0f) totalCorrect / totalAttempts else -1f
-        } ?: -1f
+        val statsItems = (statsResult as? ApiResult.Success)?.data ?: emptyList()
+        val totalCorrect = statsItems.sumOf { it.data.meaningCorrect + it.data.readingCorrect }.toFloat()
+        val totalAttempts = statsItems.sumOf {
+            it.data.meaningCorrect + it.data.meaningIncorrect +
+                it.data.readingCorrect + it.data.readingIncorrect
+        }
+        val accuracy = if (totalAttempts > 0) totalCorrect / totalAttempts else -1f
+        val totalReviews = totalAttempts
 
+        // learnedAllTime proxy: number of subjects with review statistics
+        val learnedAllTime = statsItems.size
+
+        // Level progressions → timeline + avg speed
         val progressionsResult = safeApiCall { api.getLevelProgressions() }
-        // getLevelProgressions() → WkCollectionResponse<LevelProgressionData>; .data is the item list
         val sortedProgressions = (progressionsResult as? ApiResult.Success)?.data?.data
             ?.mapNotNull { item -> item.data.unlockedAt?.let { item.data.level to it } }
             ?.sortedBy { it.second }
@@ -124,39 +179,54 @@ class FriendStatsRepository(
         val avgDaysPerLevel = computeAvgDaysPerLevel(sortedProgressions)
         val daysSinceStart = sortedProgressions.firstOrNull()?.let { (_, unlockedAt) ->
             val startMillis = parseIsoToMillis(unlockedAt)
-            if (startMillis != null) {
-                ((Clock.System.now().toEpochMilliseconds() - startMillis) / 86_400_000L).toInt()
-            } else null
+            if (startMillis != null) ((nowMillis - startMillis) / DAY_MS).toInt() else null
         } ?: -1
 
-        val timelinePoints = buildTimeline(sortedProgressions)
         val timelineJson = json.encodeToString(
-            ListSerializer(TimelinePointJson.serializer()), timelinePoints
+            ListSerializer(TimelinePointJson.serializer()),
+            buildTimeline(sortedProgressions)
         )
 
         return FriendStatsEntity(
             friendId = friendId,
             username = userData.username,
             level = userData.level,
-            burnedCount = burnedCount,
             reviewAccuracy = accuracy,
             avgDaysPerLevel = avgDaysPerLevel ?: -1f,
             daysSinceStart = daysSinceStart,
             levelTimelineJson = timelineJson,
-            fetchedAtMillis = Clock.System.now().toEpochMilliseconds()
+            fetchedAtMillis = nowMillis,
+            learnedToday = learnedCounts.today,
+            learnedWeek = learnedCounts.week,
+            learnedMonth = learnedCounts.month,
+            learnedYear = learnedCounts.year,
+            learnedAllTime = learnedAllTime,
+            burnedToday = burnedCounts.today,
+            burnedWeek = burnedCounts.week,
+            burnedMonth = burnedCounts.month,
+            burnedYear = burnedCounts.year,
+            burnedAllTime = burnedCounts.allTime,
+            totalReviews = totalReviews
         )
     }
 
     private fun buildSelfStats(
-        burnedCount: Int,
+        burnedTimestamps: List<String>,
+        startedTimestamps: List<String>,
         statistics: List<ReviewStatisticEntity>,
         progressions: List<LevelProgressionEntity>
     ): FriendStats {
+        val nowMillis = Clock.System.now().toEpochMilliseconds()
+
+        val burnedCounts = computeWindowedCounts(burnedTimestamps, nowMillis)
+        val learnedCounts = computeWindowedCounts(startedTimestamps, nowMillis)
+            .let { it.copy(allTime = statistics.size) }  // proxy: subjects with review history
+
         val totalCorrect = statistics.sumOf { it.meaningCorrect + it.readingCorrect }.toFloat()
         val totalAttempts = statistics.sumOf {
             it.meaningCorrect + it.meaningIncorrect + it.readingCorrect + it.readingIncorrect
-        }.toFloat()
-        val accuracy = if (totalAttempts > 0f) totalCorrect / totalAttempts else -1f
+        }
+        val accuracy = if (totalAttempts > 0) totalCorrect / totalAttempts else -1f
 
         val sortedProgressions = progressions
             .mapNotNull { p -> p.unlockedAt?.let { p.level to it } }
@@ -165,9 +235,7 @@ class FriendStatsRepository(
         val avgDays = computeAvgDaysPerLevel(sortedProgressions)
         val daysSinceStart = sortedProgressions.firstOrNull()?.let { (_, unlockedAt) ->
             val startMillis = parseIsoToMillis(unlockedAt)
-            if (startMillis != null) {
-                ((Clock.System.now().toEpochMilliseconds() - startMillis) / 86_400_000L).toInt()
-            } else null
+            if (startMillis != null) ((nowMillis - startMillis) / DAY_MS).toInt() else null
         }
         val timeline = buildTimeline(sortedProgressions)
             .map { LevelTimelinePoint(it.daysSinceStart, it.level) }
@@ -177,12 +245,26 @@ class FriendStatsRepository(
             nickname = "You",
             username = "",
             level = progressions.maxOfOrNull { it.level } ?: 0,
-            burnedCount = burnedCount,
             reviewAccuracy = accuracy,
             avgDaysPerLevel = avgDays,
             daysSinceStart = daysSinceStart,
             levelTimeline = timeline,
-            isCurrentUser = true
+            isCurrentUser = true,
+            learned = ActivityStats(
+                today = learnedCounts.today,
+                week = learnedCounts.week,
+                month = learnedCounts.month,
+                year = learnedCounts.year,
+                allTime = learnedCounts.allTime
+            ),
+            burned = ActivityStats(
+                today = burnedCounts.today,
+                week = burnedCounts.week,
+                month = burnedCounts.month,
+                year = burnedCounts.year,
+                allTime = burnedCounts.allTime
+            ),
+            totalReviews = totalAttempts
         )
     }
 
@@ -196,12 +278,26 @@ class FriendStatsRepository(
             nickname = nickname,
             username = username,
             level = level,
-            burnedCount = burnedCount,
             reviewAccuracy = reviewAccuracy,
             avgDaysPerLevel = if (avgDaysPerLevel < 0f) null else avgDaysPerLevel,
             daysSinceStart = if (daysSinceStart < 0) null else daysSinceStart,
             levelTimeline = timeline,
-            isCurrentUser = false
+            isCurrentUser = false,
+            learned = ActivityStats(
+                today = learnedToday,
+                week = learnedWeek,
+                month = learnedMonth,
+                year = learnedYear,
+                allTime = learnedAllTime
+            ),
+            burned = ActivityStats(
+                today = burnedToday,
+                week = burnedWeek,
+                month = burnedMonth,
+                year = burnedYear,
+                allTime = burnedAllTime
+            ),
+            totalReviews = totalReviews
         )
     }
 
@@ -209,7 +305,7 @@ class FriendStatsRepository(
         if (sortedProgressions.size < 2) return null
         val millis = sortedProgressions.mapNotNull { (_, ts) -> parseIsoToMillis(ts) }
         if (millis.size < 2) return null
-        val intervals = millis.zipWithNext().map { (a, b) -> (b - a).toFloat() / 86_400_000f }
+        val intervals = millis.zipWithNext().map { (a, b) -> (b - a).toFloat() / DAY_MS }
         return intervals.average().toFloat()
     }
 
@@ -218,7 +314,7 @@ class FriendStatsRepository(
         val startMillis = parseIsoToMillis(sortedProgressions.first().second) ?: return emptyList()
         return sortedProgressions.mapNotNull { (level, ts) ->
             val ms = parseIsoToMillis(ts) ?: return@mapNotNull null
-            TimelinePointJson(daysSinceStart = ((ms - startMillis) / 86_400_000L).toInt(), level = level)
+            TimelinePointJson(daysSinceStart = ((ms - startMillis) / DAY_MS).toInt(), level = level)
         }
     }
 

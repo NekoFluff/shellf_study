@@ -36,4 +36,7 @@ interface ReviewStatisticDao {
 
     @Query("SELECT * FROM review_statistics")
     fun observeAll(): Flow<List<ReviewStatisticEntity>>
+
+    @Query("SELECT COALESCE(SUM(meaningCorrect + meaningIncorrect + readingCorrect + readingIncorrect), 0) FROM review_statistics")
+    fun observeTotalReviewsCount(): Flow<Int>
 }

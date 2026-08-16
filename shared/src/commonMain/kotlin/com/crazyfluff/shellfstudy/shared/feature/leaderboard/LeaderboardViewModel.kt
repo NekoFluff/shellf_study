@@ -8,6 +8,7 @@ import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.safeApiCall
 import com.crazyfluff.shellfstudy.shared.network.createFriendWaniKaniApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,7 +30,8 @@ data class LeaderboardUiState(
     val addFriendToken: String = "",
     val addFriendValidating: Boolean = false,
     val addFriendError: String? = null,
-    val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEVEL
+    val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
+    val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK
 )
 
 private data class FormState(
@@ -38,7 +40,8 @@ private data class FormState(
     val addFriendToken: String = "",
     val addFriendValidating: Boolean = false,
     val addFriendError: String? = null,
-    val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEVEL
+    val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
+    val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK
 )
 
 class LeaderboardViewModel(
@@ -51,7 +54,9 @@ class LeaderboardViewModel(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val leaderboardFlow = _formState
-        .flatMapLatest { form -> friendStatsRepository.observeLeaderboard(form.selectedMetric) }
+        .flatMapLatest { form ->
+            friendStatsRepository.observeLeaderboard(form.selectedMetric, form.selectedWindow)
+        }
 
     val uiState: StateFlow<LeaderboardUiState> = combine(
         _formState,
@@ -66,7 +71,8 @@ class LeaderboardViewModel(
             addFriendToken = form.addFriendToken,
             addFriendValidating = form.addFriendValidating,
             addFriendError = form.addFriendError,
-            selectedMetric = form.selectedMetric
+            selectedMetric = form.selectedMetric,
+            selectedWindow = form.selectedWindow
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LeaderboardUiState())
 
@@ -84,6 +90,10 @@ class LeaderboardViewModel(
 
     fun onMetricChange(metric: LeaderboardMetric) {
         _formState.update { it.copy(selectedMetric = metric) }
+    }
+
+    fun onWindowChange(window: LeaderboardWindow) {
+        _formState.update { it.copy(selectedWindow = window) }
     }
 
     fun onAddFriendNicknameChange(value: String) {

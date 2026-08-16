@@ -72,6 +72,7 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.HeadToHeadSheet
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
@@ -149,7 +150,8 @@ fun DashboardRoute(
         searchUiState = searchUiState,
         onSearchQueryChange = searchViewModel::onQueryChange,
         onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
-        onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange
+        onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange,
+        onLeaderboardWindowChange = viewModel::onLeaderboardWindowChange
     )
 }
 
@@ -168,7 +170,8 @@ fun DashboardScreen(
     searchUiState: SearchUiState = SearchUiState(),
     onSearchQueryChange: (String) -> Unit = {},
     onLevelProgressLevelChange: (Int) -> Unit = {},
-    onLeaderboardMetricChange: (LeaderboardMetric) -> Unit = {}
+    onLeaderboardMetricChange: (LeaderboardMetric) -> Unit = {},
+    onLeaderboardWindowChange: (LeaderboardWindow) -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -388,8 +391,11 @@ fun DashboardScreen(
                                     leaderboard = uiState.leaderboard,
                                     isLoading = uiState.leaderboardLoading,
                                     onMetricChange = onLeaderboardMetricChange,
+                                    onWindowChange = onLeaderboardWindowChange,
                                     onFriendTap = { headToHeadFriend = it },
                                     onSeeAll = onOpenLeaderboard,
+                                    selectedMetric = uiState.selectedMetric,
+                                    selectedWindow = uiState.selectedWindow,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))

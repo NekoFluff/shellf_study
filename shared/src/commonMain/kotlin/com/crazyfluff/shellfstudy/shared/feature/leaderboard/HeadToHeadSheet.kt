@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
 import kotlin.math.PI
 import kotlin.math.cos
@@ -71,21 +72,22 @@ fun HeadToHeadSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Win/loss chips per axis
+            // Win/loss chips per axis — use ALL_TIME window for the head-to-head comparison
             val axes = LeaderboardMetric.entries
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 axes.forEach { metric ->
-                    val (selfVal, friendVal) = normalizedValues(self, friend, metric)
+                    val (selfVal, friendVal) = normalizedValues(self, friend, metric, LeaderboardWindow.ALL_TIME)
                     val outcome = when {
                         selfVal > friendVal + 0.05f -> "You're ahead"
                         friendVal > selfVal + 0.05f -> "${friend.nickname} leads"
                         else -> "Tied"
                     }
                     val label = when (metric) {
+                        LeaderboardMetric.LEARNED -> "Learned"
+                        LeaderboardMetric.REVIEWS -> "Reviews"
                         LeaderboardMetric.LEVEL -> "Level"
                         LeaderboardMetric.BURNED -> "Burned"
                         LeaderboardMetric.ACCURACY -> "Accuracy"
-                        LeaderboardMetric.SPEED -> "Speed"
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -158,24 +160,11 @@ private fun RadarChart(
             drawLine(gridColor, Offset(cx, cy), outer, strokeWidth = 1.dp.toPx())
         }
 
-        fun drawPolygon(stats: FriendStats, fillColor: Color, strokeColor: Color) {
-            val path = Path()
-            axes.forEachIndexed { i, metric ->
-                val (v, _) = normalizedValues(stats, stats, metric)
-                val r = radius * v
-                val pt = axisOffset(i, r)
-                if (i == 0) path.moveTo(pt.x, pt.y) else path.lineTo(pt.x, pt.y)
-            }
-            path.close()
-            drawPath(path, fillColor, style = Fill)
-            drawPath(path, strokeColor, style = Stroke(width = 2.dp.toPx()))
-        }
-
-        // For self polygon: normalize self vs friend pair
+        // Self/friend polygons — normalized against each other per axis
         val selfPath = Path()
         val friendPath = Path()
         axes.forEachIndexed { i, metric ->
-            val (selfV, friendV) = normalizedValues(self, friend, metric)
+            val (selfV, friendV) = normalizedValues(self, friend, metric, LeaderboardWindow.ALL_TIME)
             val sr = radius * selfV
             val fr = radius * friendV
             val spt = axisOffset(i, sr)
@@ -192,30 +181,38 @@ private fun RadarChart(
     }
 }
 
-private fun normalizedValues(self: FriendStats, friend: FriendStats, metric: LeaderboardMetric): Pair<Float, Float> {
-    return when (metric) {
-        LeaderboardMetric.LEVEL -> {
-            val max = maxOf(self.level, friend.level, 1).toFloat()
-            (self.level / max) to (friend.level / max)
-        }
-        LeaderboardMetric.BURNED -> {
-            val max = maxOf(self.burnedCount, friend.burnedCount, 1).toFloat()
-            (self.burnedCount / max) to (friend.burnedCount / max)
-        }
-        LeaderboardMetric.ACCURACY -> {
-            val sv = self.reviewAccuracy.coerceAtLeast(0f)
-            val fv = friend.reviewAccuracy.coerceAtLeast(0f)
-            val max = maxOf(sv, fv, 0.01f)
-            (sv / max) to (fv / max)
-        }
-        LeaderboardMetric.SPEED -> {
-            // Lower avgDaysPerLevel is better — invert the normalization
-            val sv = self.avgDaysPerLevel ?: 0f
-            val fv = friend.avgDaysPerLevel ?: 0f
-            if (sv <= 0f && fv <= 0f) return 0.5f to 0.5f
-            val max = maxOf(sv, fv, 0.01f)
-            // Higher ratio = slower = worse, so invert: score = 1 - (val / max)
-            (1f - sv / max) to (1f - fv / max)
-        }
+private fun normalizedValues(
+    self: FriendStats,
+    friend: FriendStats,
+    metric: LeaderboardMetric,
+    window: LeaderboardWindow
+): Pair<Float, Float> = when (metric) {
+    LeaderboardMetric.LEARNED -> {
+        val sv = self.learned.forWindow(window).toFloat()
+        val fv = friend.learned.forWindow(window).toFloat()
+        val max = maxOf(sv, fv, 1f)
+        (sv / max) to (fv / max)
+    }
+    LeaderboardMetric.REVIEWS -> {
+        val sv = self.totalReviews.toFloat()
+        val fv = friend.totalReviews.toFloat()
+        val max = maxOf(sv, fv, 1f)
+        (sv / max) to (fv / max)
+    }
+    LeaderboardMetric.LEVEL -> {
+        val max = maxOf(self.level, friend.level, 1).toFloat()
+        (self.level / max) to (friend.level / max)
+    }
+    LeaderboardMetric.BURNED -> {
+        val sv = self.burned.forWindow(window).toFloat()
+        val fv = friend.burned.forWindow(window).toFloat()
+        val max = maxOf(sv, fv, 1f)
+        (sv / max) to (fv / max)
+    }
+    LeaderboardMetric.ACCURACY -> {
+        val sv = self.reviewAccuracy.coerceAtLeast(0f)
+        val fv = friend.reviewAccuracy.coerceAtLeast(0f)
+        val max = maxOf(sv, fv, 0.01f)
+        (sv / max) to (fv / max)
     }
 }
