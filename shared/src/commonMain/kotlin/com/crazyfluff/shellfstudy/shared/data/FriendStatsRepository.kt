@@ -44,7 +44,19 @@ private const val MONTH_MS = 30 * DAY_MS
 private const val YEAR_MS = 365 * DAY_MS
 
 @Serializable
-private data class TimelinePointJson(val daysSinceStart: Int, val level: Int)
+internal data class TimelinePointJson(val daysSinceStart: Int, val level: Int)
+
+internal fun buildTimeline(sortedProgressions: List<Pair<Int, String>>): List<TimelinePointJson> {
+    if (sortedProgressions.isEmpty()) return emptyList()
+    val startMillis = parseIsoToMillis(sortedProgressions.first().second) ?: return emptyList()
+    return sortedProgressions.mapNotNull { (level, ts) ->
+        val ms = parseIsoToMillis(ts) ?: return@mapNotNull null
+        TimelinePointJson(daysSinceStart = ((ms - startMillis) / DAY_MS).toInt(), level = level)
+    }
+}
+
+private fun parseIsoToMillis(iso: String): Long? =
+    runCatching { Instant.parse(iso).toEpochMilliseconds() }.getOrNull()
 
 internal data class WindowedCounts(val today: Int, val week: Int, val month: Int, val year: Int, val allTime: Int)
 
@@ -375,15 +387,4 @@ class FriendStatsRepository(
         return intervals.average().toFloat()
     }
 
-    private fun buildTimeline(sortedProgressions: List<Pair<Int, String>>): List<TimelinePointJson> {
-        if (sortedProgressions.isEmpty()) return emptyList()
-        val startMillis = parseIsoToMillis(sortedProgressions.first().second) ?: return emptyList()
-        return sortedProgressions.mapNotNull { (level, ts) ->
-            val ms = parseIsoToMillis(ts) ?: return@mapNotNull null
-            TimelinePointJson(daysSinceStart = ((ms - startMillis) / DAY_MS).toInt(), level = level)
-        }
-    }
-
-    private fun parseIsoToMillis(iso: String): Long? =
-        runCatching { Instant.parse(iso).toEpochMilliseconds() }.getOrNull()
 }
