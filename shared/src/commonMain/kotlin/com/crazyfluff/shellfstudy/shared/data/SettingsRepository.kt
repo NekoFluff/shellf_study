@@ -23,7 +23,8 @@ data class AppSettings(
     val showSubjectTypeLabel: Boolean = false,
     val showTotalTimer: Boolean = false,
     val showQuestionTimer: Boolean = false,
-    val showStrokeOrder: Boolean = true
+    val showStrokeOrder: Boolean = true,
+    val useJapaneseKeyboard: Boolean = false
 )
 
 data class NotificationSettings(
@@ -50,6 +51,7 @@ class SettingsRepository(
     private val showTotalTimerKey = booleanPreferencesKey("show_total_timer")
     private val showQuestionTimerKey = booleanPreferencesKey("show_question_timer")
     private val showStrokeOrderKey = booleanPreferencesKey("show_stroke_order")
+    private val useJapaneseKeyboardKey = booleanPreferencesKey("use_japanese_keyboard")
 
     private val notificationsEnabledKey = booleanPreferencesKey("notifications_enabled")
     private val reviewsAvailableEnabledKey = booleanPreferencesKey("notif_reviews_available_enabled")
@@ -80,7 +82,8 @@ class SettingsRepository(
             showSubjectTypeLabel = prefs[showSubjectTypeLabelKey] ?: false,
             showTotalTimer = prefs[showTotalTimerKey] ?: false,
             showQuestionTimer = prefs[showQuestionTimerKey] ?: false,
-            showStrokeOrder = prefs[showStrokeOrderKey] ?: true
+            showStrokeOrder = prefs[showStrokeOrderKey] ?: true,
+            useJapaneseKeyboard = prefs[useJapaneseKeyboardKey] ?: false
         )
     }.distinctUntilChanged()
 
@@ -133,6 +136,10 @@ class SettingsRepository(
 
     suspend fun setShowStrokeOrder(enabled: Boolean) {
         dataStore.edit { it[showStrokeOrderKey] = enabled }
+    }
+
+    suspend fun setUseJapaneseKeyboard(enabled: Boolean) {
+        dataStore.edit { it[useJapaneseKeyboardKey] = enabled }
     }
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {

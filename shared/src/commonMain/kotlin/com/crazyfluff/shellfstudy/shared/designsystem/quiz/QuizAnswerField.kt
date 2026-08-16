@@ -21,6 +21,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.IntOffset
 import com.crazyfluff.shellfstudy.shared.designsystem.text.RomajiVisualTransformation
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
@@ -41,6 +43,7 @@ fun QuizAnswerField(
     answerFieldTestTag: String,
     typeMismatchTextTestTag: String,
     focusResetKey: Any?,
+    useJapaneseKeyboard: Boolean = false,
     modifier: Modifier = Modifier,
     trailingIcon: (@Composable () -> Unit)? = null
 ) {
@@ -71,7 +74,7 @@ fun QuizAnswerField(
         label = { Text("答え") },
         singleLine = true,
         enabled = !isAnswered,
-        visualTransformation = if (questionType == QuestionType.READING) {
+        visualTransformation = if (!useJapaneseKeyboard && questionType == QuestionType.READING) {
             RomajiVisualTransformation(isComplete = isAnswered)
         } else {
             VisualTransformation.None
@@ -86,7 +89,12 @@ fun QuizAnswerField(
                 )
             }
         } else null,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardOptions = KeyboardOptions(
+            imeAction = ImeAction.Done,
+            hintLocales = if (useJapaneseKeyboard) {
+                LocaleList(Locale(if (questionType == QuestionType.READING) "ja" else "en"))
+            } else null
+        ),
         keyboardActions = KeyboardActions(onDone = { if (!isAnswered) onSubmit() }),
         modifier = modifier
             .fillMaxWidth()

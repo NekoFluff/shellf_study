@@ -37,6 +37,7 @@ class SettingsScreenTest {
         onShowSubjectTypeLabelChange: (Boolean) -> Unit = {},
         onShowTotalTimerChange: (Boolean) -> Unit = {},
         onShowQuestionTimerChange: (Boolean) -> Unit = {},
+        onUseJapaneseKeyboardChange: (Boolean) -> Unit = {},
         onNotificationsEnabledChange: (Boolean) -> Unit = {},
         onReviewsAvailableEnabledChange: (Boolean) -> Unit = {},
         onReviewsBacklogEnabledChange: (Boolean) -> Unit = {},
@@ -61,6 +62,7 @@ class SettingsScreenTest {
                 onShowTotalTimerChange = onShowTotalTimerChange,
                 onShowQuestionTimerChange = onShowQuestionTimerChange,
                 onShowStrokeOrderChange = {},
+                onUseJapaneseKeyboardChange = onUseJapaneseKeyboardChange,
                 onNotificationsEnabledChange = onNotificationsEnabledChange,
                 onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
                 onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
@@ -200,6 +202,18 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_QUESTION_TIMER_TOGGLE).performScrollTo().performClick()
         assert(showTimer == true)
+    }
+
+    @Test
+    fun togglingUseJapaneseKeyboardSwitch_invokesCallback() {
+        var useJapaneseKeyboard: Boolean? = null
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, useJapaneseKeyboard = false),
+            onUseJapaneseKeyboardChange = { useJapaneseKeyboard = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.JAPANESE_KEYBOARD_TOGGLE).performScrollTo().performClick()
+        assert(useJapaneseKeyboard == true)
     }
 
     @Test

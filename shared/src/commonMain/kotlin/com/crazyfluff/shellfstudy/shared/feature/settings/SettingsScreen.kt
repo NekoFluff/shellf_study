@@ -70,6 +70,7 @@ object SettingsScreenTestTags {
     const val SHOW_TOTAL_TIMER_TOGGLE = "settings_show_total_timer_toggle"
     const val SHOW_QUESTION_TIMER_TOGGLE = "settings_show_question_timer_toggle"
     const val STROKE_ORDER_TOGGLE = "settings_stroke_order_toggle"
+    const val JAPANESE_KEYBOARD_TOGGLE = "settings_use_japanese_keyboard_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
     const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
     const val REVIEWS_BACKLOG_TOGGLE = "settings_reviews_backlog_toggle"
@@ -116,6 +117,7 @@ fun SettingsRoute(
         onShowTotalTimerChange = viewModel::onShowTotalTimerChange,
         onShowQuestionTimerChange = viewModel::onShowQuestionTimerChange,
         onShowStrokeOrderChange = viewModel::onShowStrokeOrderChange,
+        onUseJapaneseKeyboardChange = viewModel::onUseJapaneseKeyboardChange,
         onNotificationsEnabledChange = { enabled ->
             if (enabled) requestNotificationPermission() else viewModel.onNotificationsEnabledChange(false)
         },
@@ -146,6 +148,7 @@ fun SettingsScreen(
     onShowTotalTimerChange: (Boolean) -> Unit,
     onShowQuestionTimerChange: (Boolean) -> Unit,
     onShowStrokeOrderChange: (Boolean) -> Unit,
+    onUseJapaneseKeyboardChange: (Boolean) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onReviewsAvailableEnabledChange: (Boolean) -> Unit,
     onReviewsBacklogEnabledChange: (Boolean) -> Unit,
@@ -296,6 +299,13 @@ fun SettingsScreen(
                     checked = uiState.showQuestionTimer,
                     onCheckedChange = onShowQuestionTimerChange,
                     testTag = SettingsScreenTestTags.SHOW_QUESTION_TIMER_TOGGLE
+                )
+                ToggleRow(
+                    label = "Use system keyboard for reading",
+                    description = "Disables the built-in romaji converter and sends a Japanese locale hint to your keyboard, so Gboard and similar apps switch language automatically between meaning and reading questions.",
+                    checked = uiState.useJapaneseKeyboard,
+                    onCheckedChange = onUseJapaneseKeyboardChange,
+                    testTag = SettingsScreenTestTags.JAPANESE_KEYBOARD_TOGGLE
                 )
             }
 

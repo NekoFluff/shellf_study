@@ -62,6 +62,7 @@ data class ReviewUiState(
     val showSubjectTypeLabel: Boolean = false,
     val showTotalTimer: Boolean = false,
     val showQuestionTimer: Boolean = false,
+    val useJapaneseKeyboard: Boolean = false,
     // Active time accumulated before the current viewing segment, and (while non-null) when that
     // segment began — see PausableElapsedTimeText and ReviewViewModel's activeElapsedMs /
     // activeSegmentStartMs, which these mirror exactly. Segment goes null while the session isn't
@@ -135,7 +136,8 @@ class ReviewViewModel(
                     it.copy(
                         showSubjectTypeLabel = settings.showSubjectTypeLabel,
                         showTotalTimer = settings.showTotalTimer,
-                        showQuestionTimer = settings.showQuestionTimer
+                        showQuestionTimer = settings.showQuestionTimer,
+                        useJapaneseKeyboard = settings.useJapaneseKeyboard
                     )
                 }
             }

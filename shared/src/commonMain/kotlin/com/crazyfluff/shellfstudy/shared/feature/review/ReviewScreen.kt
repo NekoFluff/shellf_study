@@ -567,6 +567,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             // item/questionType, so the field's focus-restoring effect wouldn't otherwise refire and
             // the user would be left tapped-out of the field they just asked to retry.
             focusResetKey = Triple(item.assignmentId, questionType, uiState.undoCounter),
+            useJapaneseKeyboard = uiState.useJapaneseKeyboard,
             trailingIcon = if (feedbackForField != null) {
                 {
                     IconButton(

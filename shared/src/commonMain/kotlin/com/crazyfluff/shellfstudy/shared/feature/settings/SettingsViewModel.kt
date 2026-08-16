@@ -25,6 +25,7 @@ data class SettingsUiState(
     val showTotalTimer: Boolean = false,
     val showQuestionTimer: Boolean = false,
     val showStrokeOrder: Boolean = true,
+    val useJapaneseKeyboard: Boolean = false,
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
@@ -63,6 +64,7 @@ class SettingsViewModel(
             showTotalTimer = app.showTotalTimer,
             showQuestionTimer = app.showQuestionTimer,
             showStrokeOrder = app.showStrokeOrder,
+            useJapaneseKeyboard = app.useJapaneseKeyboard,
             notificationsEnabled = notif.notificationsEnabled,
             reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
             reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
@@ -111,6 +113,10 @@ class SettingsViewModel(
 
     fun onShowStrokeOrderChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setShowStrokeOrder(enabled) }
+    }
+
+    fun onUseJapaneseKeyboardChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setUseJapaneseKeyboard(enabled) }
     }
 
     /**

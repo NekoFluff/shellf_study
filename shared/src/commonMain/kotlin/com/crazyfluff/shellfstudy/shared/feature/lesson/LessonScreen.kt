@@ -1084,7 +1084,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             onSubmit = onSubmit,
             answerFieldTestTag = LessonScreenTestTags.ANSWER_FIELD,
             typeMismatchTextTestTag = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
-            focusResetKey = item.assignmentId to questionType
+            focusResetKey = item.assignmentId to questionType,
+            useJapaneseKeyboard = uiState.useJapaneseKeyboard
         )
 
         Spacer(modifier = Modifier.height(16.dp))
