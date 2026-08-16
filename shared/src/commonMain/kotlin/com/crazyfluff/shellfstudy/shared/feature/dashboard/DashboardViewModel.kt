@@ -301,10 +301,7 @@ class DashboardViewModel(
 
         if (userResult is ApiResult.Error) {
             if (userResult.isAuthError) {
-                tokenRepository.clearToken()
-                syncScheduler.cancelPeriodicSync()
-                pitchAccentScrapeScheduler.cancelPeriodicScrape()
-                notificationCoordinator.onLogout()
+                performLogout()
                 _dashboardData.update { it.copy(isRefreshing = false, isLoggedOut = true) }
             } else if (hasContent) {
                 _dashboardData.update { it.copy(isRefreshing = false, isOffline = true) }
@@ -360,10 +357,7 @@ class DashboardViewModel(
             val (userResult, summaryResult) = fetchUserAndSummary()
 
             if (userResult is ApiResult.Error && userResult.isAuthError) {
-                tokenRepository.clearToken()
-                syncScheduler.cancelPeriodicSync()
-                pitchAccentScrapeScheduler.cancelPeriodicScrape()
-                notificationCoordinator.onLogout()
+                performLogout()
                 _dashboardData.update { it.copy(isLoggedOut = true) }
                 return@launch
             }
@@ -406,12 +400,16 @@ class DashboardViewModel(
         return userResult to summaryResult
     }
 
+    private suspend fun performLogout() {
+        tokenRepository.clearToken()
+        syncScheduler.cancelPeriodicSync()
+        pitchAccentScrapeScheduler.cancelPeriodicScrape()
+        notificationCoordinator.onLogout()
+    }
+
     fun logOut() {
         viewModelScope.launch {
-            tokenRepository.clearToken()
-            syncScheduler.cancelPeriodicSync()
-            pitchAccentScrapeScheduler.cancelPeriodicScrape()
-            notificationCoordinator.onLogout()
+            performLogout()
             _dashboardData.update { it.copy(isLoggedOut = true) }
         }
     }

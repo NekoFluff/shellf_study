@@ -16,8 +16,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,93 +37,75 @@ data class LeaderboardUiState(
     val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK
 )
 
-private data class FormState(
-    val isRefreshing: Boolean = false,
-    val addFriendNickname: String = "",
-    val addFriendToken: String = "",
-    val addFriendValidating: Boolean = false,
-    val addFriendError: String? = null,
-    val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
-    val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK
-)
-
 class LeaderboardViewModel(
     private val friendRepository: FriendRepository,
     private val friendStatsRepository: FriendStatsRepository,
     private val json: Json
 ) : ViewModel() {
 
-    private val _formState = MutableStateFlow(FormState())
+    private val _uiState = MutableStateFlow(LeaderboardUiState())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val leaderboardFlow = _formState
-        .flatMapLatest { form ->
-            friendStatsRepository.observeLeaderboard(form.selectedMetric, form.selectedWindow)
+    private val leaderboardFlow = _uiState
+        .map { it.selectedMetric to it.selectedWindow }
+        .distinctUntilChanged()
+        .flatMapLatest { (metric, window) ->
+            friendStatsRepository.observeLeaderboard(metric, window)
         }
 
     val uiState: StateFlow<LeaderboardUiState> = combine(
-        _formState,
+        _uiState,
         friendRepository.friendsFlow,
         leaderboardFlow
-    ) { form, friends, leaderboard ->
-        LeaderboardUiState(
-            leaderboard = leaderboard,
-            friends = friends,
-            isRefreshing = form.isRefreshing,
-            addFriendNickname = form.addFriendNickname,
-            addFriendToken = form.addFriendToken,
-            addFriendValidating = form.addFriendValidating,
-            addFriendError = form.addFriendError,
-            selectedMetric = form.selectedMetric,
-            selectedWindow = form.selectedWindow
-        )
+    ) { state, friends, leaderboard ->
+        state.copy(leaderboard = leaderboard, friends = friends)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LeaderboardUiState())
 
     fun onRefresh() {
         viewModelScope.launch {
-            _formState.update { it.copy(isRefreshing = true) }
+            _uiState.update { it.copy(isRefreshing = true) }
             val entries = friendRepository.friendsFlow.first()
             entries.forEach { entry -> friendStatsRepository.refreshFriend(entry) }
-            _formState.update { it.copy(isRefreshing = false) }
+            _uiState.update { it.copy(isRefreshing = false) }
         }
     }
 
     fun onMetricChange(metric: LeaderboardMetric) {
-        _formState.update { it.copy(selectedMetric = metric) }
+        _uiState.update { it.copy(selectedMetric = metric) }
     }
 
     fun onWindowChange(window: LeaderboardWindow) {
-        _formState.update { it.copy(selectedWindow = window) }
+        _uiState.update { it.copy(selectedWindow = window) }
     }
 
     fun onAddFriendNicknameChange(value: String) {
-        _formState.update { it.copy(addFriendNickname = value, addFriendError = null) }
+        _uiState.update { it.copy(addFriendNickname = value, addFriendError = null) }
     }
 
     fun onAddFriendTokenChange(value: String) {
-        _formState.update { it.copy(addFriendToken = value, addFriendError = null) }
+        _uiState.update { it.copy(addFriendToken = value, addFriendError = null) }
     }
 
     fun onAddFriendConfirm() {
-        val nickname = _formState.value.addFriendNickname.trim()
-        val token = _formState.value.addFriendToken.trim()
+        val nickname = _uiState.value.addFriendNickname.trim()
+        val token = _uiState.value.addFriendToken.trim()
         if (nickname.isBlank()) {
-            _formState.update { it.copy(addFriendError = "Please enter a nickname.") }
+            _uiState.update { it.copy(addFriendError = "Please enter a nickname.") }
             return
         }
         if (token.isBlank()) {
-            _formState.update { it.copy(addFriendError = "Please enter an API token.") }
+            _uiState.update { it.copy(addFriendError = "Please enter an API token.") }
             return
         }
         viewModelScope.launch {
-            _formState.update { it.copy(addFriendValidating = true, addFriendError = null) }
+            _uiState.update { it.copy(addFriendValidating = true, addFriendError = null) }
             val api = createFriendWaniKaniApi(token, json)
             val result = safeApiCall { api.getUser() }
             when (result) {
                 is ApiResult.Success -> {
                     val entry = friendRepository.addFriend(nickname, token)
                     friendStatsRepository.refreshFriend(entry)
-                    _formState.update {
+                    _uiState.update {
                         it.copy(
                             addFriendValidating = false,
                             addFriendNickname = "",
@@ -131,7 +115,7 @@ class LeaderboardViewModel(
                     }
                 }
                 is ApiResult.Error -> {
-                    _formState.update {
+                    _uiState.update {
                         it.copy(addFriendValidating = false, addFriendError = result.message)
                     }
                 }
