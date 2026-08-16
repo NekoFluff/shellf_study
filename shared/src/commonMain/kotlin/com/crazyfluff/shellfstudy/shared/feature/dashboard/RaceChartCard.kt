@@ -105,12 +105,38 @@ private fun buildActivityBars(
                 ActivityBar(labels[gi], entries.map { buckets(it).monthDays.slice(range).sum() })
             }
         }
-        LeaderboardWindow.YEAR, LeaderboardWindow.ALL_TIME -> {
+        LeaderboardWindow.YEAR -> {
             val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(TimeZone.currentSystemDefault())
             val nowTotalMonths = nowDt.year * 12 + (nowDt.monthNumber - 1)
             (0..11).map { i ->
                 val targetMonth = (nowTotalMonths - (11 - i)) % 12
                 ActivityBar(MONTH_ABBREVS[targetMonth], entries.map { buckets(it).yearMonths.getOrElse(i) { 0 } })
+            }
+        }
+        LeaderboardWindow.ALL_TIME -> {
+            val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(TimeZone.currentSystemDefault())
+            val nowTotalMonths = nowDt.year * 12 + (nowDt.monthNumber - 1)
+            // Align all users by right-edge (last index = current month); pad shorter histories on the left
+            val allTimeBuckets = entries.map { buckets(it).allTimeMonths }
+            val maxLen = allTimeBuckets.maxOfOrNull { it.size }.takeIf { it != null && it > 0 }
+                ?: 12  // fall back to yearMonths if allTimeMonths not yet populated
+            if (maxLen <= 12 && allTimeBuckets.all { it.isEmpty() }) {
+                // Old cached data — fall back to yearMonths
+                val fallbackNow = nowDt
+                val fallbackNowTotal = fallbackNow.year * 12 + (fallbackNow.monthNumber - 1)
+                return (0..11).map { i ->
+                    val targetMonth = (fallbackNowTotal - (11 - i)) % 12
+                    ActivityBar(MONTH_ABBREVS[targetMonth], entries.map { buckets(it).yearMonths.getOrElse(i) { 0 } })
+                }
+            }
+            val aligned = allTimeBuckets.map { b ->
+                List(maxLen - b.size) { 0 } + b
+            }
+            (0 until maxLen).map { i ->
+                val monthsAgo = maxLen - 1 - i
+                val totalMonths = nowTotalMonths - monthsAgo
+                val label = "${MONTH_ABBREVS[totalMonths % 12]} '${(totalMonths / 12 % 100).toString().padStart(2, '0')}"
+                ActivityBar(label, aligned.map { it[i] })
             }
         }
     }
@@ -189,7 +215,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
     }
     val timeRange = (nowMillis - globalMinMs).coerceAtLeast(1L)
 
-    var selectedX by remember { mutableStateOf<Float?>(null) }
+    var selectedX by remember(leaderboard.window) { mutableStateOf<Float?>(null) }
 
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -361,7 +387,7 @@ private fun ActivityWindowChart(
     val maxVal = cumulativeSeries.flatten().maxOrNull()?.coerceAtLeast(1) ?: 1
     val numPoints = bars.size
 
-    var selectedIdx by remember { mutableStateOf<Int?>(null) }
+    var selectedIdx by remember(leaderboard.window) { mutableStateOf<Int?>(null) }
     var canvasW by remember { mutableStateOf(0f) }
     val yLabelWPx = with(LocalDensity.current) { 36.dp.toPx() }
 
@@ -406,8 +432,10 @@ private fun ActivityWindowChart(
 
                 // X-axis labels — evenly distributed, edge-anchored
                 val labelIndices = when (leaderboard.window) {
-                    LeaderboardWindow.YEAR, LeaderboardWindow.ALL_TIME ->
+                    LeaderboardWindow.YEAR ->
                         listOf(0, 4, 8, numPoints - 1)
+                    LeaderboardWindow.ALL_TIME ->
+                        List(4) { i -> (i.toFloat() / 3f * (numPoints - 1)).roundToInt() }.distinct()
                     else -> (0 until numPoints).toList()
                 }
                 labelIndices.forEach { bi ->
