@@ -25,16 +25,12 @@ import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SegmentedBar
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.srsStageColor
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
-import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 object ItemSpreadTestTags {
     const val CARD = "item_spread_card"
     const val BAR = "item_spread_bar"
     const val EMPTY_STATE = "item_spread_empty_state"
-    fun typeBar(bucket: ItemSpreadBucket) = "item_spread_type_bar_${bucket.name.lowercase()}"
 }
 
 private data class SpreadSegment(val bucket: ItemSpreadBucket, val label: String, val count: Int, val color: Color)
@@ -68,7 +64,7 @@ fun ItemSpreadCard(spread: ItemSpread?, modifier: Modifier = Modifier) {
             } else {
                 val total = spread?.totalCount ?: 0
                 segments.filter { it.count > 0 }.forEach { segment ->
-                    StatRow(segment, total = total, countsByType = spread?.countsByType?.get(segment.bucket).orEmpty())
+                    StatRow(segment, total = total)
                 }
             }
         }
@@ -84,35 +80,12 @@ private fun ItemSpreadBar(segments: List<SpreadSegment>) {
     )
 }
 
-/** A stage's composition by subject type (Radical/Kanji/Vocabulary), same visual language as
- *  [ItemSpreadBar] but thinner, sitting under that stage's legend row. */
 @Composable
-private fun TypeMiniBar(bucket: ItemSpreadBucket, countsByType: Map<SubjectType, Int>, modifier: Modifier = Modifier) {
-    val typeSegments = listOf(SubjectType.RADICAL, SubjectType.KANJI, SubjectType.VOCABULARY)
-        .map { type -> subjectColor(type) to (countsByType[type] ?: 0) }
-    SegmentedBar(
-        segments = typeSegments,
-        modifier = modifier.testTag(ItemSpreadTestTags.typeBar(bucket)),
-        height = 6.dp
-    )
-}
-
-@Composable
-private fun StatRow(segment: SpreadSegment, total: Int, countsByType: Map<SubjectType, Int>) {
+private fun StatRow(segment: SpreadSegment, total: Int) {
     val percent = if (total > 0) segment.count * 100 / total else 0
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(segment.color))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "${segment.label}: ${segment.count} ($percent%)", style = MaterialTheme.typography.bodySmall)
-        }
-        if (segment.count > 0) {
-            Spacer(modifier = Modifier.height(2.dp))
-            TypeMiniBar(
-                bucket = segment.bucket,
-                countsByType = countsByType,
-                modifier = Modifier.padding(start = 18.dp)
-            )
-        }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+        Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(segment.color))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = "${segment.label}: ${segment.count} ($percent%)", style = MaterialTheme.typography.bodySmall)
     }
 }
