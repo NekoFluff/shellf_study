@@ -220,7 +220,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
-                    .pointerInput(Unit) {
+                    .pointerInput(leaderboard.window) {
                         detectTapGestures { offset ->
                             val prev = selectedX
                             selectedX = if (prev != null && kotlin.math.abs(offset.x - prev) < 20.dp.toPx()) null else offset.x
@@ -353,7 +353,7 @@ private fun ActivityWindowChart(
         LeaderboardWindow.WEEK -> "Cumulative — last 7 days"
         LeaderboardWindow.MONTH -> "Cumulative — last 4 weeks"
         LeaderboardWindow.YEAR -> "Cumulative — last 12 months"
-        LeaderboardWindow.ALL_TIME -> "Cumulative — last 12 months"
+        LeaderboardWindow.ALL_TIME -> "Cumulative — all time"
     }
 
     val palette = leaderboardUserPalette()
