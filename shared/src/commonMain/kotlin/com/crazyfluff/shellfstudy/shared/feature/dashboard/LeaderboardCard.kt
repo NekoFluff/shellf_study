@@ -20,6 +20,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -101,9 +102,18 @@ fun LeaderboardCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 metrics.forEach { metric ->
+                    val selected = metric == selectedMetric
                     FilterChip(
-                        selected = metric == selectedMetric,
+                        selected = selected,
                         onClick = { onMetricChange(metric) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        border = if (selected) null else FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = false
+                        ),
                         label = {
                             Text(
                                 text = when (metric) {

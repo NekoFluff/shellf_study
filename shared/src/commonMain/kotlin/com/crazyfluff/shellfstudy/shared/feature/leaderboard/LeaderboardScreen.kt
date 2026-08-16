@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.feature.leaderboard
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,18 +9,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,10 +43,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
 import org.koin.compose.viewmodel.koinViewModel
+
+private val avatarPalette = listOf(
+    SubjectTypeColors.Kanji,
+    SubjectTypeColors.Radical,
+    SubjectTypeColors.Vocabulary,
+    Color(0xFFE65100),
+    Color(0xFF00695C),
+    Color(0xFF1565C0)
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,35 +119,33 @@ fun LeaderboardScreen(
             modifier = Modifier.padding(paddingValues)
         ) {
             if (uiState.friends.isEmpty()) {
-                Box(
+                EmptyFriendsState(
+                    onAddFriend = { showAddFriendDialog = true },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp
+                    )
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    item {
                         Text(
-                            text = "No friends yet",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Tap + to add a friend's read-only API token.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "${uiState.friends.size} ${if (uiState.friends.size == 1) "friend" else "friends"}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
                         )
                     }
-                }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(bottom = 80.dp)
-                ) {
-                    uiState.friends.forEachIndexed { index, friend ->
-                        if (index > 0) HorizontalDivider()
-                        FriendManagementRow(
+                    itemsIndexed(uiState.friends) { index, friend ->
+                        FriendCard(
                             friend = friend,
-                            onDelete = { friendToDelete = friend }
+                            avatarColor = avatarPalette[index % avatarPalette.size],
+                            onDelete = { friendToDelete = friend },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
                         )
                     }
                 }
@@ -166,29 +184,94 @@ fun LeaderboardScreen(
 }
 
 @Composable
-private fun FriendManagementRow(
+private fun EmptyFriendsState(
+    onAddFriend: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Group,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "No friends yet",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Add a friend using their WaniKani read-only API token to compare progress on the leaderboard.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(Modifier.height(24.dp))
+            FilledTonalButton(onClick = onAddFriend) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Add a friend")
+            }
+        }
+    }
+}
+
+@Composable
+private fun FriendCard(
     friend: FriendEntry,
+    avatarColor: Color,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
+    Card(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(avatarColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = (friend.nickname.firstOrNull() ?: '?').uppercaseChar().toString(),
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.width(14.dp))
             Text(
                 text = friend.nickname,
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
             )
-        }
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = "Remove ${friend.nickname}",
-                tint = MaterialTheme.colorScheme.error
-            )
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Remove ${friend.nickname}",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -239,7 +322,7 @@ private fun AddFriendDialog(
         confirmButton = {
             TextButton(onClick = onConfirm, enabled = !isValidating) {
                 if (isValidating) {
-                    CircularProgressIndicator(modifier = Modifier.height(16.dp).width(16.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp))
                 } else {
                     Text("Validate & Add")
                 }
