@@ -413,7 +413,7 @@ class ReviewViewModel(
     }
 
     private fun isFullyDone(item: ReviewItem, progress: ItemProgress): Boolean {
-        val requiresReading = item.subjectType != SubjectType.RADICAL
+        val requiresReading = item.subjectType != SubjectType.RADICAL && item.subjectType != SubjectType.KANA_VOCABULARY
         return progress.meaningDone && (!requiresReading || progress.readingDone)
     }
 

@@ -51,7 +51,7 @@ fun CompletionProjectionCard(projection: CompletionProjection?, modifier: Modifi
     if (projection == null) return
     Card(modifier = modifier.fillMaxWidth().testTag(CompletionProjectionTestTags.CARD)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Completion Time", style = MaterialTheme.typography.titleMedium)
+            Text(text = "Completion Date", style = MaterialTheme.typography.titleMedium)
 
             if (projection.itemsRemaining <= 0) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {

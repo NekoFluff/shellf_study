@@ -30,12 +30,14 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.WkResourceItem
 import com.crazyfluff.shellfstudy.shared.network.collectAllPages
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -270,36 +272,52 @@ class AssignmentRepository(
         assignmentDao.observeBySubjectId(subjectId).map { assignment -> assignment?.let { SrsStage.fromRaw(it.srsStage) } }
 
     fun observeReviewForecast(hours: Int = 24): Flow<ReviewForecast> {
-        val now = Clock.System.now()
-        val nowIso = now.toString()
+        // Re-subscribe to the DAO at every hour boundary. The DAO query parameters (nowIso) are
+        // baked in at subscription time — Room re-fires the query on table writes but can't update
+        // the `availableAt <= :nowIso` predicate itself. Without re-subscribing, reviews that
+        // become available when the clock hour rolls over stay stuck in "upcoming" instead of
+        // moving to "available now", even though the review count (fetched from the API) updates
+        // correctly. The ticker fires immediately on first collection, then sleeps to the next
+        // hour boundary (+5 s buffer) so the re-subscription cost is minimal.
         // WaniKani assignments only ever become available on the hour, so buckets are aligned to
         // clock-hour boundaries (not rolling 1h windows from `now`) — otherwise a bucket labeled
         // e.g. "3 PM" would actually span 2:47-3:47, and the label would read an hour behind the
         // reviews it describes.
-        val currentHourStart = now.truncatedToHour()
-        return combine(
-            assignmentDao.observeDueForReview(nowIso),
-            assignmentDao.observeUpcoming(nowIso)
-        ) { availableNow, upcoming ->
-            val buckets = (1..hours).map { hourOffset ->
-                val bucketStart = currentHourStart + hourOffset.hours
-                val bucketEnd = bucketStart + 1.hours
-                val inBucket = upcoming.filter { assignment ->
-                    val availableAt = assignment.availableAt?.let(Instant::parse) ?: return@filter false
-                    availableAt >= bucketStart && availableAt < bucketEnd
+        val hourBoundaryTicker = flow<Unit> {
+            while (true) {
+                emit(Unit)
+                val secondsIntoHour = Clock.System.now().epochSeconds % 3600
+                delay((3600 - secondsIntoHour + 5L) * 1000L)
+            }
+        }
+        return hourBoundaryTicker.flatMapLatest {
+            val now = Clock.System.now()
+            val nowIso = now.toString()
+            val currentHourStart = now.truncatedToHour()
+            combine(
+                assignmentDao.observeDueForReview(nowIso),
+                assignmentDao.observeUpcoming(nowIso)
+            ) { availableNow, upcoming ->
+                val buckets = (1..hours).map { hourOffset ->
+                    val bucketStart = currentHourStart + hourOffset.hours
+                    val bucketEnd = bucketStart + 1.hours
+                    val inBucket = upcoming.filter { assignment ->
+                        val availableAt = assignment.availableAt?.let(Instant::parse) ?: return@filter false
+                        availableAt >= bucketStart && availableAt < bucketEnd
+                    }
+                    ReviewForecastBucket(
+                        hoursFromNow = hourOffset,
+                        availableAt = bucketStart,
+                        newlyAvailableCount = inBucket.size,
+                        countsByType = inBucket.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
+                    )
                 }
-                ReviewForecastBucket(
-                    hoursFromNow = hourOffset,
-                    availableAt = bucketStart,
-                    newlyAvailableCount = inBucket.size,
-                    countsByType = inBucket.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
+                ReviewForecast(
+                    reviewsAvailableNow = availableNow.size,
+                    buckets = buckets,
+                    availableNowCountsByType = availableNow.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
                 )
             }
-            ReviewForecast(
-                reviewsAvailableNow = availableNow.size,
-                buckets = buckets,
-                availableNowCountsByType = availableNow.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
-            )
         }.flowOn(Dispatchers.Default)
         // Room's InvalidationTracker re-fires observeDueForReview/observeUpcoming on ANY write to
         // the assignments table, anywhere in the app — not just ones this forecast cares about.

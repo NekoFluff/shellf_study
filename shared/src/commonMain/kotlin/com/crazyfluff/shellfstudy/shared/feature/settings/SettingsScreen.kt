@@ -403,7 +403,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Default.Group, contentDescription = null)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Manage friends & leaderboard", style = MaterialTheme.typography.bodyLarge)
+                    Text("Manage friends", style = MaterialTheme.typography.bodyLarge)
                 }
             }
 

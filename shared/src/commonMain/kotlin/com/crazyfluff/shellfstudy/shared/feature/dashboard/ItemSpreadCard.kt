@@ -25,6 +25,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SegmentedBar
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.srsStageColor
 
 object ItemSpreadTestTags {
@@ -48,7 +49,7 @@ fun ItemSpreadCard(spread: ItemSpread?, modifier: Modifier = Modifier) {
                 SpreadSegment(ItemSpreadBucket.GURU, "Guru", spread?.guruCount ?: 0, srsStageColor(SrsStage.GURU_1)),
                 SpreadSegment(ItemSpreadBucket.MASTER, "Master", spread?.masterCount ?: 0, srsStageColor(SrsStage.MASTER)),
                 SpreadSegment(ItemSpreadBucket.ENLIGHTENED, "Enlightened", spread?.enlightenedCount ?: 0, srsStageColor(SrsStage.ENLIGHTENED)),
-                SpreadSegment(ItemSpreadBucket.BURNED, "Burned", spread?.burnedCount ?: 0, srsStageColor(SrsStage.BURNED))
+                SpreadSegment(ItemSpreadBucket.BURNED, "Burned", spread?.burnedCount ?: 0, SrsStageColors.Burned)
             )
 
             ItemSpreadBar(segments)

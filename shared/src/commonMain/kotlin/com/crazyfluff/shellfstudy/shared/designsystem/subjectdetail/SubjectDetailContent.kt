@@ -98,11 +98,19 @@ fun SubjectDetailContent(
                 subjectType = detail.subjectType,
                 size = 80.dp
             )
-            Text(
-                text = "Level ${detail.level} · ${subjectTypeLabel(detail.subjectType)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Level ${detail.level} · ${subjectTypeLabel(detail.subjectType)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (srsStage != null) {
+                    SrsStageChip(srsStage)
+                }
+            }
             if (isVocabulary && detail.partsOfSpeech.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     detail.partsOfSpeech.forEach { part ->
@@ -250,13 +258,6 @@ fun SubjectDetailContent(
             onSubjectClick = onRelatedSubjectClick
         )
 
-        if (srsStage != null) {
-            HorizontalDivider()
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SectionEyebrow("Stats")
-                SrsStageChip(srsStage)
-            }
-        }
     }
 }
 
