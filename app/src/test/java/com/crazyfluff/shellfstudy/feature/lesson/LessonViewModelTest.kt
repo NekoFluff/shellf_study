@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import com.crazyfluff.shellfstudy.shared.data.PersistedLessonPhase
+import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPhase
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import androidx.datastore.core.DataStore
@@ -29,6 +31,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -1015,6 +1018,78 @@ class LessonViewModelTest {
             viewModel.submitAnswer()
             val correctState = awaitItem()
             assertThat(correctState.feedback?.isCorrect).isTrue()
+        }
+    }
+
+    @Test
+    fun `backgrounding after returning to a study-phase session preserves the study snapshot`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression: pauseActiveSegment() was calling persistCurrentState() (which always writes
+        // phase=QUIZ) even while the ViewModel was in STUDY phase. The foreground tracker fires
+        // resumeActiveSegment() unconditionally on any return to foreground, starting a segment even
+        // in STUDY phase; the next background event then hit the bad persist path. The study snapshot
+        // written by persistStudySnapshot was overwritten with an empty-queue QUIZ record, which
+        // resumeQuizPhase() read back as "lesson complete".
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            val studyState = awaitItem()
+            assertThat(studyState.phase).isEqualTo(LessonPhase.STUDY)
+
+            // Home button: no segment running yet in STUDY phase — pauseActiveSegment returns early
+            // with no state update. yield() lets the dispatcher run the foreground-tracker collector
+            // (which processes false) before the start event fires; without the yield the two are
+            // conflated and the collector only sees the net value (true → false → true = no change),
+            // so resumeActiveSegment is never called and there is nothing to test.
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            yield()
+            // Return: foreground tracker fires resumeActiveSegment() — starts a segment even
+            // though we're still in STUDY phase.
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+            awaitItem() // sessionActiveSegmentStartMs set
+            // Home button (or onCleared from Back) with a now-running segment: this is the
+            // path that used to corrupt the session by calling persistCurrentState().
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            awaitItem() // sessionActiveSegmentStartMs cleared
+        }
+
+        val persisted = lessonSessionRepository.load()
+        assertThat(persisted).isNotNull()
+        assertThat(persisted!!.phase).isEqualTo(PersistedLessonPhase.STUDY)
+    }
+
+    @Test
+    fun `resuming a stale empty-queue QUIZ snapshot clears it so the next visit starts fresh`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression: resumeQuizPhase() used to set isSessionComplete=true without clearing the
+        // persisted session when it found an empty quizQueue. The stale record stayed in DataStore,
+        // so every subsequent visit to the lesson screen also showed "Lesson complete!" — an
+        // infinite loop the user couldn't escape. A stale empty-queue QUIZ record is produced by
+        // (e.g.) the STUDY-phase corruption above, or by answering the last quiz question correctly
+        // and navigating away before tapping Continue.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        lessonSessionRepository.save(PersistedLessonSession(phase = PersistedLessonPhase.QUIZ))
+
+        // First visit: the stale session produces a (spurious) "lesson complete" screen once.
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.isSessionComplete).isTrue()
+        }
+        // Session must be cleared so the next visit doesn't also show "lesson complete".
+        assertThat(lessonSessionRepository.load()).isNull()
+
+        // Second visit: gets a fresh lesson load rather than another infinite "lesson complete".
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.isSessionComplete).isFalse()
+            assertThat(state.phase).isEqualTo(LessonPhase.SELECT)
         }
     }
 

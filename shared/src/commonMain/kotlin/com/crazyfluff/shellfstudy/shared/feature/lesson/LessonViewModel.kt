@@ -269,10 +269,12 @@ class LessonViewModel(
         questionShownAtMs = Clock.System.now().toEpochMilliseconds()
         totalQuizCount = persisted.totalQuizCount
         val next = quizQueue.current
-        // A persisted queue is only ever written mid-quiz (see advanceQuiz's completion branch,
-        // which clears it), so next == null here is an unreachable edge case in practice — handled
-        // defensively anyway, mirroring ReviewViewModel.resumeFromPersisted's equivalent.
+        // next == null when an empty-queue QUIZ snapshot landed in DataStore — e.g. a phase
+        // mismatch in persistCurrentState (STUDY phase + Home + Back), or the last correct answer
+        // was snapshotted before the user tapped Continue. Clear the stale session so the next
+        // visit starts fresh rather than looping on "lesson complete" indefinitely.
         val summary = if (next == null) sessionSummary() else null
+        if (next == null) applicationScope.runDurably { lessonSessionRepository.clear() }
         _uiState.update {
             it.copy(
                 isLoading = false,
@@ -650,6 +652,14 @@ class LessonViewModel(
         // The quiz-complete branch already cleared lessonSessionRepository once the session
         // finished — re-persisting here would resurrect a stale, empty-queue "active session".
         if (_uiState.value.isSessionComplete) return
+        // currentPersistSnapshot() always writes phase = QUIZ — only call it when actually in the
+        // quiz phase. In STUDY phase the correct snapshot is already persisted by
+        // persistStudySnapshot on every card change; calling persistCurrentState() here would
+        // overwrite it with an empty-queue QUIZ record that resumeQuizPhase() would misread as
+        // "session complete". The foreground tracker calls resumeActiveSegment() unconditionally
+        // on app-foreground, so a segment can be running even while in STUDY phase — without this
+        // guard, onCleared() after a Home+Back in STUDY phase writes the corrupt snapshot.
+        if (_uiState.value.phase != LessonPhase.QUIZ) return
         applicationScope.launch { persistCurrentState() }
     }
 
