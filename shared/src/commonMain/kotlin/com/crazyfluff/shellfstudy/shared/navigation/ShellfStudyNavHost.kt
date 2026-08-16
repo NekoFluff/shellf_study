@@ -11,6 +11,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthRoute
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardRoute
+import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardRoute
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonRoute
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewRoute
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsRoute
@@ -25,6 +26,7 @@ sealed interface ShellfStudyDestination {
     @Serializable data object Review : ShellfStudyDestination
     @Serializable data object Lesson : ShellfStudyDestination
     @Serializable data object Settings : ShellfStudyDestination
+    @Serializable data object Leaderboard : ShellfStudyDestination
 }
 
 @Composable
@@ -81,6 +83,7 @@ fun ShellfStudyNavHost(
                 onStartReview = { navController.navigateSafely(ShellfStudyDestination.Review) },
                 onStartLesson = { navController.navigateSafely(ShellfStudyDestination.Lesson) },
                 onOpenSettings = { navController.navigateSafely(ShellfStudyDestination.Settings) },
+                onOpenLeaderboard = { navController.navigateSafely(ShellfStudyDestination.Leaderboard) },
                 onLoggedOut = {
                     navController.navigateSafely(ShellfStudyDestination.Auth) {
                         popUpTo<ShellfStudyDestination.Dashboard> { inclusive = true }
@@ -103,7 +106,13 @@ fun ShellfStudyNavHost(
             )
         }
         composable<ShellfStudyDestination.Settings> {
-            SettingsRoute(onBack = { navController.popBackStackSafely() })
+            SettingsRoute(
+                onBack = { navController.popBackStackSafely() },
+                onOpenLeaderboard = { navController.navigateSafely(ShellfStudyDestination.Leaderboard) }
+            )
+        }
+        composable<ShellfStudyDestination.Leaderboard> {
+            LeaderboardRoute(onBack = { navController.popBackStackSafely() })
         }
     }
 }

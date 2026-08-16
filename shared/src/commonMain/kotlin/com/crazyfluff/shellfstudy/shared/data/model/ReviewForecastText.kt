@@ -13,13 +13,13 @@ fun reviewForecastSummary(forecast: ReviewForecast): String {
     val upcomingTotal = forecast.buckets.sumOf { it.newlyAvailableCount }
     return when {
         forecast.reviewsAvailableNow > 0 && upcomingTotal > 0 ->
-            "${forecast.reviewsAvailableNow} due now · $upcomingTotal more in the next 24h"
+            "${forecast.reviewsAvailableNow} due now · $upcomingTotal more in 24h"
         forecast.reviewsAvailableNow > 0 -> "${forecast.reviewsAvailableNow} due now"
         upcomingTotal > 0 -> {
             val next = forecast.buckets.first { it.newlyAvailableCount > 0 }
-            "Next up: ${next.newlyAvailableCount} at ${formatHourOfDay(next.availableAt)}"
+            "Next: ${next.newlyAvailableCount} at ${formatHourOfDay(next.availableAt)}"
         }
-        else -> "All caught up — nothing due in the next 24h"
+        else -> "All caught up"
     }
 }
 

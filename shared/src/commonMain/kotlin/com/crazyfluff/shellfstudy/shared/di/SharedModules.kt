@@ -3,6 +3,8 @@ package com.crazyfluff.shellfstudy.shared.di
 import com.crazyfluff.shellfstudy.shared.ThemeViewModel
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.shared.data.FriendRepository
+import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
@@ -18,6 +20,7 @@ import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
 import com.crazyfluff.shellfstudy.shared.data.strokeorder.CmpStrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthViewModel
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
+import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardViewModel
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
@@ -109,6 +112,17 @@ val repositoryModule = module {
     single { DashboardCacheRepository(get()) }
     single { LessonSessionRepository(dataStore = get(), json = get()) }
     single { ReviewSessionRepository(dataStore = get(), json = get()) }
+    single { FriendRepository(dataStore = get(), json = get(), tokenCipher = get()) }
+    single {
+        FriendStatsRepository(
+            friendRepository = get(),
+            friendStatsDao = get(),
+            json = get(),
+            selfAssignmentDao = get(),
+            selfReviewStatisticDao = get(),
+            selfLevelProgressionDao = get()
+        )
+    }
 
     single {
         PitchAccentRepository(
@@ -137,6 +151,7 @@ val viewModelModule = module {
     }
 
     viewModel { SearchViewModel(get()) }
+    viewModel { LeaderboardViewModel(get(), get(), get()) }
 
     viewModel {
         DashboardViewModel(
@@ -154,7 +169,8 @@ val viewModelModule = module {
             syncOrchestrator = get(),
             syncScheduler = get(),
             pitchAccentScrapeScheduler = get(),
-            notificationCoordinator = get()
+            notificationCoordinator = get(),
+            friendStatsRepository = get()
         )
     }
 

@@ -70,6 +70,9 @@ import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
+import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
+import com.crazyfluff.shellfstudy.shared.feature.leaderboard.HeadToHeadSheet
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
 
@@ -99,6 +102,7 @@ fun DashboardRoute(
     onStartReview: () -> Unit,
     onStartLesson: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenLeaderboard: () -> Unit,
     onLoggedOut: () -> Unit,
     pendingDestination: String? = null,
     onPendingDestinationConsumed: () -> Unit = {},
@@ -138,12 +142,14 @@ fun DashboardRoute(
         onStartReview = onStartReview,
         onStartLesson = onStartLesson,
         onOpenSettings = onOpenSettings,
+        onOpenLeaderboard = onOpenLeaderboard,
         onLogOut = viewModel::logOut,
         onAbandonReviewSession = viewModel::abandonReviewSession,
         onAbandonLessonSession = viewModel::abandonLessonSession,
         searchUiState = searchUiState,
         onSearchQueryChange = searchViewModel::onQueryChange,
-        onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange
+        onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
+        onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange
     )
 }
 
@@ -156,17 +162,20 @@ fun DashboardScreen(
     onLogOut: () -> Unit,
     onStartLesson: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onOpenLeaderboard: () -> Unit = {},
     onAbandonReviewSession: () -> Unit = {},
     onAbandonLessonSession: () -> Unit = {},
     searchUiState: SearchUiState = SearchUiState(),
     onSearchQueryChange: (String) -> Unit = {},
-    onLevelProgressLevelChange: (Int) -> Unit = {}
+    onLevelProgressLevelChange: (Int) -> Unit = {},
+    onLeaderboardMetricChange: (LeaderboardMetric) -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var showAbandonReviewConfirm by remember { mutableStateOf(false) }
     var showAbandonLessonConfirm by remember { mutableStateOf(false) }
     val detailSheetState = rememberSubjectDetailSheetState()
+    var headToHeadFriend by remember { mutableStateOf<FriendStats?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -372,6 +381,23 @@ fun DashboardScreen(
 
                             Spacer(modifier = Modifier.height(16.dp))
                             ItemSpreadCard(spread = uiState.itemSpread, modifier = Modifier.fillMaxWidth())
+
+                            if (uiState.leaderboard != null) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                LeaderboardCard(
+                                    leaderboard = uiState.leaderboard,
+                                    isLoading = uiState.leaderboardLoading,
+                                    onMetricChange = onLeaderboardMetricChange,
+                                    onFriendTap = { headToHeadFriend = it },
+                                    onSeeAll = onOpenLeaderboard,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                RaceChartCard(
+                                    leaderboard = uiState.leaderboard,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
                 }
@@ -410,6 +436,16 @@ fun DashboardScreen(
     }
 
     SubjectDetailSheetHost(detailSheetState)
+
+    val friend = headToHeadFriend
+    val self = uiState.leaderboard?.entries?.firstOrNull { it.isCurrentUser }
+    if (friend != null && self != null) {
+        HeadToHeadSheet(
+            friend = friend,
+            self = self,
+            onDismiss = { headToHeadFriend = null }
+        )
+    }
 }
 
 @Composable

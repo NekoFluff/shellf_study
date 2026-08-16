@@ -8,8 +8,11 @@ import com.crazyfluff.shellfstudy.shared.database.SrsStageTypeCount
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectTypeCount
+import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsDao
+import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /** In-memory stand-in for [SubjectDao] used by repository/ViewModel unit tests. */
@@ -127,5 +130,25 @@ class FakeAssignmentDao(
         map.values
             .filter { !it.hidden && it.subjectType == "kanji" && subjectLevelLookup(it.subjectId) == level }
             .map { KanjiLevelUpRow(it.srsStage) }
+    }
+
+    override fun observeBurnedCount(): Flow<Int> = assignments.map { map ->
+        map.values.count { !it.hidden && it.srsStage == 9 }
+    }
+}
+
+class FakeFriendStatsDao : FriendStatsDao {
+    private val entities = MutableStateFlow<Map<String, FriendStatsEntity>>(emptyMap())
+
+    override suspend fun upsert(entity: FriendStatsEntity) {
+        entities.value = entities.value + (entity.friendId to entity)
+    }
+
+    override suspend fun getById(id: String): FriendStatsEntity? = entities.value[id]
+
+    override fun observeAll(): Flow<List<FriendStatsEntity>> = entities.map { it.values.toList() }
+
+    override suspend fun deleteById(id: String) {
+        entities.value = entities.value - id
     }
 }

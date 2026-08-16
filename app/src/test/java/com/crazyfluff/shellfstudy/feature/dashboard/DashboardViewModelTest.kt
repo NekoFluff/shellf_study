@@ -23,14 +23,19 @@ import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
+import com.crazyfluff.shellfstudy.fakes.FakeFriendStatsDao
+import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
+import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
+import com.crazyfluff.shellfstudy.shared.data.FriendRepository
+import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -109,6 +114,16 @@ class DashboardViewModelTest {
     }
 
     private fun createViewModel(): DashboardViewModel {
+        val json = Json { ignoreUnknownKeys = true }
+        val friendRepository = FriendRepository(dataStore, json, FakeTokenCipher())
+        val friendStatsRepository = FriendStatsRepository(
+            friendRepository = friendRepository,
+            friendStatsDao = FakeFriendStatsDao(),
+            json = json,
+            selfAssignmentDao = repositories.assignmentDao,
+            selfReviewStatisticDao = FakeReviewStatisticDao(),
+            selfLevelProgressionDao = FakeLevelProgressionDao()
+        )
         val factory = viewModelFactory {
             initializer {
                 DashboardViewModel(
@@ -126,7 +141,8 @@ class DashboardViewModelTest {
                     syncOrchestrator = repositories.syncOrchestrator,
                     syncScheduler = syncScheduler,
                     pitchAccentScrapeScheduler = pitchAccentScrapeScheduler,
-                    notificationCoordinator = notificationCoordinator
+                    notificationCoordinator = notificationCoordinator,
+                    friendStatsRepository = friendStatsRepository
                 )
             }
         }

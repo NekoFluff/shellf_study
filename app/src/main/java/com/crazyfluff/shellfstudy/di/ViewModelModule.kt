@@ -6,6 +6,7 @@ import com.crazyfluff.shellfstudy.shared.feature.auth.AuthViewModel
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewViewModel
+import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsViewModel
 import com.crazyfluff.shellfstudy.shared.feature.splash.SplashViewModel
@@ -37,6 +38,7 @@ val viewModelModule = module {
     // registration to the requesting composable's own ViewModelStoreOwner rather than sharing one
     // app-wide instance.
     viewModel { SearchViewModel(get()) }
+    viewModel { LeaderboardViewModel(get(), get(), get()) }
 
     viewModel {
         DashboardViewModel(
@@ -54,7 +56,8 @@ val viewModelModule = module {
             syncOrchestrator = get(),
             syncScheduler = get(),
             pitchAccentScrapeScheduler = get(),
-            notificationCoordinator = get()
+            notificationCoordinator = get(),
+            friendStatsRepository = get()
         )
     }
 

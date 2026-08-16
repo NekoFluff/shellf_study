@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
@@ -18,6 +19,8 @@ import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
 import com.crazyfluff.shellfstudy.shared.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
+import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
@@ -68,7 +71,9 @@ data class DashboardUiState(
     val reviewForecast: ReviewForecast? = null,
     val levelProgress: LevelProgress? = null,
     val itemSpread: ItemSpread? = null,
-    val completionProjection: CompletionProjection? = null
+    val completionProjection: CompletionProjection? = null,
+    val leaderboard: Leaderboard? = null,
+    val leaderboardLoading: Boolean = false
 ) {
     val bannerState: DashboardBannerState
         get() = when {
@@ -143,12 +148,15 @@ class DashboardViewModel(
     private val syncOrchestrator: SyncOrchestrator,
     private val syncScheduler: SyncScheduler,
     private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,
-    private val notificationCoordinator: NotificationCoordinator
+    private val notificationCoordinator: NotificationCoordinator,
+    private val friendStatsRepository: FriendStatsRepository
 ) : ViewModel() {
 
     private val _dashboardData = MutableStateFlow(DashboardUiState())
     private val selectedProgressLevel = MutableStateFlow<Int?>(null)
     private val currentLevel: Flow<Int?> = _dashboardData.map { it.level }.distinctUntilChanged()
+    private val _selectedMetric = MutableStateFlow(LeaderboardMetric.LEVEL)
+    private val _leaderboardRefreshing = MutableStateFlow(false)
 
     private val sessionSyncState: Flow<SessionSyncState> = combine(
         reviewSessionRepository.hasActiveSession,
@@ -191,23 +199,33 @@ class DashboardViewModel(
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val leaderboardState: Flow<Pair<Leaderboard?, Boolean>> = combine(
+        _selectedMetric.flatMapLatest { metric -> friendStatsRepository.observeLeaderboard(metric) },
+        _leaderboardRefreshing
+    ) { leaderboard, refreshing -> leaderboard to refreshing }
+
     val uiState: StateFlow<DashboardUiState> = combine(
-        _dashboardData, sessionSyncState, progressStatsState, levelDependentState
-    ) { imperative, sessionSync, progress, levelDependent ->
-        imperative.copy(
-            hasActiveReviewSession = sessionSync.hasActiveReviewSession,
-            hasActiveLessonSession = sessionSync.hasActiveLessonSession,
-            pendingSyncCount = sessionSync.pendingSyncCount,
-            syncBlockedOnAuth = sessionSync.syncBlockedOnAuth,
-            dailyLessonGoal = sessionSync.dailyLessonGoal,
-            lessonsCompletedToday = progress.lessonsCompletedToday,
-            daysOnCurrentLevel = progress.daysOnCurrentLevel,
-            reviewForecast = progress.reviewForecast,
-            itemSpread = progress.itemSpread,
-            completionProjection = progress.completionProjection,
-            levelUpProgress = levelDependent.levelUpProgress,
-            levelProgress = levelDependent.levelProgress
-        )
+        combine(_dashboardData, sessionSyncState, progressStatsState, levelDependentState)
+        { imperative, sessionSync, progress, levelDependent ->
+            imperative.copy(
+                hasActiveReviewSession = sessionSync.hasActiveReviewSession,
+                hasActiveLessonSession = sessionSync.hasActiveLessonSession,
+                pendingSyncCount = sessionSync.pendingSyncCount,
+                syncBlockedOnAuth = sessionSync.syncBlockedOnAuth,
+                dailyLessonGoal = sessionSync.dailyLessonGoal,
+                lessonsCompletedToday = progress.lessonsCompletedToday,
+                daysOnCurrentLevel = progress.daysOnCurrentLevel,
+                reviewForecast = progress.reviewForecast,
+                itemSpread = progress.itemSpread,
+                completionProjection = progress.completionProjection,
+                levelUpProgress = levelDependent.levelUpProgress,
+                levelProgress = levelDependent.levelProgress
+            )
+        },
+        leaderboardState
+    ) { dashboardState, (leaderboard, leaderboardLoading) ->
+        dashboardState.copy(leaderboard = leaderboard, leaderboardLoading = leaderboardLoading)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
 
     private var hasCompletedInitialSync = false
@@ -220,6 +238,10 @@ class DashboardViewModel(
 
     fun onLevelProgressLevelChange(level: Int) {
         selectedProgressLevel.value = level.coerceAtLeast(1)
+    }
+
+    fun onLeaderboardMetricChange(metric: LeaderboardMetric) {
+        _selectedMetric.value = metric
     }
 
     private suspend fun seedFromCache() {
@@ -245,6 +267,13 @@ class DashboardViewModel(
 
     private suspend fun performForcedRefresh() {
         _dashboardData.update { it.copy(isRefreshing = true, errorMessage = null, isOffline = false) }
+
+        // Non-blocking: friend stats refresh runs in the background and doesn't gate the main UI.
+        viewModelScope.launch {
+            _leaderboardRefreshing.value = true
+            friendStatsRepository.refreshAllIfStale()
+            _leaderboardRefreshing.value = false
+        }
 
         syncOrchestrator.syncAll(force = true)
 

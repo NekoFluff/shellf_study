@@ -39,6 +39,11 @@ private fun HttpClientConfig<*>.installWaniKaniAuthHeaders(tokenProvider: AuthTo
     )
 }
 
+/** Creates a throw-away [WaniKaniApi] bound to a single fixed token — for friend stats fetches.
+ *  Do not cache; create fresh per fetch (each friend is fetched at most once per 30 minutes). */
+fun createFriendWaniKaniApi(token: String, json: Json = waniKaniJson()): WaniKaniApi =
+    WaniKaniApi(createWaniKaniHttpClient(tokenProvider = AuthTokenProvider { token }, json = json))
+
 /** Builds the [HttpClient] backing [WaniKaniApi]. Pass [engine] (e.g. a MockEngine) in tests. */
 fun createWaniKaniHttpClient(
     tokenProvider: AuthTokenProvider,

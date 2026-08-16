@@ -1,0 +1,79 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "b3b748cb0ab5ac0b7363a49480990d1f",
+    "entities": [
+      {
+        "tableName": "friend_stats",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`friendId` TEXT NOT NULL, `username` TEXT NOT NULL, `level` INTEGER NOT NULL, `burnedCount` INTEGER NOT NULL, `reviewAccuracy` REAL NOT NULL, `avgDaysPerLevel` REAL NOT NULL, `daysSinceStart` INTEGER NOT NULL, `levelTimelineJson` TEXT NOT NULL, `fetchedAtMillis` INTEGER NOT NULL, PRIMARY KEY(`friendId`))",
+        "fields": [
+          {
+            "fieldPath": "friendId",
+            "columnName": "friendId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "username",
+            "columnName": "username",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "burnedCount",
+            "columnName": "burnedCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reviewAccuracy",
+            "columnName": "reviewAccuracy",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "avgDaysPerLevel",
+            "columnName": "avgDaysPerLevel",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "daysSinceStart",
+            "columnName": "daysSinceStart",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "levelTimelineJson",
+            "columnName": "levelTimelineJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtMillis",
+            "columnName": "fetchedAtMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "friendId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b3b748cb0ab5ac0b7363a49480990d1f')"
+    ]
+  }
+}

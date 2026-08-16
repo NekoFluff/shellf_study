@@ -3,6 +3,9 @@ package com.crazyfluff.shellfstudy.core.database
 import com.crazyfluff.shellfstudy.shared.database.AppDatabase
 import com.crazyfluff.shellfstudy.shared.database.buildAppDatabase
 import com.crazyfluff.shellfstudy.shared.database.getAppDatabaseBuilder
+import com.crazyfluff.shellfstudy.shared.database.friends.FriendsDatabase
+import com.crazyfluff.shellfstudy.shared.database.friends.buildFriendsDatabase
+import com.crazyfluff.shellfstudy.shared.database.friends.getFriendsDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.buildOutboxDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.getOutboxDatabaseBuilder
@@ -41,4 +44,8 @@ val databaseModule = module {
     // destructive migration would force needless re-scraping, so this uses normal migrations.
     single { buildPitchAccentDatabase(getPitchAccentDatabaseBuilder(androidContext())) }
     single { get<PitchAccentDatabase>().pitchAccentCacheDao() }
+
+    // Pure cache — always re-fetchable from the WaniKani API.
+    single { buildFriendsDatabase(getFriendsDatabaseBuilder(androidContext())) }
+    single { get<FriendsDatabase>().friendStatsDao() }
 }

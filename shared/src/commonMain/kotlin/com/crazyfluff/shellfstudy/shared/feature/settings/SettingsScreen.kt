@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
@@ -94,6 +95,7 @@ object SettingsScreenTestTags {
 @Composable
 fun SettingsRoute(
     onBack: () -> Unit,
+    onOpenLeaderboard: () -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -124,6 +126,7 @@ fun SettingsRoute(
         onQuietHoursStartHourChange = viewModel::onQuietHoursStartHourChange,
         onQuietHoursEndHourChange = viewModel::onQuietHoursEndHourChange,
         onFullRefreshRequested = viewModel::onFullRefreshRequested,
+        onOpenLeaderboard = onOpenLeaderboard,
         onBack = onBack
     )
 }
@@ -150,6 +153,7 @@ fun SettingsScreen(
     onQuietHoursStartHourChange: (Int) -> Unit,
     onQuietHoursEndHourChange: (Int) -> Unit,
     onFullRefreshRequested: () -> Unit,
+    onOpenLeaderboard: () -> Unit = {},
     onBack: () -> Unit
 ) {
     var showFullRefreshConfirm by remember { mutableStateOf(false) }
@@ -378,6 +382,28 @@ fun SettingsScreen(
                             valueLabel = { formatHour(it) }
                         )
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            SectionCard(title = "Friends & Competition", icon = Icons.Default.Group) {
+                Text(
+                    text = "Add friends' read-only API tokens to compare progress on the dashboard.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenLeaderboard() }
+                        .padding(vertical = 8.dp)
+                ) {
+                    Icon(Icons.Default.Group, contentDescription = null)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Manage friends & leaderboard", style = MaterialTheme.typography.bodyLarge)
                 }
             }
 

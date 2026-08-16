@@ -12,6 +12,9 @@ import com.crazyfluff.shellfstudy.shared.data.getPreferencesDataStore
 import com.crazyfluff.shellfstudy.shared.database.AppDatabase
 import com.crazyfluff.shellfstudy.shared.database.buildAppDatabase
 import com.crazyfluff.shellfstudy.shared.database.getAppDatabaseBuilder
+import com.crazyfluff.shellfstudy.shared.database.friends.FriendsDatabase
+import com.crazyfluff.shellfstudy.shared.database.friends.buildFriendsDatabase
+import com.crazyfluff.shellfstudy.shared.database.friends.getFriendsDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.buildOutboxDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.getOutboxDatabaseBuilder
@@ -52,6 +55,9 @@ private val iosDatabaseModule = module {
 
     single { buildPitchAccentDatabase(getPitchAccentDatabaseBuilder()) }
     single { get<PitchAccentDatabase>().pitchAccentCacheDao() }
+
+    single { buildFriendsDatabase(getFriendsDatabaseBuilder()) }
+    single { get<FriendsDatabase>().friendStatsDao() }
 }
 
 private val iosDataStoreModule = module {

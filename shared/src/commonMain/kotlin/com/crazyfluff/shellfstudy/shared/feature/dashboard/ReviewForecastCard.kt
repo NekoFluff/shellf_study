@@ -30,6 +30,10 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -88,7 +92,7 @@ fun ReviewForecastCard(forecast: ReviewForecast?, modifier: Modifier = Modifier)
                 forecast == null -> ReviewForecastBarChart(forecast = null, selectedIndex = null, onSelect = {})
                 forecast.reviewsAvailableNow == 0 && forecast.buckets.all { it.newlyAvailableCount == 0 } -> {
                     Text(
-                        text = "All caught up — nothing due in the next 24 hours.",
+                        text = "All caught up.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.testTag(ReviewForecastTestTags.EMPTY_STATE)
@@ -112,15 +116,13 @@ private fun summaryText(forecast: ReviewForecast?, selectedIndex: Int?): String 
     if (forecast == null) return "Loading…"
     if (selectedIndex != null) {
         return if (selectedIndex == 0) {
-            "${forecast.reviewsAvailableNow} due right now"
+            "${forecast.reviewsAvailableNow} due now"
         } else {
             val bucket = forecast.buckets[selectedIndex - 1]
             val time = formatHourOfDay(bucket.availableAt)
-            // Cumulative — everything due by this point in time, not just what newly becomes
-            // available in this one hour's bucket — since "how many reviews would I have if I
-            // waited until X" is the more useful number to plan around.
+            val atHour = bucket.newlyAvailableCount
             val totalByThen = forecast.reviewsAvailableNow + forecast.buckets.take(selectedIndex).sumOf { it.newlyAvailableCount }
-            "$totalByThen total due by $time"
+            "$atHour at $time · $totalByThen total"
         }
     }
     return reviewForecastSummary(forecast)
@@ -150,6 +152,9 @@ private fun ReviewForecastBarChart(
     )
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val yLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+    val textMeasurer = rememberTextMeasurer()
+    val yLabelStyle = TextStyle(fontSize = 9.sp, color = yLabelColor)
 
     val counts: List<Int> = listOf(forecast?.reviewsAvailableNow ?: 0) +
         (forecast?.buckets?.map { it.newlyAvailableCount } ?: List(24) { 0 })
@@ -157,6 +162,14 @@ private fun ReviewForecastBarChart(
         (forecast?.buckets?.map { it.countsByType } ?: List(24) { emptyMap() })
     val maxCount = (counts.maxOrNull() ?: 0).coerceAtLeast(1)
     val barCount = counts.size
+
+    // Pre-measure all three Y-axis labels to determine how wide the label column needs to be.
+    val yFractions = listOf(0.25f, 0.5f, 0.75f)
+    val yMeasured = yFractions.map { fraction ->
+        textMeasurer.measure((maxCount * fraction).toInt().toString(), style = yLabelStyle)
+    }
+    val yLabelColumnWidth = yMeasured.maxOf { it.size.width }.toFloat()
+    val yLabelGap = 4.dp
 
     Canvas(
         modifier = Modifier
@@ -167,28 +180,36 @@ private fun ReviewForecastBarChart(
                 if (forecast != null) {
                     detectTapGestures { offset ->
                         val gap = 2.dp.toPx()
-                        val barWidth = (size.width - gap * (barCount - 1)) / barCount
+                        val barsWidth = size.width - yLabelColumnWidth - yLabelGap.toPx()
+                        val barWidth = (barsWidth - gap * (barCount - 1)) / barCount
                         val index = (offset.x / (barWidth + gap)).toInt().coerceIn(0, barCount - 1)
                         onSelect(index)
                     }
                 }
             }
     ) {
-        // A light baseline grid (25%/50%/75%) gives a visual reference for bar heights instead of
-        // leaving viewers to guess magnitude from bar height alone.
-        listOf(0.25f, 0.5f, 0.75f).forEach { fraction ->
+        val barsRight = size.width - yLabelColumnWidth - yLabelGap.toPx()
+
+        // Grid lines span only the bar area, stopping before the Y-axis label column.
+        yFractions.forEachIndexed { i, fraction ->
             val y = size.height * (1 - fraction)
-            drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
+            drawLine(gridColor, Offset(0f, y), Offset(barsRight, y), strokeWidth = 1.dp.toPx())
+
+            // Y-axis label, vertically centered on its grid line.
+            val measured = yMeasured[i]
+            val labelX = size.width - measured.size.width.toFloat()
+            val labelY = y - measured.size.height / 2f
+            drawText(measured, topLeft = Offset(labelX, labelY))
         }
 
         val gap = 2.dp.toPx()
-        val barWidth = (size.width - gap * (barCount - 1)) / barCount
+        val barWidth = (barsRight - gap * (barCount - 1)) / barCount
         counts.forEachIndexed { index, count ->
             val barHeight = if (forecast == null) 4.dp.toPx() else (size.height * (count.toFloat() / maxCount)).coerceAtLeast(2f)
             val x = index * (barWidth + gap)
             val isDimmed = selectedIndex != null && selectedIndex != index
-            // Full strength for "now" (index 0), a lighter tint for future bars — same distinction
-            // the old single-hue bars made — dimmed further still once another bar is selected.
+            // Full strength for "now" (index 0), a lighter tint for future bars — dimmed further
+            // still once another bar is selected.
             val alpha = when {
                 isDimmed -> 0.2f
                 index == 0 -> 1f
