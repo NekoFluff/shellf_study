@@ -987,16 +987,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
         (uiState.totalQuizCount - uiState.remainingQuizCount).toFloat() / uiState.totalQuizCount
     val accentColor = subjectColor(item.subjectType)
 
-    if (uiState.showTotalTimer) {
-        PausableElapsedTimeText(
-            baseElapsedMs = uiState.sessionActiveElapsedMs,
-            segmentStartMs = uiState.sessionActiveSegmentStartMs,
-            style = MaterialTheme.typography.labelMedium.copy(textAlign = TextAlign.End),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp)
-                .testTag(LessonScreenTestTags.TOTAL_TIMER_TEXT)
-        )
-    }
     LinearProgressIndicator(
         progress = { progress },
         modifier = Modifier.fillMaxWidth(),
@@ -1013,23 +1003,41 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.testTag(LessonScreenTestTags.QUIZ_PROGRESS_COUNT)
         )
-        if (uiState.showQuestionTimer) {
-            val questionElapsedMs = uiState.questionElapsedMs
-            val questionStartTimeMs = uiState.questionStartTimeMs
-            if (questionElapsedMs != null) {
-                // Frozen at the instant the question was answered, matching the elapsedMs recorded
-                // for the slowest-answers summary, rather than continuing to tick through feedback.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (uiState.showQuestionTimer) {
+                val questionElapsedMs = uiState.questionElapsedMs
+                val questionStartTimeMs = uiState.questionStartTimeMs
+                if (questionElapsedMs != null) {
+                    // Frozen at the instant the question was answered, matching the elapsedMs recorded
+                    // for the slowest-answers summary, rather than continuing to tick through feedback.
+                    Text(
+                        text = formatElapsedClock(questionElapsedMs),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag(LessonScreenTestTags.QUESTION_TIMER_TEXT)
+                    )
+                } else if (questionStartTimeMs != null) {
+                    ElapsedTimeText(
+                        startTimeMs = questionStartTimeMs,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag(LessonScreenTestTags.QUESTION_TIMER_TEXT)
+                    )
+                }
+            }
+            if (uiState.showQuestionTimer && uiState.showTotalTimer) {
                 Text(
-                    text = formatElapsedClock(questionElapsedMs),
+                    text = " / ",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (uiState.showTotalTimer) {
+                PausableElapsedTimeText(
+                    baseElapsedMs = uiState.sessionActiveElapsedMs,
+                    segmentStartMs = uiState.sessionActiveSegmentStartMs,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(LessonScreenTestTags.QUESTION_TIMER_TEXT)
-                )
-            } else if (questionStartTimeMs != null) {
-                ElapsedTimeText(
-                    startTimeMs = questionStartTimeMs,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(LessonScreenTestTags.QUESTION_TIMER_TEXT)
+                    modifier = Modifier.testTag(LessonScreenTestTags.TOTAL_TIMER_TEXT)
                 )
             }
         }

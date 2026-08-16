@@ -55,7 +55,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -409,16 +408,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
         (uiState.totalCount - uiState.remainingCount).toFloat() / uiState.totalCount
     val accentColor = subjectColor(item.subjectType)
 
-    if (uiState.showTotalTimer) {
-        PausableElapsedTimeText(
-            baseElapsedMs = uiState.sessionActiveElapsedMs,
-            segmentStartMs = uiState.sessionActiveSegmentStartMs,
-            style = MaterialTheme.typography.labelMedium.copy(textAlign = TextAlign.End),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp)
-                .testTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT)
-        )
-    }
     LinearProgressIndicator(
         progress = { progress },
         modifier = Modifier.fillMaxWidth(),
@@ -435,23 +424,41 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.testTag(ReviewScreenTestTags.PROGRESS_COUNT)
         )
-        if (uiState.showQuestionTimer) {
-            val questionElapsedMs = uiState.questionElapsedMs
-            val questionStartTimeMs = uiState.questionStartTimeMs
-            if (questionElapsedMs != null) {
-                // Frozen at the instant the question was answered, matching the elapsedMs recorded
-                // for the slowest-answers summary, rather than continuing to tick through feedback.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (uiState.showQuestionTimer) {
+                val questionElapsedMs = uiState.questionElapsedMs
+                val questionStartTimeMs = uiState.questionStartTimeMs
+                if (questionElapsedMs != null) {
+                    // Frozen at the instant the question was answered, matching the elapsedMs recorded
+                    // for the slowest-answers summary, rather than continuing to tick through feedback.
+                    Text(
+                        text = formatElapsedClock(questionElapsedMs),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT)
+                    )
+                } else if (questionStartTimeMs != null) {
+                    ElapsedTimeText(
+                        startTimeMs = questionStartTimeMs,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT)
+                    )
+                }
+            }
+            if (uiState.showQuestionTimer && uiState.showTotalTimer) {
                 Text(
-                    text = formatElapsedClock(questionElapsedMs),
+                    text = " / ",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (uiState.showTotalTimer) {
+                PausableElapsedTimeText(
+                    baseElapsedMs = uiState.sessionActiveElapsedMs,
+                    segmentStartMs = uiState.sessionActiveSegmentStartMs,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT)
-                )
-            } else if (questionStartTimeMs != null) {
-                ElapsedTimeText(
-                    startTimeMs = questionStartTimeMs,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT)
+                    modifier = Modifier.testTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT)
                 )
             }
         }

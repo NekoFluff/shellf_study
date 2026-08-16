@@ -66,6 +66,7 @@ fun SubjectDetailContent(
     onPlayReading: ((String) -> Unit)? = null,
     strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
     autoPlayStrokeOrder: Boolean = true,
+    showStrokeOrder: Boolean = true,
     srsStage: SrsStage? = null
 ) {
     val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.MEANING)
@@ -119,8 +120,10 @@ fun SubjectDetailContent(
                 }
             }
         }
-        StrokeOrderSection(strokeOrder, autoPlay = autoPlayStrokeOrder)
-        WritingPracticeSection(strokeOrder = strokeOrder, resetKey = detail.subjectId)
+        if (showStrokeOrder) {
+            StrokeOrderSection(strokeOrder, autoPlay = autoPlayStrokeOrder)
+            WritingPracticeSection(strokeOrder = strokeOrder, resetKey = detail.subjectId)
+        }
 
         RelatedSubjectsSection(
             title = componentsLabel(detail.subjectType),

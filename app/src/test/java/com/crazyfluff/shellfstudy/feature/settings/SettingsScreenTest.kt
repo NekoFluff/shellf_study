@@ -60,6 +60,7 @@ class SettingsScreenTest {
                 onShowSubjectTypeLabelChange = onShowSubjectTypeLabelChange,
                 onShowTotalTimerChange = onShowTotalTimerChange,
                 onShowQuestionTimerChange = onShowQuestionTimerChange,
+                onShowStrokeOrderChange = {},
                 onNotificationsEnabledChange = onNotificationsEnabledChange,
                 onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
                 onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
@@ -161,7 +162,7 @@ class SettingsScreenTest {
             onRestrictAudioToMp3Change = { restrictToMp3 = it }
         )
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE).performScrollTo().performClick()
         assert(restrictToMp3 == true)
     }
 

@@ -49,6 +49,10 @@ class FakeReviewStatisticDao : ReviewStatisticDao {
         statistics.value.values.firstOrNull { it.subjectId == subjectId }
 
     override fun observeAll(): Flow<List<ReviewStatisticEntity>> = statistics.map { it.values.toList() }
+
+    override fun observeTotalReviewsCount(): Flow<Int> = statistics.map { map ->
+        map.values.sumOf { it.meaningCorrect + it.meaningIncorrect + it.readingCorrect + it.readingIncorrect }
+    }
 }
 
 class FakeStudyMaterialDao : StudyMaterialDao {

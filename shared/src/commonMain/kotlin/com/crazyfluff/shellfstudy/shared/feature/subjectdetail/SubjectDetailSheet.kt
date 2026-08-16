@@ -294,6 +294,7 @@ private fun ColumnScope.SubjectDetailBody(
             onPlayReading = viewModel::playReading,
             strokeOrder = uiState.strokeOrder,
             autoPlayStrokeOrder = autoPlayStrokeOrder,
+            showStrokeOrder = uiState.showStrokeOrder,
             srsStage = uiState.srsStage
         )
     }

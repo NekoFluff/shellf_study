@@ -69,6 +69,7 @@ object SettingsScreenTestTags {
     const val SHOW_SUBJECT_TYPE_LABEL_TOGGLE = "settings_show_subject_type_label_toggle"
     const val SHOW_TOTAL_TIMER_TOGGLE = "settings_show_total_timer_toggle"
     const val SHOW_QUESTION_TIMER_TOGGLE = "settings_show_question_timer_toggle"
+    const val STROKE_ORDER_TOGGLE = "settings_stroke_order_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
     const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
     const val REVIEWS_BACKLOG_TOGGLE = "settings_reviews_backlog_toggle"
@@ -114,6 +115,7 @@ fun SettingsRoute(
         onShowSubjectTypeLabelChange = viewModel::onShowSubjectTypeLabelChange,
         onShowTotalTimerChange = viewModel::onShowTotalTimerChange,
         onShowQuestionTimerChange = viewModel::onShowQuestionTimerChange,
+        onShowStrokeOrderChange = viewModel::onShowStrokeOrderChange,
         onNotificationsEnabledChange = { enabled ->
             if (enabled) requestNotificationPermission() else viewModel.onNotificationsEnabledChange(false)
         },
@@ -143,6 +145,7 @@ fun SettingsScreen(
     onShowSubjectTypeLabelChange: (Boolean) -> Unit,
     onShowTotalTimerChange: (Boolean) -> Unit,
     onShowQuestionTimerChange: (Boolean) -> Unit,
+    onShowStrokeOrderChange: (Boolean) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onReviewsAvailableEnabledChange: (Boolean) -> Unit,
     onReviewsBacklogEnabledChange: (Boolean) -> Unit,
@@ -246,6 +249,13 @@ fun SettingsScreen(
                     checked = uiState.showPitchAccent,
                     onCheckedChange = onShowPitchAccentChange,
                     testTag = SettingsScreenTestTags.PITCH_ACCENT_TOGGLE
+                )
+                ToggleRow(
+                    label = "Show stroke order",
+                    description = "Displays the animated stroke order diagram and writing practice canvas for kanji in the subject detail panel.",
+                    checked = uiState.showStrokeOrder,
+                    onCheckedChange = onShowStrokeOrderChange,
+                    testTag = SettingsScreenTestTags.STROKE_ORDER_TOGGLE
                 )
                 ToggleRow(
                     label = "Auto-play pronunciation audio",

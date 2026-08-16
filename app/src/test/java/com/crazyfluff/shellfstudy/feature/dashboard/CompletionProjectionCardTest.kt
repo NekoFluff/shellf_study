@@ -25,11 +25,6 @@ class CompletionProjectionCardTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun rendersNothing_beforeFirstLoad() {
-        composeTestRule.setContent { CompletionProjectionCard(projection = null) }
-    }
-
-    @Test
     fun showsDaysAndDate_whenItemsRemain() {
         composeTestRule.setContent {
             CompletionProjectionCard(

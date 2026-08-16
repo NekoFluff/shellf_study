@@ -135,6 +135,14 @@ class FakeAssignmentDao(
     override fun observeBurnedCount(): Flow<Int> = assignments.map { map ->
         map.values.count { !it.hidden && it.srsStage == 9 }
     }
+
+    override fun observeAllStartedTimestamps(): Flow<List<String>> = assignments.map { map ->
+        map.values.mapNotNull { if (!it.hidden) it.startedAt else null }
+    }
+
+    override fun observeAllBurnedTimestamps(): Flow<List<String>> = assignments.map { map ->
+        map.values.mapNotNull { if (!it.hidden && it.srsStage == 9) it.passedAt else null }
+    }
 }
 
 class FakeFriendStatsDao : FriendStatsDao {

@@ -22,7 +22,8 @@ data class AppSettings(
     val restrictAudioToMp3: Boolean = false,
     val showSubjectTypeLabel: Boolean = false,
     val showTotalTimer: Boolean = false,
-    val showQuestionTimer: Boolean = false
+    val showQuestionTimer: Boolean = false,
+    val showStrokeOrder: Boolean = true
 )
 
 data class NotificationSettings(
@@ -48,6 +49,7 @@ class SettingsRepository(
     private val showSubjectTypeLabelKey = booleanPreferencesKey("show_subject_type_label")
     private val showTotalTimerKey = booleanPreferencesKey("show_total_timer")
     private val showQuestionTimerKey = booleanPreferencesKey("show_question_timer")
+    private val showStrokeOrderKey = booleanPreferencesKey("show_stroke_order")
 
     private val notificationsEnabledKey = booleanPreferencesKey("notifications_enabled")
     private val reviewsAvailableEnabledKey = booleanPreferencesKey("notif_reviews_available_enabled")
@@ -77,7 +79,8 @@ class SettingsRepository(
             restrictAudioToMp3 = prefs[restrictAudioToMp3Key] ?: false,
             showSubjectTypeLabel = prefs[showSubjectTypeLabelKey] ?: false,
             showTotalTimer = prefs[showTotalTimerKey] ?: false,
-            showQuestionTimer = prefs[showQuestionTimerKey] ?: false
+            showQuestionTimer = prefs[showQuestionTimerKey] ?: false,
+            showStrokeOrder = prefs[showStrokeOrderKey] ?: true
         )
     }.distinctUntilChanged()
 
@@ -126,6 +129,10 @@ class SettingsRepository(
 
     suspend fun setShowQuestionTimer(enabled: Boolean) {
         dataStore.edit { it[showQuestionTimerKey] = enabled }
+    }
+
+    suspend fun setShowStrokeOrder(enabled: Boolean) {
+        dataStore.edit { it[showStrokeOrderKey] = enabled }
     }
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {

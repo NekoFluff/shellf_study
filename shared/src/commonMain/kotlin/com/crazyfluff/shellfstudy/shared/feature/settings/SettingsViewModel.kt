@@ -24,6 +24,7 @@ data class SettingsUiState(
     val showSubjectTypeLabel: Boolean = false,
     val showTotalTimer: Boolean = false,
     val showQuestionTimer: Boolean = false,
+    val showStrokeOrder: Boolean = true,
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
@@ -61,6 +62,7 @@ class SettingsViewModel(
             showSubjectTypeLabel = app.showSubjectTypeLabel,
             showTotalTimer = app.showTotalTimer,
             showQuestionTimer = app.showQuestionTimer,
+            showStrokeOrder = app.showStrokeOrder,
             notificationsEnabled = notif.notificationsEnabled,
             reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
             reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
@@ -105,6 +107,10 @@ class SettingsViewModel(
 
     fun onShowQuestionTimerChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setShowQuestionTimer(enabled) }
+    }
+
+    fun onShowStrokeOrderChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowStrokeOrder(enabled) }
     }
 
     /**

@@ -32,6 +32,7 @@ data class SubjectDetailUiState(
     val backStack: List<Long> = emptyList(),
     val showPitchAccent: Boolean = true,
     val restrictAudioToMp3: Boolean = false,
+    val showStrokeOrder: Boolean = true,
     val strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
     /** User asked to see every section on the root subject even though the sheet's reveal mode
      *  would otherwise hide the field matching the in-progress/failed question. Reset on [open]. */
@@ -106,6 +107,7 @@ class SubjectDetailViewModel(
                             backStack = stack,
                             showPitchAccent = settings.showPitchAccent,
                             restrictAudioToMp3 = settings.restrictAudioToMp3,
+                            showStrokeOrder = settings.showStrokeOrder,
                             strokeOrder = detailAndRelated.strokeOrder,
                             srsStage = detailAndRelated.srsStage
                         )
