@@ -10,6 +10,8 @@ import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
+import com.crazyfluff.shellfstudy.shared.quiz.ActiveSegmentTracker
+import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerOutcome
 import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
@@ -80,13 +82,7 @@ data class ReviewUiState(
 
 data class SlowAnswer(val item: ReviewItem, val type: QuestionType, val elapsedMs: Long, val isCorrect: Boolean)
 
-private class ItemProgress(val item: ReviewItem) {
-    var meaningDone = false
-    var readingDone = false
-    var hadIncorrectMeaning = false
-    var hadIncorrectReading = false
-    val hasAnyProgress: Boolean get() = meaningDone || readingDone || hadIncorrectMeaning || hadIncorrectReading
-}
+private typealias ItemProgress = QuizItemProgress<ReviewItem>
 
 private data class AnsweredQuestionRecord(val item: ReviewItem, val type: QuestionType, val isCorrect: Boolean, val elapsedMs: Long)
 
@@ -116,12 +112,8 @@ class ReviewViewModel(
     // resumeFromPersisted) so the total/average time summaries stay accurate across a resume.
     private val answeredQuestions = mutableListOf<AnsweredQuestionRecord>()
 
-    // Together, these track only the time the session was actively being viewed: activeElapsedMs is
-    // the accumulated total as of the end of the last viewing segment, and activeSegmentStartMs —
-    // non-null exactly while actively viewing — is when the current one began. currentActiveElapsedMs
-    // combines them; see it, resumeActiveSegment, and pauseActiveSegment for how the two ever change.
-    private var activeElapsedMs: Long = 0L
-    private var activeSegmentStartMs: Long? = null
+    // Tracks only the time the session was actively being viewed. See ActiveSegmentTracker.
+    private val activeSegmentTracker = ActiveSegmentTracker()
     private var questionShownAtMs: Long = 0L
 
     // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
@@ -224,7 +216,7 @@ class ReviewViewModel(
         // deliberately *not* wall-clock time since the session began; time spent away (backgrounded,
         // or navigated off and back) must not count. resumeActiveSegment then starts a fresh viewing
         // segment on top of that restored base, so the clock resumes right where it left off.
-        activeElapsedMs = persisted.sessionActiveElapsedMs
+        activeSegmentTracker.elapsedMs = persisted.sessionActiveElapsedMs
         resumeActiveSegment()
         advanceToNextQuestion()
     }
@@ -233,7 +225,7 @@ class ReviewViewModel(
         queue.clear()
         progressByAssignmentId.clear()
         answeredQuestions.clear()
-        activeElapsedMs = 0L
+        activeSegmentTracker.elapsedMs = 0L
         resumeActiveSegment()
 
         items.forEach { item -> progressByAssignmentId[item.assignmentId] = ItemProgress(item) }
@@ -452,34 +444,18 @@ class ReviewViewModel(
      *  and [sessionSummary]'s final total derive from this same formula over the same two fields, so
      *  they can never disagree. */
     private fun currentActiveElapsedMs(nowMs: Long = Clock.System.now().toEpochMilliseconds()): Long =
-        activeElapsedMs + (activeSegmentStartMs?.let { nowMs - it } ?: 0L)
+        activeSegmentTracker.currentElapsedMs(nowMs)
 
-    /** Starts a fresh viewing segment — called once the session is actually being looked at (right
-     *  after loading/resuming, and whenever [appForegroundTracker] reports the app came back to the
-     *  foreground). Idempotent: a no-op if a segment is already running. */
     private fun resumeActiveSegment() {
-        if (activeSegmentStartMs != null) return
-        val now = Clock.System.now().toEpochMilliseconds()
-        activeSegmentStartMs = now
+        val now = activeSegmentTracker.resume() ?: return
         _uiState.update { it.copy(sessionActiveSegmentStartMs = now) }
     }
 
-    /** Folds the current viewing segment into the accumulated total and stops the clock — called
-     *  when the session is no longer being actively viewed ([appForegroundTracker] reports the app
-     *  backgrounded, or this ViewModel is cleared because the user navigated away). Persists via
-     *  [applicationScope] rather than [viewModelScope] since the latter may already be in the
-     *  process of being cancelled by the time this runs (see [onCleared]). Idempotent: a no-op if no
-     *  segment is running. */
     private fun pauseActiveSegment() {
-        val startedAt = activeSegmentStartMs ?: return
-        activeElapsedMs += Clock.System.now().toEpochMilliseconds() - startedAt
-        activeSegmentStartMs = null
-        _uiState.update { it.copy(sessionActiveElapsedMs = activeElapsedMs, sessionActiveSegmentStartMs = null) }
+        val newElapsed = activeSegmentTracker.pause() ?: return
+        _uiState.update { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
         // advanceToNextQuestion() already cleared reviewSessionRepository once the session
-        // completed — re-persisting here (this fires from onCleared when the user navigates off
-        // the complete screen, or from the app backgrounding while still on it) would resurrect a
-        // stale, empty-queue "active session" record. The dashboard would then offer to resume a
-        // 0-review session that, once opened, immediately re-completes.
+        // completed — re-persisting here would resurrect a stale, empty-queue "active session".
         if (_uiState.value.isSessionComplete) return
         applicationScope.launch { persistCurrentState() }
     }
@@ -566,8 +542,8 @@ class ReviewViewModel(
                 isDetailsExpanded = false,
                 totalCount = totalQuestions,
                 remainingCount = queue.size,
-                sessionActiveElapsedMs = activeElapsedMs,
-                sessionActiveSegmentStartMs = activeSegmentStartMs,
+                sessionActiveElapsedMs = activeSegmentTracker.elapsedMs,
+                sessionActiveSegmentStartMs = activeSegmentTracker.segmentStartMs,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null
             )

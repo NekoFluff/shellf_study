@@ -23,6 +23,8 @@ import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.quiz.ActiveSegmentTracker
+import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerOutcome
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
@@ -97,12 +99,7 @@ data class LessonUiState(
 
 data class LessonSlowAnswer(val item: LessonItem, val type: QuestionType, val elapsedMs: Long, val isCorrect: Boolean)
 
-private class LessonItemProgress(val item: LessonItem) {
-    var meaningDone = false
-    var readingDone = false
-    var hadIncorrectMeaning = false
-    var hadIncorrectReading = false
-}
+private typealias LessonItemProgress = QuizItemProgress<LessonItem>
 
 private data class LessonAnsweredQuestionRecord(val item: LessonItem, val type: QuestionType, val isCorrect: Boolean, val elapsedMs: Long)
 
@@ -135,12 +132,8 @@ class LessonViewModel(
     // resumeQuizPhase) so the total/average time summaries stay accurate across a resume.
     private val answeredQuestions = mutableListOf<LessonAnsweredQuestionRecord>()
 
-    // Together, these track only the time the quiz was actively being viewed: activeElapsedMs is
-    // the accumulated total as of the end of the last viewing segment, and activeSegmentStartMs —
-    // non-null exactly while actively viewing — is when the current one began. currentActiveElapsedMs
-    // combines them; see it, resumeActiveSegment, and pauseActiveSegment for how the two ever change.
-    private var activeElapsedMs: Long = 0L
-    private var activeSegmentStartMs: Long? = null
+    // Tracks only the time the quiz was actively being viewed. See ActiveSegmentTracker.
+    private val activeSegmentTracker = ActiveSegmentTracker()
     private var questionShownAtMs: Long = 0L
 
     init {
@@ -269,7 +262,7 @@ class LessonViewModel(
         // deliberately *not* wall-clock time since the quiz began; time spent away (backgrounded, or
         // navigated off and back) must not count. resumeActiveSegment then starts a fresh viewing
         // segment on top of that restored base, so the clock resumes right where it left off.
-        activeElapsedMs = persisted.sessionActiveElapsedMs
+        activeSegmentTracker.elapsedMs = persisted.sessionActiveElapsedMs
         resumeActiveSegment()
         questionShownAtMs = Clock.System.now().toEpochMilliseconds()
         totalQuizCount = persisted.totalQuizCount
@@ -287,8 +280,8 @@ class LessonViewModel(
                 currentQuizItem = next?.item,
                 currentQuestionType = next?.type,
                 isSessionComplete = next == null,
-                sessionActiveElapsedMs = activeElapsedMs,
-                sessionActiveSegmentStartMs = activeSegmentStartMs,
+                sessionActiveElapsedMs = activeSegmentTracker.elapsedMs,
+                sessionActiveSegmentStartMs = activeSegmentTracker.segmentStartMs,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null,
                 sessionItemsLearned = summary?.itemsLearned ?: it.sessionItemsLearned,
@@ -461,7 +454,7 @@ class LessonViewModel(
         progressByAssignmentId.clear()
         items.forEach { item -> progressByAssignmentId[item.assignmentId] = LessonItemProgress(item) }
         answeredQuestions.clear()
-        activeElapsedMs = 0L
+        activeSegmentTracker.elapsedMs = 0L
         resumeActiveSegment()
         questionShownAtMs = Clock.System.now().toEpochMilliseconds()
 
@@ -476,8 +469,8 @@ class LessonViewModel(
                 answerInput = "",
                 feedback = null,
                 isSessionComplete = next == null,
-                sessionActiveElapsedMs = activeElapsedMs,
-                sessionActiveSegmentStartMs = activeSegmentStartMs,
+                sessionActiveElapsedMs = activeSegmentTracker.elapsedMs,
+                sessionActiveSegmentStartMs = activeSegmentTracker.segmentStartMs,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null
             )
@@ -642,34 +635,18 @@ class LessonViewModel(
      *  and [sessionSummary]'s final total derive from this same formula over the same two fields, so
      *  they can never disagree. */
     private fun currentActiveElapsedMs(nowMs: Long = Clock.System.now().toEpochMilliseconds()): Long =
-        activeElapsedMs + (activeSegmentStartMs?.let { nowMs - it } ?: 0L)
+        activeSegmentTracker.currentElapsedMs(nowMs)
 
-    /** Starts a fresh viewing segment — called once the quiz is actually being looked at (right
-     *  after beginning/resuming it, and whenever [appForegroundTracker] reports the app came back to
-     *  the foreground). Idempotent: a no-op if a segment is already running. */
     private fun resumeActiveSegment() {
-        if (activeSegmentStartMs != null) return
-        val now = Clock.System.now().toEpochMilliseconds()
-        activeSegmentStartMs = now
+        val now = activeSegmentTracker.resume() ?: return
         _uiState.update { it.copy(sessionActiveSegmentStartMs = now) }
     }
 
-    /** Folds the current viewing segment into the accumulated total and stops the clock — called
-     *  when the quiz is no longer being actively viewed ([appForegroundTracker] reports the app
-     *  backgrounded, or this ViewModel is cleared because the user navigated away). Persists via
-     *  [applicationScope] rather than [viewModelScope] since the latter may already be in the
-     *  process of being cancelled by the time this runs (see [onCleared]). Idempotent: a no-op if no
-     *  segment is running (including during the STUDY phase, before the quiz clock has started). */
     private fun pauseActiveSegment() {
-        val startedAt = activeSegmentStartMs ?: return
-        activeElapsedMs += Clock.System.now().toEpochMilliseconds() - startedAt
-        activeSegmentStartMs = null
-        _uiState.update { it.copy(sessionActiveElapsedMs = activeElapsedMs, sessionActiveSegmentStartMs = null) }
+        val newElapsed = activeSegmentTracker.pause() ?: return
+        _uiState.update { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
         // The quiz-complete branch already cleared lessonSessionRepository once the session
-        // finished — re-persisting here (this fires from onCleared when the user navigates off the
-        // complete screen, or from the app backgrounding while still on it) would resurrect a
-        // stale, empty-queue "active session" record. The dashboard would then offer to resume a
-        // 0-lesson session that, once opened, immediately re-completes.
+        // finished — re-persisting here would resurrect a stale, empty-queue "active session".
         if (_uiState.value.isSessionComplete) return
         applicationScope.launch { persistCurrentState() }
     }
