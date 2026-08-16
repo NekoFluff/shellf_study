@@ -282,7 +282,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
 
                 // Tap overlay
                 val sx = selectedX?.coerceIn(yLabelW, w) ?: return@Canvas
-                val scrubMs = globalMinMs + ((sx - yLabelW) / (w - yLabelW) * timeRange).toLong()
+                val scrubMs = (globalMinMs + ((sx - yLabelW) / (w - yLabelW) * timeRange).toLong())
                     .coerceIn(globalMinMs, nowMillis)
 
                 // Crosshair
