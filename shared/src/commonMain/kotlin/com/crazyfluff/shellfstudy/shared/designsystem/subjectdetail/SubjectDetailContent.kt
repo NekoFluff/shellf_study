@@ -30,7 +30,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
-import androidx.compose.foundation.text.selection.SelectionContainer
+import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSection
@@ -227,7 +227,7 @@ fun SubjectDetailContent(
                 SectionEyebrow("Context sentences")
                 // 20dp between example sentences (vs. 2dp between a sentence's own JP/EN pair) so
                 // each example reads as its own distinct card of information while scanning.
-                SelectionContainer {
+                AkebiSelectableContainer {
                     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         detail.contextSentences.forEach { sentence ->
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {

@@ -24,7 +24,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
+import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -955,7 +955,7 @@ private fun LessonReadingSection(
 private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionEyebrow("Context sentences")
-        SelectionContainer {
+        AkebiSelectableContainer {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 sentences.forEach { sentence ->
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
