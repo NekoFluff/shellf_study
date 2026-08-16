@@ -226,7 +226,7 @@ private fun metricValue(entry: FriendStats, metric: LeaderboardMetric, window: L
         LeaderboardMetric.LEARNED -> "${entry.learned.forWindow(window)} learned"
         LeaderboardMetric.REVIEWS -> "${entry.totalReviews} reviews"
         LeaderboardMetric.LEVEL -> "Lv. ${entry.level}"
-        LeaderboardMetric.BURNED -> "${entry.burned.forWindow(window)} 🔥"
+        LeaderboardMetric.BURNED -> "${entry.burned.forWindow(window)} burned"
         LeaderboardMetric.ACCURACY ->
             if (entry.reviewAccuracy < 0f) "—" else "${(entry.reviewAccuracy * 100).toInt()}%"
     }
