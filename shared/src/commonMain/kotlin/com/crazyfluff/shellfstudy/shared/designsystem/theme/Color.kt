@@ -18,13 +18,13 @@ val RadicalLight = Color(0xFFB3D9FF)
 val KanjiLight = Color(0xFFFFB3E6)
 val VocabularyLight = Color(0xFFE3B3FF)
 
-/** WaniKani's own SRS-stage color convention. */
+/** SRS stage colors — Dusk palette: cool tones for early stages, warm for later, black for Burned. */
 object SrsStageColors {
-    val Apprentice = Color(0xFFDD0093)
-    val Guru = Color(0xFF882D9E)
-    val Master = Color(0xFF294DDB)
-    val Enlightened = Color(0xFF0093DD)
-    val Burned = Color(0xFF434343)
+    val Apprentice = Color(0xFF00897B)
+    val Guru = Color(0xFF5C6BC0)
+    val Master = Color(0xFF8E44AD)
+    val Enlightened = Color(0xFFE67E22)
+    val Burned = Color(0xFF1C1C1C)
     val Locked = Color(0xFF9E9E9E)
 }
 
@@ -32,6 +32,10 @@ object SrsStageColors {
  *  charcoal is illegible against a dark background, unlike the other (already-bright) stage
  *  colors, which don't need a dark-theme variant. */
 val BurnedDark = Color(0xFFB0B0B0)
+
+/** Accent for "Correct!" feedback text and success icons in quiz flows. */
+val CorrectAnswerColor = Color(0xFF0093DD)
+val CorrectAnswerColorDark = Color(0xFF2E2E2E)
 
 /** Smouldering Durtles' pitch-accent-pattern color convention, kept for a familiar look. */
 object PitchAccentColors {

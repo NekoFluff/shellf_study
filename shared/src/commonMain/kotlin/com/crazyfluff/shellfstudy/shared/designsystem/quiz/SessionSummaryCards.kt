@@ -29,8 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkStageColors
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColorDark
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
@@ -66,7 +66,7 @@ fun SessionOverviewCard(
                     progress = { accuracyPercent / 100f },
                     modifier = Modifier.size(64.dp),
                     strokeWidth = 6.dp,
-                    color = themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened),
+                    color = themeAwareColor(CorrectAnswerColor, CorrectAnswerColorDark),
                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
                 Text("$accuracyPercent%", style = MaterialTheme.typography.titleMedium)
@@ -154,7 +154,7 @@ fun SessionSlowestAnswersCard(
                         imageVector = if (answer.isCorrect) Icons.Default.Check else Icons.Default.Close,
                         contentDescription = if (answer.isCorrect) "Correct" else "Incorrect",
                         tint = if (answer.isCorrect) {
-                            themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)
+                            themeAwareColor(CorrectAnswerColor, CorrectAnswerColorDark)
                         } else {
                             MaterialTheme.colorScheme.error
                         },

@@ -78,13 +78,13 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkStageColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColorDark
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.RankChangeChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.RankChangeChipEnterDurationMs
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
@@ -592,7 +592,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             Text(
                 text = if (feedback.isCorrect) "Correct!" else "Incorrect",
                 color = if (feedback.isCorrect) {
-                    themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)
+                    themeAwareColor(CorrectAnswerColor, CorrectAnswerColorDark)
                 } else {
                     MaterialTheme.colorScheme.error
                 },
@@ -657,7 +657,7 @@ private fun SessionCompleteContent(
             Icon(
                 imageVector = Icons.Filled.Celebration,
                 contentDescription = null,
-                tint = themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)
+                tint = themeAwareColor(CorrectAnswerColor, CorrectAnswerColorDark)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text("Session complete!", style = MaterialTheme.typography.headlineMedium)

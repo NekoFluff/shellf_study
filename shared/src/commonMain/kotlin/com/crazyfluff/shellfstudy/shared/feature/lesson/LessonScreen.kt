@@ -95,9 +95,9 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.VocabReadingRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.componentsLabel
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkStageColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColorDark
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageColors
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
@@ -424,7 +424,7 @@ private fun SessionCompleteContent(
             Icon(
                 imageVector = Icons.Filled.Celebration,
                 contentDescription = null,
-                tint = themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)
+                tint = themeAwareColor(CorrectAnswerColor, CorrectAnswerColorDark)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text("Lesson complete!", style = MaterialTheme.typography.headlineMedium)
@@ -1039,10 +1039,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
         modifier = Modifier.weight(1f, fill = false).fillMaxWidth().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = item.characters ?: item.meanings.firstOrNull() ?: "?",
-            style = MaterialTheme.typography.displayLarge,
-            color = accentColor,
+        SubjectGlyph(
+            characters = item.characters,
+            characterImageUrl = item.characterImageUrl,
+            subjectType = item.subjectType,
+            size = 104.dp,
             modifier = Modifier.testTag(LessonScreenTestTags.QUIZ_CHARACTERS)
         )
         if (uiState.showSubjectTypeLabel) {
@@ -1096,7 +1097,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
         } else {
             Text(
                 text = if (feedback.isCorrect) "Correct!" else "Incorrect",
-                color = if (feedback.isCorrect) SrsStageColors.Enlightened else MaterialTheme.colorScheme.error,
+                color = if (feedback.isCorrect) themeAwareColor(CorrectAnswerColor, CorrectAnswerColorDark) else MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.testTag(LessonScreenTestTags.FEEDBACK_TEXT)
             )
