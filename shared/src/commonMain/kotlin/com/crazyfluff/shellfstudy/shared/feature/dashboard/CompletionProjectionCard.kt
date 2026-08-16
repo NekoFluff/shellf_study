@@ -47,8 +47,7 @@ private val DATE_FORMATTER = kotlinx.datetime.LocalDate.Format {
 }
 
 @Composable
-fun CompletionProjectionCard(projection: CompletionProjection?, modifier: Modifier = Modifier) {
-    if (projection == null) return
+fun CompletionProjectionCard(projection: CompletionProjection, modifier: Modifier = Modifier) {
     Card(modifier = modifier.fillMaxWidth().testTag(CompletionProjectionTestTags.CARD)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = "Completion Date", style = MaterialTheme.typography.titleMedium)

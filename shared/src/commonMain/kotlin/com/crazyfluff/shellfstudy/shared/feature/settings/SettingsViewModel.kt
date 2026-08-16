@@ -113,10 +113,7 @@ class SettingsViewModel(
      * production callers via Kotlin's Unit-conversion) so tests can `join()` it instead of racing
      * a separately-observed state Flow against this coroutine's own completion.
      */
-    fun onNotificationsPermissionResult(granted: Boolean) = viewModelScope.launch {
-        settingsRepository.setNotificationsEnabled(granted)
-        if (granted) notificationCoordinator.rescheduleDailyReminder() else notificationScheduler.cancelAll()
-    }
+    fun onNotificationsPermissionResult(granted: Boolean) = onNotificationsEnabledChange(granted)
 
     /** Turning the toggle off, or on below API 33 where no runtime prompt is needed. */
     fun onNotificationsEnabledChange(enabled: Boolean) = viewModelScope.launch {

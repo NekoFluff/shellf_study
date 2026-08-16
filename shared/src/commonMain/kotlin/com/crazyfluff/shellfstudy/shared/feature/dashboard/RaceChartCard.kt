@@ -49,12 +49,14 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.vocabularyColor
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.format.MonthNames
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.roundToInt
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
-private const val DAY_MS_CHART = 86_400_000L
+private val DAY_MS_CHART = 24.hours.inWholeMilliseconds
 
 @Composable
 private fun raceChartPalette(): List<Color> {
@@ -69,16 +71,11 @@ private fun raceChartPalette(): List<Color> {
     )
 }
 
-private val MONTH_ABBREVS = arrayOf(
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-)
-
 private fun formatMonthYear(epochMillis: Long): String {
     val dt = Instant.fromEpochMilliseconds(epochMillis)
         .toLocalDateTime(TimeZone.currentSystemDefault())
     val year = (dt.year % 100).toString().padStart(2, '0')
-    return "${MONTH_ABBREVS[dt.monthNumber - 1]} '$year"
+    return "${MonthNames.ENGLISH_ABBREVIATED.names[dt.monthNumber - 1]} '$year"
 }
 
 private fun formatShortDate(epochMillis: Long): String {

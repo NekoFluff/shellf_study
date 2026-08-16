@@ -34,7 +34,7 @@ object SrsStageColors {
 val BurnedDark = Color(0xFFB0B0B0)
 
 /** Accent for "Correct!" feedback text and success icons in quiz flows. */
-val CorrectAnswerColor = Color(0xFF0093DD)
+val CorrectAnswerColor = SubjectTypeColors.Radical
 val CorrectAnswerColorDark = Color(0xFF2E2E2E)
 
 /** Smouldering Durtles' pitch-accent-pattern color convention, kept for a familiar look. */

@@ -11,8 +11,8 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
 fun subjectColor(type: SubjectType): Color = when (type) {
     SubjectType.RADICAL -> themeAwareColor(SubjectTypeColors.Radical, MaterialTheme.colorScheme.tertiary)
     SubjectType.KANJI -> themeAwareColor(SubjectTypeColors.Kanji, MaterialTheme.colorScheme.secondary)
-    SubjectType.VOCABULARY -> themeAwareColor(SubjectTypeColors.Vocabulary, MaterialTheme.colorScheme.primary)
-    SubjectType.KANA_VOCABULARY -> themeAwareColor(SubjectTypeColors.Vocabulary, MaterialTheme.colorScheme.primary)
+    SubjectType.VOCABULARY, SubjectType.KANA_VOCABULARY ->
+        themeAwareColor(SubjectTypeColors.Vocabulary, MaterialTheme.colorScheme.primary)
 }
 
 /** Named shorthands — use these instead of [themeAwareColor] or bare [SubjectTypeColors] references. */
