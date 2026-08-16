@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -79,12 +80,9 @@ class LeaderboardViewModel(
     fun onRefresh() {
         viewModelScope.launch {
             _formState.update { it.copy(isRefreshing = true) }
-            val friends = friendRepository.friendsFlow
-            friends.collect { entries ->
-                entries.forEach { entry -> friendStatsRepository.refreshFriend(entry) }
-                _formState.update { it.copy(isRefreshing = false) }
-                return@collect
-            }
+            val entries = friendRepository.friendsFlow.first()
+            entries.forEach { entry -> friendStatsRepository.refreshFriend(entry) }
+            _formState.update { it.copy(isRefreshing = false) }
         }
     }
 

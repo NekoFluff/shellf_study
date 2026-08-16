@@ -175,8 +175,7 @@ fun DashboardScreen(
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
-    var showAbandonReviewConfirm by remember { mutableStateOf(false) }
-    var showAbandonLessonConfirm by remember { mutableStateOf(false) }
+    var abandonConfirm by remember { mutableStateOf<AbandonConfirmKind?>(null) }
     val detailSheetState = rememberSubjectDetailSheetState()
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -207,24 +206,18 @@ fun DashboardScreen(
                                 shape = RoundedCornerShape(16.dp)
                             ) {
                                 if (uiState.hasActiveReviewSession) {
-                                    DropdownMenuItem(
-                                        text = { Text("Abandon review session", color = MaterialTheme.colorScheme.error) },
-                                        leadingIcon = {
-                                            Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                                        },
-                                        onClick = { menuExpanded = false; showAbandonReviewConfirm = true },
-                                        modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM)
+                                    AbandonSessionMenuItem(
+                                        label = "Abandon review session",
+                                        testTag = DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM,
+                                        onClick = { menuExpanded = false; abandonConfirm = AbandonConfirmKind.Review }
                                     )
                                     HorizontalDivider()
                                 }
                                 if (uiState.hasActiveLessonSession) {
-                                    DropdownMenuItem(
-                                        text = { Text("Abandon lesson session", color = MaterialTheme.colorScheme.error) },
-                                        leadingIcon = {
-                                            Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                                        },
-                                        onClick = { menuExpanded = false; showAbandonLessonConfirm = true },
-                                        modifier = Modifier.testTag(DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM)
+                                    AbandonSessionMenuItem(
+                                        label = "Abandon lesson session",
+                                        testTag = DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM,
+                                        onClick = { menuExpanded = false; abandonConfirm = AbandonConfirmKind.Lesson }
                                     )
                                     HorizontalDivider()
                                 }
@@ -417,25 +410,24 @@ fun DashboardScreen(
             onSubjectClick = { detailSheetState.show(it) }
         )
 
-        if (showAbandonReviewConfirm) {
-            ConfirmationDialog(
+        when (abandonConfirm) {
+            AbandonConfirmKind.Review -> ConfirmationDialog(
                 title = "Abandon review session?",
                 text = "Progress on reviews you haven't finished yet will be lost. This won't affect items you've already submitted.",
                 confirmLabel = "Abandon",
-                onConfirm = { showAbandonReviewConfirm = false; onAbandonReviewSession() },
-                onDismiss = { showAbandonReviewConfirm = false },
+                onConfirm = { abandonConfirm = null; onAbandonReviewSession() },
+                onDismiss = { abandonConfirm = null },
                 confirmButtonTestTag = DashboardScreenTestTags.ABANDON_REVIEW_CONFIRM_BUTTON
             )
-        }
-        if (showAbandonLessonConfirm) {
-            ConfirmationDialog(
+            AbandonConfirmKind.Lesson -> ConfirmationDialog(
                 title = "Abandon lesson session?",
                 text = "Progress on the lessons you haven't finished quizzing yet will be lost. Lessons you've already completed won't be affected.",
                 confirmLabel = "Abandon",
-                onConfirm = { showAbandonLessonConfirm = false; onAbandonLessonSession() },
-                onDismiss = { showAbandonLessonConfirm = false },
+                onConfirm = { abandonConfirm = null; onAbandonLessonSession() },
+                onDismiss = { abandonConfirm = null },
                 confirmButtonTestTag = DashboardScreenTestTags.ABANDON_LESSON_CONFIRM_BUTTON
             )
+            null -> Unit
         }
     }
 
@@ -510,88 +502,56 @@ private fun DashboardStatusBanner(bannerState: DashboardBannerState, onRetry: ()
     when (bannerState) {
         DashboardBannerState.None -> Unit
 
-        DashboardBannerState.SyncBlockedOnAuth -> {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.errorContainer)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .testTag(DashboardScreenTestTags.SYNC_BLOCKED_BANNER),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Sync paused — check your API token.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+        DashboardBannerState.SyncBlockedOnAuth -> BannerRow(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            testTag = DashboardScreenTestTags.SYNC_BLOCKED_BANNER
+        ) {
+            Text(
+                text = "Sync paused — check your API token.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
         }
 
-        is DashboardBannerState.Offline -> {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.errorContainer)
-                    .clickable(onClick = onRetry)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .testTag(DashboardScreenTestTags.OFFLINE_BANNER),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "You're offline — showing data from ${formatRelativeSyncTime(bannerState.lastSyncedAtMillis)}. Tap to retry.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+        is DashboardBannerState.Offline -> BannerRow(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            testTag = DashboardScreenTestTags.OFFLINE_BANNER,
+            onClick = onRetry
+        ) {
+            Text(
+                text = "You're offline — showing data from ${formatRelativeSyncTime(bannerState.lastSyncedAtMillis)}. Tap to retry.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
         }
 
-        is DashboardBannerState.PendingSync -> {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .testTag(DashboardScreenTestTags.PENDING_SYNC_BANNER),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val noun = if (bannerState.count == 1) "item" else "items"
-                Text(
-                    text = "${bannerState.count} $noun waiting to sync.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+        is DashboardBannerState.PendingSync -> BannerRow(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            testTag = DashboardScreenTestTags.PENDING_SYNC_BANNER
+        ) {
+            val noun = if (bannerState.count == 1) "item" else "items"
+            Text(
+                text = "${bannerState.count} $noun waiting to sync.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
-        DashboardBannerState.Refreshing -> {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .testTag(DashboardScreenTestTags.REFRESHING_BANNER),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Refreshing…",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+        DashboardBannerState.Refreshing -> BannerRow(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            testTag = DashboardScreenTestTags.REFRESHING_BANNER
+        ) {
+            CircularProgressIndicator(
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Refreshing…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -611,6 +571,36 @@ private fun formatRelativeSyncTime(lastSyncedAtMillis: Long?): String {
             "$daysAgo day${if (daysAgo == 1L) "" else "s"} ago"
         }
     }
+}
+
+private enum class AbandonConfirmKind { Review, Lesson }
+
+@Composable
+private fun AbandonSessionMenuItem(label: String, testTag: String, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label, color = MaterialTheme.colorScheme.error) },
+        leadingIcon = { Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+        onClick = onClick,
+        modifier = Modifier.testTag(testTag)
+    )
+}
+
+@Composable
+private fun BannerRow(
+    containerColor: Color,
+    testTag: String,
+    onClick: (() -> Unit)? = null,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
+) {
+    val baseModifier = Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(8.dp))
+        .background(containerColor)
+        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .padding(horizontal = 12.dp, vertical = 8.dp)
+        .testTag(testTag)
+    Row(modifier = baseModifier, verticalAlignment = Alignment.CenterVertically, content = content)
+    Spacer(modifier = Modifier.height(16.dp))
 }
 
 /** Small ring showing progress toward the daily lesson goal, tucked in a card's corner. */

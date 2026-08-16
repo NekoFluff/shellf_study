@@ -115,7 +115,7 @@ private fun buildActivityBars(
             val nowTotalMonths = nowDt.year * 12 + (nowDt.monthNumber - 1)
             (0..11).map { i ->
                 val targetMonth = (nowTotalMonths - (11 - i)) % 12
-                ActivityBar(MONTH_ABBREVS[targetMonth], entries.map { buckets(it).yearMonths.getOrElse(i) { 0 } })
+                ActivityBar(MonthNames.ENGLISH_ABBREVIATED.names[targetMonth], entries.map { buckets(it).yearMonths.getOrElse(i) { 0 } })
             }
         }
         LeaderboardWindow.ALL_TIME -> {
@@ -131,7 +131,7 @@ private fun buildActivityBars(
                 val fallbackNowTotal = fallbackNow.year * 12 + (fallbackNow.monthNumber - 1)
                 return (0..11).map { i ->
                     val targetMonth = (fallbackNowTotal - (11 - i)) % 12
-                    ActivityBar(MONTH_ABBREVS[targetMonth], entries.map { buckets(it).yearMonths.getOrElse(i) { 0 } })
+                    ActivityBar(MonthNames.ENGLISH_ABBREVIATED.names[targetMonth], entries.map { buckets(it).yearMonths.getOrElse(i) { 0 } })
                 }
             }
             val aligned = allTimeBuckets.map { b ->
@@ -140,7 +140,7 @@ private fun buildActivityBars(
             (0 until maxLen).map { i ->
                 val monthsAgo = maxLen - 1 - i
                 val totalMonths = nowTotalMonths - monthsAgo
-                val label = "${MONTH_ABBREVS[totalMonths % 12]} '${(totalMonths / 12 % 100).toString().padStart(2, '0')}"
+                val label = "${MonthNames.ENGLISH_ABBREVIATED.names[totalMonths % 12]} '${(totalMonths / 12 % 100).toString().padStart(2, '0')}"
                 ActivityBar(label, aligned.map { it[i] })
             }
         }

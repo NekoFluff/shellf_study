@@ -63,9 +63,11 @@ fun HeadToHeadSheet(
             val selfColor = kanjiColor()
             val friendColor = radicalColor()
 
+            val axes = LeaderboardMetric.entries
+            val normalized = axes.map { normalizedValues(self, friend, it, LeaderboardWindow.ALL_TIME) }
+
             RadarChart(
-                self = self,
-                friend = friend,
+                normalized = normalized,
                 selfColor = selfColor,
                 friendColor = friendColor,
                 modifier = Modifier.size(240.dp)
@@ -74,27 +76,20 @@ fun HeadToHeadSheet(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Win/loss chips per axis — use ALL_TIME window for the head-to-head comparison
-            val axes = LeaderboardMetric.entries
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                axes.forEach { metric ->
-                    val (selfVal, friendVal) = normalizedValues(self, friend, metric, LeaderboardWindow.ALL_TIME)
+                axes.forEachIndexed { idx, metric ->
+                    val (selfVal, friendVal) = normalized[idx]
                     val outcome = when {
                         selfVal > friendVal + 0.05f -> "You're ahead"
                         friendVal > selfVal + 0.05f -> "${friend.nickname} leads"
                         else -> "Tied"
-                    }
-                    val label = when (metric) {
-                        LeaderboardMetric.LEARNED -> "Lessons"
-                        LeaderboardMetric.LEVEL -> "Level"
-                        LeaderboardMetric.BURNED -> "Burned"
-                        LeaderboardMetric.ACCURACY -> "Accuracy"
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                        Text(metric.displayName, style = MaterialTheme.typography.bodyMedium)
                         SuggestionChip(
                             onClick = {},
                             label = { Text(outcome, style = MaterialTheme.typography.labelMedium) },
@@ -118,14 +113,12 @@ fun HeadToHeadSheet(
 
 @Composable
 private fun RadarChart(
-    self: FriendStats,
-    friend: FriendStats,
+    normalized: List<Pair<Float, Float>>,
     selfColor: Color,
     friendColor: Color,
     modifier: Modifier = Modifier
 ) {
-    val axes = LeaderboardMetric.entries
-    val axisCount = axes.size
+    val axisCount = normalized.size
     val gridSteps = 4
 
     val gridColor = MaterialTheme.colorScheme.outlineVariant
@@ -163,8 +156,7 @@ private fun RadarChart(
         // Self/friend polygons — normalized against each other per axis
         val selfPath = Path()
         val friendPath = Path()
-        axes.forEachIndexed { i, metric ->
-            val (selfV, friendV) = normalizedValues(self, friend, metric, LeaderboardWindow.ALL_TIME)
+        normalized.forEachIndexed { i, (selfV, friendV) ->
             val sr = radius * selfV
             val fr = radius * friendV
             val spt = axisOffset(i, sr)

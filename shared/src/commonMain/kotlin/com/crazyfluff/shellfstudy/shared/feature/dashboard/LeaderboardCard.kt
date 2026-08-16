@@ -123,15 +123,7 @@ fun LeaderboardCard(
                             selected = false
                         ),
                         label = {
-                            Text(
-                                text = when (metric) {
-                                    LeaderboardMetric.LEARNED -> "Lessons"
-                                    LeaderboardMetric.LEVEL -> "Level"
-                                    LeaderboardMetric.BURNED -> "Burned"
-                                    LeaderboardMetric.ACCURACY -> "Accuracy"
-                                },
-                                style = MaterialTheme.typography.labelSmall
-                            )
+                            Text(text = metric.displayName, style = MaterialTheme.typography.labelSmall)
                         }
                     )
                 }
@@ -257,12 +249,7 @@ fun WindowDropdownButton(
     Box(modifier = modifier) {
         TextButton(onClick = { expanded = true }) {
             Text(
-                text = when (selectedWindow) {
-                    LeaderboardWindow.WEEK -> "Week"
-                    LeaderboardWindow.MONTH -> "Month"
-                    LeaderboardWindow.YEAR -> "Year"
-                    LeaderboardWindow.ALL_TIME -> "All time"
-                },
+                text = selectedWindow.label,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -276,14 +263,7 @@ fun WindowDropdownButton(
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             LeaderboardWindow.entries.forEach { window ->
                 DropdownMenuItem(
-                    text = {
-                        Text(when (window) {
-                            LeaderboardWindow.WEEK -> "Week"
-                            LeaderboardWindow.MONTH -> "Month"
-                            LeaderboardWindow.YEAR -> "Year"
-                            LeaderboardWindow.ALL_TIME -> "All time"
-                        })
-                    },
+                    text = { Text(window.label) },
                     onClick = { onWindowChange(window); expanded = false },
                     trailingIcon = if (window == selectedWindow) {
                         { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }

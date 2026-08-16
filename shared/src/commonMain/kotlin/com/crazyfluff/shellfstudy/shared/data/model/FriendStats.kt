@@ -27,9 +27,19 @@ data class ActivityStats(
     }
 }
 
-enum class LeaderboardMetric { LEARNED, LEVEL, BURNED, ACCURACY }
+enum class LeaderboardMetric(val displayName: String) {
+    LEARNED("Lessons"),
+    LEVEL("Level"),
+    BURNED("Burned"),
+    ACCURACY("Accuracy")
+}
 
-enum class LeaderboardWindow { WEEK, MONTH, YEAR, ALL_TIME }
+enum class LeaderboardWindow(val label: String) {
+    WEEK("Week"),
+    MONTH("Month"),
+    YEAR("Year"),
+    ALL_TIME("All time")
+}
 
 data class FriendStats(
     val friendEntryId: String,
