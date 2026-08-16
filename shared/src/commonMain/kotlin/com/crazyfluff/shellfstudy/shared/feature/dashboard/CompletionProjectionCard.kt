@@ -22,7 +22,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.vocabularyColor
 import kotlin.time.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
@@ -55,7 +55,7 @@ fun CompletionProjectionCard(projection: CompletionProjection?, modifier: Modifi
 
             if (projection.itemsRemaining <= 0) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
-                    Icon(imageVector = Icons.Filled.Celebration, contentDescription = null, tint = SubjectTypeColors.Vocabulary)
+                    Icon(imageVector = Icons.Filled.Celebration, contentDescription = null, tint = vocabularyColor())
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = "You've started every item in the library!",
@@ -76,8 +76,8 @@ fun CompletionProjectionCard(projection: CompletionProjection?, modifier: Modifi
                             progress = { fraction },
                             modifier = Modifier.size(72.dp).testTag(CompletionProjectionTestTags.PROGRESS),
                             strokeWidth = 7.dp,
-                            color = SubjectTypeColors.Vocabulary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            color = vocabularyColor(),
+                            trackColor = MaterialTheme.colorScheme.outline
                         )
                         Text(text = "${(fraction * 100).toInt()}%", style = MaterialTheme.typography.titleMedium)
                     }

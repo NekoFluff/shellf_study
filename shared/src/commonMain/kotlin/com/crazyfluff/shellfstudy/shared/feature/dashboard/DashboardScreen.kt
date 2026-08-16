@@ -64,8 +64,9 @@ import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
@@ -327,7 +328,7 @@ fun DashboardScreen(
                                     // small accents, not a full-bleed card fill — with white text on
                                     // top that read as washed out. This card should look the same
                                     // vivid blue in both themes.
-                                    color = SubjectTypeColors.Radical,
+                                    color = radicalColor(),
                                     onClick = onStartLesson,
                                     enabled = uiState.isLessonsCardEnabled,
                                     badge = {
@@ -347,7 +348,7 @@ fun DashboardScreen(
                                     // next to it (each Card sizes to its own content by default).
                                     label = if (uiState.hasActiveReviewSession) "Resume" else "Reviews",
                                     count = uiState.reviewCount,
-                                    color = SubjectTypeColors.Kanji,
+                                    color = kanjiColor(),
                                     onClick = onStartReview,
                                     enabled = uiState.isReviewsCardEnabled,
                                     modifier = Modifier

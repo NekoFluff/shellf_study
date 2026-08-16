@@ -24,12 +24,14 @@ private val LightColorScheme = lightColorScheme(
 
 // Hand-authored grayscale scheme for e-ink panels (Boox etc.) — flat colors instead of tonal
 // elevation, since neither shadows nor saturated hues render well on those displays.
+// primary/secondary/tertiary mirror the light scheme's Vocabulary/Kanji/Radical mapping so that
+// subjectColor() can derive its eink values from the scheme rather than hardcoding them.
 private val EinkColorScheme = lightColorScheme(
-    primary = Color.Black,
+    primary = EinkSubjectColors.Vocabulary,
     onPrimary = Color.White,
-    secondary = EinkPalette.OnSurfaceVariant,
+    secondary = EinkSubjectColors.Kanji,
     onSecondary = Color.White,
-    tertiary = EinkPalette.Outline,
+    tertiary = EinkSubjectColors.Radical,
     onTertiary = Color.White,
     background = EinkPalette.Background,
     onBackground = Color.Black,

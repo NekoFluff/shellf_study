@@ -29,7 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -59,8 +60,8 @@ fun HeadToHeadSheet(
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            val selfColor = SubjectTypeColors.Kanji
-            val friendColor = SubjectTypeColors.Radical
+            val selfColor = kanjiColor()
+            val friendColor = radicalColor()
 
             RadarChart(
                 self = self,

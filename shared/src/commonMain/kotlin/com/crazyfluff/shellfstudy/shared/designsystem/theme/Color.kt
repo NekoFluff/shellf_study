@@ -58,6 +58,13 @@ object EinkPalette {
     val OnSurfaceVariant = Color(0xFF424242)
 }
 
+/** Extra grayscale slots for the 6-entry leaderboard / race-chart user palette (positions 4–6). */
+object EinkExtraColors {
+    val Slot4 = Color(0xFFAAAAAA)
+    val Slot5 = Color(0xFFBBBBBB)
+    val Slot6 = Color(0xFFCCCCCC)
+}
+
 /** Grayscale stand-ins for [SubjectTypeColors], distinguishable by lightness alone. */
 object EinkSubjectColors {
     val Radical = Color(0xFF000000)

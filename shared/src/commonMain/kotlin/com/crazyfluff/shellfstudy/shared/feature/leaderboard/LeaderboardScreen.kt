@@ -50,17 +50,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkExtraColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.vocabularyColor
 import org.koin.compose.viewmodel.koinViewModel
 
-private val avatarPalette = listOf(
-    SubjectTypeColors.Kanji,
-    SubjectTypeColors.Radical,
-    SubjectTypeColors.Vocabulary,
-    Color(0xFFE65100),
-    Color(0xFF00695C),
-    Color(0xFF1565C0)
-)
+@Composable
+private fun avatarPalette(): List<Color> {
+    val isEink = LocalEinkTheme.current
+    return listOf(
+        kanjiColor(),
+        radicalColor(),
+        vocabularyColor(),
+        if (isEink) EinkExtraColors.Slot4 else Color(0xFFE65100),
+        if (isEink) EinkExtraColors.Slot5 else Color(0xFF00695C),
+        if (isEink) EinkExtraColors.Slot6 else Color(0xFF1565C0),
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,6 +102,7 @@ fun LeaderboardScreen(
 ) {
     var showAddFriendDialog by remember { mutableStateOf(false) }
     var friendToDelete by remember { mutableStateOf<FriendEntry?>(null) }
+    val palette = avatarPalette()
 
     Scaffold(
         modifier = modifier,
@@ -141,7 +150,7 @@ fun LeaderboardScreen(
                     itemsIndexed(uiState.friends) { index, friend ->
                         FriendCard(
                             friend = friend,
-                            avatarColor = avatarPalette[index % avatarPalette.size],
+                            avatarColor = palette[index % palette.size],
                             onDelete = { friendToDelete = friend },
                             modifier = Modifier
                                 .fillMaxWidth()

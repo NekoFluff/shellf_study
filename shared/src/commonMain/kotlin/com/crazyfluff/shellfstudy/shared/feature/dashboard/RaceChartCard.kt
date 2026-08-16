@@ -43,7 +43,11 @@ import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkExtraColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.vocabularyColor
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.roundToInt
@@ -52,14 +56,18 @@ import kotlin.time.Instant
 
 private const val DAY_MS_CHART = 86_400_000L
 
-private val raceChartPalette = listOf(
-    SubjectTypeColors.Kanji,
-    SubjectTypeColors.Radical,
-    SubjectTypeColors.Vocabulary,
-    Color(0xFFE65100),
-    Color(0xFF00695C),
-    Color(0xFF1565C0)
-)
+@Composable
+private fun raceChartPalette(): List<Color> {
+    val isEink = LocalEinkTheme.current
+    return listOf(
+        kanjiColor(),
+        radicalColor(),
+        vocabularyColor(),
+        if (isEink) EinkExtraColors.Slot4 else Color(0xFFE65100),
+        if (isEink) EinkExtraColors.Slot5 else Color(0xFF00695C),
+        if (isEink) EinkExtraColors.Slot6 else Color(0xFF1565C0),
+    )
+}
 
 private val MONTH_ABBREVS = arrayOf(
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -182,6 +190,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
         LeaderboardWindow.ALL_TIME -> "Full progression"
     }
 
+    val palette = raceChartPalette()
     val textMeasurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -269,7 +278,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
 
                 // User lines
                 userTimelines.forEachIndexed { idx, (user, points) ->
-                    val color = raceChartPalette.getOrElse(idx) { raceChartPalette.last() }
+                    val color = palette.getOrElse(idx) { palette.last() }
                     val strokeW = if (user.isCurrentUser) 3.dp.toPx() else 1.5.dp.toPx()
 
                     if (points.size == 1) {
@@ -311,7 +320,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                 }
                 val headerResult = textMeasurer.measure(dateLabel, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))
                 val userResults = userTimelines.mapIndexed { idx, (user, points) ->
-                    val color = raceChartPalette.getOrElse(idx) { raceChartPalette.last() }
+                    val color = palette.getOrElse(idx) { palette.last() }
                     val lvl = points.lastOrNull { (ms, _) -> ms <= scrubMs }?.second
                         ?: points.firstOrNull()?.second
                         ?: user.level
@@ -339,7 +348,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
             Spacer(Modifier.height(12.dp))
             usersWithData.forEachIndexed { idx, user ->
                 ChartLegendRow(
-                    color = raceChartPalette.getOrElse(idx) { raceChartPalette.last() },
+                    color = palette.getOrElse(idx) { palette.last() },
                     label = user.nickname,
                     isCurrentUser = user.isCurrentUser
                 )
@@ -372,6 +381,7 @@ private fun ActivityWindowChart(
         LeaderboardWindow.ALL_TIME -> "Cumulative — last 12 months"
     }
 
+    val palette = raceChartPalette()
     val textMeasurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -451,7 +461,7 @@ private fun ActivityWindowChart(
 
                 // Lines per user
                 cumulativeSeries.forEachIndexed { ui, cumValues ->
-                    val color = raceChartPalette.getOrElse(ui) { raceChartPalette.last() }
+                    val color = palette.getOrElse(ui) { palette.last() }
                     val strokeW = if (entries.getOrNull(ui)?.isCurrentUser == true) 3.dp.toPx() else 1.5.dp.toPx()
                     if (cumValues.size >= 2) {
                         val path = Path()
@@ -486,7 +496,7 @@ private fun ActivityWindowChart(
                 val lineGap = 3.dp.toPx()
                 val headerResult = textMeasurer.measure(bars[snapIdx].label, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))
                 val userResults = cumulativeSeries.mapIndexed { ui, cumValues ->
-                    val color = raceChartPalette.getOrElse(ui) { raceChartPalette.last() }
+                    val color = palette.getOrElse(ui) { palette.last() }
                     val v = cumValues.getOrElse(snapIdx) { 0 }
                     drawCircle(color, 5.dp.toPx(), Offset(snapX, yOf(v)))
                     drawCircle(Color.White, 2.5.dp.toPx(), Offset(snapX, yOf(v)))
@@ -513,7 +523,7 @@ private fun ActivityWindowChart(
             Spacer(Modifier.height(12.dp))
             entries.forEachIndexed { idx, user ->
                 ChartLegendRow(
-                    color = raceChartPalette.getOrElse(idx) { raceChartPalette.last() },
+                    color = palette.getOrElse(idx) { palette.last() },
                     label = user.nickname,
                     isCurrentUser = user.isCurrentUser
                 )

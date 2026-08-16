@@ -42,7 +42,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
 import com.crazyfluff.shellfstudy.shared.data.model.formatHourOfDay
 import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlinx.datetime.TimeZone
@@ -83,7 +83,7 @@ fun ReviewForecastCard(forecast: ReviewForecast?, modifier: Modifier = Modifier)
                 // scheme, secondary maps to a pale tint (see DashboardScreen's SummaryCard comment)
                 // that reads as washed out against a surfaceVariant track and doesn't match the
                 // vivid Kanji color the "Reviews" card elsewhere on this screen uses for the same concept.
-                color = SubjectTypeColors.Kanji,
+                color = kanjiColor(),
                 modifier = Modifier.testTag(ReviewForecastTestTags.SUMMARY)
             )
             Spacer(modifier = Modifier.height(12.dp))
