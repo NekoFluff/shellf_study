@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.crazyfluff.shellfstudy.shared.data.model.ActivityBuckets
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
@@ -61,12 +62,46 @@ private fun formatDateLabel(epochMillis: Long): String {
     return "${MONTH_ABBREVS[dt.monthNumber - 1]} '$year"
 }
 
-private fun activityValue(entry: FriendStats, metric: LeaderboardMetric, window: LeaderboardWindow): Int =
-    when (metric) {
-        LeaderboardMetric.LEARNED -> entry.learned.forWindow(window)
-        LeaderboardMetric.BURNED -> entry.burned.forWindow(window)
-        else -> 0
+private data class ActivityBar(val label: String, val counts: List<Int>)
+
+private fun buildActivityBars(
+    entries: List<FriendStats>,
+    metric: LeaderboardMetric,
+    window: LeaderboardWindow,
+    nowMillis: Long
+): List<ActivityBar> {
+    fun buckets(e: FriendStats): ActivityBuckets = when (metric) {
+        LeaderboardMetric.LEARNED -> e.learnedBuckets
+        else -> e.burnedBuckets
     }
+
+    val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(TimeZone.currentSystemDefault())
+
+    return when (window) {
+        LeaderboardWindow.WEEK -> (0..6).map { i ->
+            val daysAgo = 6 - i
+            val dt = Instant.fromEpochMilliseconds(nowMillis - daysAgo * DAY_MS_CHART)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+            val dow = dt.dayOfWeek.ordinal  // 0 = Mon
+            val dayAbbrevs = arrayOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+            ActivityBar(dayAbbrevs[dow], entries.map { buckets(it).weekDays.getOrElse(i) { 0 } })
+        }
+        LeaderboardWindow.MONTH -> {
+            val groupRanges = listOf(0..6, 7..13, 14..20, 21..29)
+            val labels = listOf("4w ago", "3w ago", "2w ago", "This wk")
+            groupRanges.mapIndexed { gi, range ->
+                ActivityBar(labels[gi], entries.map { buckets(it).monthDays.slice(range).sum() })
+            }
+        }
+        LeaderboardWindow.YEAR, LeaderboardWindow.ALL_TIME -> {
+            val nowTotalMonths = nowDt.year * 12 + (nowDt.monthNumber - 1)
+            (0..11).map { i ->
+                val targetMonth = (nowTotalMonths - (11 - i)) % 12  // 0-indexed
+                ActivityBar(MONTH_ABBREVS[targetMonth], entries.map { buckets(it).yearMonths.getOrElse(i) { 0 } })
+            }
+        }
+    }
+}
 
 @Composable
 fun RaceChartCard(
@@ -191,37 +226,28 @@ private fun ActivityWindowChart(
 ) {
     if (leaderboard.entries.isEmpty()) return
 
+    val nowMillis = Clock.System.now().toEpochMilliseconds()
+    val entries = leaderboard.entries
+    val N = entries.size
+
+    val bars = buildActivityBars(entries, leaderboard.metric, leaderboard.window, nowMillis)
+    val maxVal = bars.flatMap { it.counts }.maxOrNull()?.coerceAtLeast(1) ?: 1
+
+    val subtitle = when (leaderboard.window) {
+        LeaderboardWindow.WEEK -> "Daily — last 7 days"
+        LeaderboardWindow.MONTH -> "Weekly — last 4 weeks"
+        LeaderboardWindow.YEAR, LeaderboardWindow.ALL_TIME -> "Monthly — last 12 months"
+    }
+
     val textMeasurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val primaryColor = MaterialTheme.colorScheme.primary
     val labelStyle = MaterialTheme.typography.labelSmall
-    val boldLabelStyle = labelStyle.copy(fontWeight = FontWeight.Bold)
-
-    val windows = LeaderboardWindow.entries
-    val entries = leaderboard.entries
-    val metric = leaderboard.metric
-    val selectedWindow = leaderboard.window
-    val N = entries.size
-
-    val allValues = windows.flatMap { wnd -> entries.map { activityValue(it, metric, wnd) } }
-    val maxVal = allValues.maxOrNull()?.coerceAtLeast(1) ?: 1
-
-    val windowLabel = when (selectedWindow) {
-        LeaderboardWindow.WEEK -> "this week"
-        LeaderboardWindow.MONTH -> "this month"
-        LeaderboardWindow.YEAR -> "this year"
-        LeaderboardWindow.ALL_TIME -> "all time"
-    }
 
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(
-                "All time periods — $windowLabel highlighted",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
 
             Canvas(modifier = Modifier.fillMaxWidth().height(160.dp)) {
@@ -239,41 +265,28 @@ private fun ActivityWindowChart(
                     drawLine(gridColor, Offset(yLabelW, y), Offset(w, y), 1.dp.toPx())
                     val label = if (yVal >= 1000) "${yVal / 1000}k" else "$yVal"
                     val lr = textMeasurer.measure(label, labelStyle)
-                    val lx = (yLabelW - lr.size.width - 4.dp.toPx()).coerceAtLeast(0f)
-                    drawText(lr, labelColor, Offset(lx, y - lr.size.height / 2f))
+                    drawText(lr, labelColor, Offset((yLabelW - lr.size.width - 4.dp.toPx()).coerceAtLeast(0f), y - lr.size.height / 2f))
                 }
 
-                val groupW = plotW / windows.size
-                val barPadding = groupW * 0.1f
+                val groupW = plotW / bars.size
+                val barPadding = (groupW * 0.08f).coerceAtMost(4.dp.toPx())
                 val availW = groupW - barPadding * 2f
-                val barGap = 2.dp.toPx()
+                val barGap = if (N > 1) 1.dp.toPx() else 0f
                 val barW = if (N > 1) (availW - barGap * (N - 1)) / N else availW
 
-                windows.forEachIndexed { wi, window ->
-                    val isSelected = window == selectedWindow
-                    val groupLeft = yLabelW + wi * groupW
+                bars.forEachIndexed { bi, bar ->
+                    val groupLeft = yLabelW + bi * groupW
                     val groupCenterX = groupLeft + groupW / 2f
 
                     // X-axis label
-                    val lStr = when (window) {
-                        LeaderboardWindow.WEEK -> "Week"
-                        LeaderboardWindow.MONTH -> "Month"
-                        LeaderboardWindow.YEAR -> "Year"
-                        LeaderboardWindow.ALL_TIME -> "All"
-                    }
-                    val lrStyle = if (isSelected) boldLabelStyle else labelStyle
-                    val lrColor = if (isSelected) primaryColor else labelColor
-                    val lr = textMeasurer.measure(lStr, lrStyle)
-                    drawText(lr, lrColor, Offset(groupCenterX - lr.size.width / 2f, plotH + 4.dp.toPx()))
+                    val lr = textMeasurer.measure(bar.label, labelStyle)
+                    drawText(lr, labelColor, Offset((groupCenterX - lr.size.width / 2f).coerceIn(yLabelW, w - lr.size.width), plotH + 4.dp.toPx()))
 
                     // One bar per user
-                    entries.forEachIndexed { ui, entry ->
-                        val value = activityValue(entry, metric, window)
+                    bar.counts.forEachIndexed { ui, count ->
+                        val color = raceChartPalette.getOrElse(ui) { raceChartPalette.last() }
                         val barLeft = groupLeft + barPadding + ui * (barW + barGap)
-                        val barH = (value.toFloat() / maxVal) * plotH
-                        val alpha = if (isSelected) 1f else 0.3f
-                        val color = raceChartPalette.getOrElse(ui) { raceChartPalette.last() }.copy(alpha = alpha)
-
+                        val barH = (count.toFloat() / maxVal) * plotH
                         if (barH > 0.5f) {
                             drawRoundRect(
                                 color = color,

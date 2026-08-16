@@ -37,7 +37,10 @@ data class FriendStatsEntity(
     val burnedYear: Int = 0,
     val burnedAllTime: Int = 0,
     // All-time review count
-    val totalReviews: Int = 0
+    val totalReviews: Int = 0,
+    // Per-day activity buckets serialised as JSON (ActivityBuckets)
+    val learnedBucketsJson: String = "{}",
+    val burnedBucketsJson: String = "{}"
 )
 
 @Dao
@@ -55,7 +58,7 @@ interface FriendStatsDao {
     suspend fun deleteById(id: String)
 }
 
-@Database(entities = [FriendStatsEntity::class], version = 2, exportSchema = true)
+@Database(entities = [FriendStatsEntity::class], version = 3, exportSchema = true)
 @ConstructedBy(FriendsDatabaseConstructor::class)
 abstract class FriendsDatabase : RoomDatabase() {
     abstract fun friendStatsDao(): FriendStatsDao

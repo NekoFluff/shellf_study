@@ -1,6 +1,15 @@
 package com.crazyfluff.shellfstudy.shared.data.model
 
+import kotlinx.serialization.Serializable
+
 data class LevelTimelinePoint(val daysSinceStart: Int, val level: Int)
+
+@Serializable
+data class ActivityBuckets(
+    val weekDays: List<Int> = List(7) { 0 },    // index 0 = 6 days ago, index 6 = today
+    val monthDays: List<Int> = List(30) { 0 },  // index 0 = 29 days ago, index 29 = today
+    val yearMonths: List<Int> = List(12) { 0 }  // index 0 = 11 months ago, index 11 = current month
+)
 
 data class ActivityStats(
     val today: Int = 0,
@@ -32,7 +41,9 @@ data class FriendStats(
     val levelTimeline: List<LevelTimelinePoint>,
     val isCurrentUser: Boolean,
     val learned: ActivityStats = ActivityStats(),
-    val burned: ActivityStats = ActivityStats()
+    val burned: ActivityStats = ActivityStats(),
+    val learnedBuckets: ActivityBuckets = ActivityBuckets(),
+    val burnedBuckets: ActivityBuckets = ActivityBuckets()
 )
 
 data class Leaderboard(

@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.data
 
+import com.crazyfluff.shellfstudy.shared.data.model.ActivityBuckets
 import com.crazyfluff.shellfstudy.shared.data.model.ActivityStats
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
@@ -7,6 +8,8 @@ import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelTimelinePoint
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
@@ -42,6 +45,29 @@ private const val YEAR_MS = 365 * DAY_MS
 private data class TimelinePointJson(val daysSinceStart: Int, val level: Int)
 
 private data class WindowedCounts(val today: Int, val week: Int, val month: Int, val year: Int, val allTime: Int)
+
+private fun computeActivityBuckets(isoTimestamps: List<String?>, nowMillis: Long): ActivityBuckets {
+    val nowDays = nowMillis / DAY_MS
+    val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(TimeZone.currentSystemDefault())
+    val nowTotalMonths = nowDt.year * 12 + (nowDt.monthNumber - 1)
+
+    val weekDays = IntArray(7)
+    val monthDays = IntArray(30)
+    val yearMonths = IntArray(12)
+
+    for (ts in isoTimestamps) {
+        val tsMillis = ts?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() } ?: continue
+        val tsDays = tsMillis / DAY_MS
+        val daysAgo = (nowDays - tsDays).toInt()
+        if (daysAgo in 0..6) weekDays[6 - daysAgo]++
+        if (daysAgo in 0..29) monthDays[29 - daysAgo]++
+        val tsDt = Instant.fromEpochMilliseconds(tsMillis).toLocalDateTime(TimeZone.currentSystemDefault())
+        val monthsAgo = nowTotalMonths - (tsDt.year * 12 + (tsDt.monthNumber - 1))
+        if (monthsAgo in 0..11) yearMonths[11 - monthsAgo]++
+    }
+
+    return ActivityBuckets(weekDays.toList(), monthDays.toList(), yearMonths.toList())
+}
 
 private fun computeWindowedCounts(isoTimestamps: List<String?>, nowMillis: Long): WindowedCounts {
     val millis = isoTimestamps.mapNotNull { ts ->
@@ -137,8 +163,10 @@ class FriendStatsRepository(
             )
         }
         val burnedItems = (burnedResult as? ApiResult.Success)?.data ?: emptyList()
-        val burnedCounts = computeWindowedCounts(burnedItems.map { it.data.burnedAt }, nowMillis)
+        val burnedTimestamps = burnedItems.map { it.data.burnedAt }
+        val burnedCounts = computeWindowedCounts(burnedTimestamps, nowMillis)
             .let { it.copy(allTime = burnedItems.size) }
+        val burnedBuckets = computeActivityBuckets(burnedTimestamps, nowMillis)
 
         // Assignments started in the last year → windowed learned counts
         val learnedResult = safeApiCall {
@@ -148,7 +176,9 @@ class FriendStatsRepository(
             )
         }
         val learnedItems = (learnedResult as? ApiResult.Success)?.data ?: emptyList()
-        val learnedCounts = computeWindowedCounts(learnedItems.map { it.data.startedAt }, nowMillis)
+        val learnedTimestamps = learnedItems.map { it.data.startedAt }
+        val learnedCounts = computeWindowedCounts(learnedTimestamps, nowMillis)
+        val learnedBuckets = computeActivityBuckets(learnedTimestamps, nowMillis)
 
         // Review statistics → accuracy + all-time totals
         val statsResult = safeApiCall {
@@ -206,7 +236,9 @@ class FriendStatsRepository(
             burnedMonth = burnedCounts.month,
             burnedYear = burnedCounts.year,
             burnedAllTime = burnedCounts.allTime,
-            totalReviews = totalReviews
+            totalReviews = totalReviews,
+            learnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), learnedBuckets),
+            burnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), burnedBuckets)
         )
     }
 
@@ -221,6 +253,8 @@ class FriendStatsRepository(
         val burnedCounts = computeWindowedCounts(burnedTimestamps, nowMillis)
         val learnedCounts = computeWindowedCounts(startedTimestamps, nowMillis)
             .let { it.copy(allTime = statistics.size) }  // proxy: subjects with review history
+        val learnedBuckets = computeActivityBuckets(startedTimestamps, nowMillis)
+        val burnedBuckets = computeActivityBuckets(burnedTimestamps, nowMillis)
 
         val totalCorrect = statistics.sumOf { it.meaningCorrect + it.readingCorrect }.toFloat()
         val totalAttempts = statistics.sumOf {
@@ -263,7 +297,9 @@ class FriendStatsRepository(
                 month = burnedCounts.month,
                 year = burnedCounts.year,
                 allTime = burnedCounts.allTime
-            )
+            ),
+            learnedBuckets = learnedBuckets,
+            burnedBuckets = burnedBuckets
         )
     }
 
@@ -272,6 +308,12 @@ class FriendStatsRepository(
             json.decodeFromString(ListSerializer(TimelinePointJson.serializer()), levelTimelineJson)
                 .map { LevelTimelinePoint(it.daysSinceStart, it.level) }
         }.getOrDefault(emptyList())
+        val learnedBuckets = runCatching {
+            json.decodeFromString(ActivityBuckets.serializer(), learnedBucketsJson)
+        }.getOrDefault(ActivityBuckets())
+        val burnedBuckets = runCatching {
+            json.decodeFromString(ActivityBuckets.serializer(), burnedBucketsJson)
+        }.getOrDefault(ActivityBuckets())
         return FriendStats(
             friendEntryId = friendId,
             nickname = nickname,
@@ -295,7 +337,9 @@ class FriendStatsRepository(
                 month = burnedMonth,
                 year = burnedYear,
                 allTime = burnedAllTime
-            )
+            ),
+            learnedBuckets = learnedBuckets,
+            burnedBuckets = burnedBuckets
         )
     }
 
