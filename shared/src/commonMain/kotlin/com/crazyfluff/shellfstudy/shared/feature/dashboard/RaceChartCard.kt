@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -43,9 +44,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkExtraColors
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.vocabularyColor
 import kotlinx.datetime.TimeZone
@@ -58,18 +57,6 @@ import kotlin.time.Instant
 
 private val DAY_MS_CHART = 24.hours.inWholeMilliseconds
 
-@Composable
-private fun raceChartPalette(): List<Color> {
-    val isEink = LocalEinkTheme.current
-    return listOf(
-        kanjiColor(),
-        radicalColor(),
-        vocabularyColor(),
-        if (isEink) EinkExtraColors.Slot4 else Color(0xFFE65100),
-        if (isEink) EinkExtraColors.Slot5 else Color(0xFF00695C),
-        if (isEink) EinkExtraColors.Slot6 else Color(0xFF1565C0),
-    )
-}
 
 private fun formatMonthYear(epochMillis: Long): String {
     val dt = Instant.fromEpochMilliseconds(epochMillis)
@@ -187,7 +174,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
         LeaderboardWindow.ALL_TIME -> "Full progression"
     }
 
-    val palette = raceChartPalette()
+    val palette = leaderboardUserPalette()
     val textMeasurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -307,10 +294,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
                 )
 
-                // Intersection dots + tooltip lines
-                val tooltipPx = 8.dp.toPx()
-                val tooltipPy = 6.dp.toPx()
-                val lineGap = 3.dp.toPx()
+                // Intersection dots + tooltip
                 val dateLabel = when (window) {
                     LeaderboardWindow.WEEK, LeaderboardWindow.MONTH -> formatShortDate(scrubMs)
                     else -> formatMonthYear(scrubMs)
@@ -326,20 +310,14 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                     Triple(textMeasurer.measure("${user.nickname}: Lv. $lvl", labelStyle), color, lvl)
                 }
 
-                val allResults = listOf(headerResult) + userResults.map { it.first }
-                val tooltipW = allResults.maxOf { it.size.width } + tooltipPx * 2
-                val tooltipH = allResults.sumOf { it.size.height } + lineGap * (allResults.size - 1) + tooltipPy * 2
-                val tooltipX = if (sx + tooltipW + 10.dp.toPx() > w) sx - tooltipW - 10.dp.toPx() else sx + 10.dp.toPx()
-                val tooltipY = 4.dp.toPx()
-
-                drawRoundRect(tooltipBg, Offset(tooltipX, tooltipY), Size(tooltipW, tooltipH), CornerRadius(8.dp.toPx()))
-                var ty = tooltipY + tooltipPy
-                drawText(headerResult, tooltipFg, Offset(tooltipX + tooltipPx, ty))
-                ty += headerResult.size.height + lineGap
-                userResults.forEach { (result, color, _) ->
-                    drawText(result, color, Offset(tooltipX + tooltipPx, ty))
-                    ty += result.size.height + lineGap
-                }
+                drawTooltip(
+                    header = headerResult,
+                    rows = userResults.map { it.first to it.second },
+                    anchorX = sx,
+                    canvasWidth = w,
+                    bg = tooltipBg,
+                    fg = tooltipFg
+                )
             }
 
             Spacer(Modifier.height(12.dp))
@@ -378,7 +356,7 @@ private fun ActivityWindowChart(
         LeaderboardWindow.ALL_TIME -> "Cumulative — last 12 months"
     }
 
-    val palette = raceChartPalette()
+    val palette = leaderboardUserPalette()
     val textMeasurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -487,10 +465,7 @@ private fun ActivityWindowChart(
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
                 )
 
-                // Intersection dots + tooltip data
-                val tooltipPx = 8.dp.toPx()
-                val tooltipPy = 6.dp.toPx()
-                val lineGap = 3.dp.toPx()
+                // Intersection dots + tooltip
                 val headerResult = textMeasurer.measure(bars[snapIdx].label, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))
                 val userResults = cumulativeSeries.mapIndexed { ui, cumValues ->
                     val color = palette.getOrElse(ui) { palette.last() }
@@ -500,21 +475,14 @@ private fun ActivityWindowChart(
                     val nickname = entries.getOrNull(ui)?.nickname ?: "?"
                     textMeasurer.measure("$nickname: $v", labelStyle) to color
                 }
-
-                val allResults = listOf(headerResult) + userResults.map { it.first }
-                val tooltipW = allResults.maxOf { it.size.width } + tooltipPx * 2
-                val tooltipH = allResults.sumOf { it.size.height } + lineGap * (allResults.size - 1) + tooltipPy * 2
-                val tooltipX = if (snapX + tooltipW + 10.dp.toPx() > w) snapX - tooltipW - 10.dp.toPx() else snapX + 10.dp.toPx()
-                val tooltipY = 4.dp.toPx()
-
-                drawRoundRect(tooltipBg, Offset(tooltipX, tooltipY), Size(tooltipW, tooltipH), CornerRadius(8.dp.toPx()))
-                var ty = tooltipY + tooltipPy
-                drawText(headerResult, tooltipFg, Offset(tooltipX + tooltipPx, ty))
-                ty += headerResult.size.height + lineGap
-                userResults.forEach { (result, color) ->
-                    drawText(result, color, Offset(tooltipX + tooltipPx, ty))
-                    ty += result.size.height + lineGap
-                }
+                drawTooltip(
+                    header = headerResult,
+                    rows = userResults,
+                    anchorX = snapX,
+                    canvasWidth = w,
+                    bg = tooltipBg,
+                    fg = tooltipFg
+                )
             }
 
             Spacer(Modifier.height(12.dp))
@@ -526,6 +494,32 @@ private fun ActivityWindowChart(
                 )
             }
         }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTooltip(
+    header: TextLayoutResult,
+    rows: List<Pair<TextLayoutResult, Color>>,
+    anchorX: Float,
+    canvasWidth: Float,
+    bg: Color,
+    fg: Color
+) {
+    val tooltipPx = 8.dp.toPx()
+    val tooltipPy = 6.dp.toPx()
+    val lineGap = 3.dp.toPx()
+    val allResults = listOf(header) + rows.map { it.first }
+    val tooltipW = allResults.maxOf { it.size.width } + tooltipPx * 2
+    val tooltipH = allResults.sumOf { it.size.height } + lineGap * (allResults.size - 1) + tooltipPy * 2
+    val tooltipX = if (anchorX + tooltipW + 10.dp.toPx() > canvasWidth) anchorX - tooltipW - 10.dp.toPx() else anchorX + 10.dp.toPx()
+    val tooltipY = 4.dp.toPx()
+    drawRoundRect(bg, Offset(tooltipX, tooltipY), Size(tooltipW, tooltipH), CornerRadius(8.dp.toPx()))
+    var ty = tooltipY + tooltipPy
+    drawText(header, fg, Offset(tooltipX + tooltipPx, ty))
+    ty += header.size.height + lineGap
+    rows.forEach { (result, color) ->
+        drawText(result, color, Offset(tooltipX + tooltipPx, ty))
+        ty += result.size.height + lineGap
     }
 }
 

@@ -43,24 +43,10 @@ import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkExtraColors
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.vocabularyColor
 
-@Composable
-private fun leaderboardPalette(): List<Color> {
-    val isEink = LocalEinkTheme.current
-    return listOf(
-        kanjiColor(),
-        radicalColor(),
-        vocabularyColor(),
-        if (isEink) EinkExtraColors.Slot4 else Color(0xFFE65100),
-        if (isEink) EinkExtraColors.Slot5 else Color(0xFF00695C),
-        if (isEink) EinkExtraColors.Slot6 else Color(0xFF1565C0),
-    )
-}
 
 private val metrics = listOf(LeaderboardMetric.LEARNED, LeaderboardMetric.BURNED, LeaderboardMetric.LEVEL)
 
@@ -129,7 +115,7 @@ fun LeaderboardCard(
                 }
             }
 
-            val palette = leaderboardPalette()
+            val palette = leaderboardUserPalette()
             val displayEntries = leaderboard.entries.take(3)
             displayEntries.forEachIndexed { index, entry ->
                 if (index > 0) HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
