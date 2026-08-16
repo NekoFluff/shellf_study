@@ -17,7 +17,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -50,6 +49,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.LeaderboardCard
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.WindowDropdownButton
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -162,29 +162,15 @@ fun LeaderboardScreen(
                         }
                     }
 
-                    if (uiState.selectedMetric == LeaderboardMetric.LEARNED ||
-                        uiState.selectedMetric == LeaderboardMetric.BURNED
-                    ) {
+                    if (uiState.selectedMetric != LeaderboardMetric.ACCURACY) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 0.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.fillMaxWidth().padding(end = 4.dp),
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            LeaderboardWindow.entries.forEach { window ->
-                                FilterChip(
-                                    selected = window == uiState.selectedWindow,
-                                    onClick = { onWindowChange(window) },
-                                    label = {
-                                        Text(
-                                            text = when (window) {
-                                                LeaderboardWindow.WEEK -> "Week"
-                                                LeaderboardWindow.MONTH -> "Month"
-                                                LeaderboardWindow.YEAR -> "Year"
-                                                LeaderboardWindow.ALL_TIME -> "All time"
-                                            }
-                                        )
-                                    }
-                                )
-                            }
+                            WindowDropdownButton(
+                                selectedWindow = uiState.selectedWindow,
+                                onWindowChange = onWindowChange
+                            )
                         }
                     }
 

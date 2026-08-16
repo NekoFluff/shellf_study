@@ -128,29 +128,49 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
     if (usersWithData.isEmpty()) return
 
     val nowMillis = Clock.System.now().toEpochMilliseconds()
+    val window = leaderboard.window
+    val windowStartMs = when (window) {
+        LeaderboardWindow.WEEK -> nowMillis - 7 * DAY_MS_CHART
+        LeaderboardWindow.MONTH -> nowMillis - 30 * DAY_MS_CHART
+        LeaderboardWindow.YEAR -> nowMillis - 365 * DAY_MS_CHART
+        LeaderboardWindow.ALL_TIME -> Long.MIN_VALUE
+    }
+
     val textMeasurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val labelStyle = MaterialTheme.typography.labelSmall
 
-    // Convert daysSinceStart offsets to absolute epoch millis
+    // Convert daysSinceStart offsets to absolute epoch millis, then clip to selected window
     val userTimelines = usersWithData.map { user ->
         val startMs = nowMillis - user.daysSinceStart!! * DAY_MS_CHART
-        val points = user.levelTimeline.map { pt -> startMs + pt.daysSinceStart * DAY_MS_CHART to pt.level }
+        val allPoints = user.levelTimeline.map { pt -> startMs + pt.daysSinceStart * DAY_MS_CHART to pt.level }
+
+        val points = if (window == LeaderboardWindow.ALL_TIME) {
+            allPoints + listOf(nowMillis to user.level)
+        } else {
+            val preWindow = allPoints.lastOrNull { (ms, _) -> ms <= windowStartMs }
+            val inWindow = allPoints.filter { (ms, _) -> ms > windowStartMs }
+            val startLevel = preWindow?.second ?: allPoints.firstOrNull()?.second ?: user.level
+            buildList {
+                add(windowStartMs to startLevel)
+                addAll(inWindow)
+                if (last().first < nowMillis) add(nowMillis to user.level)
+            }
+        }
         user to points
     }
 
-    val globalMinMs = userTimelines.minOf { (_, pts) -> pts.first().first }
+    val globalMinMs = if (window == LeaderboardWindow.ALL_TIME) {
+        userTimelines.minOf { (_, pts) -> pts.first().first }
+    } else {
+        windowStartMs
+    }
     val timeRange = (nowMillis - globalMinMs).coerceAtLeast(1L)
 
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Level Race", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(
-                "Level over time",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("Level", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(12.dp))
 
             Canvas(modifier = Modifier.fillMaxWidth().height(180.dp)) {

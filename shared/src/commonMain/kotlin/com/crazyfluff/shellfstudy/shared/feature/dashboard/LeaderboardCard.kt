@@ -13,9 +13,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
@@ -23,6 +28,10 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,12 +73,21 @@ fun LeaderboardCard(
             if (isLoading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = "Leaderboard",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                if (selectedMetric != LeaderboardMetric.ACCURACY) {
+                    WindowDropdownButton(selectedWindow = selectedWindow, onWindowChange = onWindowChange)
+                }
             }
 
             ScrollableTabRow(
@@ -94,33 +112,7 @@ fun LeaderboardCard(
                 }
             }
 
-            // Window filter chips — shown only for windowed metrics
-            if (selectedMetric == LeaderboardMetric.LEARNED || selectedMetric == LeaderboardMetric.BURNED) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LeaderboardWindow.entries.forEach { window ->
-                        FilterChip(
-                            selected = window == selectedWindow,
-                            onClick = { onWindowChange(window) },
-                            label = {
-                                Text(
-                                    text = when (window) {
-                                        LeaderboardWindow.WEEK -> "Week"
-                                        LeaderboardWindow.MONTH -> "Month"
-                                        LeaderboardWindow.YEAR -> "Year"
-                                        LeaderboardWindow.ALL_TIME -> "All time"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        )
-                    }
-                }
-            } else {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+            Spacer(modifier = Modifier.height(4.dp))
 
             val displayEntries = leaderboard.entries.take(3)
             displayEntries.forEachIndexed { index, entry ->
@@ -233,4 +225,51 @@ private fun todayDelta(entry: FriendStats, metric: LeaderboardMetric): String? =
     LeaderboardMetric.LEARNED -> if (entry.learned.today > 0) "+${entry.learned.today} today" else null
     LeaderboardMetric.BURNED -> if (entry.burned.today > 0) "+${entry.burned.today} today" else null
     else -> null
+}
+
+@Composable
+fun WindowDropdownButton(
+    selectedWindow: LeaderboardWindow,
+    onWindowChange: (LeaderboardWindow) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        TextButton(onClick = { expanded = true }) {
+            Text(
+                text = when (selectedWindow) {
+                    LeaderboardWindow.WEEK -> "Week"
+                    LeaderboardWindow.MONTH -> "Month"
+                    LeaderboardWindow.YEAR -> "Year"
+                    LeaderboardWindow.ALL_TIME -> "All time"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = "Change time window",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            LeaderboardWindow.entries.forEach { window ->
+                DropdownMenuItem(
+                    text = {
+                        Text(when (window) {
+                            LeaderboardWindow.WEEK -> "Week"
+                            LeaderboardWindow.MONTH -> "Month"
+                            LeaderboardWindow.YEAR -> "Year"
+                            LeaderboardWindow.ALL_TIME -> "All time"
+                        })
+                    },
+                    onClick = { onWindowChange(window); expanded = false },
+                    trailingIcon = if (window == selectedWindow) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    } else null
+                )
+            }
+        }
+    }
 }
