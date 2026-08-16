@@ -46,10 +46,13 @@ private const val YEAR_MS = 365 * DAY_MS
 @Serializable
 private data class TimelinePointJson(val daysSinceStart: Int, val level: Int)
 
-private data class WindowedCounts(val today: Int, val week: Int, val month: Int, val year: Int, val allTime: Int)
+internal data class WindowedCounts(val today: Int, val week: Int, val month: Int, val year: Int, val allTime: Int)
 
-private fun computeActivityBuckets(isoTimestamps: List<String?>, nowMillis: Long): ActivityBuckets {
-    val tz = TimeZone.currentSystemDefault()
+internal fun computeActivityBuckets(
+    isoTimestamps: List<String?>,
+    nowMillis: Long,
+    tz: TimeZone = TimeZone.currentSystemDefault()
+): ActivityBuckets {
     val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(tz)
     val nowTotalMonths = nowDt.year * 12 + (nowDt.monthNumber - 1)
     val nowLocalDays = nowDt.date.toEpochDays()
@@ -58,21 +61,38 @@ private fun computeActivityBuckets(isoTimestamps: List<String?>, nowMillis: Long
     val monthDays = IntArray(30)
     val yearMonths = IntArray(12)
 
-    for (ts in isoTimestamps) {
-        val tsMillis = ts?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() } ?: continue
-        val tsDt = Instant.fromEpochMilliseconds(tsMillis).toLocalDateTime(tz)
+    // Parse all timestamps up front so we can find the earliest month for allTimeMonths sizing
+    val parsed = isoTimestamps.mapNotNull { ts ->
+        ts?.let { runCatching { Instant.parse(it) }.getOrNull() }
+    }
+
+    val earliestTotalMonths = parsed.minOfOrNull { inst ->
+        val dt = inst.toLocalDateTime(tz)
+        dt.year * 12 + (dt.monthNumber - 1)
+    } ?: nowTotalMonths
+    val allTimeLen = (nowTotalMonths - earliestTotalMonths + 1).coerceAtLeast(1)
+    val allTimeMonths = IntArray(allTimeLen)
+
+    for (inst in parsed) {
+        val tsDt = inst.toLocalDateTime(tz)
         val daysAgo = (nowLocalDays - tsDt.date.toEpochDays()).toInt()
         if (daysAgo in 0..6) weekDays[6 - daysAgo]++
         if (daysAgo in 0..29) monthDays[29 - daysAgo]++
-        val monthsAgo = nowTotalMonths - (tsDt.year * 12 + (tsDt.monthNumber - 1))
+        val tsTotalMonths = tsDt.year * 12 + (tsDt.monthNumber - 1)
+        val monthsAgo = nowTotalMonths - tsTotalMonths
         if (monthsAgo in 0..11) yearMonths[11 - monthsAgo]++
+        val allTimeIdx = tsTotalMonths - earliestTotalMonths
+        if (allTimeIdx in 0 until allTimeLen) allTimeMonths[allTimeIdx]++
     }
 
-    return ActivityBuckets(weekDays.toList(), monthDays.toList(), yearMonths.toList())
+    return ActivityBuckets(weekDays.toList(), monthDays.toList(), yearMonths.toList(), allTimeMonths.toList())
 }
 
-private fun computeWindowedCounts(isoTimestamps: List<String?>, nowMillis: Long): WindowedCounts {
-    val tz = TimeZone.currentSystemDefault()
+internal fun computeWindowedCounts(
+    isoTimestamps: List<String?>,
+    nowMillis: Long,
+    tz: TimeZone = TimeZone.currentSystemDefault()
+): WindowedCounts {
     val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(tz)
     // Start of today in local time (midnight)
     val todayStartMillis = LocalDateTime(nowDt.year, nowDt.month, nowDt.dayOfMonth, 0, 0, 0)

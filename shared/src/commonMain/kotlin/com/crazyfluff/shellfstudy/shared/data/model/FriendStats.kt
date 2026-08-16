@@ -6,9 +6,10 @@ data class LevelTimelinePoint(val daysSinceStart: Int, val level: Int)
 
 @Serializable
 data class ActivityBuckets(
-    val weekDays: List<Int> = List(7) { 0 },    // index 0 = 6 days ago, index 6 = today
-    val monthDays: List<Int> = List(30) { 0 },  // index 0 = 29 days ago, index 29 = today
-    val yearMonths: List<Int> = List(12) { 0 }  // index 0 = 11 months ago, index 11 = current month
+    val weekDays: List<Int> = List(7) { 0 },       // index 0 = 6 days ago, index 6 = today
+    val monthDays: List<Int> = List(30) { 0 },     // index 0 = 29 days ago, index 29 = today
+    val yearMonths: List<Int> = List(12) { 0 },    // index 0 = 11 months ago, index 11 = current month
+    val allTimeMonths: List<Int> = emptyList()     // index 0 = earliest month, last index = current month
 )
 
 data class ActivityStats(
