@@ -22,6 +22,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
@@ -305,6 +306,32 @@ class LessonScreenTest {
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_CHARACTERS).assertIsDisplayed()
+    }
+
+    @Test
+    fun studyPhase_auxiliaryMeaningsUnderCap_showAllWithoutTruncation() {
+        val item = radicalItem.copy(auxiliaryMeanings = listOf("Aqua", "H2O"))
+        setScreen(
+            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(item), studyIndex = 0)
+        )
+
+        composeTestRule.onNodeWithText("Aqua, H2O").assertIsDisplayed()
+    }
+
+    @Test
+    fun studyPhase_auxiliaryMeaningsOverCap_tapExpandsThenCollapses() {
+        val item = radicalItem.copy(auxiliaryMeanings = listOf("A", "B", "C", "D", "E"))
+        setScreen(
+            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(item), studyIndex = 0)
+        )
+
+        composeTestRule.onNodeWithText("A, B, C +2 more").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(SubjectDetailTestTags.AUXILIARY_MEANINGS_TEXT).performClick()
+        composeTestRule.onNodeWithText("A, B, C, D, E").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(SubjectDetailTestTags.AUXILIARY_MEANINGS_TEXT).performClick()
+        composeTestRule.onNodeWithText("A, B, C +2 more").assertIsDisplayed()
     }
 
     @Test

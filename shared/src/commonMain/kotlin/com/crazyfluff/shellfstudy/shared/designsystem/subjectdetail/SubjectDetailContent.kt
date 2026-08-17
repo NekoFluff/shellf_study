@@ -329,9 +329,10 @@ fun ReadingTypeRow(label: String, readings: List<String>) {
 
 /** Auxiliary meanings truncate to a "+N more" summary the same way the review screen's answer
  *  feedback does (see [formatAnswerList]) — tapping toggles the full list back open and closed,
- *  rather than always spelling out every whitelisted alternate meaning up front. */
+ *  rather than always spelling out every whitelisted alternate meaning up front. Shared by every
+ *  screen that shows a subject's/item's auxiliary meanings (subject detail, lesson). */
 @Composable
-private fun AuxiliaryMeaningsText(auxiliaryMeanings: List<String>, resetKey: Any?) {
+fun AuxiliaryMeaningsText(auxiliaryMeanings: List<String>, resetKey: Any?) {
     var isExpanded by remember(resetKey) { mutableStateOf(false) }
     val display = formatAnswerList(auxiliaryMeanings.joinToString(", "), expanded = isExpanded)
     Text(

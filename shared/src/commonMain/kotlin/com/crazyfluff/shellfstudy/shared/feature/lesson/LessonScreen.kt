@@ -88,6 +88,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.AuxiliaryMeaningsText
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.ReadingTypeRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.RelatedSubjectsSection
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SectionEyebrow
@@ -920,11 +921,7 @@ private fun LessonMeaningSection(item: LessonItem) {
             Text("Meaning", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(item.meanings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
             if (item.auxiliaryMeanings.isNotEmpty()) {
-                Text(
-                    text = item.auxiliaryMeanings.joinToString(", "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                AuxiliaryMeaningsText(item.auxiliaryMeanings, resetKey = item.subjectId)
             }
         }
         val meaningMnemonic = item.meaningMnemonic
