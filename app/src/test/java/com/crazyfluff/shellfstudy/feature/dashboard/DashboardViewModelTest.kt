@@ -199,7 +199,7 @@ class DashboardViewModelTest {
             assertThat(state.errorMessage).isNull()
             cancelAndIgnoreRemainingEvents()
         }
-        assertThat(repositories.outboxSyncScheduler.requestCount).isAtLeast(1)
+        assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isAtLeast(1)
     }
 
     @Test

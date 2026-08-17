@@ -160,6 +160,9 @@ class ReviewViewModelTest {
             assertThat(finalState.sessionItemsReviewed).isEqualTo(1)
             assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(1)
         }
+        // Session completion should flush the outbox immediately rather than waiting out the
+        // per-answer debounce, so the dashboard's pending-sync count doesn't look stale.
+        assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isEqualTo(1)
     }
 
     @Test

@@ -698,6 +698,7 @@ class LessonViewModel(
         val next = quizQueue.current
         if (next == null) {
             applicationScope.runDurably { lessonSessionRepository.clear() }
+            outboxRepository.requestSyncNow()
             val summary = sessionSummary()
             _uiState.update {
                 it.copy(

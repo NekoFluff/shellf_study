@@ -23,8 +23,14 @@ class FakeSyncScheduler : SyncScheduler {
 class FakeOutboxSyncScheduler : OutboxSyncScheduler {
     var requestCount = 0
         private set
+    var immediateRequestCount = 0
+        private set
 
     override fun requestSync() {
         requestCount++
+    }
+
+    override fun requestImmediateSync() {
+        immediateRequestCount++
     }
 }

@@ -373,6 +373,9 @@ class LessonViewModelTest {
         assertThat(queued).hasSize(1)
         assertThat(queued.first().assignmentId).isEqualTo(101L)
         assertThat(repositories.outboxSyncScheduler.requestCount).isEqualTo(1)
+        // Session completion should flush the outbox immediately rather than waiting out the
+        // per-answer debounce, so the dashboard's pending-sync count doesn't look stale.
+        assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isEqualTo(1)
     }
 
     @Test

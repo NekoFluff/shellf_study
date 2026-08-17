@@ -91,7 +91,10 @@ private val iosSyncModule = module {
             assignmentRepository = get(),
             outboxRepository = get()
         )
-        OutboxSyncScheduler { appScope.launch { drainer.drain() } }
+        object : OutboxSyncScheduler {
+            override fun requestSync() { appScope.launch { drainer.drain() } }
+            override fun requestImmediateSync() { appScope.launch { drainer.drain() } }
+        }
     }
     single {
         SyncOrchestrator(

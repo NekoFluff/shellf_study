@@ -314,7 +314,7 @@ class DashboardViewModel(
 
     fun onDashboardResumed() {
         viewModelScope.launch {
-            outboxSyncScheduler.requestSync()
+            outboxSyncScheduler.requestImmediateSync()
 
             if (!hasCompletedInitialSync) {
                 hasCompletedInitialSync = true

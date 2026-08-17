@@ -22,10 +22,14 @@ private val OUTBOX_SYNC_DEBOUNCE = Duration.ofSeconds(5)
 class WorkManagerOutboxSyncScheduler(
     private val context: Context
 ) : OutboxSyncScheduler {
-    override fun requestSync() {
+    override fun requestSync() = enqueue(initialDelay = OUTBOX_SYNC_DEBOUNCE)
+
+    override fun requestImmediateSync() = enqueue(initialDelay = Duration.ZERO)
+
+    private fun enqueue(initialDelay: Duration) {
         val request = OneTimeWorkRequestBuilder<OutboxSyncWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .setInitialDelay(OUTBOX_SYNC_DEBOUNCE)
+            .setInitialDelay(initialDelay)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
             .build()
         WorkManager.getInstance(context)

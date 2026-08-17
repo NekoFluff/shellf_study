@@ -46,6 +46,13 @@ class OutboxRepository(
         outboxSyncScheduler.requestSync()
     }
 
+    /** Bypasses the debounce on [OutboxSyncScheduler.requestSync] — call when the caller knows the
+     *  user is done (session completion, dashboard resumption) and wants pending items to clear
+     *  promptly instead of waiting out the coalescing delay. */
+    fun requestSyncNow() {
+        outboxSyncScheduler.requestImmediateSync()
+    }
+
     fun observePendingCount(): Flow<Int> =
         combine(outboxDao.observePendingReviewSubmissionCount(), outboxDao.observePendingLessonStartCount()) { reviews, lessons ->
             reviews + lessons

@@ -493,6 +493,7 @@ class ReviewViewModel(
         val next = queue.current
         if (next == null) {
             applicationScope.runDurably { reviewSessionRepository.clear() }
+            outboxRepository.requestSyncNow()
             val summary = sessionSummary()
             _uiState.update {
                 it.copy(
