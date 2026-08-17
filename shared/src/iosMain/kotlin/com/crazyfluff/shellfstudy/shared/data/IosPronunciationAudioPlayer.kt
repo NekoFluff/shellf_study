@@ -5,6 +5,9 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import platform.AVFoundation.AVAudioSession
+import platform.AVFoundation.AVAudioSessionCategoryOptionDuckOthers
+import platform.AVFoundation.AVAudioSessionCategoryPlayback
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
 import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
@@ -43,6 +46,14 @@ class IosPronunciationAudioPlayer : PronunciationAudioPlayer {
     private var failureObserver: NSObjectProtocol? = null
 
     init {
+        val session = AVAudioSession.sharedInstance()
+        session.setCategory(
+            AVAudioSessionCategoryPlayback,
+            withOptions = AVAudioSessionCategoryOptionDuckOthers,
+            error = null
+        )
+        session.setActive(true, null)
+
         endObserver = NSNotificationCenter.defaultCenter.addObserverForName(
             name = AVPlayerItemDidPlayToEndTimeNotification,
             `object` = null,

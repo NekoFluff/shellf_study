@@ -36,7 +36,7 @@ val audioModule = module {
             .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(get<CacheDataSource.Factory>()))
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
+                    .setUsage(C.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
                     .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
                     .build(),
                 /* handleAudioFocus = */ true
