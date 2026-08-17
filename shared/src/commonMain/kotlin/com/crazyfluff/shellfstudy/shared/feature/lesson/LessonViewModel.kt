@@ -658,9 +658,9 @@ class LessonViewModel(
     private fun pauseActiveSegment() {
         val newElapsed = activeSegmentTracker.pause() ?: return
         _uiState.update { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
-        // The quiz-complete branch already cleared lessonSessionRepository once the session
-        // finished — re-persisting here would resurrect a stale, empty-queue "active session".
-        if (_uiState.value.isSessionComplete) return
+        // Don't re-persist after the session has already been cleared by advanceQuiz() or
+        // abandonSession() — doing so would resurrect a stale session in DataStore.
+        if (_uiState.value.isSessionComplete || _uiState.value.isAbandoned) return
         // currentPersistSnapshot() always writes phase = QUIZ — only call it when actually in the
         // quiz phase. In STUDY phase the correct snapshot is already persisted by
         // persistStudySnapshot on every card change; calling persistCurrentState() here would
@@ -674,11 +674,7 @@ class LessonViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        // Navigating Back (or any other destruction path) abandons the session rather than saving
-        // it for resume. The DataStore snapshot written by AppForegroundTracker.onStop already
-        // covers the background → process-kill → return case; onCleared() is never called on a
-        // process kill, only on explicit Back navigation, so clearing here is always correct.
-        applicationScope.launch { lessonSessionRepository.clear() }
+        pauseActiveSegment()
     }
 
     private data class LessonSessionSummary(

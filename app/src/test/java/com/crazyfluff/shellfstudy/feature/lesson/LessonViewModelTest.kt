@@ -29,7 +29,6 @@ import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -1163,10 +1162,9 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `navigating Back clears the session so the dashboard does not offer resume`() = runTest(mainDispatcherRule.dispatcher) {
-        // Regression: onCleared() was calling pauseActiveSegment() which persisted the current
-        // state to DataStore on every Back press, leaving a resumable session behind. This caused
-        // the dashboard card to say "Resume" after the user pressed Back from the quiz page.
+    fun `pressing Back from the quiz preserves the session for resume on the dashboard`() = runTest(mainDispatcherRule.dispatcher) {
+        // Back button = save-and-exit: the session must remain in DataStore so the dashboard card
+        // shows "Resume" and the user can continue the quiz later.
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -1175,16 +1173,46 @@ class LessonViewModelTest {
             while (state.isLoading) state = awaitItem()
             viewModel.startSelectedLessons()
             awaitItem() // STUDY phase — persistStudySnapshot wrote the session to DataStore
+            viewModel.nextStudyCard()
+            awaitItem() // QUIZ phase — beginQuiz() started an active-time segment
         }
-        assertThat(lessonSessionRepository.load()).isNotNull()
 
-        // Simulate the user pressing Back: Android's ViewModel.clear() calls onCleared().
+        // Simulate the user pressing Back: Android calls ViewModel.clear() → onCleared().
         ViewModel::class.java.getDeclaredMethod("onCleared")
             .apply { isAccessible = true }
             .invoke(viewModel)
-        // onCleared() fires applicationScope.launch { clear() } — wait for the DataStore
-        // write to propagate rather than racing against it with an immediate load().
-        lessonSessionRepository.hasActiveSession.first { !it }
+        testScheduler.advanceUntilIdle()
+
+        // Session must still be in DataStore — Back must not clear it.
+        assertThat(lessonSessionRepository.load()).isNotNull()
+    }
+
+    @Test
+    fun `abandoning the session does not leave a resumable session after navigation`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression: abandonSession() cleared DataStore but onCleared() then fired and
+        // re-wrote the session via pauseActiveSegment() because isAbandoned was never checked.
+        // The dashboard would show "Resume" even after an explicit Abandon.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            viewModel.startSelectedLessons()
+            awaitItem() // STUDY phase
+            viewModel.nextStudyCard()
+            awaitItem() // QUIZ phase (segment started)
+            // Abandon clears DataStore then sets isAbandoned = true; wait for both.
+            viewModel.abandonSession()
+            var s = awaitItem()
+            while (!s.isAbandoned) s = awaitItem()
+        }
+
+        // isAbandoned is now true. onCleared() must not re-write the session.
+        ViewModel::class.java.getDeclaredMethod("onCleared")
+            .apply { isAccessible = true }
+            .invoke(viewModel)
+        testScheduler.advanceUntilIdle()
 
         assertThat(lessonSessionRepository.load()).isNull()
     }
