@@ -667,14 +667,18 @@ class LessonViewModel(
         // overwrite it with an empty-queue QUIZ record that resumeQuizPhase() would misread as
         // "session complete". The foreground tracker calls resumeActiveSegment() unconditionally
         // on app-foreground, so a segment can be running even while in STUDY phase — without this
-        // guard, onCleared() after a Home+Back in STUDY phase writes the corrupt snapshot.
+        // guard, a Home press in STUDY phase would write the corrupt snapshot.
         if (_uiState.value.phase != LessonPhase.QUIZ) return
         applicationScope.launch { persistCurrentState() }
     }
 
     override fun onCleared() {
         super.onCleared()
-        pauseActiveSegment()
+        // Navigating Back (or any other destruction path) abandons the session rather than saving
+        // it for resume. The DataStore snapshot written by AppForegroundTracker.onStop already
+        // covers the background → process-kill → return case; onCleared() is never called on a
+        // process kill, only on explicit Back navigation, so clearing here is always correct.
+        applicationScope.launch { lessonSessionRepository.clear() }
     }
 
     private data class LessonSessionSummary(

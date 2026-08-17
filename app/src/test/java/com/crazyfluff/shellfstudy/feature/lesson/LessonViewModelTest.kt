@@ -7,6 +7,7 @@ import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
@@ -28,6 +29,7 @@ import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -1158,6 +1160,33 @@ class LessonViewModelTest {
             expectNoEvents()
             assertThat(viewModel.uiState.value.phase).isEqualTo(LessonPhase.SELECT)
         }
+    }
+
+    @Test
+    fun `navigating Back clears the session so the dashboard does not offer resume`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression: onCleared() was calling pauseActiveSegment() which persisted the current
+        // state to DataStore on every Back press, leaving a resumable session behind. This caused
+        // the dashboard card to say "Resume" after the user pressed Back from the quiz page.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            viewModel.startSelectedLessons()
+            awaitItem() // STUDY phase — persistStudySnapshot wrote the session to DataStore
+        }
+        assertThat(lessonSessionRepository.load()).isNotNull()
+
+        // Simulate the user pressing Back: Android's ViewModel.clear() calls onCleared().
+        ViewModel::class.java.getDeclaredMethod("onCleared")
+            .apply { isAccessible = true }
+            .invoke(viewModel)
+        // onCleared() fires applicationScope.launch { clear() } — wait for the DataStore
+        // write to propagate rather than racing against it with an immediate load().
+        lessonSessionRepository.hasActiveSession.first { !it }
+
+        assertThat(lessonSessionRepository.load()).isNull()
     }
 
     private fun kanjiAssignmentsJson() = """
