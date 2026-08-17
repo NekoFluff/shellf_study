@@ -205,10 +205,10 @@ fun SubjectSearchOverlay(
 
                 when {
                     uiState.query.isBlank() -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(horizontal = 32.dp)
+                                modifier = Modifier.padding(horizontal = 32.dp, vertical = 48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Search,
@@ -229,8 +229,11 @@ fun SubjectSearchOverlay(
                     }
 
                     uiState.isSyncing && uiState.results.isEmpty() -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(vertical = 48.dp)
+                            ) {
                                 CircularProgressIndicator(modifier = Modifier.testTag(SearchOverlayTestTags.SYNCING_STATE))
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
@@ -243,10 +246,10 @@ fun SubjectSearchOverlay(
                     }
 
                     uiState.results.isEmpty() -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(horizontal = 32.dp)
+                                modifier = Modifier.padding(horizontal = 32.dp, vertical = 48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
