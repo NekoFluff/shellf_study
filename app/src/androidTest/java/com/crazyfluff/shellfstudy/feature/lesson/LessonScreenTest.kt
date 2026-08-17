@@ -124,6 +124,8 @@ class LessonScreenTest {
             ),
             onEvent = { if (it == LessonScreenEvent.SelectAll) selectedAll = true }
         )
+        // Chips live inside the collapsible "Customize selection" panel — expand it first.
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECT_ALL_CHIP).performClick()
         assert(selectedAll)
     }
@@ -139,6 +141,7 @@ class LessonScreenTest {
             ),
             onEvent = { if (it == LessonScreenEvent.SelectNone) selectedNone = true }
         )
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECT_NONE_CHIP).performClick()
         assert(selectedNone)
     }

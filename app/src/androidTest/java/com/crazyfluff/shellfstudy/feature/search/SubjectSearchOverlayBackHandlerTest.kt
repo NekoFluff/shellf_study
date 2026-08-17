@@ -5,6 +5,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.espresso.Espresso
 import androidx.test.espresso.NoActivityResumedException
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

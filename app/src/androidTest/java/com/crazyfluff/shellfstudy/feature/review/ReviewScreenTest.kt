@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.shared.feature.review.ReviewUiState
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreen
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreenEvent
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreenTestTags
+import com.crazyfluff.shellfstudy.shared.feature.review.SlowAnswer
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
