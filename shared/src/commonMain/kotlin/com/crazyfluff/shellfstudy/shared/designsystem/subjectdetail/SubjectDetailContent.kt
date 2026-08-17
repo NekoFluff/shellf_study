@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -77,20 +78,25 @@ fun SubjectDetailContent(
     autoPlayStrokeOrder: Boolean = true,
     showStrokeOrder: Boolean = true,
     assignmentStats: SubjectAssignmentStats? = null,
-    reviewStats: SubjectReviewStats? = null
+    reviewStats: SubjectReviewStats? = null,
+    initialScrollOffset: Int = 0,
+    onScrollPositionChanged: (Int) -> Unit = {}
 ) {
     val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.MEANING)
     val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.READING)
     val hasReadings = detail.readings.isNotEmpty()
     val isVocabulary = detail.subjectType == SubjectType.VOCABULARY || detail.subjectType == SubjectType.KANA_VOCABULARY
 
-    // Reset (not just remembered fresh) so navigating deeper into a related subject scrolls back
-    // to the top of its own content, instead of inheriting whatever offset the previous subject was
-    // scrolled to — an effect-driven reset animates cleanly rather than discarding in-flight gesture
-    // state on the same frame the way keying rememberScrollState() to subjectId would.
+    // Jump to initialScrollOffset (not just remembered fresh) on every subject change — an
+    // effect-driven jump animates cleanly rather than discarding in-flight gesture state on the
+    // same frame the way keying rememberScrollState() to subjectId would. Callers reset this to 0
+    // when drilling into a related subject, and restore a recorded offset when going back.
     val scrollState = rememberScrollState()
     LaunchedEffect(detail.subjectId) {
-        scrollState.scrollTo(0)
+        scrollState.scrollTo(initialScrollOffset)
+    }
+    LaunchedEffect(detail.subjectId) {
+        snapshotFlow { scrollState.value }.collect { onScrollPositionChanged(it) }
     }
 
     Column(

@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -36,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -156,6 +158,17 @@ fun SubjectDetailSheet(
                         interactionSource = remember { MutableInteractionSource() },
                         onClick = onDismiss
                     )
+            )
+            // The sheet's own Surface stops above the navigation bar inset (see its
+            // .navigationBarsPadding() below), so on edge-to-edge devices with a translucent nav
+            // bar this strip is what shows through it — tint it to match the sheet instead of
+            // leaving the dimmed scrim (and the screen behind it) visible through the OS controls.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                    .background(MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp))
             )
         }
 
@@ -296,7 +309,9 @@ private fun ColumnScope.SubjectDetailBody(
             autoPlayStrokeOrder = autoPlayStrokeOrder,
             showStrokeOrder = uiState.showStrokeOrder,
             assignmentStats = uiState.assignmentStats,
-            reviewStats = uiState.reviewStats
+            reviewStats = uiState.reviewStats,
+            initialScrollOffset = uiState.pendingScrollOffset,
+            onScrollPositionChanged = { viewModel.recordScrollOffset(detail.subjectId, it) }
         )
     }
 }

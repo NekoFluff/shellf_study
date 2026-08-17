@@ -607,4 +607,45 @@ class SubjectDetailContentTest {
         composeTestRule.onAllNodesWithText("No reviews yet").assertCountEquals(2)
         composeTestRule.onAllNodesWithText("Last reviewed").assertCountEquals(0)
     }
+
+    @Test
+    fun initialScrollOffset_jumpsContentDownOnFirstComposition() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                assignmentStats = lessonedAssignmentStats,
+                initialScrollOffset = Int.MAX_VALUE / 2
+            )
+        }
+
+        // With no offset (assignmentStatsPresent_showsMilestonesWithNotYetForBurned above), this
+        // node needs performScrollTo() to be visible — here it should already be in view.
+        composeTestRule.onNodeWithText("Unlocked").assertIsDisplayed()
+    }
+
+    @Test
+    fun scrollingContent_reportsPositionViaOnScrollPositionChanged() {
+        var reportedOffset = 0
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                assignmentStats = lessonedAssignmentStats,
+                onScrollPositionChanged = { reportedOffset = it }
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SubjectStatsTestTags.SECTION).performScrollTo()
+
+        assertThat(reportedOffset).isGreaterThan(0)
+    }
 }

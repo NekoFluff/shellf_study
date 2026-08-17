@@ -42,7 +42,10 @@ data class SubjectDetailUiState(
     /** Null if the subject hasn't been lessoned yet (no assignment exists for it). */
     val assignmentStats: SubjectAssignmentStats? = null,
     /** Null if the subject hasn't been lessoned, or has been lessoned but never reviewed yet. */
-    val reviewStats: SubjectReviewStats? = null
+    val reviewStats: SubjectReviewStats? = null,
+    /** Scroll offset (px) [SubjectDetailContent] should jump to for the current [detail]'s subject —
+     *  the recorded offset when returning via [SubjectDetailViewModel.goBack], 0 otherwise. */
+    val pendingScrollOffset: Int = 0
 )
 
 /** Intermediate combine result — [SubjectDetailViewModel.uiState]'s detail/related/stroke/stats fields. */
@@ -71,6 +74,10 @@ class SubjectDetailViewModel(
 
     private val currentSubjectId = MutableStateFlow<Long?>(null)
     private val backStack = MutableStateFlow<List<Long>>(emptyList())
+
+    /** Last-recorded scroll offset (px) per subject, keyed across the whole drill-down stack so
+     *  [goBack] can restore where the user left off. Never persisted beyond this ViewModel's lifetime. */
+    private val scrollOffsets = mutableMapOf<Long, Int>()
 
     private val _uiState = MutableStateFlow(SubjectDetailUiState())
     val uiState: StateFlow<SubjectDetailUiState> = _uiState.asStateFlow()
@@ -133,7 +140,7 @@ class SubjectDetailViewModel(
     fun open(subjectId: Long) {
         backStack.value = emptyList()
         currentSubjectId.value = subjectId
-        _uiState.update { it.copy(forceRevealAll = false) }
+        _uiState.update { it.copy(forceRevealAll = false, pendingScrollOffset = 0) }
     }
 
     /** Toggles the "show all" override for the root subject — see [SubjectDetailUiState.forceRevealAll]. */
@@ -141,20 +148,29 @@ class SubjectDetailViewModel(
         _uiState.update { it.copy(forceRevealAll = !it.forceRevealAll) }
     }
 
-    /** Drills into a related subject, pushing the current one onto the back stack. */
+    /** Drills into a related subject, pushing the current one onto the back stack. Always starts
+     *  the new subject scrolled to the top, even if it was previously visited and scrolled. */
     fun navigateToRelated(subjectId: Long) {
         val current = currentSubjectId.value ?: return
         backStack.value = backStack.value + current
         currentSubjectId.value = subjectId
+        _uiState.update { it.copy(pendingScrollOffset = 0) }
     }
 
-    /** Pops the back stack if non-empty. Returns false if there was nothing to pop (caller should dismiss). */
+    /** Pops the back stack if non-empty, restoring the scroll offset [recordScrollOffset] captured
+     *  for that subject. Returns false if there was nothing to pop (caller should dismiss). */
     fun goBack(): Boolean {
         val stack = backStack.value
         val previous = stack.lastOrNull() ?: return false
         backStack.value = stack.dropLast(1)
         currentSubjectId.value = previous
+        _uiState.update { it.copy(pendingScrollOffset = scrollOffsets[previous] ?: 0) }
         return true
+    }
+
+    /** Records the live scroll offset (px) for [subjectId] so [goBack] can restore it later. */
+    fun recordScrollOffset(subjectId: Long, offset: Int) {
+        scrollOffsets[subjectId] = offset
     }
 
     fun playReading(reading: String) {

@@ -188,6 +188,86 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
+    fun `goBack restores the recorded scroll offset for the subject being returned to`() = runTest(mainDispatcherRule.dispatcher) {
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(1)
+            awaitSettled(1)
+            viewModel.recordScrollOffset(1, 240)
+
+            viewModel.navigateToRelated(2)
+            awaitSettled(2)
+
+            assertThat(viewModel.goBack()).isTrue()
+            val backAtRoot = awaitSettled(1)
+            assertThat(backAtRoot.pendingScrollOffset).isEqualTo(240)
+        }
+    }
+
+    @Test
+    fun `goBack yields a pendingScrollOffset of 0 when nothing was recorded for the subject`() = runTest(mainDispatcherRule.dispatcher) {
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(1)
+            awaitSettled(1)
+
+            viewModel.navigateToRelated(2)
+            awaitSettled(2)
+
+            assertThat(viewModel.goBack()).isTrue()
+            val backAtRoot = awaitSettled(1)
+            assertThat(backAtRoot.pendingScrollOffset).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `navigateToRelated always resets pendingScrollOffset to 0`() = runTest(mainDispatcherRule.dispatcher) {
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(1)
+            awaitSettled(1)
+
+            viewModel.navigateToRelated(2)
+            awaitSettled(2)
+            viewModel.recordScrollOffset(2, 500)
+
+            assertThat(viewModel.goBack()).isTrue()
+            awaitSettled(1)
+
+            viewModel.navigateToRelated(2)
+            val drilledAgain = awaitSettled(2)
+            assertThat(drilledAgain.pendingScrollOffset).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `open resets pendingScrollOffset to 0`() = runTest(mainDispatcherRule.dispatcher) {
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(1)
+            awaitSettled(1)
+            viewModel.recordScrollOffset(1, 300)
+
+            viewModel.navigateToRelated(2)
+            awaitSettled(2)
+
+            // Land on a non-zero pendingScrollOffset via goBack so the subsequent open() reset is
+            // an observable state change rather than a same-value no-op the StateFlow would drop.
+            assertThat(viewModel.goBack()).isTrue()
+            val backAtRoot = awaitSettled(1)
+            assertThat(backAtRoot.pendingScrollOffset).isEqualTo(300)
+
+            viewModel.open(1)
+            val reopened = awaitSettled(1)
+            assertThat(reopened.pendingScrollOffset).isEqualTo(0)
+        }
+    }
+
+    @Test
     fun `uiState reflects showPitchAccent from settings and updates when it changes`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             val state = awaitNotLoading()
