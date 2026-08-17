@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.shared.feature.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
@@ -19,6 +20,7 @@ data class AuthUiState(
     val tokenInput: String = "",
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
+    val pendingNotificationRequest: Boolean = false,
     val isAuthenticated: Boolean = false
 ) {
     val isLoading: Boolean get() = isSubmitting
@@ -29,7 +31,8 @@ class AuthViewModel(
     private val waniKaniRepository: WaniKaniRepository,
     private val syncScheduler: SyncScheduler,
     private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,
-    private val notificationCoordinator: NotificationCoordinator
+    private val notificationCoordinator: NotificationCoordinator,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -53,13 +56,20 @@ class AuthViewModel(
                     syncScheduler.schedulePeriodicSync()
                     pitchAccentScrapeScheduler.schedulePeriodicScrape()
                     notificationCoordinator.onLogin()
-                    _uiState.update { it.copy(isSubmitting = false, isAuthenticated = true) }
+                    _uiState.update { it.copy(isSubmitting = false, pendingNotificationRequest = true) }
                 }
                 is ApiResult.Error -> {
                     if (result.isAuthError) tokenRepository.clearToken()
                     _uiState.update { it.copy(isSubmitting = false, errorMessage = result.message) }
                 }
             }
+        }
+    }
+
+    fun onNotificationPermissionResult(granted: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setNotificationsEnabled(granted)
+            _uiState.update { it.copy(pendingNotificationRequest = false, isAuthenticated = true) }
         }
     }
 }

@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
@@ -18,6 +19,7 @@ import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockWebServer
 import org.junit.After
@@ -40,17 +42,24 @@ class AuthViewModelTest {
     private lateinit var syncScheduler: FakeSyncScheduler
     private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
     private lateinit var notificationCoordinator: FakeNotificationCoordinator
+    private lateinit var settingsRepository: SettingsRepository
 
     @Before
     fun setUp() {
         server = MockWebServer()
         server.start()
 
-        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
-            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
+        val scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob())
+        val tokenDataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            scope = scope,
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
-        tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
+        val settingsDataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            scope = scope,
+            produceFile = { tempFolder.newFile("settings.preferences_pb") }
+        )
+        tokenRepository = TokenRepository(tokenDataStore, FakeTokenCipher())
+        settingsRepository = SettingsRepository(settingsDataStore)
         waniKaniRepository = buildTestRepositories(server.url("/").toString()).waniKaniRepository
         syncScheduler = FakeSyncScheduler()
         pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
@@ -63,7 +72,7 @@ class AuthViewModelTest {
     }
 
     private fun createViewModel() =
-        AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler, pitchAccentScrapeScheduler, notificationCoordinator)
+        AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler, pitchAccentScrapeScheduler, notificationCoordinator, settingsRepository)
 
     @Test
     fun `submitting a blank token shows a validation error and makes no request`() = runTest(mainDispatcherRule.dispatcher) {
@@ -81,7 +90,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `submitting a valid token authenticates and schedules background sync`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `submitting a valid token shows notification prompt before authenticating`() = runTest(mainDispatcherRule.dispatcher) {
         server.enqueue(jsonResponse(userJson()))
         val viewModel = createViewModel()
 
@@ -94,10 +103,52 @@ class AuthViewModelTest {
 
             var afterSubmit = awaitItem()
             while (afterSubmit.isSubmitting) afterSubmit = awaitItem()
-            assertThat(afterSubmit.isAuthenticated).isTrue()
+            assertThat(afterSubmit.pendingNotificationRequest).isTrue()
+            assertThat(afterSubmit.isAuthenticated).isFalse()
         }
         assertThat(syncScheduler.scheduleCallCount).isEqualTo(1)
         assertThat(notificationCoordinator.onLoginCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `granting notification permission enables notifications and navigates`() = runTest(mainDispatcherRule.dispatcher) {
+        server.enqueue(jsonResponse(userJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onTokenInputChange("new-token")
+            awaitItem()
+            viewModel.submitToken()
+            var state = awaitItem()
+            while (state.isSubmitting) state = awaitItem()
+
+            viewModel.onNotificationPermissionResult(true)
+            state = awaitItem()
+            assertThat(state.isAuthenticated).isTrue()
+            assertThat(state.pendingNotificationRequest).isFalse()
+        }
+        assertThat(settingsRepository.notificationSettings.first().notificationsEnabled).isTrue()
+    }
+
+    @Test
+    fun `denying notification permission still navigates but leaves notifications disabled`() = runTest(mainDispatcherRule.dispatcher) {
+        server.enqueue(jsonResponse(userJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onTokenInputChange("new-token")
+            awaitItem()
+            viewModel.submitToken()
+            var state = awaitItem()
+            while (state.isSubmitting) state = awaitItem()
+
+            viewModel.onNotificationPermissionResult(false)
+            state = awaitItem()
+            assertThat(state.isAuthenticated).isTrue()
+        }
+        assertThat(settingsRepository.notificationSettings.first().notificationsEnabled).isFalse()
     }
 
     @Test

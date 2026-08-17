@@ -137,7 +137,7 @@ val repositoryModule = module {
 val viewModelModule = module {
     viewModel { ThemeViewModel(get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get()) }
-    viewModel { AuthViewModel(get(), get(), get(), get(), get()) }
+    viewModel { AuthViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { SplashViewModel(get(), get(), get(), get()) }
 
     viewModel {
