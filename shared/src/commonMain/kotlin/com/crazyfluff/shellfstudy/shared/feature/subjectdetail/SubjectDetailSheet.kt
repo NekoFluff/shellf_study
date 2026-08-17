@@ -176,7 +176,7 @@ fun SubjectDetailSheet(
                         .fillMaxWidth()
                         .height(if (isOpenIsh) SubjectDetailOpenHandleHeight else SubjectDetailHandleHeight)
                         .then(if (active) Modifier.anchoredDraggable(dragState, Orientation.Vertical) else Modifier)
-                        .clickable(enabled = active, onClick = onToggle)
+                        .then(if (active) Modifier.clickable(onClick = onToggle) else Modifier)
                         .testTag(handleTestTag)
                 ) {
                     if (isOpenIsh) {
