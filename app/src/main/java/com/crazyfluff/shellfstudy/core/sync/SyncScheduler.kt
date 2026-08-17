@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.sync
 
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -25,6 +26,7 @@ class WorkManagerSyncScheduler(
                     .setRequiresBatteryNotLow(true)
                     .build()
             )
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, Duration.ofMinutes(1))
             .build()
         WorkManager.getInstance(context)
             .enqueueUniquePeriodicWork(SYNC_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
