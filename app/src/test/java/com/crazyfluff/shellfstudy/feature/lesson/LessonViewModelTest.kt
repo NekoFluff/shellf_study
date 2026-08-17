@@ -1217,6 +1217,97 @@ class LessonViewModelTest {
         assertThat(lessonSessionRepository.load()).isNull()
     }
 
+    @Test
+    fun `selectFirst selects only the first n items from the available lessons`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            // Default pre-selects all 2 (batch size >= available count)
+            assertThat(state.selectedAssignmentIds).hasSize(2)
+
+            viewModel.selectFirst(1)
+            val afterSelectFirst = awaitItem()
+            assertThat(afterSelectFirst.selectedAssignmentIds).containsExactly(101L)
+        }
+    }
+
+    @Test
+    fun `onStudyCardSwiped with an out-of-range index is a no-op`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            val studyState = awaitItem()
+            assertThat(studyState.studyIndex).isEqualTo(0)
+            assertThat(studyState.studyItems).hasSize(1)
+
+            viewModel.onStudyCardSwiped(5) // out of range for a 1-item list
+            expectNoEvents()
+            assertThat(viewModel.uiState.value.studyIndex).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `submitAnswer with blank input is a no-op`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            // Empty input — submitAnswer must not grade or produce feedback
+            viewModel.submitAnswer()
+            expectNoEvents()
+            assertThat(viewModel.uiState.value.feedback).isNull()
+            assertThat(viewModel.uiState.value.remainingQuizCount).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `submitAnswer while feedback is already showing is a no-op`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback).isNotNull()
+            val remainingAfterFirstSubmit = feedbackState.remainingQuizCount
+
+            // Second submit while feedback is visible — must be a no-op
+            viewModel.submitAnswer()
+            expectNoEvents()
+            assertThat(viewModel.uiState.value.remainingQuizCount).isEqualTo(remainingAfterFirstSubmit)
+        }
+    }
+
     private fun kanjiAssignmentsJson() = """
         {
           "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
