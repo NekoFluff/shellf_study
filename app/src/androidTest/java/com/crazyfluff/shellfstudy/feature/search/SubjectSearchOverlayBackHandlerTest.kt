@@ -22,24 +22,6 @@ class SubjectSearchOverlayBackHandlerTest {
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun systemBack_whileActive_closesOverlayInsteadOfLeavingScreen() {
-        var active = true
-        composeTestRule.setContent {
-            SubjectSearchOverlay(
-                active = active,
-                onActiveChange = { active = it },
-                uiState = SearchUiState(),
-                onQueryChange = {}
-            )
-        }
-
-        Espresso.pressBack()
-
-        composeTestRule.waitForIdle()
-        assert(!active)
-    }
-
-    @Test
     fun systemBack_whileInactive_isNotConsumedByTheOverlay() {
         var active = false
         composeTestRule.setContent {

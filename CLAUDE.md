@@ -98,3 +98,39 @@ Every feature should have both ViewModel/business-logic coverage and screen/UI c
 - **Quiz engine invariants** — `QuizQueue.moveMatchingToFront` uses `indexOfLast`; `QuizGradingGuard` blocks concurrent submissions.
 - **Silent drops** — missing DB rows (e.g. subject not cached) produce empty collections, not crashes.
 - **Guard clauses** — `startSelectedLessons` with empty selection, `pauseActiveSegment` after session complete, etc.
+
+### Running instrumented tests safely
+
+**Never run `connectedAndroidTest` on a physical device** — `MainActivityFlowTest` calls `tokenRepository.clearToken()` in `setUp()`, which will log out a real device. Always target the emulator:
+
+```bash
+# Run all instrumented tests — emulator only
+ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest
+
+# Run a single test class or method on emulator
+ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class="com.example.MyTest#myMethod"
+```
+
+`ANDROID_SERIAL` is the correct way to pin `adb` to one device; `-Pandroid.device.serial` is not a standard Gradle flag and does not prevent other connected devices from being targeted.
+
+### When to run instrumented tests
+
+Instrumented tests are slow (~3–5 min). Don't run them on every change. Run them when:
+
+- You add or modify a file in `app/src/androidTest/`
+- You change back-navigation logic (anything touching `BackHandler`, `NavHost`, or `onBackPressed`)
+- You change token storage (`KeychainTokenCipher`, `KeystoreTokenCipher`, `TokenRepository`)
+- Before committing a batch of changes that touch screens or navigation
+
+For everything else — ViewModel logic, repositories, quiz engine, screen composition — the JVM tests are sufficient:
+
+```bash
+./gradlew :shared:testAndroidHostTest    # commonTest (fast)
+./gradlew :app:testDebugUnitTest         # Robolectric (medium)
+```
+
+### Known Compose test limitations
+
+- **`swipeUp()` on `anchoredDraggable` handles does not call toggle callbacks** — swipe drives internal drag state only; use `performClick()` to trigger `clickable(onClick = ...)` callbacks. Do not write tests that `swipeUp` and then assert a callback was called on a draggable handle.
+- **`Espresso.pressBack()` with `BackHandler` in a bare `ComponentActivity` test** — unreliable on API 33+ (predictive back gesture). System-back interception is tested at the full-activity level in `MainActivityFlowTest` instead.

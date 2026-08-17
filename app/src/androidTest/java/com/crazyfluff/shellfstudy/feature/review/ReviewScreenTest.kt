@@ -17,8 +17,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeUp
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
@@ -427,23 +425,6 @@ class ReviewScreenTest {
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.DETAILS_TOGGLE).performClick()
         assert(toggled)
     }
-
-    @Test
-    fun detailsHandle_swipingUp_invokesCallback_onceAnswered() {
-        var toggled = false
-        setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.READING,
-                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず")
-            ),
-            onToggleDetails = { toggled = true }
-        )
-
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.DETAILS_TOGGLE).performTouchInput { swipeUp() }
-        assert(toggled)
-    }
-
 
     @Test
     fun dontKnowButton_isDisplayedBeforeAnswering_andInvokesCallback() {
