@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -63,8 +64,8 @@ internal fun pitchPatternColor(pitchNumber: Int, moraCount: Int): Color {
 /**
  * Replicates Smouldering Durtles' `PitchInfoDiagramView`: one dot per mora, connected by lines,
  * high/low position derived from [pitchAccent]'s pitch number, color-coded by pattern
- * (heiban/atamadaka/nakadaka/odaka). Odaka gets a trailing drop-tick after the last mora — without
- * it, odaka and heiban are visually identical (they only differ in what happens on the next word).
+ * (heiban/atamadaka/nakadaka/odaka). Odaka gets a trailing open particle dot (hollow circle) after
+ * the last mora — without it, odaka and heiban are visually identical.
  */
 @Composable
 fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modifier = Modifier) {
@@ -86,11 +87,11 @@ fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modi
     val dotRadiusPx = with(density) { 3.dp.toPx() }
     val tickLengthPx = with(density) { 5.dp.toPx() }
     // Size the canvas to the diagram's actual content width (mora glyph widths plus a small
-    // trailing allowance for the odaka drop-tick / dot radius) instead of fillMaxWidth() —
+    // trailing allowance for the odaka particle dot / dot radius) instead of fillMaxWidth() —
     // otherwise short readings draw their dots crammed into a corner of a much wider canvas,
     // leaving a large dead gap before whatever follows in the row (e.g. the play button).
     val contentWidthDp = with(density) {
-        (moraWidths.sum() + dotRadiusPx + (if (pitchNumber == moraCount) tickLengthPx else 0f)).toDp()
+        (moraWidths.sum() + dotRadiusPx + (if (pitchNumber == moraCount) tickLengthPx + dotRadiusPx else 0f)).toDp()
     }
     Canvas(
         modifier = modifier
@@ -116,7 +117,9 @@ fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modi
         }
         if (pitchNumber == moraCount) {
             val last = points.last()
-            drawLine(color = color, start = last, end = Offset(last.x + tickLength, lowY), strokeWidth = strokeWidth)
+            val particleCenter = Offset(last.x + tickLength, lowY)
+            drawLine(color = color, start = last, end = particleCenter, strokeWidth = strokeWidth)
+            drawCircle(color = color, radius = dotRadius, center = particleCenter, style = Stroke(width = strokeWidth))
         }
         points.forEach { point -> drawCircle(color = color, radius = dotRadius, center = point) }
     }
