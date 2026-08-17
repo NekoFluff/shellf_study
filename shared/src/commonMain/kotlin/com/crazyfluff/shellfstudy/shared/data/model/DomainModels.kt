@@ -61,6 +61,10 @@ data class LessonItem(
     val characters: String?,
     val characterImageUrl: String? = null,
     val level: Int,
+    /** The subject's position within its level's lesson order, per WaniKani's own intended
+     *  sequencing — used as the tie-break when [com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPrioritizer]
+     *  reorders a level's items. */
+    val lessonPosition: Int = 0,
     val meanings: List<String>,
     val readings: List<String>,
     val meaningMnemonic: String?,

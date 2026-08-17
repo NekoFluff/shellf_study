@@ -93,8 +93,9 @@ class LessonViewModelTest {
     }
 
     private fun TestScope.createViewModel() = LessonViewModel(
-        assignmentRepository, outboxRepository, lessonSessionRepository, pitchAccentRepository, settingsRepository,
-        subjectRepository, strokeOrderRepository, pronunciationAudioPlayer, appForegroundTracker, backgroundScope
+        assignmentRepository, repositories.statsRepository, outboxRepository, lessonSessionRepository,
+        pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository,
+        pronunciationAudioPlayer, appForegroundTracker, backgroundScope
     )
 
     /** Routes by path — refreshing the lesson queue now syncs subjects and assignments, in either order. */

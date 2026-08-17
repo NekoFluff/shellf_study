@@ -244,6 +244,7 @@ class AssignmentRepository(
                             characters = subject.characters,
                             characterImageUrl = subject.characterImageUrl,
                             level = subject.level,
+                            lessonPosition = subject.lessonPosition,
                             meanings = subject.acceptedMeanings(),
                             readings = subject.acceptedGradableReadings(),
                             meaningMnemonic = subject.meaningMnemonic,

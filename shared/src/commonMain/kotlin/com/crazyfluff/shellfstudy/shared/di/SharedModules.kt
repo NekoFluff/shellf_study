@@ -175,6 +175,7 @@ val viewModelModule = module {
     viewModel {
         LessonViewModel(
             assignmentRepository = get(),
+            statsRepository = get(),
             outboxRepository = get(),
             lessonSessionRepository = get(),
             pitchAccentRepository = get(),

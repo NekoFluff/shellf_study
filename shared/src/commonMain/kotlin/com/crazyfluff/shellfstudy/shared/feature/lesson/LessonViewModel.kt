@@ -16,6 +16,7 @@ import com.crazyfluff.shellfstudy.shared.data.PersistedLessonQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
@@ -105,6 +106,7 @@ private typealias LessonItemProgress = QuizItemProgress<LessonItem>
 
 class LessonViewModel(
     private val assignmentRepository: AssignmentRepository,
+    private val statsRepository: StatsRepository,
     private val outboxRepository: OutboxRepository,
     private val lessonSessionRepository: LessonSessionRepository,
     private val pitchAccentRepository: PitchAccentProvider,
@@ -323,8 +325,15 @@ class LessonViewModel(
         when (val result = assignmentRepository.refreshLessonQueue()) {
             is ApiResult.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
             is ApiResult.Success -> {
-                val items = assignmentRepository.observeLessonQueue().first()
-                    .sortedWith(compareBy({ it.level }, { it.subjectType.ordinal }, { it.assignmentId }))
+                val currentLevel = statsRepository.observeCurrentLevel().first() ?: 0
+                val levelUpProgress = assignmentRepository.observeLevelUpProgress(currentLevel).first()
+                val lessonsToday = assignmentRepository.observeLessonsCompletedToday().first()
+                val dailyGoal = settingsRepository.settings.first().dailyLessonGoal
+                val items = LessonPrioritizer.prioritize(
+                    items = assignmentRepository.observeLessonQueue().first(),
+                    levelUpProgress = levelUpProgress,
+                    isStrained = lessonsToday >= dailyGoal
+                )
                 if (items.isEmpty()) {
                     _uiState.update { it.copy(isLoading = false, hasNoLessonsAvailable = true) }
                 } else {
