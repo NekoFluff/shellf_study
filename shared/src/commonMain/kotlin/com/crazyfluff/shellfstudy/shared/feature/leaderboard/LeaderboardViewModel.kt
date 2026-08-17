@@ -131,4 +131,12 @@ class LeaderboardViewModel(
             friendStatsRepository.removeFriendCache(id)
         }
     }
+
+    fun onEditNickname(id: String, nickname: String) {
+        val trimmed = nickname.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            friendRepository.updateNickname(id, trimmed)
+        }
+    }
 }

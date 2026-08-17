@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
+import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.EinkExtraColors
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
@@ -85,7 +87,8 @@ fun LeaderboardRoute(
         onAddFriendNicknameChange = viewModel::onAddFriendNicknameChange,
         onAddFriendTokenChange = viewModel::onAddFriendTokenChange,
         onAddFriendConfirm = viewModel::onAddFriendConfirm,
-        onRemoveFriend = viewModel::onRemoveFriend
+        onRemoveFriend = viewModel::onRemoveFriend,
+        onEditNickname = viewModel::onEditNickname
     )
 }
 
@@ -99,10 +102,12 @@ fun LeaderboardScreen(
     onAddFriendTokenChange: (String) -> Unit,
     onAddFriendConfirm: () -> Unit,
     onRemoveFriend: (String) -> Unit,
+    onEditNickname: (String, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showAddFriendDialog by remember { mutableStateOf(false) }
     var friendToDelete by remember { mutableStateOf<FriendEntry?>(null) }
+    var friendToEdit by remember { mutableStateOf<FriendEntry?>(null) }
     val palette = avatarPalette()
 
     LaunchedEffect(uiState.addFriendSuccess) {
@@ -155,7 +160,9 @@ fun LeaderboardScreen(
                     itemsIndexed(uiState.friends) { index, friend ->
                         FriendCard(
                             friend = friend,
+                            stats = uiState.leaderboard?.entries?.find { it.friendEntryId == friend.id },
                             avatarColor = palette[index % palette.size],
+                            onEdit = { friendToEdit = friend },
                             onDelete = { friendToDelete = friend },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -188,6 +195,15 @@ fun LeaderboardScreen(
             confirmLabel = "Remove",
             onConfirm = { onRemoveFriend(entry.id); friendToDelete = null },
             onDismiss = { friendToDelete = null }
+        )
+    }
+
+    val editing = friendToEdit
+    if (editing != null) {
+        EditNicknameDialog(
+            initialNickname = editing.nickname,
+            onConfirm = { onEditNickname(editing.id, it); friendToEdit = null },
+            onDismiss = { friendToEdit = null }
         )
     }
 }
@@ -242,7 +258,9 @@ private fun EmptyFriendsState(
 @Composable
 private fun FriendCard(
     friend: FriendEntry,
+    stats: FriendStats?,
     avatarColor: Color,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -250,7 +268,7 @@ private fun FriendCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -268,12 +286,28 @@ private fun FriendCard(
                 )
             }
             Spacer(Modifier.width(14.dp))
-            Text(
-                text = friend.nickname,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = friend.nickname,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
+                )
+                if (stats != null) {
+                    Text(
+                        text = "${stats.username} · Level ${stats.level}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
+            IconButton(onClick = onEdit) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "Edit ${friend.nickname}",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.Delete,
@@ -335,6 +369,36 @@ private fun AddFriendDialog(
                 } else {
                     Text("Validate & Add")
                 }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun EditNicknameDialog(
+    initialNickname: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var nickname by remember { mutableStateOf(initialNickname) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit nickname") },
+        text = {
+            OutlinedTextField(
+                value = nickname,
+                onValueChange = { nickname = it },
+                label = { Text("Nickname") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(nickname) }, enabled = nickname.isNotBlank()) {
+                Text("Save")
             }
         },
         dismissButton = {
