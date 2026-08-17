@@ -195,9 +195,11 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                         drawCircle(color, 4.dp.toPx(), Offset(xOf(ms), yOf(lvl)))
                     } else {
                         val path = Path()
+                        var prevY = 0f
                         points.forEachIndexed { pIdx, (ms, lvl) ->
                             val x = xOf(ms); val y = yOf(lvl)
-                            if (pIdx == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                            if (pIdx == 0) { path.moveTo(x, y); prevY = y }
+                            else { path.lineTo(x, prevY); path.lineTo(x, y); prevY = y }
                         }
                         drawPath(path, color, style = Stroke(strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round))
                         val (lastMs, lastLvl) = points.last()
