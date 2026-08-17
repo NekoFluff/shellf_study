@@ -2,8 +2,8 @@ package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -83,17 +83,26 @@ fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modi
     }
 
     val diagramHeightDp = 20.dp
+    val dotRadiusPx = with(density) { 3.dp.toPx() }
+    val tickLengthPx = with(density) { 5.dp.toPx() }
+    // Size the canvas to the diagram's actual content width (mora glyph widths plus a small
+    // trailing allowance for the odaka drop-tick / dot radius) instead of fillMaxWidth() —
+    // otherwise short readings draw their dots crammed into a corner of a much wider canvas,
+    // leaving a large dead gap before whatever follows in the row (e.g. the play button).
+    val contentWidthDp = with(density) {
+        (moraWidths.sum() + dotRadiusPx + (if (pitchNumber == moraCount) tickLengthPx else 0f)).toDp()
+    }
     Canvas(
         modifier = modifier
-            .fillMaxWidth()
+            .width(contentWidthDp)
             .height(diagramHeightDp)
             .testTag(PitchAccentTestTags.DIAGRAM)
     ) {
         val highY = size.height * 0.2f
         val lowY = size.height * 0.8f
-        val dotRadius = with(density) { 3.dp.toPx() }
+        val dotRadius = dotRadiusPx
         val strokeWidth = with(density) { 1.5.dp.toPx() }
-        val tickLength = with(density) { 5.dp.toPx() }
+        val tickLength = tickLengthPx
 
         var x = 0f
         val points = moraWidths.mapIndexed { index, width ->

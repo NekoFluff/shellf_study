@@ -1,12 +1,17 @@
 package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentDiagram
@@ -63,6 +68,21 @@ class PitchAccentDiagramTest {
         }
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(4)
+    }
+
+    @Test
+    fun `diagram sizes itself to content width instead of filling the available row`() {
+        composeTestRule.setContent {
+            Box(modifier = Modifier.width(400.dp)) {
+                PitchAccentDiagram(
+                    reading = "くつ",
+                    pitchAccent = PitchAccent(reading = "クツ", partOfSpeech = null, pitchNumber = 2)
+                )
+            }
+        }
+
+        val bounds = composeTestRule.onNodeWithTag(PitchAccentTestTags.DIAGRAM).getUnclippedBoundsInRoot()
+        assertThat((bounds.right - bounds.left).value).isLessThan(150f)
     }
 
     @Test

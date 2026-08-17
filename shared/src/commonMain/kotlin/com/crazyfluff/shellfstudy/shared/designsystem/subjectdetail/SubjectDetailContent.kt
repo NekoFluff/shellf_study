@@ -290,9 +290,8 @@ fun VocabReadingRow(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (showPitchAccent && pitchAccents.isNotEmpty()) {
-            // weight(1f, fill = false): claim only the space left after the play button, instead
-            // of the diagram's Canvas.fillMaxWidth() greedily filling the whole row and pushing
-            // the button out of the visible area entirely.
+            // weight(1f, fill = false): the diagram sizes itself to its content, this just caps
+            // its max width for unusually long readings so the play button can't be pushed off-screen.
             PitchAccentReadingRow(reading = reading, pitchAccents = pitchAccents, modifier = Modifier.weight(1f, fill = false))
         } else {
             Text(reading, style = MaterialTheme.typography.bodyLarge)
