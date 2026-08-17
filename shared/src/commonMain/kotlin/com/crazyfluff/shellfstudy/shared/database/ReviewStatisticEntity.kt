@@ -31,12 +31,6 @@ interface ReviewStatisticDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(statistics: List<ReviewStatisticEntity>)
 
-    @Query("SELECT * FROM review_statistics WHERE subjectId = :subjectId")
-    suspend fun getBySubjectId(subjectId: Long): ReviewStatisticEntity?
-
     @Query("SELECT * FROM review_statistics")
     fun observeAll(): Flow<List<ReviewStatisticEntity>>
-
-    @Query("SELECT COALESCE(SUM(meaningCorrect + meaningIncorrect + readingCorrect + readingIncorrect), 0) FROM review_statistics")
-    fun observeTotalReviewsCount(): Flow<Int>
 }

@@ -3,9 +3,11 @@ package com.crazyfluff.shellfstudy.shared.di
 import com.crazyfluff.shellfstudy.shared.ThemeViewModel
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
 import com.crazyfluff.shellfstudy.shared.data.FriendRepository
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
+import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
@@ -32,6 +34,9 @@ import com.crazyfluff.shellfstudy.shared.network.AuthTokenProvider
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient
 import com.crazyfluff.shellfstudy.shared.network.waniKaniJson
+import com.crazyfluff.shellfstudy.shared.network.weblio.KtorWeblioApi
+import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi
+import com.crazyfluff.shellfstudy.shared.network.weblio.createWeblioHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -63,11 +68,7 @@ val networkModule = module {
 }
 
 val weblioNetworkModule = module {
-    single<com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi> {
-        com.crazyfluff.shellfstudy.shared.network.weblio.KtorWeblioApi(
-            com.crazyfluff.shellfstudy.shared.network.weblio.createWeblioHttpClient()
-        )
-    }
+    single<WeblioApi> { KtorWeblioApi(createWeblioHttpClient()) }
 }
 
 val repositoryModule = module {
@@ -78,7 +79,6 @@ val repositoryModule = module {
             api = get(),
             subjectDao = get(),
             srsSystemDao = get(),
-            studyMaterialDao = get(),
             syncStateDao = get(),
             pitchAccentProvider = get()
         )
@@ -110,6 +110,8 @@ val repositoryModule = module {
     single { OutboxRepository(outboxDao = get(), outboxSyncScheduler = get(), dataStore = get()) }
     single { WeblioPitchAccentParser() }
     single { DashboardCacheRepository(get()) }
+    single { LogoutCoordinator(tokenRepository = get(), syncScheduler = get(), pitchAccentScrapeScheduler = get(), notificationCoordinator = get()) }
+    single { DashboardSyncCoordinator(waniKaniRepository = get(), syncOrchestrator = get(), dashboardCacheRepository = get()) }
     single { LessonSessionRepository(dataStore = get(), json = get()) }
     single { ReviewSessionRepository(dataStore = get(), json = get()) }
     single { FriendRepository(dataStore = get(), json = get(), tokenCipher = get()) }
@@ -155,22 +157,17 @@ val viewModelModule = module {
 
     viewModel {
         DashboardViewModel(
-            waniKaniRepository = get(),
-            tokenRepository = get(),
             reviewSessionRepository = get(),
             lessonSessionRepository = get(),
             settingsRepository = get(),
             subjectRepository = get(),
             assignmentRepository = get(),
             statsRepository = get(),
-            dashboardCacheRepository = get(),
             outboxRepository = get(),
             outboxSyncScheduler = get(),
-            syncOrchestrator = get(),
-            syncScheduler = get(),
-            pitchAccentScrapeScheduler = get(),
-            notificationCoordinator = get(),
-            friendStatsRepository = get()
+            friendStatsRepository = get(),
+            logoutCoordinator = get(),
+            dashboardSyncCoordinator = get()
         )
     }
 

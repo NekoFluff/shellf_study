@@ -11,8 +11,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -31,13 +33,14 @@ class SearchViewModel(
     private val subjectRepository: SubjectRepository
 ) : ViewModel() {
 
-    private val query = MutableStateFlow("")
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            query
+            _uiState
+                .map { it.query }
+                .distinctUntilChanged()
                 .debounce(QUERY_DEBOUNCE_MILLIS)
                 .flatMapLatest { currentQuery ->
                     val trimmed = currentQuery.trim()
@@ -65,7 +68,6 @@ class SearchViewModel(
     }
 
     fun onQueryChange(value: String) {
-        query.value = value
         _uiState.update { it.copy(query = value) }
     }
 

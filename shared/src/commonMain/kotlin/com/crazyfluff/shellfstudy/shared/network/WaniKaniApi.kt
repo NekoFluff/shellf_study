@@ -101,17 +101,6 @@ class WaniKaniApi(
     suspend fun getReviewStatisticsPage(url: String): WkCollectionResponse<ReviewStatisticData> =
         httpClient.get(url).body()
 
-    suspend fun getStudyMaterials(
-        updatedAfter: String? = null
-    ): WkCollectionResponse<StudyMaterialData> =
-        httpClient.get("${baseUrl}study_materials") {
-            parameter("updated_after", updatedAfter)
-        }.body()
-
-    /** Follows a study_materials collection's `pages.next_url` — see [collectAllPages]. */
-    suspend fun getStudyMaterialsPage(url: String): WkCollectionResponse<StudyMaterialData> =
-        httpClient.get(url).body()
-
     // GET /v2/reviews is deliberately not implemented: it's deprecated and always returns an empty
     // array of data (confirmed against the docs) — WaniKani no longer stores individual review
     // history server-side.

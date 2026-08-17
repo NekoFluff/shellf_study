@@ -7,8 +7,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.model.toPronunciationAudios
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
-import com.crazyfluff.shellfstudy.shared.database.StudyMaterialDao
-import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
@@ -26,20 +24,16 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.hours
 
 private const val RESOURCE_SUBJECTS = "subjects"
 private const val RESOURCE_SRS_SYSTEMS = "srs_systems"
-private const val RESOURCE_STUDY_MATERIALS = "study_materials"
 private val SUBJECTS_STALENESS = 1.days
-private val STUDY_MATERIALS_STALENESS = 1.hours
 
-/** Owns subjects, SRS systems, and study materials — the full WaniKani content library. */
+/** Owns subjects and SRS systems — the full WaniKani content library. */
 class SubjectRepository(
     private val api: WaniKaniApi,
     private val subjectDao: SubjectDao,
     private val srsSystemDao: SrsSystemDao,
-    private val studyMaterialDao: StudyMaterialDao,
     private val syncStateDao: SyncStateDao,
     private val pitchAccentProvider: PitchAccentProvider
 ) {
@@ -108,27 +102,6 @@ class SubjectRepository(
                         passingStagePosition = item.data.passingStagePosition,
                         burningStagePosition = item.data.burningStagePosition,
                         stages = item.data.stages
-                    )
-                }
-            )
-        }
-
-    suspend fun syncStudyMaterials(force: Boolean = false): ApiResult<Unit> =
-        runSync(syncStateDao, RESOURCE_STUDY_MATERIALS, force, STUDY_MATERIALS_STALENESS) { cursor ->
-            val items = collectAllPages(
-                firstPage = { api.getStudyMaterials(updatedAfter = cursor) },
-                nextPage = { url -> api.getStudyMaterialsPage(url) }
-            )
-            studyMaterialDao.upsertAll(
-                items.map { item ->
-                    StudyMaterialEntity(
-                        id = item.id,
-                        subjectId = item.data.subjectId,
-                        subjectType = item.data.subjectType,
-                        meaningNote = item.data.meaningNote,
-                        readingNote = item.data.readingNote,
-                        meaningSynonyms = item.data.meaningSynonyms,
-                        hidden = item.data.hidden
                     )
                 }
             )

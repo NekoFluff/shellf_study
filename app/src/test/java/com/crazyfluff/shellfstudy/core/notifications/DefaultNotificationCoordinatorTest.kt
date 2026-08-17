@@ -17,7 +17,6 @@ import com.crazyfluff.shellfstudy.fakes.FakePitchAccentCacheDao
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeSrsSystemDao
 import com.crazyfluff.shellfstudy.fakes.FakeStudyActivityDao
-import com.crazyfluff.shellfstudy.fakes.FakeStudyMaterialDao
 import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncStateDao
 import com.crazyfluff.shellfstudy.fakes.FakeWeblioApi
@@ -63,7 +62,7 @@ class DefaultNotificationCoordinatorTest {
             FakePitchAccentBundledSource(emptyMap()), FakePitchAccentCacheDao(), FakeWeblioApi(), WeblioPitchAccentParser()
         )
         val srsSystemDao = FakeSrsSystemDao()
-        val subjectRepository = SubjectRepository(api, subjectDao, srsSystemDao, FakeStudyMaterialDao(), syncStateDao, pitchAccentRepository)
+        val subjectRepository = SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository)
         assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao)
         statsRepository = StatsRepository(api, FakeReviewStatisticDao(), FakeLevelProgressionDao(), FakeStudyActivityDao(), syncStateDao)
 

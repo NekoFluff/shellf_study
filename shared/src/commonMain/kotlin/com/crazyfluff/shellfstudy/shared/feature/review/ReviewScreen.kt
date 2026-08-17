@@ -42,7 +42,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -90,6 +89,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.label
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
@@ -355,14 +355,6 @@ fun ReviewScreen(
         lastDetailSubjectId?.let { subjectId ->
             lastDetailQuestionType?.let { questionType ->
                 val active = !isSearchActive && uiState.feedback != null
-                // Instant marker (not a duration span) for a captured System Trace — labels the
-                // frame where `active` first flips true, i.e. the frame right after Submit, so the
-                // AnchoredDraggableState/Surface first-mount cost this gates is easy to find.
-                DisposableEffect(active) {
-                    if (active) {
-                    }
-                    onDispose {}
-                }
                 SubjectDetailSheet(
                     subjectId = subjectId,
                     active = active,
@@ -502,14 +494,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
             val childConstraints = Constraints(maxWidth = 200.dp.roundToPx())
             val placeables = measurables.map { it.measure(childConstraints) }
             layout(0, 0) { placeables.forEach { it.place(0, 0) } }
-        }
-        // Instant marker for a captured System Trace — labels the frame where `rankChange` first
-        // turns non-null, i.e. right after Submit, so RankChangeChip's enter animation is easy to
-        // find (the animation itself runs on Compose's own clock, so there's nothing to bracket).
-        DisposableEffect(uiState.rankChange) {
-            if (uiState.rankChange != null) {
-            }
-            onDispose {}
         }
         AnimatedVisibility(
             visible = uiState.rankChange != null,
@@ -721,7 +705,7 @@ private fun SessionCompleteContent(
     }
 }
 
-private fun SlowAnswer.toRow(): SessionAnswerRow = SessionAnswerRow(
+private fun SlowAnswer<ReviewItem>.toRow(): SessionAnswerRow = SessionAnswerRow(
     label = item.characters ?: item.meanings.firstOrNull() ?: "?",
     typeLabel = type.label,
     elapsedMs = elapsedMs,

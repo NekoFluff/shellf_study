@@ -89,9 +89,6 @@ interface AssignmentDao {
     @Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL AND startedAt >= :startOfDayIso")
     fun observeStartedTodayCount(startOfDayIso: String): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND srsStage = 9")
-    fun observeBurnedCount(): Flow<Int>
-
     @Query("SELECT startedAt FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL")
     fun observeAllStartedTimestamps(): Flow<List<String>>
 

@@ -6,6 +6,7 @@ import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
@@ -23,7 +24,7 @@ import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.shared.quiz.ActiveSegmentTracker
+import com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord
 import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerOutcome
@@ -31,6 +32,8 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
 import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
+import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
@@ -42,7 +45,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -96,14 +98,10 @@ data class LessonUiState(
     val sessionMissedItems: List<LessonItem> = emptyList(),
     val sessionTotalElapsedMs: Long = 0L,
     val sessionAverageTimePerItemMs: Long = 0L,
-    val sessionSlowestAnswers: List<LessonSlowAnswer> = emptyList()
+    val sessionSlowestAnswers: List<SlowAnswer<LessonItem>> = emptyList()
 )
 
-data class LessonSlowAnswer(val item: LessonItem, val type: QuestionType, val elapsedMs: Long, val isCorrect: Boolean)
-
 private typealias LessonItemProgress = QuizItemProgress<LessonItem>
-
-private data class LessonAnsweredQuestionRecord(val item: LessonItem, val type: QuestionType, val isCorrect: Boolean, val elapsedMs: Long)
 
 class LessonViewModel(
     private val assignmentRepository: AssignmentRepository,
@@ -132,16 +130,40 @@ class LessonViewModel(
     // a resume starts this list fresh, so that card only reflects answers given since the most
     // recent resume. activeElapsedMs, by contrast, is restored from persisted state on resume (see
     // resumeQuizPhase) so the total/average time summaries stay accurate across a resume.
-    private val answeredQuestions = mutableListOf<LessonAnsweredQuestionRecord>()
+    private val answeredQuestions = mutableListOf<AnsweredQuestionRecord<LessonItem>>()
 
-    // Tracks only the time the quiz was actively being viewed. See ActiveSegmentTracker.
-    private val activeSegmentTracker = ActiveSegmentTracker()
+    // Tracks only the time the quiz was actively being viewed — see QuizSessionTiming. Pause skips
+    // re-persisting once the session is complete or abandoned (would resurrect a stale session in
+    // DataStore), and also skips it outside the QUIZ phase — currentPersistSnapshot() always writes
+    // phase = QUIZ, and in STUDY phase the correct snapshot is already kept current by
+    // persistStudySnapshot on every card change; overwriting it here with an empty-queue QUIZ
+    // record would make resumeQuizPhase() misread it as "session complete". The foreground tracker
+    // calls resume() unconditionally on app-foreground, so a segment can be running even while in
+    // STUDY phase — without this guard, a Home press in STUDY phase would write the corrupt snapshot.
+    private val sessionTiming = QuizSessionTiming(
+        onResume = { now -> _uiState.update { it.copy(sessionActiveSegmentStartMs = now) } },
+        onPause = pause@{ newElapsed ->
+            _uiState.update { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
+            if (_uiState.value.isSessionComplete || _uiState.value.isAbandoned) return@pause
+            if (_uiState.value.phase != LessonPhase.QUIZ) return@pause
+            applicationScope.launch { persistCurrentState() }
+        }
+    )
     private var questionShownAtMs: Long = 0L
+
+    // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
+    // flags as a plain field instead of calling `settingsRepository.settings.first()` — see
+    // ReviewViewModel.latestSettings's doc comment for why a fresh Flow collection here measurably
+    // janks the post-submit animation. AppSettings()'s defaults match SettingsRepository's
+    // DataStore defaults, so the narrow window before this field's first real emission lands is
+    // harmless.
+    private var latestSettings = AppSettings()
 
     init {
         loadOrResume()
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
+                latestSettings = settings
                 _uiState.update {
                     it.copy(
                         showPitchAccent = settings.showPitchAccent,
@@ -153,14 +175,9 @@ class LessonViewModel(
                 }
             }
         }
-        // The initial value is handled by beginQuiz/resumeQuizPhase/resumeActiveSegment below instead
-        // — dropped here so a ViewModel created while already in the foreground (the overwhelmingly
-        // common case) doesn't publish a redundant extra uiState emission for it.
-        viewModelScope.launch {
-            appForegroundTracker.isForeground.drop(1).collect { isForeground ->
-                if (isForeground) resumeActiveSegment() else pauseActiveSegment()
-            }
-        }
+        // The initial value is handled by beginQuiz/resumeQuizPhase/sessionTiming.resume() below
+        // instead — see QuizSessionTiming.wireForegroundTracking's doc comment.
+        sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
     }
 
     /** Explicit fresh fetch — bound to the error screen's retry action, so it always discards any
@@ -263,10 +280,10 @@ class LessonViewModel(
         answeredQuestions.clear()
         // Restores the quiz's accumulated active time rather than restarting the clock — this is
         // deliberately *not* wall-clock time since the quiz began; time spent away (backgrounded, or
-        // navigated off and back) must not count. resumeActiveSegment then starts a fresh viewing
+        // navigated off and back) must not count. sessionTiming.resume() then starts a fresh viewing
         // segment on top of that restored base, so the clock resumes right where it left off.
-        activeSegmentTracker.elapsedMs = persisted.sessionActiveElapsedMs
-        resumeActiveSegment()
+        sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
+        sessionTiming.resume()
         questionShownAtMs = Clock.System.now().toEpochMilliseconds()
         totalQuizCount = persisted.totalQuizCount
         val next = quizQueue.current
@@ -285,8 +302,8 @@ class LessonViewModel(
                 currentQuizItem = next?.item,
                 currentQuestionType = next?.type,
                 isSessionComplete = next == null,
-                sessionActiveElapsedMs = activeSegmentTracker.elapsedMs,
-                sessionActiveSegmentStartMs = activeSegmentTracker.segmentStartMs,
+                sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null,
                 sessionItemsLearned = summary?.itemsLearned ?: it.sessionItemsLearned,
@@ -459,8 +476,8 @@ class LessonViewModel(
         progressByAssignmentId.clear()
         items.forEach { item -> progressByAssignmentId[item.assignmentId] = LessonItemProgress(item) }
         answeredQuestions.clear()
-        activeSegmentTracker.elapsedMs = 0L
-        resumeActiveSegment()
+        sessionTiming.elapsedMs = 0L
+        sessionTiming.resume()
         questionShownAtMs = Clock.System.now().toEpochMilliseconds()
 
         val next = quizQueue.current
@@ -474,8 +491,8 @@ class LessonViewModel(
                 answerInput = "",
                 feedback = null,
                 isSessionComplete = next == null,
-                sessionActiveElapsedMs = activeSegmentTracker.elapsedMs,
-                sessionActiveSegmentStartMs = activeSegmentTracker.segmentStartMs,
+                sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null
             )
@@ -526,7 +543,7 @@ class LessonViewModel(
     ) {
         val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { LessonItemProgress(item) }
         val questionElapsedMs = Clock.System.now().toEpochMilliseconds() - questionShownAtMs
-        answeredQuestions.add(LessonAnsweredQuestionRecord(item, type, isCorrect, questionElapsedMs))
+        answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, questionElapsedMs))
 
         quizQueue.removeCurrent()
         val justCompletedItem = if (!isCorrect) {
@@ -569,7 +586,9 @@ class LessonViewModel(
             )
         }
 
-        val settings = settingsRepository.settings.first()
+        // Reads the field kept warm by the settings collector in init{} instead of
+        // `settingsRepository.settings.first()` — see `latestSettings`'s doc comment.
+        val settings = latestSettings
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
             candidates.firstOrNull()?.let { reading ->
                 selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
@@ -583,8 +602,7 @@ class LessonViewModel(
     /** Manual play from the study card's reading row — mirrors SubjectDetailViewModel.playReading. */
     fun playReading(item: LessonItem, reading: String) {
         viewModelScope.launch {
-            val restrictAudioToMp3 = settingsRepository.settings.first().restrictAudioToMp3
-            selectAudioFor(item.pronunciationAudios, reading, mp3Only = restrictAudioToMp3)
+            selectAudioFor(item.pronunciationAudios, reading, mp3Only = latestSettings.restrictAudioToMp3)
                 ?.let(pronunciationAudioPlayer::play)
         }
     }
@@ -599,15 +617,11 @@ class LessonViewModel(
             PersistedLessonItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },
         totalQuizCount = totalQuizCount,
-        sessionActiveElapsedMs = currentActiveElapsedMs()
+        sessionActiveElapsedMs = sessionTiming.currentElapsedMs()
     )
 
-    private suspend fun persistSnapshot(snapshot: PersistedLessonSession) {
-        lessonSessionRepository.save(snapshot)
-    }
-
     private suspend fun persistCurrentState() {
-        persistSnapshot(currentPersistSnapshot())
+        lessonSessionRepository.save(currentPersistSnapshot())
     }
 
     /** Runs the post-grading durability writes (outbox enqueue, session persistence) — see
@@ -618,7 +632,7 @@ class LessonViewModel(
                 assignmentRepository.applyOptimisticLessonStart(item.assignmentId, item.srsSystemId)
                 outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
             }
-            persistSnapshot(snapshot)
+            lessonSessionRepository.save(snapshot)
         }
     }
 
@@ -643,38 +657,9 @@ class LessonViewModel(
         }
     }
 
-    /** The single source of truth for "how long has this quiz actually been viewed" — both the
-     *  live-ticking total timer (via [PausableElapsedTimeText] reading the mirrored uiState fields)
-     *  and [sessionSummary]'s final total derive from this same formula over the same two fields, so
-     *  they can never disagree. */
-    private fun currentActiveElapsedMs(nowMs: Long = Clock.System.now().toEpochMilliseconds()): Long =
-        activeSegmentTracker.currentElapsedMs(nowMs)
-
-    private fun resumeActiveSegment() {
-        val now = activeSegmentTracker.resume() ?: return
-        _uiState.update { it.copy(sessionActiveSegmentStartMs = now) }
-    }
-
-    private fun pauseActiveSegment() {
-        val newElapsed = activeSegmentTracker.pause() ?: return
-        _uiState.update { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
-        // Don't re-persist after the session has already been cleared by advanceQuiz() or
-        // abandonSession() — doing so would resurrect a stale session in DataStore.
-        if (_uiState.value.isSessionComplete || _uiState.value.isAbandoned) return
-        // currentPersistSnapshot() always writes phase = QUIZ — only call it when actually in the
-        // quiz phase. In STUDY phase the correct snapshot is already persisted by
-        // persistStudySnapshot on every card change; calling persistCurrentState() here would
-        // overwrite it with an empty-queue QUIZ record that resumeQuizPhase() would misread as
-        // "session complete". The foreground tracker calls resumeActiveSegment() unconditionally
-        // on app-foreground, so a segment can be running even while in STUDY phase — without this
-        // guard, a Home press in STUDY phase would write the corrupt snapshot.
-        if (_uiState.value.phase != LessonPhase.QUIZ) return
-        applicationScope.launch { persistCurrentState() }
-    }
-
     override fun onCleared() {
         super.onCleared()
-        pauseActiveSegment()
+        sessionTiming.pause()
     }
 
     private data class LessonSessionSummary(
@@ -683,7 +668,7 @@ class LessonViewModel(
         val missedItems: List<LessonItem>,
         val totalElapsedMs: Long,
         val averageTimePerItemMs: Long,
-        val slowestAnswers: List<LessonSlowAnswer>
+        val slowestAnswers: List<SlowAnswer<LessonItem>>
     )
 
     /** Items learned, how many were correct without ever missing, which were missed at least once,
@@ -695,10 +680,10 @@ class LessonViewModel(
         val missedItems = progressByAssignmentId.values
             .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
             .map { it.item }
-        val totalElapsedMs = currentActiveElapsedMs()
+        val totalElapsedMs = sessionTiming.currentElapsedMs()
         val averageTimePerItemMs = if (itemsLearned == 0) 0L else totalElapsedMs / itemsLearned
         val slowestAnswers = answeredQuestions.sortedByDescending { it.elapsedMs }.take(5)
-            .map { LessonSlowAnswer(it.item, it.type, it.elapsedMs, it.isCorrect) }
+            .map { SlowAnswer(it.item, it.type, it.elapsedMs, it.isCorrect) }
         return LessonSessionSummary(
             itemsLearned = itemsLearned,
             correctFirstTry = correctFirstTry,

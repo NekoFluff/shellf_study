@@ -22,9 +22,7 @@ data class AuthUiState(
     val errorMessage: String? = null,
     val pendingNotificationRequest: Boolean = false,
     val isAuthenticated: Boolean = false
-) {
-    val isLoading: Boolean get() = isSubmitting
-}
+)
 
 class AuthViewModel(
     private val tokenRepository: TokenRepository,

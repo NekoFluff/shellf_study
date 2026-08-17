@@ -10,7 +10,7 @@ import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
-import com.crazyfluff.shellfstudy.shared.quiz.ActiveSegmentTracker
+import com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord
 import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerOutcome
@@ -18,6 +18,8 @@ import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
+import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
@@ -36,7 +38,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -78,14 +79,10 @@ data class ReviewUiState(
     val sessionMissedItems: List<ReviewItem> = emptyList(),
     val sessionTotalElapsedMs: Long = 0L,
     val sessionAverageTimePerItemMs: Long = 0L,
-    val sessionSlowestAnswers: List<SlowAnswer> = emptyList()
+    val sessionSlowestAnswers: List<SlowAnswer<ReviewItem>> = emptyList()
 )
 
-data class SlowAnswer(val item: ReviewItem, val type: QuestionType, val elapsedMs: Long, val isCorrect: Boolean)
-
 private typealias ItemProgress = QuizItemProgress<ReviewItem>
-
-private data class AnsweredQuestionRecord(val item: ReviewItem, val type: QuestionType, val isCorrect: Boolean, val elapsedMs: Long)
 
 class ReviewViewModel(
     private val assignmentRepository: AssignmentRepository,
@@ -111,10 +108,20 @@ class ReviewViewModel(
     // a resume starts this list fresh, so that card only reflects answers given since the most
     // recent resume. activeElapsedMs, by contrast, is restored from persisted state on resume (see
     // resumeFromPersisted) so the total/average time summaries stay accurate across a resume.
-    private val answeredQuestions = mutableListOf<AnsweredQuestionRecord>()
+    private val answeredQuestions = mutableListOf<AnsweredQuestionRecord<ReviewItem>>()
 
-    // Tracks only the time the session was actively being viewed. See ActiveSegmentTracker.
-    private val activeSegmentTracker = ActiveSegmentTracker()
+    // Tracks only the time the session was actively being viewed — see QuizSessionTiming. Pause
+    // always re-persists unless the session has already completed (advanceToNextQuestion already
+    // cleared reviewSessionRepository at that point; re-persisting here would resurrect a stale,
+    // empty-queue "active session").
+    private val sessionTiming = QuizSessionTiming(
+        onResume = { now -> _uiState.update { it.copy(sessionActiveSegmentStartMs = now) } },
+        onPause = pause@{ newElapsed ->
+            _uiState.update { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
+            if (_uiState.value.isSessionComplete) return@pause
+            applicationScope.launch { persistCurrentState() }
+        }
+    )
     private var questionShownAtMs: Long = 0L
 
     // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
@@ -142,14 +149,9 @@ class ReviewViewModel(
                 }
             }
         }
-        // The initial value is handled by loadOrResume/resumeActiveSegment below instead — dropped
-        // here so a ViewModel created while already in the foreground (the overwhelmingly common
-        // case) doesn't publish a redundant extra uiState emission for it.
-        viewModelScope.launch {
-            appForegroundTracker.isForeground.drop(1).collect { isForeground ->
-                if (isForeground) resumeActiveSegment() else pauseActiveSegment()
-            }
-        }
+        // The initial value is handled by loadOrResume/sessionTiming.resume() below instead — see
+        // QuizSessionTiming.wireForegroundTracking's doc comment.
+        sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
     }
 
     /** Resumes a persisted in-progress session if one exists, otherwise fetches a fresh queue. */
@@ -216,10 +218,10 @@ class ReviewViewModel(
         answeredQuestions.clear()
         // Restores the session's accumulated active time rather than restarting the clock — this is
         // deliberately *not* wall-clock time since the session began; time spent away (backgrounded,
-        // or navigated off and back) must not count. resumeActiveSegment then starts a fresh viewing
-        // segment on top of that restored base, so the clock resumes right where it left off.
-        activeSegmentTracker.elapsedMs = persisted.sessionActiveElapsedMs
-        resumeActiveSegment()
+        // or navigated off and back) must not count. sessionTiming.resume() then starts a fresh
+        // viewing segment on top of that restored base, so the clock resumes right where it left off.
+        sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
+        sessionTiming.resume()
         advanceToNextQuestion()
     }
 
@@ -227,8 +229,8 @@ class ReviewViewModel(
         queue.clear()
         progressByAssignmentId.clear()
         answeredQuestions.clear()
-        activeSegmentTracker.elapsedMs = 0L
-        resumeActiveSegment()
+        sessionTiming.elapsedMs = 0L
+        sessionTiming.resume()
 
         items.forEach { item -> progressByAssignmentId[item.assignmentId] = ItemProgress(item) }
         queue.build(items, typesFor = { item -> questionTypesFor(item.subjectType) })
@@ -441,30 +443,9 @@ class ReviewViewModel(
     private fun completedQuestionCount(): Int =
         progressByAssignmentId.values.sumOf { (if (it.meaningDone) 1 else 0) + (if (it.readingDone) 1 else 0) }
 
-    /** The single source of truth for "how long has this session actually been viewed" — both the
-     *  live-ticking total timer (via [PausableElapsedTimeText] reading the mirrored uiState fields)
-     *  and [sessionSummary]'s final total derive from this same formula over the same two fields, so
-     *  they can never disagree. */
-    private fun currentActiveElapsedMs(nowMs: Long = Clock.System.now().toEpochMilliseconds()): Long =
-        activeSegmentTracker.currentElapsedMs(nowMs)
-
-    private fun resumeActiveSegment() {
-        val now = activeSegmentTracker.resume() ?: return
-        _uiState.update { it.copy(sessionActiveSegmentStartMs = now) }
-    }
-
-    private fun pauseActiveSegment() {
-        val newElapsed = activeSegmentTracker.pause() ?: return
-        _uiState.update { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
-        // advanceToNextQuestion() already cleared reviewSessionRepository once the session
-        // completed — re-persisting here would resurrect a stale, empty-queue "active session".
-        if (_uiState.value.isSessionComplete) return
-        applicationScope.launch { persistCurrentState() }
-    }
-
     override fun onCleared() {
         super.onCleared()
-        pauseActiveSegment()
+        sessionTiming.pause()
     }
 
     private data class SessionSummary(
@@ -473,7 +454,7 @@ class ReviewViewModel(
         val missedItems: List<ReviewItem>,
         val totalElapsedMs: Long,
         val averageTimePerItemMs: Long,
-        val slowestAnswers: List<SlowAnswer>
+        val slowestAnswers: List<SlowAnswer<ReviewItem>>
     )
 
     /** Items reviewed, how many were correct without ever missing, which were missed at least once,
@@ -494,7 +475,7 @@ class ReviewViewModel(
         val missedItems = reviewedProgress
             .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
             .map { it.item }
-        val totalElapsedMs = currentActiveElapsedMs()
+        val totalElapsedMs = sessionTiming.currentElapsedMs()
         val averageTimePerItemMs = if (itemsReviewed == 0) 0L else totalElapsedMs / itemsReviewed
         val slowestAnswers = answeredQuestions.sortedByDescending { it.elapsedMs }.take(5)
             .map { SlowAnswer(it.item, it.type, it.elapsedMs, it.isCorrect) }
@@ -544,8 +525,8 @@ class ReviewViewModel(
                 isDetailsExpanded = false,
                 totalCount = totalQuestions,
                 remainingCount = queue.size,
-                sessionActiveElapsedMs = activeSegmentTracker.elapsedMs,
-                sessionActiveSegmentStartMs = activeSegmentTracker.segmentStartMs,
+                sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null
             )
@@ -564,15 +545,11 @@ class ReviewViewModel(
             PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },
         totalQuestions = totalQuestions,
-        sessionActiveElapsedMs = currentActiveElapsedMs()
+        sessionActiveElapsedMs = sessionTiming.currentElapsedMs()
     )
 
-    private suspend fun persistSnapshot(snapshot: PersistedReviewSession) {
-        reviewSessionRepository.save(snapshot)
-    }
-
     private suspend fun persistCurrentState() {
-        persistSnapshot(currentPersistSnapshot())
+        reviewSessionRepository.save(currentPersistSnapshot())
     }
 
     /** Runs the post-grading durability writes (outbox enqueue, study-streak mark, session
@@ -589,7 +566,7 @@ class ReviewViewModel(
                 outboxRepository.enqueueReviewSubmission(item.assignmentId, item.subjectId, grade)
                 statsRepository.markStudyActivityToday()
             }
-            persistSnapshot(snapshot)
+            reviewSessionRepository.save(snapshot)
         }
     }
 }

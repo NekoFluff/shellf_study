@@ -4,7 +4,6 @@ import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPhase
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreen
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenEvent
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenTestTags
-import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSlowAnswer
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -28,6 +27,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiS
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -672,7 +672,7 @@ class LessonScreenTest {
                 isLoading = false, isSessionComplete = true,
                 sessionItemsLearned = 1, sessionItemsCorrectFirstTry = 1,
                 sessionSlowestAnswers = listOf(
-                    LessonSlowAnswer(radicalItem, QuestionType.MEANING, 12_000L, isCorrect = true)
+                    SlowAnswer(radicalItem, QuestionType.MEANING, 12_000L, isCorrect = true)
                 )
             )
         )

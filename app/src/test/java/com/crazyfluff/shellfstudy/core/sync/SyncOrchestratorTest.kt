@@ -42,7 +42,6 @@ class SyncOrchestratorTest {
                     path.startsWith("/subjects") -> emptyCollection("kanji")
                     path.startsWith("/assignments") -> emptyCollection("assignment")
                     path.startsWith("/review_statistics") -> emptyCollection("review_statistic")
-                    path.startsWith("/study_materials") -> emptyCollection("study_material")
                     path.startsWith("/level_progressions") -> emptyCollection("level_progression")
                     else -> emptyResponse(404)
                 }
@@ -64,7 +63,7 @@ class SyncOrchestratorTest {
         assertThat(result).isEqualTo(ApiResult.Success(Unit))
         assertThat(pathsRequested()).containsAtLeast(
             "/spaced_repetition_systems", "/subjects", "/assignments",
-            "/review_statistics", "/study_materials", "/level_progressions"
+            "/review_statistics", "/level_progressions"
         )
     }
 
@@ -76,18 +75,18 @@ class SyncOrchestratorTest {
 
         assertThat(result).isInstanceOf(ApiResult.Error::class.java)
         assertThat((result as ApiResult.Error).message).contains("WaniKani API error (500)")
-        // The other three parallel syncs (assignments, study materials, level progressions) still
-        // ran to completion despite review_statistics failing.
+        // The other two parallel syncs (assignments, level progressions) still ran to completion
+        // despite review_statistics failing.
         assertThat(pathsRequested()).containsAtLeast(
             "/spaced_repetition_systems", "/subjects", "/assignments",
-            "/review_statistics", "/study_materials", "/level_progressions"
+            "/review_statistics", "/level_progressions"
         )
     }
 
     @Test
     fun `fullRefresh clears every resource's sync cursor before resyncing`() = runTest {
         // Seed cursors as if a normal sync had already run — force(=true) alone would reuse these.
-        listOf("subjects", "srs_systems", "assignments", "review_statistics", "study_materials").forEach { resource ->
+        listOf("subjects", "srs_systems", "assignments", "review_statistics").forEach { resource ->
             repositories.syncStateDao.upsert(
                 SyncStateEntity(resource = resource, lastSyncedAt = "2020-01-01T00:00:00Z", lastSyncSuccessAt = "2020-01-01T00:00:00Z")
             )

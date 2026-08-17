@@ -4,20 +4,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
-import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
+import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
-import com.crazyfluff.shellfstudy.shared.data.TokenRepository
-import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
-import com.crazyfluff.shellfstudy.shared.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
@@ -25,11 +23,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
-import com.crazyfluff.shellfstudy.shared.data.model.WaniKaniUser
-import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
-import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
-import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
-import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -137,22 +130,17 @@ private data class LevelDependentState(
 )
 
 class DashboardViewModel(
-    private val waniKaniRepository: WaniKaniRepository,
-    private val tokenRepository: TokenRepository,
     private val reviewSessionRepository: ReviewSessionRepository,
     private val lessonSessionRepository: LessonSessionRepository,
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
-    private val dashboardCacheRepository: DashboardCacheRepository,
     private val outboxRepository: OutboxRepository,
     private val outboxSyncScheduler: OutboxSyncScheduler,
-    private val syncOrchestrator: SyncOrchestrator,
-    private val syncScheduler: SyncScheduler,
-    private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,
-    private val notificationCoordinator: NotificationCoordinator,
-    private val friendStatsRepository: FriendStatsRepository
+    private val friendStatsRepository: FriendStatsRepository,
+    private val logoutCoordinator: LogoutCoordinator,
+    private val dashboardSyncCoordinator: DashboardSyncCoordinator
 ) : ViewModel() {
 
     private val _dashboardData = MutableStateFlow(DashboardUiState())
@@ -252,7 +240,7 @@ class DashboardViewModel(
     }
 
     private suspend fun seedFromCache() {
-        val cached = dashboardCacheRepository.cachedSummary.first() ?: return
+        val cached = dashboardSyncCoordinator.cachedSummary.first() ?: return
         _dashboardData.update { current ->
             if (current.lastSyncedAtMillis != null) {
                 current
@@ -282,14 +270,14 @@ class DashboardViewModel(
             _leaderboardRefreshing.value = false
         }
 
-        syncOrchestrator.syncAll(force = true)
+        dashboardSyncCoordinator.sync(force = true)
 
-        val (userResult, summaryResult) = fetchUserAndSummary()
+        val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()
         val hasContent = _dashboardData.value.username != null
 
         if (userResult is ApiResult.Error) {
             if (userResult.isAuthError) {
-                performLogout()
+                logoutCoordinator.logout()
                 _dashboardData.update { it.copy(isRefreshing = false, isLoggedOut = true) }
             } else if (hasContent) {
                 _dashboardData.update { it.copy(isRefreshing = false, isOffline = true) }
@@ -310,13 +298,7 @@ class DashboardViewModel(
         val user = (userResult as ApiResult.Success).data
         val summary = (summaryResult as ApiResult.Success).data
         val syncedAtMillis = Clock.System.now().toEpochMilliseconds()
-        dashboardCacheRepository.save(
-            username = user.username,
-            level = user.level,
-            lessonCount = summary.lessonCount,
-            reviewCount = summary.reviewCount,
-            syncedAtMillis = syncedAtMillis
-        )
+        dashboardSyncCoordinator.cacheSummary(user, summary, syncedAtMillis)
         _dashboardData.update {
             it.copy(
                 isRefreshing = false,
@@ -340,12 +322,12 @@ class DashboardViewModel(
                 return@launch
             }
 
-            syncOrchestrator.syncAll(force = false)
+            dashboardSyncCoordinator.sync(force = false)
 
-            val (userResult, summaryResult) = fetchUserAndSummary()
+            val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()
 
             if (userResult is ApiResult.Error && userResult.isAuthError) {
-                performLogout()
+                logoutCoordinator.logout()
                 _dashboardData.update { it.copy(isLoggedOut = true) }
                 return@launch
             }
@@ -371,33 +353,14 @@ class DashboardViewModel(
             }
 
             if (!fetchFailed && user != null && summary != null) {
-                dashboardCacheRepository.save(
-                    username = user.username,
-                    level = user.level,
-                    lessonCount = summary.lessonCount,
-                    reviewCount = summary.reviewCount,
-                    syncedAtMillis = syncedAtMillis
-                )
+                dashboardSyncCoordinator.cacheSummary(user, summary, syncedAtMillis)
             }
         }
     }
 
-    private suspend fun fetchUserAndSummary(): Pair<ApiResult<WaniKaniUser>, ApiResult<DashboardSummary>> {
-        val userResult = waniKaniRepository.fetchUser()
-        val summaryResult = waniKaniRepository.fetchDashboardSummary()
-        return userResult to summaryResult
-    }
-
-    private suspend fun performLogout() {
-        tokenRepository.clearToken()
-        syncScheduler.cancelPeriodicSync()
-        pitchAccentScrapeScheduler.cancelPeriodicScrape()
-        notificationCoordinator.onLogout()
-    }
-
     fun logOut() {
         viewModelScope.launch {
-            performLogout()
+            logoutCoordinator.logout()
             _dashboardData.update { it.copy(isLoggedOut = true) }
         }
     }

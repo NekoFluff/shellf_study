@@ -27,7 +27,6 @@ class SyncOrchestrator(
 
         val assignmentsDeferred = async { assignmentRepository.syncAssignments(force) }
         val reviewStatisticsDeferred = async { statsRepository.syncReviewStatistics(force) }
-        val studyMaterialsDeferred = async { subjectRepository.syncStudyMaterials(force) }
         val levelProgressionsDeferred = async { statsRepository.syncLevelProgressions(force) }
 
         val results = listOf(
@@ -35,7 +34,6 @@ class SyncOrchestrator(
             subjectsResult,
             assignmentsDeferred.await(),
             reviewStatisticsDeferred.await(),
-            studyMaterialsDeferred.await(),
             levelProgressionsDeferred.await()
         )
         results.filterIsInstance<ApiResult.Error>().firstOrNull() ?: ApiResult.Success(Unit)

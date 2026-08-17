@@ -163,17 +163,6 @@ data class ReviewStatisticData(
 )
 
 @Serializable
-data class StudyMaterialData(
-    @SerialName("created_at") val createdAt: String,
-    @SerialName("subject_id") val subjectId: Long,
-    @SerialName("subject_type") val subjectType: String,
-    @SerialName("meaning_note") val meaningNote: String? = null,
-    @SerialName("reading_note") val readingNote: String? = null,
-    @SerialName("meaning_synonyms") val meaningSynonyms: List<String> = emptyList(),
-    val hidden: Boolean = false
-)
-
-@Serializable
 data class ReviewSubmissionRequest(val review: ReviewSubmissionBody)
 
 @Serializable

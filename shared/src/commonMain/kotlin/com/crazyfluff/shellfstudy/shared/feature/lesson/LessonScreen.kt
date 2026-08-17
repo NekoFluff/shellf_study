@@ -105,6 +105,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSec
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.label
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
@@ -521,7 +522,7 @@ private fun SessionCompleteContent(
     }
 }
 
-private fun LessonSlowAnswer.toRow(): SessionAnswerRow = SessionAnswerRow(
+private fun SlowAnswer<LessonItem>.toRow(): SessionAnswerRow = SessionAnswerRow(
     label = item.characters ?: item.meanings.firstOrNull() ?: "?",
     typeLabel = type.label,
     elapsedMs = elapsedMs,

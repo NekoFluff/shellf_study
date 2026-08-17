@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardCallbacks
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreen
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreenTestTags
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardUiState
@@ -35,7 +36,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = true, username = null),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -49,7 +50,7 @@ class DashboardScreenTest {
                 uiState = DashboardUiState(
                     isRefreshing = true, username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -68,7 +69,7 @@ class DashboardScreenTest {
                     isRefreshing = false, isOffline = true,
                     username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
-                onRefresh = { retried = true }, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = { retried = true }, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -88,7 +89,7 @@ class DashboardScreenTest {
                     isRefreshing = false, pendingSyncCount = 3,
                     username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -106,7 +107,7 @@ class DashboardScreenTest {
                     isRefreshing = false, isOffline = true, pendingSyncCount = 2, syncBlockedOnAuth = true,
                     username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -122,7 +123,7 @@ class DashboardScreenTest {
                 uiState = DashboardUiState(
                     isRefreshing = false, username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -138,7 +139,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, errorMessage = "Network error"),
-                onRefresh = { retried = true }, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = { retried = true }, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -153,7 +154,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                onRefresh = {}, onStartReview = {}, onLogOut = { loggedOut = true }
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = { loggedOut = true })
             )
         }
 
@@ -171,7 +172,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}, onOpenSettings = { openedSettings = true }
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onOpenSettings = { openedSettings = true })
             )
         }
 
@@ -188,7 +189,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, lessonCount = 5),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true }
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })
             )
         }
 
@@ -202,7 +203,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, reviewCount = 5),
-                onRefresh = {}, onStartReview = { startedReview = true }, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = { startedReview = true }, onLogOut = {})
             )
         }
 
@@ -216,7 +217,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, lessonCount = 0),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true }
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })
             )
         }
 
@@ -230,7 +231,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, reviewCount = 0),
-                onRefresh = {}, onStartReview = { startedReview = true }, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = { startedReview = true }, onLogOut = {})
             )
         }
 
@@ -247,7 +248,7 @@ class DashboardScreenTest {
                     isRefreshing = false, username = "x", level = 1,
                     lessonCount = 0, hasActiveLessonSession = true
                 ),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true }
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })
             )
         }
 
@@ -263,7 +264,7 @@ class DashboardScreenTest {
                     isRefreshing = false, username = "x", level = 1,
                     lessonsCompletedToday = 3, dailyLessonGoal = 15
                 ),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -279,7 +280,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 12, daysOnCurrentLevel = 6),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -291,7 +292,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveReviewSession = true),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -303,7 +304,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveLessonSession = true),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -315,7 +316,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -331,7 +332,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -343,7 +344,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -357,7 +358,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveReviewSession = true),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true }
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true })
             )
         }
 
@@ -373,7 +374,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveReviewSession = true),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true }
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true })
             )
         }
 
@@ -389,7 +390,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -403,7 +404,7 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveLessonSession = true),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonLessonSession = { abandoned = true }
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonLessonSession = { abandoned = true })
             )
         }
 
@@ -421,7 +422,7 @@ class DashboardScreenTest {
                     isRefreshing = false, username = "x", level = 1,
                     hasActiveReviewSession = true, hasActiveLessonSession = true
                 ),
-                onRefresh = {}, onStartReview = {}, onLogOut = {}
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 

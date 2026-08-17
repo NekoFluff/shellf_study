@@ -132,10 +132,6 @@ class FakeAssignmentDao(
             .map { KanjiLevelUpRow(it.srsStage) }
     }
 
-    override fun observeBurnedCount(): Flow<Int> = assignments.map { map ->
-        map.values.count { !it.hidden && it.srsStage == 9 }
-    }
-
     override fun observeAllStartedTimestamps(): Flow<List<String>> = assignments.map { map ->
         map.values.mapNotNull { if (!it.hidden) it.startedAt else null }
     }

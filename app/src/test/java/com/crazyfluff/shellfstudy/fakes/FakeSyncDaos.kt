@@ -6,8 +6,6 @@ import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
-import com.crazyfluff.shellfstudy.shared.database.StudyMaterialDao
-import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
@@ -45,27 +43,7 @@ class FakeReviewStatisticDao : ReviewStatisticDao {
         this.statistics.value = this.statistics.value + statistics.associateBy { it.id }
     }
 
-    override suspend fun getBySubjectId(subjectId: Long): ReviewStatisticEntity? =
-        statistics.value.values.firstOrNull { it.subjectId == subjectId }
-
     override fun observeAll(): Flow<List<ReviewStatisticEntity>> = statistics.map { it.values.toList() }
-
-    override fun observeTotalReviewsCount(): Flow<Int> = statistics.map { map ->
-        map.values.sumOf { it.meaningCorrect + it.meaningIncorrect + it.readingCorrect + it.readingIncorrect }
-    }
-}
-
-class FakeStudyMaterialDao : StudyMaterialDao {
-    private val materials = MutableStateFlow<Map<Long, StudyMaterialEntity>>(emptyMap())
-
-    override suspend fun upsertAll(materials: List<StudyMaterialEntity>) {
-        this.materials.value = this.materials.value + materials.associateBy { it.id }
-    }
-
-    override suspend fun getBySubjectId(subjectId: Long): StudyMaterialEntity? =
-        materials.value.values.firstOrNull { it.subjectId == subjectId }
-
-    override fun observeAll(): Flow<List<StudyMaterialEntity>> = materials.map { it.values.toList() }
 }
 
 class FakeLevelProgressionDao : LevelProgressionDao {

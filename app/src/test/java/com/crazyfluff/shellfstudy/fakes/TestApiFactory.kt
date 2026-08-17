@@ -93,7 +93,7 @@ fun buildTestRepositories(
         FakePitchAccentBundledSource(pitchAccentEntries), FakePitchAccentCacheDao(), FakeWeblioApi(), WeblioPitchAccentParser()
     )
     val subjectRepository =
-        SubjectRepository(api, subjectDao, srsSystemDao, FakeStudyMaterialDao(), syncStateDao, pitchAccentRepository)
+        SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository)
     val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao)
     val statsRepository = StatsRepository(api, FakeReviewStatisticDao(), FakeLevelProgressionDao(), studyActivityDao, syncStateDao)
     val waniKaniRepository = WaniKaniRepository(api)

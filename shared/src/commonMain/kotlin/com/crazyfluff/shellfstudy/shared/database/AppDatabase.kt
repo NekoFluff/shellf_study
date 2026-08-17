@@ -14,11 +14,10 @@ import kotlinx.coroutines.Dispatchers
         AssignmentEntity::class,
         SrsSystemEntity::class,
         ReviewStatisticEntity::class,
-        StudyMaterialEntity::class,
         LevelProgressionEntity::class,
         SyncStateEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -28,7 +27,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun assignmentDao(): AssignmentDao
     abstract fun srsSystemDao(): SrsSystemDao
     abstract fun reviewStatisticDao(): ReviewStatisticDao
-    abstract fun studyMaterialDao(): StudyMaterialDao
     abstract fun levelProgressionDao(): LevelProgressionDao
     abstract fun syncStateDao(): SyncStateDao
 }

@@ -12,7 +12,9 @@ import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
+import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonQuestion
@@ -124,25 +126,31 @@ class DashboardViewModelTest {
             selfReviewStatisticDao = FakeReviewStatisticDao(),
             selfLevelProgressionDao = FakeLevelProgressionDao()
         )
+        val logoutCoordinator = LogoutCoordinator(
+            tokenRepository = tokenRepository,
+            syncScheduler = syncScheduler,
+            pitchAccentScrapeScheduler = pitchAccentScrapeScheduler,
+            notificationCoordinator = notificationCoordinator
+        )
+        val dashboardSyncCoordinator = DashboardSyncCoordinator(
+            waniKaniRepository = repositories.waniKaniRepository,
+            syncOrchestrator = repositories.syncOrchestrator,
+            dashboardCacheRepository = dashboardCacheRepository
+        )
         val factory = viewModelFactory {
             initializer {
                 DashboardViewModel(
-                    waniKaniRepository = repositories.waniKaniRepository,
-                    tokenRepository = tokenRepository,
                     reviewSessionRepository = reviewSessionRepository,
                     lessonSessionRepository = lessonSessionRepository,
                     settingsRepository = settingsRepository,
                     subjectRepository = repositories.subjectRepository,
                     assignmentRepository = repositories.assignmentRepository,
                     statsRepository = repositories.statsRepository,
-                    dashboardCacheRepository = dashboardCacheRepository,
                     outboxRepository = outboxRepository,
                     outboxSyncScheduler = repositories.outboxSyncScheduler,
-                    syncOrchestrator = repositories.syncOrchestrator,
-                    syncScheduler = syncScheduler,
-                    pitchAccentScrapeScheduler = pitchAccentScrapeScheduler,
-                    notificationCoordinator = notificationCoordinator,
-                    friendStatsRepository = friendStatsRepository
+                    friendStatsRepository = friendStatsRepository,
+                    logoutCoordinator = logoutCoordinator,
+                    dashboardSyncCoordinator = dashboardSyncCoordinator
                 )
             }
         }

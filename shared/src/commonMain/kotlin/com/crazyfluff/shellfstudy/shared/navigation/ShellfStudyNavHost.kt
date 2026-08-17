@@ -48,10 +48,18 @@ fun ShellfStudyNavHost(
             NotificationDeepLink.DESTINATION_LESSON -> ShellfStudyDestination.Lesson
             else -> null
         }
-        if (targetDestination != null && !destination.hasRoute(targetDestination::class)) {
-            navController.navigateSafely(targetDestination)
+        // A DESTINATION_DASHBOARD (or any other unrecognized) pending value is deliberately left
+        // unconsumed here — navigating to Dashboard doesn't create a fresh screen/ViewModel the way
+        // Review/Lesson do, so DashboardRoute's own effect is what actually reacts to it (a refresh,
+        // not a nav change) once it's the composed screen, and consumes it itself at that point.
+        // Consuming it unconditionally from here would clear it before Dashboard ever sees it if the
+        // user was on some other screen when the pending value was set.
+        if (targetDestination != null) {
+            if (!destination.hasRoute(targetDestination::class)) {
+                navController.navigateSafely(targetDestination)
+            }
+            onPendingDestinationConsumed()
         }
-        onPendingDestinationConsumed()
     }
 
     NavHost(navController = navController, startDestination = ShellfStudyDestination.Splash) {

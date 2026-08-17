@@ -43,7 +43,6 @@ private val iosDatabaseModule = module {
     single { get<AppDatabase>().assignmentDao() }
     single { get<AppDatabase>().srsSystemDao() }
     single { get<AppDatabase>().reviewStatisticDao() }
-    single { get<AppDatabase>().studyMaterialDao() }
     single { get<AppDatabase>().levelProgressionDao() }
     single { get<AppDatabase>().syncStateDao() }
 

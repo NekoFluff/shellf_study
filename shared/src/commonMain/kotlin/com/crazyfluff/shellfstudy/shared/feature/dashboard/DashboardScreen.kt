@@ -98,6 +98,23 @@ object DashboardScreenTestTags {
     const val ABANDON_LESSON_CONFIRM_BUTTON = "dashboard_abandon_lesson_confirm_button"
 }
 
+/** Bundles [DashboardScreen]'s callback lambdas into one param — the screen otherwise ends up with
+ *  a flat dozen-parameter list, most of which are only wired by [DashboardRoute]. */
+data class DashboardCallbacks(
+    val onRefresh: () -> Unit,
+    val onStartReview: () -> Unit,
+    val onLogOut: () -> Unit,
+    val onStartLesson: () -> Unit = {},
+    val onOpenSettings: () -> Unit = {},
+    val onOpenLeaderboard: () -> Unit = {},
+    val onAbandonReviewSession: () -> Unit = {},
+    val onAbandonLessonSession: () -> Unit = {},
+    val onSearchQueryChange: (String) -> Unit = {},
+    val onLevelProgressLevelChange: (Int) -> Unit = {},
+    val onLeaderboardMetricChange: (LeaderboardMetric) -> Unit = {},
+    val onLeaderboardWindowChange: (LeaderboardWindow) -> Unit = {}
+)
+
 @Composable
 fun DashboardRoute(
     onStartReview: () -> Unit,
@@ -139,19 +156,21 @@ fun DashboardRoute(
 
     DashboardScreen(
         uiState = uiState,
-        onRefresh = viewModel::refresh,
-        onStartReview = onStartReview,
-        onStartLesson = onStartLesson,
-        onOpenSettings = onOpenSettings,
-        onOpenLeaderboard = onOpenLeaderboard,
-        onLogOut = viewModel::logOut,
-        onAbandonReviewSession = viewModel::abandonReviewSession,
-        onAbandonLessonSession = viewModel::abandonLessonSession,
-        searchUiState = searchUiState,
-        onSearchQueryChange = searchViewModel::onQueryChange,
-        onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
-        onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange,
-        onLeaderboardWindowChange = viewModel::onLeaderboardWindowChange
+        callbacks = DashboardCallbacks(
+            onRefresh = viewModel::refresh,
+            onStartReview = onStartReview,
+            onStartLesson = onStartLesson,
+            onOpenSettings = onOpenSettings,
+            onOpenLeaderboard = onOpenLeaderboard,
+            onLogOut = viewModel::logOut,
+            onAbandonReviewSession = viewModel::abandonReviewSession,
+            onAbandonLessonSession = viewModel::abandonLessonSession,
+            onSearchQueryChange = searchViewModel::onQueryChange,
+            onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
+            onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange,
+            onLeaderboardWindowChange = viewModel::onLeaderboardWindowChange
+        ),
+        searchUiState = searchUiState
     )
 }
 
@@ -159,19 +178,8 @@ fun DashboardRoute(
 @Composable
 fun DashboardScreen(
     uiState: DashboardUiState,
-    onRefresh: () -> Unit,
-    onStartReview: () -> Unit,
-    onLogOut: () -> Unit,
-    onStartLesson: () -> Unit = {},
-    onOpenSettings: () -> Unit = {},
-    onOpenLeaderboard: () -> Unit = {},
-    onAbandonReviewSession: () -> Unit = {},
-    onAbandonLessonSession: () -> Unit = {},
-    searchUiState: SearchUiState = SearchUiState(),
-    onSearchQueryChange: (String) -> Unit = {},
-    onLevelProgressLevelChange: (Int) -> Unit = {},
-    onLeaderboardMetricChange: (LeaderboardMetric) -> Unit = {},
-    onLeaderboardWindowChange: (LeaderboardWindow) -> Unit = {}
+    callbacks: DashboardCallbacks,
+    searchUiState: SearchUiState = SearchUiState()
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -224,7 +232,7 @@ fun DashboardScreen(
                                 DropdownMenuItem(
                                     text = { Text("Settings") },
                                     leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                    onClick = { menuExpanded = false; onOpenSettings() },
+                                    onClick = { menuExpanded = false; callbacks.onOpenSettings() },
                                     modifier = Modifier.testTag(DashboardScreenTestTags.SETTINGS_BUTTON)
                                 )
                                 HorizontalDivider()
@@ -237,7 +245,7 @@ fun DashboardScreen(
                                             tint = MaterialTheme.colorScheme.error
                                         )
                                     },
-                                    onClick = { menuExpanded = false; onLogOut() },
+                                    onClick = { menuExpanded = false; callbacks.onLogOut() },
                                     modifier = Modifier.testTag(DashboardScreenTestTags.LOG_OUT_BUTTON)
                                 )
                             }
@@ -252,7 +260,7 @@ fun DashboardScreen(
                 // release, but wiring the real refresh state here would additionally re-pin it as a
                 // spinner for the whole refresh — the status banner below is that signal instead.
                 isRefreshing = false,
-                onRefresh = onRefresh,
+                onRefresh = callbacks.onRefresh,
                 modifier = Modifier.fillMaxSize().padding(innerPadding)
             ) {
                 Column(
@@ -281,7 +289,7 @@ fun DashboardScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             OutlinedButton(
-                                onClick = onRefresh,
+                                onClick = callbacks.onRefresh,
                                 modifier = Modifier.testTag(DashboardScreenTestTags.RETRY_BUTTON)
                             ) {
                                 Text("Retry")
@@ -291,7 +299,7 @@ fun DashboardScreen(
                         DashboardContentState.Content -> {
                             DashboardStatusBanner(
                                 bannerState = uiState.bannerState,
-                                onRetry = onRefresh
+                                onRetry = callbacks.onRefresh
                             )
                             Text(
                                 text = "Welcome back, ${uiState.username}!",
@@ -322,7 +330,7 @@ fun DashboardScreen(
                                     // top that read as washed out. This card should look the same
                                     // vivid blue in both themes.
                                     color = radicalColor(),
-                                    onClick = onStartLesson,
+                                    onClick = callbacks.onStartLesson,
                                     enabled = uiState.isLessonsCardEnabled,
                                     badge = {
                                         LessonsTodayBadge(
@@ -342,7 +350,7 @@ fun DashboardScreen(
                                     label = if (uiState.hasActiveReviewSession) "Resume" else "Reviews",
                                     count = uiState.reviewCount,
                                     color = kanjiColor(),
-                                    onClick = onStartReview,
+                                    onClick = callbacks.onStartReview,
                                     enabled = uiState.isReviewsCardEnabled,
                                     modifier = Modifier
                                         .weight(1f)
@@ -360,7 +368,7 @@ fun DashboardScreen(
                                     progress = uiState.levelProgress,
                                     maxLevel = uiState.level,
                                     levelUpProgress = uiState.levelUpProgress,
-                                    onLevelChange = onLevelProgressLevelChange,
+                                    onLevelChange = callbacks.onLevelProgressLevelChange,
                                     onSubjectClick = { detailSheetState.show(it) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -382,9 +390,9 @@ fun DashboardScreen(
                                 LeaderboardCard(
                                     leaderboard = uiState.leaderboard,
                                     isLoading = uiState.leaderboardLoading,
-                                    onMetricChange = onLeaderboardMetricChange,
-                                    onWindowChange = onLeaderboardWindowChange,
-                                    onSeeAll = onOpenLeaderboard,
+                                    onMetricChange = callbacks.onLeaderboardMetricChange,
+                                    onWindowChange = callbacks.onLeaderboardWindowChange,
+                                    onSeeAll = callbacks.onOpenLeaderboard,
                                     selectedMetric = uiState.selectedMetric,
                                     selectedWindow = uiState.selectedWindow,
                                     modifier = Modifier.fillMaxWidth()
@@ -405,7 +413,7 @@ fun DashboardScreen(
             active = isSearchActive,
             onActiveChange = { isSearchActive = it },
             uiState = searchUiState,
-            onQueryChange = onSearchQueryChange,
+            onQueryChange = callbacks.onSearchQueryChange,
             modifier = Modifier.fillMaxSize(),
             onSubjectClick = { detailSheetState.show(it) }
         )
@@ -415,7 +423,7 @@ fun DashboardScreen(
                 title = "Abandon review session?",
                 text = "Progress on reviews you haven't finished yet will be lost. This won't affect items you've already submitted.",
                 confirmLabel = "Abandon",
-                onConfirm = { abandonConfirm = null; onAbandonReviewSession() },
+                onConfirm = { abandonConfirm = null; callbacks.onAbandonReviewSession() },
                 onDismiss = { abandonConfirm = null },
                 confirmButtonTestTag = DashboardScreenTestTags.ABANDON_REVIEW_CONFIRM_BUTTON
             )
@@ -423,7 +431,7 @@ fun DashboardScreen(
                 title = "Abandon lesson session?",
                 text = "Progress on the lessons you haven't finished quizzing yet will be lost. Lessons you've already completed won't be affected.",
                 confirmLabel = "Abandon",
-                onConfirm = { abandonConfirm = null; onAbandonLessonSession() },
+                onConfirm = { abandonConfirm = null; callbacks.onAbandonLessonSession() },
                 onDismiss = { abandonConfirm = null },
                 confirmButtonTestTag = DashboardScreenTestTags.ABANDON_LESSON_CONFIRM_BUTTON
             )

@@ -15,6 +15,7 @@ import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
+import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
@@ -1308,6 +1309,50 @@ class LessonViewModelTest {
         }
     }
 
+    @Test
+    fun `answering a reading question autoplays the correct pronunciation when the setting is enabled`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJsonWithAudio()))
+
+        val viewModel = createViewModel()
+
+        // Real DataStore reads settle asynchronously on their own IO dispatcher, unlike the
+        // Main-dispatcher ViewModel coroutines the test rule makes run synchronously — so wait for
+        // the play() side effect via the player's own state flow rather than checking playedAudios
+        // immediately after the uiState turbine block exits.
+        pronunciationAudioPlayer.state.test {
+            assertThat(awaitItem()).isEqualTo(PlaybackState.IDLE)
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.isLoading) state = awaitItem()
+
+                viewModel.startSelectedLessons()
+                awaitItem()
+                viewModel.nextStudyCard()
+                state = awaitItem() // quiz begins
+
+                while (state.currentQuestionType != QuestionType.READING) {
+                    viewModel.onAnswerInputChange(if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                    awaitItem()
+                    viewModel.submitAnswer()
+                    awaitItem()
+                    viewModel.onContinue()
+                    state = awaitItem()
+                }
+
+                viewModel.onAnswerInputChange("mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+            }
+
+            assertThat(awaitItem()).isEqualTo(PlaybackState.PLAYING)
+        }
+
+        assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
+        assertThat(pronunciationAudioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
+    }
+
     private fun kanjiAssignmentsJson() = """
         {
           "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
@@ -1333,6 +1378,29 @@ class LessonViewModelTest {
               "characters": "水",
               "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
               "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}]
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun kanjiSubjectsJsonWithAudio() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
+          "data": [{
+            "id": 1, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/1",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2020-01-01T00:00:00.000000Z", "level": 3, "slug": "water",
+              "characters": "水",
+              "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
+              "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}],
+              "pronunciation_audios": [
+                {
+                  "url": "https://api.wanikani.com/audio/mizu.mp3",
+                  "content_type": "audio/mpeg",
+                  "metadata": {"gender": "female", "pronunciation": "みず"}
+                }
+              ]
             }
           }]
         }
