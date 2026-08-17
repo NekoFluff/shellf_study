@@ -20,6 +20,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.forReading
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.PitchAccentColors
+import kotlin.math.hypot
 
 object PitchAccentTestTags {
     const val DIAGRAM = "pitch_accent_diagram"
@@ -123,7 +124,12 @@ fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modi
         for (i in 0 until points.lastIndex) {
             drawLine(color = color, start = points[i], end = points[i + 1], strokeWidth = strokeWidth)
         }
-        drawLine(color = color, start = points.last(), end = particleCenter, strokeWidth = strokeWidth)
+        // Stop the line at the particle dot's edge rather than its center — the dot is hollow, so a
+        // line running all the way to the center would poke visibly through the middle of the ring.
+        val toParticle = particleCenter - points.last()
+        val toParticleDistance = hypot(toParticle.x, toParticle.y)
+        val particleEdge = particleCenter - toParticle * (dotRadius / toParticleDistance)
+        drawLine(color = color, start = points.last(), end = particleEdge, strokeWidth = strokeWidth)
         points.forEach { point -> drawCircle(color = color, radius = dotRadius, center = point) }
         drawCircle(color = color, radius = dotRadius, center = particleCenter, style = Stroke(width = strokeWidth))
     }
