@@ -1,5 +1,7 @@
 # Shellf Study
 
+[![Tests](https://github.com/NekoFluff/shellf_study/actions/workflows/tests.yml/badge.svg)](https://github.com/NekoFluff/shellf_study/actions/workflows/tests.yml)
+
 A [WaniKani](https://www.wanikani.com/) client for Android and iOS. Modern, minimalistic, written with Kotlin Multiplatform + Compose Multiplatform. Written/generated primarily using Claude.
 
 ## Stack
