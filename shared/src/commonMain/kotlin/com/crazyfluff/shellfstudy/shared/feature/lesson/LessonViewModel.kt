@@ -719,6 +719,8 @@ class LessonViewModel(
                     isSessionComplete = true,
                     currentQuizItem = null,
                     currentQuestionType = null,
+                    feedback = null,
+                    isDetailsExpanded = false,
                     sessionItemsLearned = summary.itemsLearned,
                     sessionItemsCorrectFirstTry = summary.correctFirstTry,
                     sessionMissedItems = summary.missedItems,
