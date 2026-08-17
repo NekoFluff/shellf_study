@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.StudyStreak
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
@@ -57,10 +58,30 @@ class StatsRepository(
                         readingMaxStreak = item.data.readingMaxStreak,
                         readingCurrentStreak = item.data.readingCurrentStreak,
                         percentageCorrect = item.data.percentageCorrect,
-                        hidden = item.data.hidden
+                        hidden = item.data.hidden,
+                        lastReviewedAt = item.dataUpdatedAt
                     )
                 }
             )
+        }
+
+    /** The subject detail view's accuracy/streak/last-reviewed source — null if the subject has
+     *  no review_statistics row yet (not lessoned, or not synced yet). */
+    fun observeReviewStatistic(subjectId: Long): Flow<SubjectReviewStats?> =
+        reviewStatisticDao.observeBySubjectId(subjectId).map { entity ->
+            entity?.let {
+                SubjectReviewStats(
+                    meaningCorrect = it.meaningCorrect,
+                    meaningIncorrect = it.meaningIncorrect,
+                    meaningCurrentStreak = it.meaningCurrentStreak,
+                    meaningMaxStreak = it.meaningMaxStreak,
+                    readingCorrect = it.readingCorrect,
+                    readingIncorrect = it.readingIncorrect,
+                    readingCurrentStreak = it.readingCurrentStreak,
+                    readingMaxStreak = it.readingMaxStreak,
+                    lastReviewedAt = it.lastReviewedAt?.let(Instant::parse)
+                )
+            }
         }
 
     /** level_progressions has no documented updated_after filter — always a full (small) refetch. */

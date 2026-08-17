@@ -9,6 +9,9 @@ import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
+import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
@@ -18,6 +21,7 @@ import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioMetadataData
 import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
+import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
@@ -43,12 +47,13 @@ class SubjectDetailViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var audioPlayer: FakePronunciationAudioPlayer
     private lateinit var strokeOrderRepository: FakeStrokeOrderRepository
+    private lateinit var repositories: TestRepositories
 
     @Before
     fun setUp() = runTest(mainDispatcherRule.dispatcher) {
         server = MockWebServer()
         server.start()
-        val repositories = buildTestRepositories(server.url("/").toString())
+        repositories = buildTestRepositories(server.url("/").toString())
         repositories.subjectDao.upsertAll(
             listOf(
                 subjectEntity(id = 1, characters = "水", meaning = "Water", componentIds = listOf(2)),
@@ -106,7 +111,8 @@ class SubjectDetailViewModelTest {
             mapOf('水' to listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f)))
         )
         viewModel = SubjectDetailViewModel(
-            repositories.subjectRepository, repositories.assignmentRepository, settingsRepository, audioPlayer, strokeOrderRepository
+            repositories.subjectRepository, repositories.assignmentRepository, settingsRepository, audioPlayer, strokeOrderRepository,
+            repositories.statsRepository
         )
     }
 
@@ -302,5 +308,71 @@ class SubjectDetailViewModelTest {
         viewModel.playReading("みず")
 
         assertThat(audioPlayer.playedAudios).isEmpty()
+    }
+
+    @Test
+    fun `uiState has no assignmentStats or reviewStats when the subject has not been lessoned`() = runTest(mainDispatcherRule.dispatcher) {
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(1)
+            val loaded = awaitSettled(1)
+
+            assertThat(loaded.assignmentStats).isNull()
+            assertThat(loaded.reviewStats).isNull()
+        }
+    }
+
+    @Test
+    fun `uiState reflects assignmentStats once the subject has been lessoned`() = runTest(mainDispatcherRule.dispatcher) {
+        repositories.assignmentDao.upsertAll(
+            listOf(
+                AssignmentEntity(
+                    id = 900, subjectId = 1, subjectType = "kanji", srsStage = 5,
+                    createdAt = "2020-01-01T00:00:00.000000Z",
+                    unlockedAt = "2026-01-02T00:00:00.000000Z",
+                    startedAt = "2026-01-03T00:00:00.000000Z",
+                    passedAt = "2026-01-20T00:00:00.000000Z",
+                    availableAt = "2026-01-26T03:00:00.000000Z",
+                    hidden = false
+                )
+            )
+        )
+
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(1)
+            val loaded = awaitSettled(1)
+
+            assertThat(loaded.assignmentStats?.srsStage).isEqualTo(SrsStage.GURU_1)
+            assertThat(loaded.assignmentStats?.passedAt).isNotNull()
+            assertThat(loaded.reviewStats).isNull()
+        }
+    }
+
+    @Test
+    fun `uiState reflects reviewStats once the subject has review history`() = runTest(mainDispatcherRule.dispatcher) {
+        repositories.reviewStatisticDao.upsertAll(
+            listOf(
+                ReviewStatisticEntity(
+                    id = 900, subjectId = 1, subjectType = "kanji",
+                    meaningCorrect = 9, meaningIncorrect = 1, meaningMaxStreak = 5, meaningCurrentStreak = 3,
+                    readingCorrect = 8, readingIncorrect = 2, readingMaxStreak = 6, readingCurrentStreak = 1,
+                    percentageCorrect = 85, hidden = false,
+                    lastReviewedAt = "2026-01-25T12:00:00.000000Z"
+                )
+            )
+        )
+
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(1)
+            val loaded = awaitSettled(1)
+
+            assertThat(loaded.reviewStats?.meaningAccuracyPercent).isEqualTo(90)
+            assertThat(loaded.reviewStats?.hasBeenReviewed).isTrue()
+        }
     }
 }

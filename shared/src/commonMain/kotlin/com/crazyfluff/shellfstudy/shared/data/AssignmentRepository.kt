@@ -15,6 +15,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStageCalculator
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectTypeProgress
 import com.crazyfluff.shellfstudy.shared.data.model.toPronunciationAudios
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
@@ -266,10 +267,22 @@ class AssignmentRepository(
             }
         }.flowOn(Dispatchers.Default)
 
-    /** The subject's current SRS stage, or null if it hasn't been lessoned yet (no assignment
-     *  exists) — the subject detail view's stat chip source. */
-    fun observeSrsStage(subjectId: Long): Flow<SrsStage?> =
-        assignmentDao.observeBySubjectId(subjectId).map { assignment -> assignment?.let { SrsStage.fromRaw(it.srsStage) } }
+    /** The subject's current SRS stage plus its lifecycle dates, or null if it hasn't been
+     *  lessoned yet (no assignment exists) — the subject detail view's stat chip and milestone
+     *  list source. */
+    fun observeAssignmentStats(subjectId: Long): Flow<SubjectAssignmentStats?> =
+        assignmentDao.observeBySubjectId(subjectId).map { assignment ->
+            assignment?.let {
+                SubjectAssignmentStats(
+                    srsStage = SrsStage.fromRaw(it.srsStage),
+                    nextReviewAt = it.availableAt?.let(Instant::parse),
+                    unlockedAt = it.unlockedAt?.let(Instant::parse),
+                    startedAt = it.startedAt?.let(Instant::parse),
+                    passedAt = it.passedAt?.let(Instant::parse),
+                    burnedAt = it.burnedAt?.let(Instant::parse)
+                )
+            }
+        }
 
     fun observeReviewForecast(hours: Int = 24): Flow<ReviewForecast> {
         // Re-subscribe to the DAO at every hour boundary. The DAO query parameters (nowIso) are

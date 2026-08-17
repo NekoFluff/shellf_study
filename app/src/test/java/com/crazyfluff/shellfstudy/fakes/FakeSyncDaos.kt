@@ -44,6 +44,10 @@ class FakeReviewStatisticDao : ReviewStatisticDao {
     }
 
     override fun observeAll(): Flow<List<ReviewStatisticEntity>> = statistics.map { it.values.toList() }
+
+    override fun observeBySubjectId(subjectId: Long): Flow<ReviewStatisticEntity?> = statistics.map { map ->
+        map.values.firstOrNull { it.subjectId == subjectId }
+    }
 }
 
 class FakeLevelProgressionDao : LevelProgressionDao {

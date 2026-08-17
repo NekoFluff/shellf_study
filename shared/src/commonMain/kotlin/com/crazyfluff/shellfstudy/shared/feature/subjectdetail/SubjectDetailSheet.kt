@@ -295,7 +295,8 @@ private fun ColumnScope.SubjectDetailBody(
             strokeOrder = uiState.strokeOrder,
             autoPlayStrokeOrder = autoPlayStrokeOrder,
             showStrokeOrder = uiState.showStrokeOrder,
-            srsStage = uiState.srsStage
+            assignmentStats = uiState.assignmentStats,
+            reviewStats = uiState.reviewStats
         )
     }
 }

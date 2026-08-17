@@ -68,6 +68,7 @@ class TestRepositories(
     val studyActivityDao: FakeStudyActivityDao,
     val outboxDao: FakeOutboxDao,
     val outboxSyncScheduler: FakeOutboxSyncScheduler,
+    val reviewStatisticDao: FakeReviewStatisticDao,
     val subjectRepository: SubjectRepository,
     val assignmentRepository: AssignmentRepository,
     val pitchAccentRepository: PitchAccentRepository,
@@ -88,6 +89,7 @@ fun buildTestRepositories(
     val studyActivityDao = FakeStudyActivityDao()
     val outboxDao = FakeOutboxDao()
     val outboxSyncScheduler = FakeOutboxSyncScheduler()
+    val reviewStatisticDao = FakeReviewStatisticDao()
 
     val pitchAccentRepository = PitchAccentRepository(
         FakePitchAccentBundledSource(pitchAccentEntries), FakePitchAccentCacheDao(), FakeWeblioApi(), WeblioPitchAccentParser()
@@ -95,12 +97,13 @@ fun buildTestRepositories(
     val subjectRepository =
         SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository)
     val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao)
-    val statsRepository = StatsRepository(api, FakeReviewStatisticDao(), FakeLevelProgressionDao(), studyActivityDao, syncStateDao)
+    val statsRepository = StatsRepository(api, reviewStatisticDao, FakeLevelProgressionDao(), studyActivityDao, syncStateDao)
     val waniKaniRepository = WaniKaniRepository(api)
     val syncOrchestrator = SyncOrchestrator(subjectRepository, assignmentRepository, statsRepository, syncStateDao)
 
     return TestRepositories(
         api, subjectDao, assignmentDao, srsSystemDao, syncStateDao, studyActivityDao, outboxDao, outboxSyncScheduler,
-        subjectRepository, assignmentRepository, pitchAccentRepository, statsRepository, waniKaniRepository, syncOrchestrator
+        reviewStatisticDao, subjectRepository, assignmentRepository, pitchAccentRepository, statsRepository, waniKaniRepository,
+        syncOrchestrator
     )
 }

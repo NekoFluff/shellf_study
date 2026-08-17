@@ -535,6 +535,41 @@ class AssignmentRepositoryTest {
     }
 
     @Test
+    fun `observeAssignmentStats returns null when the subject has not been lessoned`() = runTest {
+        repository.observeAssignmentStats(12345).test {
+            assertThat(awaitItem()).isNull()
+        }
+    }
+
+    @Test
+    fun `observeAssignmentStats maps srsStage, next review, and every lifecycle date`() = runTest {
+        repositories.assignmentDao.upsertAll(
+            listOf(
+                AssignmentEntity(
+                    id = 500, subjectId = 440, subjectType = "kanji", srsStage = 5,
+                    createdAt = "2020-01-01T00:00:00.000000Z",
+                    unlockedAt = "2026-01-02T00:00:00.000000Z",
+                    startedAt = "2026-01-03T00:00:00.000000Z",
+                    passedAt = "2026-01-20T00:00:00.000000Z",
+                    burnedAt = null,
+                    availableAt = "2026-01-26T03:00:00.000000Z",
+                    hidden = false
+                )
+            )
+        )
+
+        repository.observeAssignmentStats(440).test {
+            val stats = awaitItem()!!
+            assertThat(stats.srsStage).isEqualTo(SrsStage.GURU_1)
+            assertThat(stats.nextReviewAt).isEqualTo(Instant.parse("2026-01-26T03:00:00.000000Z"))
+            assertThat(stats.unlockedAt).isEqualTo(Instant.parse("2026-01-02T00:00:00.000000Z"))
+            assertThat(stats.startedAt).isEqualTo(Instant.parse("2026-01-03T00:00:00.000000Z"))
+            assertThat(stats.passedAt).isEqualTo(Instant.parse("2026-01-20T00:00:00.000000Z"))
+            assertThat(stats.burnedAt).isNull()
+        }
+    }
+
+    @Test
     fun `applyOptimisticReviewResult sets passedAt when advancing to the passing stage`() = runTest {
         seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
         repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 4)))

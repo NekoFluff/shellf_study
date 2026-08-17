@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -18,15 +19,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
-import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
@@ -35,6 +42,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 
 /** Whether the sheet shows everything (browse/study contexts) or hides the currently-tested field (mid-quiz). */
 enum class DetailRevealMode { FULL, HIDE_UNTIL_ANSWERED }
@@ -45,6 +53,7 @@ object SubjectDetailTestTags {
     const val SHEET_ROOT = "subject_detail_sheet_root"
     const val CONTENT_ROOT = "subject_detail_content_root"
     const val PEEK_HANDLE = "subject_detail_peek_handle"
+    const val AUXILIARY_MEANINGS_TEXT = "subject_detail_auxiliary_meanings_text"
 }
 
 /**
@@ -67,7 +76,8 @@ fun SubjectDetailContent(
     strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
     autoPlayStrokeOrder: Boolean = true,
     showStrokeOrder: Boolean = true,
-    srsStage: SrsStage? = null
+    assignmentStats: SubjectAssignmentStats? = null,
+    reviewStats: SubjectReviewStats? = null
 ) {
     val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.MEANING)
     val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.READING)
@@ -108,8 +118,8 @@ fun SubjectDetailContent(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (srsStage != null) {
-                    SrsStageChip(srsStage)
+                if (assignmentStats != null) {
+                    SrsStageChip(assignmentStats.srsStage)
                 }
             }
             if (isVocabulary && detail.partsOfSpeech.isNotEmpty()) {
@@ -156,11 +166,7 @@ fun SubjectDetailContent(
                     )
                     Text(detail.meanings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
                     if (detail.auxiliaryMeanings.isNotEmpty()) {
-                        Text(
-                            text = detail.auxiliaryMeanings.joinToString(", "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        AuxiliaryMeaningsText(detail.auxiliaryMeanings, resetKey = detail.subjectId)
                     }
                 }
 
@@ -261,6 +267,10 @@ fun SubjectDetailContent(
             onSubjectClick = onRelatedSubjectClick
         )
 
+        if (assignmentStats != null) {
+            HorizontalDivider()
+            SubjectStatsSection(assignmentStats = assignmentStats, reviewStats = reviewStats)
+        }
     }
 }
 
@@ -315,4 +325,23 @@ fun ReadingTypeRow(label: String, readings: List<String>) {
         )
         Text(readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
     }
+}
+
+/** Auxiliary meanings truncate to a "+N more" summary the same way the review screen's answer
+ *  feedback does (see [formatAnswerList]) — tapping toggles the full list back open and closed,
+ *  rather than always spelling out every whitelisted alternate meaning up front. */
+@Composable
+private fun AuxiliaryMeaningsText(auxiliaryMeanings: List<String>, resetKey: Any?) {
+    var isExpanded by remember(resetKey) { mutableStateOf(false) }
+    val display = formatAnswerList(auxiliaryMeanings.joinToString(", "), expanded = isExpanded)
+    Text(
+        text = display.text,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (display.hasMore) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = if (isExpanded) Int.MAX_VALUE else 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .testTag(SubjectDetailTestTags.AUXILIARY_MEANINGS_TEXT)
+            .then(if (display.hasMore) Modifier.clickable { isExpanded = !isExpanded } else Modifier)
+    )
 }

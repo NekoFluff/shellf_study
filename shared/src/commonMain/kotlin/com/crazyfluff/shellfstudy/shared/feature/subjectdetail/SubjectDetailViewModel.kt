@@ -7,9 +7,11 @@ import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
-import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
@@ -38,15 +40,18 @@ data class SubjectDetailUiState(
      *  would otherwise hide the field matching the in-progress/failed question. Reset on [open]. */
     val forceRevealAll: Boolean = false,
     /** Null if the subject hasn't been lessoned yet (no assignment exists for it). */
-    val srsStage: SrsStage? = null
+    val assignmentStats: SubjectAssignmentStats? = null,
+    /** Null if the subject hasn't been lessoned, or has been lessoned but never reviewed yet. */
+    val reviewStats: SubjectReviewStats? = null
 )
 
-/** Intermediate combine result — [SubjectDetailViewModel.uiState]'s detail/related/stroke/stage fields. */
+/** Intermediate combine result — [SubjectDetailViewModel.uiState]'s detail/related/stroke/stats fields. */
 private data class DetailAndRelated(
     val detail: SubjectDetail?,
     val related: List<SubjectSummary>,
     val strokeOrder: StrokeOrderUiState,
-    val srsStage: SrsStage?
+    val assignmentStats: SubjectAssignmentStats?,
+    val reviewStats: SubjectReviewStats?
 )
 
 /**
@@ -60,7 +65,8 @@ class SubjectDetailViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val settingsRepository: SettingsRepository,
     private val audioPlayer: PronunciationAudioPlayer,
-    private val strokeOrderRepository: StrokeOrderRepository
+    private val strokeOrderRepository: StrokeOrderRepository,
+    private val statsRepository: StatsRepository
 ) : ViewModel() {
 
     private val currentSubjectId = MutableStateFlow<Long?>(null)
@@ -90,9 +96,15 @@ class SubjectDetailViewModel(
                     } else {
                         subjectRepository.observeSubjectSummaries(relatedIds)
                     }
-                    val srsStageFlow = detail?.let { assignmentRepository.observeSrsStage(it.subjectId) } ?: flowOf(null)
-                    combine(relatedFlow, strokeOrderFlow(detail), srsStageFlow) { related, strokeOrder, srsStage ->
-                        DetailAndRelated(detail, related, strokeOrder, srsStage)
+                    val assignmentStatsFlow = detail?.let { assignmentRepository.observeAssignmentStats(it.subjectId) } ?: flowOf(null)
+                    val reviewStatsFlow = detail?.let { statsRepository.observeReviewStatistic(it.subjectId) } ?: flowOf(null)
+                    combine(
+                        relatedFlow,
+                        strokeOrderFlow(detail),
+                        assignmentStatsFlow,
+                        reviewStatsFlow
+                    ) { related, strokeOrder, assignmentStats, reviewStats ->
+                        DetailAndRelated(detail, related, strokeOrder, assignmentStats, reviewStats)
                     }
                 }
                 .combine(backStack) { detailAndRelated, stack -> detailAndRelated to stack }
@@ -109,7 +121,8 @@ class SubjectDetailViewModel(
                             restrictAudioToMp3 = settings.restrictAudioToMp3,
                             showStrokeOrder = settings.showStrokeOrder,
                             strokeOrder = detailAndRelated.strokeOrder,
-                            srsStage = detailAndRelated.srsStage
+                            assignmentStats = detailAndRelated.assignmentStats,
+                            reviewStats = detailAndRelated.reviewStats
                         )
                     }
                 }

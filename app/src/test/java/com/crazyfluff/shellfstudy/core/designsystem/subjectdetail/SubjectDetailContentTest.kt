@@ -13,15 +13,22 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectStatsTestTags
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeTestTags
@@ -68,6 +75,46 @@ class SubjectDetailContentTest {
         meanings = listOf("Water radical"),
         readings = emptyList()
     )
+
+    @Test
+    fun auxiliaryMeaningsUnderCap_showsAllWithoutTruncation() {
+        val vocabDetail = detail.copy(auxiliaryMeanings = listOf("Aqua", "H2O"))
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        composeTestRule.onNodeWithText("Aqua, H2O").assertIsDisplayed()
+    }
+
+    @Test
+    fun auxiliaryMeaningsOverCap_tapExpandsThenCollapses() {
+        val vocabDetail = detail.copy(auxiliaryMeanings = listOf("A", "B", "C", "D", "E"))
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        composeTestRule.onNodeWithText("A, B, C +2 more").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(SubjectDetailTestTags.AUXILIARY_MEANINGS_TEXT).performClick()
+        composeTestRule.onNodeWithText("A, B, C, D, E").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(SubjectDetailTestTags.AUXILIARY_MEANINGS_TEXT).performClick()
+        composeTestRule.onNodeWithText("A, B, C +2 more").assertIsDisplayed()
+    }
 
     @Test
     fun fullMode_showsBothMeaningAndReading() {
@@ -451,5 +498,113 @@ class SubjectDetailContentTest {
 
         composeTestRule.onNodeWithText("Water radical").performClick()
         assert(clicked == 1L)
+    }
+
+    private val lessonedAssignmentStats = SubjectAssignmentStats(
+        srsStage = SrsStage.GURU_1,
+        nextReviewAt = Clock.System.now() + 3.hours,
+        unlockedAt = Instant.parse("2026-01-02T00:00:00.000000Z"),
+        startedAt = Instant.parse("2026-01-03T00:00:00.000000Z"),
+        passedAt = Instant.parse("2026-01-20T00:00:00.000000Z"),
+        burnedAt = null
+    )
+
+    @Test
+    fun noAssignmentStats_hidesTheStatsSection() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(SubjectStatsTestTags.SECTION).assertCountEquals(0)
+    }
+
+    @Test
+    fun assignmentStatsPresent_showsMilestonesWithNotYetForBurned() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                assignmentStats = lessonedAssignmentStats
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SubjectStatsTestTags.SECTION).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Unlocked").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Passed").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Burned").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Not yet").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun nextReviewInThePast_showsAvailableNow() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                assignmentStats = lessonedAssignmentStats.copy(nextReviewAt = Clock.System.now() - 1.hours)
+            )
+        }
+
+        composeTestRule.onNodeWithText("Available now").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun reviewStatsPresent_showsAccuracyAndStreaksPerQuestionType() {
+        val reviewStats = SubjectReviewStats(
+            meaningCorrect = 9, meaningIncorrect = 1, meaningCurrentStreak = 3, meaningMaxStreak = 5,
+            readingCorrect = 4, readingIncorrect = 1, readingCurrentStreak = 2, readingMaxStreak = 6,
+            lastReviewedAt = Instant.parse("2026-01-25T12:00:00.000000Z")
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                assignmentStats = lessonedAssignmentStats,
+                reviewStats = reviewStats
+            )
+        }
+
+        composeTestRule.onNodeWithText("90%").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("80%").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Streak 3 (best 5)").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Last reviewed").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun noReviewStatsYet_showsPlaceholderInsteadOfMisleadingZeroPercent() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                assignmentStats = lessonedAssignmentStats,
+                reviewStats = null
+            )
+        }
+
+        composeTestRule.onAllNodesWithText("No reviews yet").assertCountEquals(2)
+        composeTestRule.onAllNodesWithText("Last reviewed").assertCountEquals(0)
     }
 }
