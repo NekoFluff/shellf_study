@@ -65,6 +65,7 @@ data class LessonUiState(
     val currentQuestionType: QuestionType? = null,
     val answerInput: String = "",
     val feedback: AnswerFeedback? = null,
+    val isDetailsExpanded: Boolean = false,
     val answerTypeMismatchCount: Int = 0,
     val totalQuizCount: Int = 0,
     val remainingQuizCount: Int = 0,
@@ -625,6 +626,14 @@ class LessonViewModel(
         viewModelScope.launch { advanceQuiz() }
     }
 
+    fun toggleDetails() {
+        _uiState.update { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
+    }
+
+    fun closeDetails() {
+        _uiState.update { it.copy(isDetailsExpanded = false) }
+    }
+
     /** Discards a persisted in-progress lesson session (study or quiz) and exits — a clean slate
      *  next time. Mirrors ReviewViewModel.abandonSession. */
     fun abandonSession() {
@@ -727,6 +736,7 @@ class LessonViewModel(
                 currentQuestionType = next.type,
                 answerInput = "",
                 feedback = null,
+                isDetailsExpanded = false,
                 remainingQuizCount = quizQueue.size,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null

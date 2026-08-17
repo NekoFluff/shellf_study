@@ -105,6 +105,8 @@ class LessonScreenTest {
                         LessonScreenEvent.DontKnow -> onDontKnow()
                         is LessonScreenEvent.PlayReading -> {}
                         LessonScreenEvent.Continue -> onContinue()
+                        LessonScreenEvent.ToggleDetails -> {}
+                        LessonScreenEvent.CloseDetails -> {}
                         LessonScreenEvent.Retry -> onRetry()
                         LessonScreenEvent.Abandon -> onAbandon()
                         LessonScreenEvent.Done -> onDone()

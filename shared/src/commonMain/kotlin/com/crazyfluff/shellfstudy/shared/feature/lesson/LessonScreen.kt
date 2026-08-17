@@ -107,6 +107,10 @@ import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.label
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailHandleHeight
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
 import kotlinx.coroutines.delay
@@ -176,6 +180,8 @@ sealed interface LessonScreenEvent {
     data object DontKnow : LessonScreenEvent
     data class PlayReading(val item: LessonItem, val reading: String) : LessonScreenEvent
     data object Continue : LessonScreenEvent
+    data object ToggleDetails : LessonScreenEvent
+    data object CloseDetails : LessonScreenEvent
     data object Retry : LessonScreenEvent
     data object Abandon : LessonScreenEvent
     data object Done : LessonScreenEvent
@@ -211,6 +217,8 @@ fun LessonRoute(
                 LessonScreenEvent.DontKnow -> viewModel.dontKnowAnswer()
                 is LessonScreenEvent.PlayReading -> viewModel.playReading(event.item, event.reading)
                 LessonScreenEvent.Continue -> viewModel.onContinue()
+                LessonScreenEvent.ToggleDetails -> viewModel.toggleDetails()
+                LessonScreenEvent.CloseDetails -> viewModel.closeDetails()
                 LessonScreenEvent.Retry -> viewModel.load()
                 LessonScreenEvent.Abandon -> viewModel.abandonSession()
                 LessonScreenEvent.Done -> onSessionComplete()
@@ -239,6 +247,8 @@ fun LessonScreen(
     val onDontKnow = { onEvent(LessonScreenEvent.DontKnow) }
     val onPlayReading: (LessonItem, String) -> Unit = { item, reading -> onEvent(LessonScreenEvent.PlayReading(item, reading)) }
     val onContinue = { onEvent(LessonScreenEvent.Continue) }
+    val onToggleDetails = { onEvent(LessonScreenEvent.ToggleDetails) }
+    val onCloseDetails = { onEvent(LessonScreenEvent.CloseDetails) }
     val onRetry = { onEvent(LessonScreenEvent.Retry) }
     val onAbandon = { onEvent(LessonScreenEvent.Abandon) }
     val onDone = { onEvent(LessonScreenEvent.Done) }
@@ -393,7 +403,9 @@ fun LessonScreen(
                         onAnswerInputChange = onAnswerInputChange,
                         onSubmit = onSubmit,
                         onDontKnow = onDontKnow,
-                        onContinue = onContinue
+                        onContinue = onContinue,
+                        onToggleDetails = onToggleDetails,
+                        onCloseDetails = onCloseDetails
                     )
                 }
             }
@@ -401,6 +413,29 @@ fun LessonScreen(
     }
 
     SubjectDetailSheetHost(detailSheetState)
+
+    if (uiState.phase == LessonPhase.QUIZ) {
+        var lastDetailSubjectId by remember { mutableStateOf<Long?>(null) }
+        var lastDetailQuestionType by remember { mutableStateOf<QuestionType?>(null) }
+        uiState.currentQuizItem?.let { lastDetailSubjectId = it.subjectId }
+        uiState.currentQuestionType?.let { lastDetailQuestionType = it }
+
+        lastDetailSubjectId?.let { subjectId ->
+            lastDetailQuestionType?.let { questionType ->
+                SubjectDetailSheet(
+                    subjectId = subjectId,
+                    active = uiState.feedback != null,
+                    expanded = uiState.isDetailsExpanded,
+                    onToggle = onToggleDetails,
+                    onDismiss = onCloseDetails,
+                    revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
+                    isAnswered = true,
+                    questionType = questionType.toDetailQuestionType(),
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
     }
 }
 
@@ -978,7 +1013,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
     onAnswerInputChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onDontKnow: () -> Unit,
-    onContinue: () -> Unit
+    onContinue: () -> Unit,
+    onToggleDetails: () -> Unit,
+    onCloseDetails: () -> Unit
 ) {
     val item = uiState.currentQuizItem ?: return
     val questionType = uiState.currentQuestionType ?: return
@@ -1137,8 +1174,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
                 continueButtonTestTag = LessonScreenTestTags.CONTINUE_BUTTON,
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(modifier = Modifier.height(16.dp + SubjectDetailHandleHeight + 24.dp))
         }
     }
 }
 
+private fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
+    QuestionType.MEANING -> DetailQuestionType.MEANING
+    QuestionType.READING -> DetailQuestionType.READING
+}
 
