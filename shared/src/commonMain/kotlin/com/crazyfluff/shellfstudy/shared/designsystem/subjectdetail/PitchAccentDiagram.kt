@@ -50,8 +50,8 @@ fun isHighMora(moraIndex: Int, pitchNumber: Int, moraCount: Int): Boolean = when
 
 @Composable
 internal fun pitchPatternColor(pitchNumber: Int, moraCount: Int): Color {
-    // The pattern is already conveyed by dot height/position and the odaka drop-tick below, so
-    // under the e-ink theme every pattern just draws in the same flat onSurface color.
+    // The pattern is already conveyed by dot height/position and the trailing particle dot below,
+    // so under the e-ink theme every pattern just draws in the same flat onSurface color.
     if (LocalEinkTheme.current) return MaterialTheme.colorScheme.onSurface
     return when {
         pitchNumber == 0 -> PitchAccentColors.Heiban
@@ -62,10 +62,11 @@ internal fun pitchPatternColor(pitchNumber: Int, moraCount: Int): Color {
 }
 
 /**
- * Replicates Smouldering Durtles' `PitchInfoDiagramView`: one dot per mora, connected by lines,
+ * Replicates the NHK pitch-accent dictionary style: one filled dot per mora, connected by lines,
  * high/low position derived from [pitchAccent]'s pitch number, color-coded by pattern
- * (heiban/atamadaka/nakadaka/odaka). Odaka gets a trailing open particle dot (hollow circle) after
- * the last mora — without it, odaka and heiban are visually identical.
+ * (heiban/atamadaka/nakadaka/odaka), plus a trailing open dot (hollow circle) after the last mora
+ * representing the following particle — shown for every pattern, at whatever height that pattern's
+ * particle is actually pronounced (high for heiban, low otherwise).
  */
 @Composable
 fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modifier = Modifier) {
@@ -83,15 +84,18 @@ fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modi
         morae.map { textMeasurer.measure(it, textStyle).size.width.toFloat() }
     }
 
+    // The trailing particle dot gets the same slot width as a real mora (its average width) so it
+    // reads as just another beat in the sequence rather than a separate tacked-on mark.
+    val particleWidth = remember(moraWidths) { moraWidths.average().toFloat() }
+
     val diagramHeightDp = 20.dp
     val dotRadiusPx = with(density) { 3.dp.toPx() }
-    val tickLengthPx = with(density) { 5.dp.toPx() }
-    // Size the canvas to the diagram's actual content width (mora glyph widths plus a small
-    // trailing allowance for the odaka particle dot / dot radius) instead of fillMaxWidth() —
-    // otherwise short readings draw their dots crammed into a corner of a much wider canvas,
-    // leaving a large dead gap before whatever follows in the row (e.g. the play button).
+    // Size the canvas to the diagram's actual content width (mora glyph widths, the particle dot's
+    // slot, plus a small trailing allowance for its radius) instead of fillMaxWidth() — otherwise
+    // short readings draw their dots crammed into a corner of a much wider canvas, leaving a large
+    // dead gap before whatever follows in the row (e.g. the play button).
     val contentWidthDp = with(density) {
-        (moraWidths.sum() + dotRadiusPx + (if (pitchNumber == moraCount) tickLengthPx + dotRadiusPx else 0f)).toDp()
+        (moraWidths.sum() + particleWidth + dotRadiusPx).toDp()
     }
     Canvas(
         modifier = modifier
@@ -103,7 +107,6 @@ fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modi
         val lowY = size.height * 0.8f
         val dotRadius = dotRadiusPx
         val strokeWidth = with(density) { 1.5.dp.toPx() }
-        val tickLength = tickLengthPx
 
         var x = 0f
         val points = moraWidths.mapIndexed { index, width ->
@@ -111,17 +114,18 @@ fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modi
             x += width
             point
         }
+        // isHighMora naturally extends to moraIndex == moraCount — the mora "slot" just past the
+        // last one — giving the correct pitch (high for heiban, low for every other pattern) for
+        // the particle that follows the word.
+        val particleY = if (isHighMora(moraCount, pitchNumber, moraCount)) highY else lowY
+        val particleCenter = Offset(x + particleWidth / 2f, particleY)
 
         for (i in 0 until points.lastIndex) {
             drawLine(color = color, start = points[i], end = points[i + 1], strokeWidth = strokeWidth)
         }
-        if (pitchNumber == moraCount) {
-            val last = points.last()
-            val particleCenter = Offset(last.x + tickLength, lowY)
-            drawLine(color = color, start = last, end = particleCenter, strokeWidth = strokeWidth)
-            drawCircle(color = color, radius = dotRadius, center = particleCenter, style = Stroke(width = strokeWidth))
-        }
+        drawLine(color = color, start = points.last(), end = particleCenter, strokeWidth = strokeWidth)
         points.forEach { point -> drawCircle(color = color, radius = dotRadius, center = point) }
+        drawCircle(color = color, radius = dotRadius, center = particleCenter, style = Stroke(width = strokeWidth))
     }
 }
 
