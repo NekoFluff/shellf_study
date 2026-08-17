@@ -20,7 +20,7 @@ class ReviewForecastTextTest {
             reviewsAvailableNow = 5,
             buckets = (1..24).map { bucket(it, if (it == 3) 2 else 0) }
         )
-        assertEquals("5 due now · 2 more in the next 24h", reviewForecastSummary(forecast))
+        assertEquals("5 due now · 2 more in 24h", reviewForecastSummary(forecast))
     }
 
     @Test
@@ -35,12 +35,12 @@ class ReviewForecastTextTest {
             reviewsAvailableNow = 0,
             buckets = (1..24).map { bucket(it, if (it == 5) 3 else 0) }
         )
-        assertTrue(reviewForecastSummary(forecast).startsWith("Next up: 3 at"))
+        assertTrue(reviewForecastSummary(forecast).startsWith("Next: 3 at"))
     }
 
     @Test
     fun nothingDueNowOrUpcomingReportsFullyCaughtUp() {
         val forecast = ReviewForecast(reviewsAvailableNow = 0, buckets = (1..24).map { bucket(it, 0) })
-        assertEquals("All caught up — nothing due in the next 24h", reviewForecastSummary(forecast))
+        assertEquals("All caught up", reviewForecastSummary(forecast))
     }
 }
