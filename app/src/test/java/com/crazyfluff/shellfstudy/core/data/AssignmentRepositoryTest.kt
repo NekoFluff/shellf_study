@@ -512,6 +512,84 @@ class AssignmentRepositoryTest {
         }
     """.trimIndent()
 
+    // --- subject-drop and passedAt/burnedAt tests ---
+
+    @Test
+    fun `observeReviewQueue silently drops an assignment whose subject is not in the DB`() = runTest {
+        // Seed an assignment that is due but deliberately omit the corresponding subject row —
+        // this models an incomplete sync (e.g. subjects sync was interrupted). The queue must
+        // return empty rather than crash, per the mapNotNull silent-drop in the repository.
+        repositories.assignmentDao.upsertAll(
+            listOf(
+                AssignmentEntity(
+                    id = 999, subjectId = 9999, subjectType = "radical", srsStage = 1,
+                    createdAt = "2026-01-01T00:00:00.000000Z",
+                    availableAt = "2020-01-01T00:00:00.000000Z", hidden = false
+                )
+            )
+        )
+
+        repository.observeReviewQueue().test {
+            assertThat(awaitItem()).isEmpty()
+        }
+    }
+
+    @Test
+    fun `applyOptimisticReviewResult sets passedAt when advancing to the passing stage`() = runTest {
+        seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
+        repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 4)))
+
+        repository.applyOptimisticReviewResult(101, 0, ReviewGrade(meaningCorrect = true, readingCorrect = true))
+
+        val updated = repositories.assignmentDao.getById(101)!!
+        assertThat(updated.srsStage).isEqualTo(5) // passed into Guru I
+        assertThat(updated.passedAt).isNotNull()
+        assertThat(updated.burnedAt).isNull()
+    }
+
+    @Test
+    fun `applyOptimisticReviewResult sets burnedAt when advancing to the burning stage`() = runTest {
+        seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
+        repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 8)))
+
+        repository.applyOptimisticReviewResult(101, 0, ReviewGrade(meaningCorrect = true, readingCorrect = true))
+
+        val updated = repositories.assignmentDao.getById(101)!!
+        assertThat(updated.srsStage).isEqualTo(9)
+        assertThat(updated.burnedAt).isNotNull()
+    }
+
+    @Test
+    fun `applyOptimisticReviewResult does not overwrite an already-set passedAt`() = runTest {
+        seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
+        val originalPassedAt = "2025-01-01T00:00:00.000000Z"
+        repositories.assignmentDao.upsertAll(
+            listOf(
+                AssignmentEntity(
+                    id = 101, subjectId = 1, subjectType = "radical", srsStage = 5,
+                    createdAt = "2026-01-01T00:00:00.000000Z", hidden = false,
+                    passedAt = originalPassedAt
+                )
+            )
+        )
+
+        repository.applyOptimisticReviewResult(101, 0, ReviewGrade(meaningCorrect = true, readingCorrect = true))
+
+        assertThat(repositories.assignmentDao.getById(101)?.passedAt).isEqualTo(originalPassedAt)
+    }
+
+    @Test
+    fun `applyOptimisticReviewResult never sets passedAt on an incorrect answer that drops the stage`() = runTest {
+        seedSubject(id = 1, characters = "口", meaning = "Mouth", reading = "くち")
+        repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 101, subjectId = 1, srsStage = 5)))
+
+        repository.applyOptimisticReviewResult(101, 0, ReviewGrade(meaningCorrect = false, readingCorrect = true))
+
+        val updated = repositories.assignmentDao.getById(101)!!
+        assertThat(updated.srsStage).isLessThan(5)
+        assertThat(updated.passedAt).isNull()
+    }
+
     private fun startAssignmentResultJson(id: Long) = """
         {
           "id": $id,

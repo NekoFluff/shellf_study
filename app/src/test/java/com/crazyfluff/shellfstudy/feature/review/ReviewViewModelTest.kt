@@ -1080,6 +1080,53 @@ class ReviewViewModelTest {
         }
     }
 
+    @Test
+    fun `a network error during load sets an error message and clears the loading state`() = runTest(mainDispatcherRule.dispatcher) {
+        // Subjects endpoint returns 500 — refreshQueue will return ApiResult.Error after the
+        // subjects sync fails, so fetchFreshQueue sets errorMessage on the uiState.
+        dispatch(
+            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+            subjectsResponse = jsonResponse("{}", 500)
+        )
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.errorMessage).isNotNull()
+            assertThat(state.isLoading).isFalse()
+        }
+    }
+
+    @Test
+    fun `retrying loadOrResume after an error clears the error and shows the queue`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(
+            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+            subjectsResponse = jsonResponse("{}", 500)
+        )
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.errorMessage).isNotNull()
+
+            // Fix the server and retry.
+            dispatch(
+                assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+                subjectsResponse = jsonResponse(radicalSubjectsJson())
+            )
+            viewModel.loadOrResume()
+
+            state = awaitItem()
+            while (state.isLoading || state.errorMessage != null) state = awaitItem()
+            assertThat(state.errorMessage).isNull()
+            assertThat(state.totalCount).isAtLeast(1)
+        }
+    }
+
     private fun threeRadicalAssignmentsJson() = """
         {
           "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 3,

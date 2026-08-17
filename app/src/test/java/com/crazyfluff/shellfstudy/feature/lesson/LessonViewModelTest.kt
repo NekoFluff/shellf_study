@@ -1093,6 +1093,73 @@ class LessonViewModelTest {
         }
     }
 
+    @Test
+    fun `a network error during load sets an error message and clears the loading state`() = runTest(mainDispatcherRule.dispatcher) {
+        // Subjects endpoint returns 500 — refreshQueue returns ApiResult.Error, so fetchFreshQueue
+        // sets errorMessage on the uiState.
+        dispatch(
+            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+            subjectsResponse = jsonResponse("{}", 500)
+        )
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.errorMessage).isNotNull()
+            assertThat(state.isLoading).isFalse()
+        }
+    }
+
+    @Test
+    fun `retrying load() after an error clears the error and shows the lesson select screen`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(
+            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+            subjectsResponse = jsonResponse("{}", 500)
+        )
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.errorMessage).isNotNull()
+
+            // Fix the server and retry via the public retry entry point.
+            dispatch(
+                assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+                subjectsResponse = jsonResponse(radicalSubjectsJson())
+            )
+            viewModel.load()
+
+            state = awaitItem()
+            while (state.isLoading || state.errorMessage != null) state = awaitItem()
+            assertThat(state.errorMessage).isNull()
+            assertThat(state.phase).isEqualTo(LessonPhase.SELECT)
+        }
+    }
+
+    @Test
+    fun `startSelectedLessons with nothing selected is a no-op and stays in the SELECT phase`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.selectNone()
+            awaitItem() // state with empty selection
+            viewModel.startSelectedLessons()
+
+            // Must be a no-op — no phase transition, no crash.
+            expectNoEvents()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(LessonPhase.SELECT)
+        }
+    }
+
     private fun kanjiAssignmentsJson() = """
         {
           "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
