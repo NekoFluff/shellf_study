@@ -181,6 +181,17 @@ class AssignmentRepository(
         return RankChange(SrsStage.fromRaw(item.srsStage), SrsStage.fromRaw(nextStage))
     }
 
+    /**
+     * Pure, synchronous prediction of a lesson item's starting rank change — same idea as
+     * [computeReviewRankChange], but every lesson item starts the same way (locked straight to the
+     * SRS system's starting stage) so there's no grade input to branch on, unlike a review's
+     * up/down result. Needs [warmSrsSystemCache] to have already run; returns null on a cache miss.
+     */
+    fun computeLessonStartRankChange(srsSystemId: Long): RankChange? {
+        val srsSystem = srsSystemCache?.get(srsSystemId) ?: return null
+        return RankChange(SrsStage.LOCKED, SrsStage.fromRaw(srsSystem.startingStagePosition))
+    }
+
     /** Reconciles the assignment with the WK-confirmed result once a queued review submission
      *  actually syncs — the server's value always wins over the local prediction. */
     suspend fun reconcileAfterReviewResult(result: ReviewResultData) {

@@ -1,6 +1,4 @@
 package com.crazyfluff.shellfstudy.shared.feature.lesson
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -76,18 +74,15 @@ import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.ElapsedTimeText
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.GatedContinueButton
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.PausableElapsedTimeText
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizAnswerField
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionContent
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemsCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionOverviewCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSlowestAnswersCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionTimingCard
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.feedbackDetailPrefix
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.AuxiliaryMeaningsText
@@ -98,17 +93,12 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.VocabReadingRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.componentsLabel
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColor
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColorDark
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
-import com.crazyfluff.shellfstudy.shared.quiz.label
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
@@ -118,7 +108,6 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailReveal
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
-import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailHandleHeight
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
@@ -159,6 +148,9 @@ object LessonScreenTestTags {
     const val FEEDBACK_TEXT = "lesson_feedback_text"
     const val ANSWER_DETAIL_TEXT = "lesson_answer_detail_text"
     const val QUIZ_SUBJECT_TYPE_LABEL = "lesson_quiz_subject_type_label"
+    const val QUESTION_LABEL = "lesson_question_label"
+    const val UNDO_BUTTON = "lesson_undo_button"
+    const val RANK_CHANGE_TEXT = "lesson_rank_change_text"
     const val CONTINUE_BUTTON = "lesson_continue_button"
     const val SESSION_COMPLETE = "lesson_session_complete"
     const val SESSION_OVERVIEW_CARD = "lesson_session_overview_card"
@@ -188,6 +180,7 @@ sealed interface LessonScreenEvent {
     data class AnswerInputChange(val value: String) : LessonScreenEvent
     data object Submit : LessonScreenEvent
     data object DontKnow : LessonScreenEvent
+    data object Undo : LessonScreenEvent
     data class PlayReading(val item: LessonItem, val reading: String) : LessonScreenEvent
     data object Continue : LessonScreenEvent
     data object ToggleDetails : LessonScreenEvent
@@ -228,6 +221,7 @@ fun LessonRoute(
                 is LessonScreenEvent.AnswerInputChange -> viewModel.onAnswerInputChange(event.value)
                 LessonScreenEvent.Submit -> viewModel.submitAnswer()
                 LessonScreenEvent.DontKnow -> viewModel.dontKnowAnswer()
+                LessonScreenEvent.Undo -> viewModel.undoLastAnswer()
                 is LessonScreenEvent.PlayReading -> viewModel.playReading(event.item, event.reading)
                 LessonScreenEvent.Continue -> viewModel.onContinue()
                 LessonScreenEvent.ToggleDetails -> viewModel.toggleDetails()
@@ -261,6 +255,7 @@ fun LessonScreen(
     val onAnswerInputChange: (String) -> Unit = { onEvent(LessonScreenEvent.AnswerInputChange(it)) }
     val onSubmit = { onEvent(LessonScreenEvent.Submit) }
     val onDontKnow = { onEvent(LessonScreenEvent.DontKnow) }
+    val onUndo = { onEvent(LessonScreenEvent.Undo) }
     val onPlayReading: (LessonItem, String) -> Unit = { item, reading -> onEvent(LessonScreenEvent.PlayReading(item, reading)) }
     val onContinue = { onEvent(LessonScreenEvent.Continue) }
     val onToggleDetails = { onEvent(LessonScreenEvent.ToggleDetails) }
@@ -443,15 +438,53 @@ fun LessonScreen(
                 }
 
                 uiState.phase == LessonPhase.QUIZ -> {
-                    LessonQuizContent(
-                        uiState = uiState,
-                        onAnswerInputChange = onAnswerInputChange,
-                        onSubmit = onSubmit,
-                        onDontKnow = onDontKnow,
-                        onContinue = onContinue,
-                        onToggleDetails = onToggleDetails,
-                        onCloseDetails = onCloseDetails
-                    )
+                    val item = uiState.currentQuizItem
+                    val questionType = uiState.currentQuestionType
+                    if (item != null && questionType != null) {
+                        QuizQuestionContent(
+                            uiState = QuizQuestionUiState(
+                                item = item,
+                                questionType = questionType,
+                                totalCount = uiState.totalQuizCount,
+                                remainingCount = uiState.remainingQuizCount,
+                                answerInput = uiState.answerInput,
+                                feedback = uiState.feedback,
+                                rankChange = uiState.rankChange,
+                                undoCounter = uiState.undoCounter,
+                                answerTypeMismatchCount = uiState.answerTypeMismatchCount,
+                                showSubjectTypeLabel = uiState.showSubjectTypeLabel,
+                                showQuestionTimer = uiState.showQuestionTimer,
+                                showTotalTimer = uiState.showTotalTimer,
+                                questionElapsedMs = uiState.questionElapsedMs,
+                                questionStartTimeMs = uiState.questionStartTimeMs,
+                                sessionActiveElapsedMs = uiState.sessionActiveElapsedMs,
+                                sessionActiveSegmentStartMs = uiState.sessionActiveSegmentStartMs,
+                                useJapaneseKeyboard = uiState.useJapaneseKeyboard
+                            ),
+                            onAnswerInputChange = onAnswerInputChange,
+                            onSubmit = onSubmit,
+                            onDontKnow = onDontKnow,
+                            onContinue = onContinue,
+                            onUndo = onUndo,
+                            testTags = QuizQuestionTestTags(
+                                progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
+                                questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,
+                                totalTimerText = LessonScreenTestTags.TOTAL_TIMER_TEXT,
+                                characters = LessonScreenTestTags.QUIZ_CHARACTERS,
+                                subjectTypeLabel = LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL,
+                                rankChangeText = LessonScreenTestTags.RANK_CHANGE_TEXT,
+                                questionLabel = LessonScreenTestTags.QUESTION_LABEL,
+                                answerField = LessonScreenTestTags.ANSWER_FIELD,
+                                typeMismatchText = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
+                                dontKnowButton = LessonScreenTestTags.DONT_KNOW_BUTTON,
+                                submitButton = LessonScreenTestTags.SUBMIT_BUTTON,
+                                undoButton = LessonScreenTestTags.UNDO_BUTTON,
+                                feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
+                                answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
+                                continueButton = LessonScreenTestTags.CONTINUE_BUTTON
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -960,181 +993,3 @@ private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
         }
     }
 }
-
-@Composable
-private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
-    uiState: LessonUiState,
-    onAnswerInputChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onDontKnow: () -> Unit,
-    onContinue: () -> Unit,
-    onToggleDetails: () -> Unit,
-    onCloseDetails: () -> Unit
-) {
-    val item = uiState.currentQuizItem ?: return
-    val questionType = uiState.currentQuestionType ?: return
-
-    val progress = if (uiState.totalQuizCount == 0) 0f else
-        (uiState.totalQuizCount - uiState.remainingQuizCount).toFloat() / uiState.totalQuizCount
-    val accentColor = subjectColor(item.subjectType)
-
-    LinearProgressIndicator(
-        progress = { progress },
-        modifier = Modifier.fillMaxWidth(),
-        color = accentColor,
-        drawStopIndicator = {}
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = "${uiState.totalQuizCount - uiState.remainingQuizCount} / ${uiState.totalQuizCount}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.testTag(LessonScreenTestTags.QUIZ_PROGRESS_COUNT)
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (uiState.showQuestionTimer) {
-                val questionElapsedMs = uiState.questionElapsedMs
-                val questionStartTimeMs = uiState.questionStartTimeMs
-                if (questionElapsedMs != null) {
-                    // Frozen at the instant the question was answered, matching the elapsedMs recorded
-                    // for the slowest-answers summary, rather than continuing to tick through feedback.
-                    Text(
-                        text = formatElapsedClock(questionElapsedMs),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.testTag(LessonScreenTestTags.QUESTION_TIMER_TEXT)
-                    )
-                } else if (questionStartTimeMs != null) {
-                    ElapsedTimeText(
-                        startTimeMs = questionStartTimeMs,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.testTag(LessonScreenTestTags.QUESTION_TIMER_TEXT)
-                    )
-                }
-            }
-            if (uiState.showQuestionTimer && uiState.showTotalTimer) {
-                Text(
-                    text = " / ",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (uiState.showTotalTimer) {
-                PausableElapsedTimeText(
-                    baseElapsedMs = uiState.sessionActiveElapsedMs,
-                    segmentStartMs = uiState.sessionActiveSegmentStartMs,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(LessonScreenTestTags.TOTAL_TIMER_TEXT)
-                )
-            }
-        }
-    }
-
-    Column(
-        modifier = Modifier.weight(1f, fill = false).fillMaxWidth().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        SubjectGlyph(
-            characters = item.characters,
-            characterImageUrl = item.characterImageUrl,
-            subjectType = item.subjectType,
-            size = 104.dp,
-            modifier = Modifier.testTag(LessonScreenTestTags.QUIZ_CHARACTERS)
-        )
-        if (uiState.showSubjectTypeLabel) {
-            Text(
-                text = subjectTypeLabel(item.subjectType),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag(LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL)
-            )
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .weight(1f)
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-    ) {
-        Text(
-            text = "What is the ${questionType.label}?",
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        QuizAnswerField(
-            value = uiState.answerInput,
-            onValueChange = onAnswerInputChange,
-            questionType = questionType,
-            isAnswered = uiState.feedback != null,
-            answerTypeMismatchCount = uiState.answerTypeMismatchCount,
-            onSubmit = onSubmit,
-            answerFieldTestTag = LessonScreenTestTags.ANSWER_FIELD,
-            typeMismatchTextTestTag = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
-            focusResetKey = item.assignmentId to questionType,
-            useJapaneseKeyboard = uiState.useJapaneseKeyboard
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        val feedback = uiState.feedback
-        if (feedback == null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = onDontKnow,
-                    modifier = Modifier.weight(1f).testTag(LessonScreenTestTags.DONT_KNOW_BUTTON)
-                ) { Text("I don't know") }
-                Button(
-                    onClick = onSubmit,
-                    enabled = uiState.answerInput.isNotBlank(),
-                    modifier = Modifier.weight(1f).testTag(LessonScreenTestTags.SUBMIT_BUTTON)
-                ) { Text("Submit") }
-            }
-        } else {
-            Text(
-                text = if (feedback.isCorrect) "Correct!" else "Incorrect",
-                color = if (feedback.isCorrect) themeAwareColor(CorrectAnswerColor, CorrectAnswerColorDark) else MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.testTag(LessonScreenTestTags.FEEDBACK_TEXT)
-            )
-            feedbackDetailPrefix(feedback)?.let { prefix ->
-                var isDetailExpanded by remember(feedback) { mutableStateOf(false) }
-                val answers = formatAnswerList(feedback.correctAnswer, expanded = isDetailExpanded)
-                // Capped at a fixed height + internally scrollable rather than left unbounded:
-                // an item with many accepted synonyms could otherwise grow past this
-                // non-scrolling Column's bounds and push the Continue button down underneath
-                // the swipe-up handle's reserved space below, silently stealing its taps.
-                Text(
-                    text = "$prefix ${answers.text}",
-                    color = if (answers.hasMore) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = if (isDetailExpanded) Int.MAX_VALUE else 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .testTag(LessonScreenTestTags.ANSWER_DETAIL_TEXT)
-                        .then(if (isDetailExpanded) Modifier.heightIn(max = 96.dp).verticalScroll(rememberScrollState()) else Modifier)
-                        .then(
-                            if (answers.hasMore) {
-                                Modifier.clickable { isDetailExpanded = !isDetailExpanded }
-                            } else {
-                                Modifier
-                            }
-                        )
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            GatedContinueButton(
-                feedback = feedback,
-                onContinue = onContinue,
-                continueButtonTestTag = LessonScreenTestTags.CONTINUE_BUTTON,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp + SubjectDetailHandleHeight + 24.dp))
-    }
-}
-

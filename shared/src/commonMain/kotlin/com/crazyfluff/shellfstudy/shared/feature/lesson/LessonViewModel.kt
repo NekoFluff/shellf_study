@@ -23,6 +23,7 @@ import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
@@ -75,6 +76,8 @@ data class LessonUiState(
     val currentQuestionType: QuestionType? = null,
     val answerInput: String = "",
     val feedback: AnswerFeedback? = null,
+    val rankChange: RankChange? = null,
+    val undoCounter: Int = 0,
     val isDetailsExpanded: Boolean = false,
     val answerTypeMismatchCount: Int = 0,
     val totalQuizCount: Int = 0,
@@ -556,6 +559,49 @@ class LessonViewModel(
         }
     }
 
+    /** Reverts the most recent incorrect answer — for a typo, not a genuine miss. Mirrors
+     *  ReviewViewModel.undoLastAnswer(). */
+    fun undoLastAnswer() {
+        val state = _uiState.value
+        val item = state.currentQuizItem ?: return
+        val type = state.currentQuestionType ?: return
+        val feedback = state.feedback ?: return
+        if (feedback.isCorrect) return
+
+        viewModelScope.launch {
+            val itemProgress = progressByAssignmentId[item.assignmentId] ?: return@launch
+            when (type) {
+                QuestionType.MEANING -> itemProgress.hadIncorrectMeaning = false
+                QuestionType.READING -> itemProgress.hadIncorrectReading = false
+            }
+            // The wrong submission moved this question to the back of the queue via requeue();
+            // move it back to the front so it stays "current" (quizQueue.current == currentQuizItem
+            // is the invariant advanceQuiz relies on), rather than dropping it entirely.
+            quizQueue.moveMatchingToFront { it.item.assignmentId == item.assignmentId && it.type == type }
+
+            // Undo removes the incorrect attempt just recorded by gradeAnswer, and restarts this
+            // question's clock so the retry's timing doesn't inherit time spent before the undo.
+            answeredQuestions.removeLastOrNull()
+            questionShownAtMs = Clock.System.now().toEpochMilliseconds()
+
+            applicationScope.runDurably { persistCurrentState() }
+            // undoCounter changes even though currentQuizItem/currentQuestionType don't — this is
+            // what the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't
+            // change either of those but still needs to refocus the field the user just tapped away
+            // from.
+            _uiState.update {
+                it.copy(
+                    feedback = null,
+                    answerInput = "",
+                    remainingQuizCount = quizQueue.size,
+                    undoCounter = it.undoCounter + 1,
+                    questionStartTimeMs = questionShownAtMs,
+                    questionElapsedMs = null
+                )
+            }
+        }
+    }
+
     private suspend fun gradeAnswer(
         item: LessonItem,
         type: QuestionType,
@@ -596,10 +642,18 @@ class LessonViewModel(
         // enqueue afterward agree on whether this is really a first-time completion.
         val isNewlyStarted = justCompletedItem && startedAssignmentIds.add(item.assignmentId)
 
+        // Computed synchronously against AssignmentRepository's in-memory SRS-system cache (warmed
+        // once when the queue loaded) — zero DB access on this critical path, same as Review's
+        // rank-change chip. Every lesson item starts the same way (locked straight to the SRS
+        // system's starting stage), so unlike Review this doesn't depend on whether the answer was
+        // actually correct — it only fires once, the first time the item's lesson is fully done.
+        val newRankChange = if (isNewlyStarted) assignmentRepository.computeLessonStartRankChange(item.srsSystemId) else null
+
         _uiState.update {
             it.copy(
                 feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
                 remainingQuizCount = quizQueue.size,
+                rankChange = newRankChange ?: it.rankChange,
                 // Freezes the "time on this question" display the instant feedback appears, rather
                 // than letting it keep ticking while the feedback/Continue screen is up — matches
                 // the elapsedMs recorded for the slowest-answers summary above, stamped at this
@@ -723,6 +777,7 @@ class LessonViewModel(
                     currentQuizItem = null,
                     currentQuestionType = null,
                     feedback = null,
+                    rankChange = null,
                     isDetailsExpanded = false,
                     sessionItemsLearned = summary.itemsCount,
                     sessionItemsCorrectFirstTry = summary.correctFirstTry,
@@ -741,6 +796,7 @@ class LessonViewModel(
                 currentQuestionType = next.type,
                 answerInput = "",
                 feedback = null,
+                rankChange = null,
                 isDetailsExpanded = false,
                 remainingQuizCount = quizQueue.size,
                 questionStartTimeMs = questionShownAtMs,

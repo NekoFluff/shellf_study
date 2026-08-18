@@ -28,21 +28,24 @@ data class LevelUpProgress(
     val isLevelUpReady: Boolean get() = kanjiTotal > 0 && kanjiGuruedOrHigher >= requiredCount
 }
 
-/** Common shape shared by [LessonItem] and [ReviewItem] — everything a quiz-session-summary row
- *  needs to display a subject without depending on either feature's full item type. */
+/** Common shape shared by [LessonItem] and [ReviewItem] — everything a quiz-session-summary row or
+ *  the shared quiz-question screen needs to display a subject, without depending on either
+ *  feature's full item type. */
 interface QuizDisplayItem {
+    val assignmentId: Long
     val characters: String?
+    val characterImageUrl: String?
     val meanings: List<String>
     val subjectId: Long
     val subjectType: SubjectType
 }
 
 data class ReviewItem(
-    val assignmentId: Long,
+    override val assignmentId: Long,
     override val subjectId: Long,
     override val subjectType: SubjectType,
     override val characters: String?,
-    val characterImageUrl: String? = null,
+    override val characterImageUrl: String? = null,
     val level: Int,
     val srsStage: Int,
     override val meanings: List<String>,
@@ -65,11 +68,11 @@ data class ReviewGrade(
 }
 
 data class LessonItem(
-    val assignmentId: Long,
+    override val assignmentId: Long,
     override val subjectId: Long,
     override val subjectType: SubjectType,
     override val characters: String?,
-    val characterImageUrl: String? = null,
+    override val characterImageUrl: String? = null,
     val level: Int,
     /** The subject's position within its level's lesson order, per WaniKani's own intended
      *  sequencing — used as the tie-break when [com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPrioritizer]

@@ -20,6 +20,8 @@ import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
@@ -387,6 +389,84 @@ class LessonViewModelTest {
         assertThat(savedSummary).isNotNull()
         assertThat(savedSummary!!.kind).isEqualTo(LastSessionKind.LESSON)
         assertThat(savedSummary.itemsCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a newly-started item surfaces a rank change once and clears on continue`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.rankChange).isNull()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            // radicalAssignmentsJson fixes the cached assignment at srs_stage 0 (Locked) — every
+            // lesson item starts the same way, straight to the SRS system's starting stage.
+            assertThat(feedbackState.rankChange).isEqualTo(RankChange(SrsStage.LOCKED, SrsStage.APPRENTICE_1))
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat(finalState.rankChange).isNull()
+        }
+    }
+
+    @Test
+    fun `undo reverts an incorrect answer so it doesn't count as a miss`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isFalse()
+
+            viewModel.undoLastAnswer()
+            val undoneState = awaitItem()
+            assertThat(undoneState.feedback).isNull()
+            assertThat(undoneState.answerInput).isEqualTo("")
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val retriedState = awaitItem()
+            assertThat(retriedState.feedback?.isCorrect).isTrue()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+        }
+
+        // The undone wrong answer must not count toward the session's missed-item tally — the
+        // only item in this session should show as correct-on-first-try.
+        val savedSummary = lastSessionSummaryRepository.load()
+        assertThat(savedSummary?.itemsCount).isEqualTo(1)
+        assertThat(savedSummary?.correctFirstTry).isEqualTo(1)
     }
 
     @Test

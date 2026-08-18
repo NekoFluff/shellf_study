@@ -56,6 +56,11 @@ fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
     QuestionType.READING -> DetailQuestionType.READING
 }
 
+/** Height of the subject-detail sheet's always-present grab strip in its collapsed "peek" state —
+ *  used by callers (Lesson/Review's quiz content, the sheet itself) to reserve room below their
+ *  own content so the strip doesn't cover it. */
+val SubjectDetailHandleHeight = 56.dp
+
 object SubjectDetailTestTags {
     const val SHEET_ROOT = "subject_detail_sheet_root"
     const val CONTENT_ROOT = "subject_detail_content_root"

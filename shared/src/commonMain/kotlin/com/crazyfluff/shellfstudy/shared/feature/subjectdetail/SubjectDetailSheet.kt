@@ -61,14 +61,12 @@ import com.crazyfluff.shellfstudy.shared.designsystem.PlatformBackHandler
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailHandleHeight
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailViewModel
 import kotlinx.coroutines.flow.drop
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
-
-/** Height of the always-present grab strip in its collapsed "peek" state. */
-val SubjectDetailHandleHeight = 56.dp
 
 private val SubjectDetailOpenHandleHeight = 32.dp
 

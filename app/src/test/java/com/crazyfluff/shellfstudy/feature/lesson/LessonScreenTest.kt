@@ -83,6 +83,7 @@ class LessonScreenTest {
         onAnswerInputChange: (String) -> Unit = {},
         onSubmit: () -> Unit = {},
         onDontKnow: () -> Unit = {},
+        onUndo: () -> Unit = {},
         onContinue: () -> Unit = {},
         onRetry: () -> Unit = {},
         onAbandon: () -> Unit = {},
@@ -105,6 +106,7 @@ class LessonScreenTest {
                         is LessonScreenEvent.AnswerInputChange -> onAnswerInputChange(event.value)
                         LessonScreenEvent.Submit -> onSubmit()
                         LessonScreenEvent.DontKnow -> onDontKnow()
+                        LessonScreenEvent.Undo -> onUndo()
                         is LessonScreenEvent.PlayReading -> {}
                         LessonScreenEvent.Continue -> onContinue()
                         LessonScreenEvent.ToggleDetails -> {}
