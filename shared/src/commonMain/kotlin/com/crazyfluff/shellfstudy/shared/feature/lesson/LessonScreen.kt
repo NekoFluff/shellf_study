@@ -81,10 +81,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.GatedContinueButton
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.PausableElapsedTimeText
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizAnswerField
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemsCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionOverviewCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSlowestAnswersCard
@@ -110,8 +108,9 @@ import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSec
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
-import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.label
+import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
+import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.toDetailQuestionType
@@ -402,8 +401,8 @@ fun LessonScreen(
                         correctFirstTry = uiState.sessionItemsCorrectFirstTry,
                         totalElapsedMs = uiState.sessionTotalElapsedMs,
                         averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
-                        slowestAnswers = uiState.sessionSlowestAnswers.map { it.toRow() },
-                        missedItems = uiState.sessionMissedItems.map { it.toMissedItemRow() },
+                        slowestAnswers = uiState.sessionSlowestAnswers.map { it.toSessionAnswerRow() },
+                        missedItems = uiState.sessionMissedItems.map { it.toSessionMissedItemRow() },
                         onDone = onDone,
                         onSubjectClick = { detailSheetState.show(it) },
                         testTags = SessionCompleteTestTags(
@@ -493,21 +492,6 @@ fun LessonScreen(
     }
     }
 }
-
-private fun SlowAnswer<LessonItem>.toRow(): SessionAnswerRow = SessionAnswerRow(
-    label = item.characters ?: item.meanings.firstOrNull() ?: "?",
-    typeLabel = type.label,
-    elapsedMs = elapsedMs,
-    isCorrect = isCorrect,
-    subjectId = item.subjectId,
-    subjectType = item.subjectType
-)
-
-private fun LessonItem.toMissedItemRow(): SessionMissedItemRow = SessionMissedItemRow(
-    label = characters ?: meanings.firstOrNull() ?: "?",
-    subjectId = subjectId,
-    subjectType = subjectType
-)
 
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(

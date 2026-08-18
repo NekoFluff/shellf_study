@@ -34,24 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.data.model.SessionAnswerRow
+import com.crazyfluff.shellfstudy.shared.data.model.SessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColorDark
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
-import com.crazyfluff.shellfstudy.shared.network.SubjectType
-
-/** One row of a [SessionSlowestAnswersCard] — a single graded answer, already reduced to display-ready fields. */
-data class SessionAnswerRow(
-    val label: String,
-    val typeLabel: String,
-    val elapsedMs: Long,
-    val isCorrect: Boolean,
-    val subjectId: Long,
-    val subjectType: SubjectType
-)
-
-/** One chip of a [SessionMissedItemsCard]. */
-data class SessionMissedItemRow(val label: String, val subjectId: Long, val subjectType: SubjectType)
 
 @Composable
 fun SessionOverviewCard(

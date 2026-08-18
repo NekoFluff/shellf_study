@@ -67,10 +67,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.GatedContinueButton
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.PausableElapsedTimeText
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizAnswerField
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemsCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionOverviewCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSlowestAnswersCard
@@ -93,8 +91,9 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
-import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.label
+import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
+import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
@@ -328,8 +327,8 @@ fun ReviewScreen(
                         correctFirstTry = uiState.sessionItemsCorrectFirstTry,
                         totalElapsedMs = uiState.sessionTotalElapsedMs,
                         averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
-                        slowestAnswers = uiState.sessionSlowestAnswers.map { it.toRow() },
-                        missedItems = uiState.sessionMissedItems.map { it.toMissedItemRow() },
+                        slowestAnswers = uiState.sessionSlowestAnswers.map { it.toSessionAnswerRow() },
+                        missedItems = uiState.sessionMissedItems.map { it.toSessionMissedItemRow() },
                         onDone = onDone,
                         onSubjectClick = { searchDetailSheetState.show(it) },
                         testTags = SessionCompleteTestTags(
@@ -659,19 +658,4 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
     }
 }
 
-
-private fun SlowAnswer<ReviewItem>.toRow(): SessionAnswerRow = SessionAnswerRow(
-    label = item.characters ?: item.meanings.firstOrNull() ?: "?",
-    typeLabel = type.label,
-    elapsedMs = elapsedMs,
-    isCorrect = isCorrect,
-    subjectId = item.subjectId,
-    subjectType = item.subjectType
-)
-
-private fun ReviewItem.toMissedItemRow(): SessionMissedItemRow = SessionMissedItemRow(
-    label = characters ?: meanings.firstOrNull() ?: "?",
-    subjectId = subjectId,
-    subjectType = subjectType
-)
 

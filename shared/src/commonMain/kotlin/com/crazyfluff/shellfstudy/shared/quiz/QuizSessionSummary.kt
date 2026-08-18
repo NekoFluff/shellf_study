@@ -1,5 +1,9 @@
 package com.crazyfluff.shellfstudy.shared.quiz
 
+import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
+import com.crazyfluff.shellfstudy.shared.data.model.SessionAnswerRow
+import com.crazyfluff.shellfstudy.shared.data.model.SessionMissedItemRow
+
 /** Aggregate stats for a completed lesson or review session — shared shape, computed the same way
  *  for both features via [summarizeQuizSession]. */
 data class QuizSessionSummary<T>(
@@ -39,3 +43,21 @@ fun <T> summarizeQuizSession(
         slowestAnswers = slowestAnswers
     )
 }
+
+/** Reduces a graded answer down to its session-summary display row — shared by Lesson and Review,
+ *  which previously each carried an identical private copy of this mapping. */
+fun <T : QuizDisplayItem> SlowAnswer<T>.toSessionAnswerRow(): SessionAnswerRow = SessionAnswerRow(
+    label = item.characters ?: item.meanings.firstOrNull() ?: "?",
+    typeLabel = type.label,
+    elapsedMs = elapsedMs,
+    isCorrect = isCorrect,
+    subjectId = item.subjectId,
+    subjectType = item.subjectType
+)
+
+/** Reduces a missed item down to its session-summary display row — shared by Lesson and Review. */
+fun <T : QuizDisplayItem> T.toSessionMissedItemRow(): SessionMissedItemRow = SessionMissedItemRow(
+    label = characters ?: meanings.firstOrNull() ?: "?",
+    subjectId = subjectId,
+    subjectType = subjectType
+)

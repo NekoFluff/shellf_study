@@ -201,6 +201,7 @@ data class LevelProgressionData(
 )
 
 /** Subject "object" type as returned in AssignmentData.subjectType / WkResourceItem.objectType. */
+@Serializable
 enum class SubjectType {
     RADICAL, KANJI, VOCABULARY, KANA_VOCABULARY;
 
