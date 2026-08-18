@@ -18,20 +18,20 @@ val RadicalLight = Color(0xFFB3D9FF)
 val KanjiLight = Color(0xFFFFB3E6)
 val VocabularyLight = Color(0xFFE3B3FF)
 
-/** SRS stage colors — Dusk palette: cool tones for early stages, warm for later, black for Burned. */
+/** SRS stage colors — Dusk palette: cool tones for early stages, warm for later, red for Burned. */
 object SrsStageColors {
-    val Apprentice = Color(0xFF00897B)
+    val Apprentice = Color(0xFF27AE60)
     val Guru = Color(0xFF5C6BC0)
     val Master = Color(0xFF8E44AD)
     val Enlightened = Color(0xFFE67E22)
-    val Burned = Color(0xFF1C1C1C)
+    val Burned = Color(0xFFC0392B)
     val Locked = Color(0xFF9E9E9E)
 }
 
-/** Lighter stand-in for [SrsStageColors.Burned] on the dark color scheme — the near-black
- *  charcoal is illegible against a dark background, unlike the other (already-bright) stage
+/** Lighter stand-in for [SrsStageColors.Burned] on the dark color scheme — the deep red
+ *  is harder to read against a dark background, unlike the other (already-bright) stage
  *  colors, which don't need a dark-theme variant. */
-val BurnedDark = Color(0xFFB0B0B0)
+val BurnedDark = Color(0xFFE57373)
 
 /** Accent for "Correct!" feedback text and success icons in quiz flows. */
 val CorrectAnswerColor = SubjectTypeColors.Radical
