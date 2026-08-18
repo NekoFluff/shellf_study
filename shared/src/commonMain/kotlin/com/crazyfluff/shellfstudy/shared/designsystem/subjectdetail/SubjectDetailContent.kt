@@ -43,12 +43,18 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 
 /** Whether the sheet shows everything (browse/study contexts) or hides the currently-tested field (mid-quiz). */
 enum class DetailRevealMode { FULL, HIDE_UNTIL_ANSWERED }
 
 enum class DetailQuestionType { MEANING, READING }
+
+fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
+    QuestionType.MEANING -> DetailQuestionType.MEANING
+    QuestionType.READING -> DetailQuestionType.READING
+}
 
 object SubjectDetailTestTags {
     const val SHEET_ROOT = "subject_detail_sheet_root"

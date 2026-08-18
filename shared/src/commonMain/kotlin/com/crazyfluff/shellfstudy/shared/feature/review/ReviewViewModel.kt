@@ -18,11 +18,13 @@ import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
+import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
@@ -448,45 +450,17 @@ class ReviewViewModel(
         sessionTiming.pause()
     }
 
-    private data class SessionSummary(
-        val itemsReviewed: Int,
-        val correctFirstTry: Int,
-        val missedItems: List<ReviewItem>,
-        val totalElapsedMs: Long,
-        val averageTimePerItemMs: Long,
-        val slowestAnswers: List<SlowAnswer<ReviewItem>>
-    )
-
-    /** Items reviewed, how many were correct without ever missing, which were missed at least once,
-     *  and timing — total session time, average time per item reviewed, and the slowest answers.
-     *  The average divides total wall-clock session time (start to finish, including feedback
-     *  screens and rank-change animations between questions) by the count of distinct items
-     *  reviewed — that's what a user actually means by "average time per item."
-     *
-     *  Only counts items with [ItemProgress.hasAnyProgress] — progressByAssignmentId is seeded with
-     *  an entry for every item in the original queue up front (see buildQueue), so after a wrapUp()
-     *  drops never-attempted items from the queue, their still-present-but-untouched entries here
-     *  must not be counted as "reviewed", or this would overcount items reviewed and, in turn,
-     *  understate the average time spent per item actually reviewed. */
-    private fun sessionSummary(): SessionSummary {
+    /** Only counts items with [QuizItemProgress.hasAnyProgress] — progressByAssignmentId is seeded
+     *  with an entry for every item in the original queue up front (see buildQueue), so after a
+     *  wrapUp() drops never-attempted items from the queue, their still-present-but-untouched
+     *  entries here must not be counted as "reviewed", or this would overcount items reviewed and,
+     *  in turn, understate the average time spent per item actually reviewed. The average divides
+     *  total wall-clock session time (start to finish, including feedback screens and rank-change
+     *  animations between questions) by the count of distinct items reviewed — that's what a user
+     *  actually means by "average time per item." Mirrors LessonViewModel.sessionSummary(). */
+    private fun sessionSummary(): QuizSessionSummary<ReviewItem> {
         val reviewedProgress = progressByAssignmentId.values.filter { it.hasAnyProgress }
-        val itemsReviewed = reviewedProgress.size
-        val correctFirstTry = reviewedProgress.count { !it.hadIncorrectMeaning && !it.hadIncorrectReading }
-        val missedItems = reviewedProgress
-            .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
-            .map { it.item }
-        val totalElapsedMs = sessionTiming.currentElapsedMs()
-        val averageTimePerItemMs = if (itemsReviewed == 0) 0L else totalElapsedMs / itemsReviewed
-        val slowestAnswers = answeredQuestions.sortedByDescending { it.elapsedMs }.take(5)
-            .map { SlowAnswer(it.item, it.type, it.elapsedMs, it.isCorrect) }
-        return SessionSummary(
-            itemsReviewed = itemsReviewed,
-            correctFirstTry = correctFirstTry,
-            missedItems = missedItems,
-            totalElapsedMs = totalElapsedMs,
-            averageTimePerItemMs = averageTimePerItemMs,
-            slowestAnswers = slowestAnswers
-        )
+        return summarizeQuizSession(reviewedProgress, answeredQuestions, sessionTiming.currentElapsedMs())
     }
 
     private suspend fun advanceToNextQuestion() {
@@ -505,7 +479,7 @@ class ReviewViewModel(
                     feedback = null,
                     rankChange = null,
                     isDetailsExpanded = false,
-                    sessionItemsReviewed = summary.itemsReviewed,
+                    sessionItemsReviewed = summary.itemsCount,
                     sessionItemsCorrectFirstTry = summary.correctFirstTry,
                     sessionMissedItems = summary.missedItems,
                     sessionTotalElapsedMs = summary.totalElapsedMs,

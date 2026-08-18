@@ -33,11 +33,13 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
 import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
+import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -310,7 +312,7 @@ class LessonViewModel(
                 sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
                 questionStartTimeMs = questionShownAtMs,
                 questionElapsedMs = null,
-                sessionItemsLearned = summary?.itemsLearned ?: it.sessionItemsLearned,
+                sessionItemsLearned = summary?.itemsCount ?: it.sessionItemsLearned,
                 sessionItemsCorrectFirstTry = summary?.correctFirstTry ?: it.sessionItemsCorrectFirstTry,
                 sessionMissedItems = summary?.missedItems ?: it.sessionMissedItems,
                 sessionTotalElapsedMs = summary?.totalElapsedMs ?: it.sessionTotalElapsedMs,
@@ -673,37 +675,11 @@ class LessonViewModel(
         sessionTiming.pause()
     }
 
-    private data class LessonSessionSummary(
-        val itemsLearned: Int,
-        val correctFirstTry: Int,
-        val missedItems: List<LessonItem>,
-        val totalElapsedMs: Long,
-        val averageTimePerItemMs: Long,
-        val slowestAnswers: List<SlowAnswer<LessonItem>>
-    )
-
     /** Items learned, how many were correct without ever missing, which were missed at least once,
      *  and timing — mirrors ReviewViewModel.sessionSummary(). "Missed" here means at least one wrong
      *  attempt during the quiz, not a real SRS miss — every lesson item is requeued until correct. */
-    private fun sessionSummary(): LessonSessionSummary {
-        val itemsLearned = progressByAssignmentId.size
-        val correctFirstTry = progressByAssignmentId.values.count { !it.hadIncorrectMeaning && !it.hadIncorrectReading }
-        val missedItems = progressByAssignmentId.values
-            .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
-            .map { it.item }
-        val totalElapsedMs = sessionTiming.currentElapsedMs()
-        val averageTimePerItemMs = if (itemsLearned == 0) 0L else totalElapsedMs / itemsLearned
-        val slowestAnswers = answeredQuestions.sortedByDescending { it.elapsedMs }.take(5)
-            .map { SlowAnswer(it.item, it.type, it.elapsedMs, it.isCorrect) }
-        return LessonSessionSummary(
-            itemsLearned = itemsLearned,
-            correctFirstTry = correctFirstTry,
-            missedItems = missedItems,
-            totalElapsedMs = totalElapsedMs,
-            averageTimePerItemMs = averageTimePerItemMs,
-            slowestAnswers = slowestAnswers
-        )
-    }
+    private fun sessionSummary(): QuizSessionSummary<LessonItem> =
+        summarizeQuizSession(progressByAssignmentId.values, answeredQuestions, sessionTiming.currentElapsedMs())
 
     private suspend fun advanceQuiz() {
         val next = quizQueue.current
@@ -718,7 +694,7 @@ class LessonViewModel(
                     currentQuestionType = null,
                     feedback = null,
                     isDetailsExpanded = false,
-                    sessionItemsLearned = summary.itemsLearned,
+                    sessionItemsLearned = summary.itemsCount,
                     sessionItemsCorrectFirstTry = summary.correctFirstTry,
                     sessionMissedItems = summary.missedItems,
                     sessionTotalElapsedMs = summary.totalElapsedMs,

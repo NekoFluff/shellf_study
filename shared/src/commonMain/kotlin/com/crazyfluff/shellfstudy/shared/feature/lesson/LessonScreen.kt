@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -111,6 +112,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.label
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.toDetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
@@ -1176,6 +1178,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
             feedbackDetailPrefix(feedback)?.let { prefix ->
                 var isDetailExpanded by remember(feedback) { mutableStateOf(false) }
                 val answers = formatAnswerList(feedback.correctAnswer, expanded = isDetailExpanded)
+                // Capped at a fixed height + internally scrollable rather than left unbounded:
+                // an item with many accepted synonyms could otherwise grow past this
+                // non-scrolling Column's bounds and push the Continue button down underneath
+                // the swipe-up handle's reserved space below, silently stealing its taps.
                 Text(
                     text = "$prefix ${answers.text}",
                     color = if (answers.hasMore) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1184,6 +1190,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .testTag(LessonScreenTestTags.ANSWER_DETAIL_TEXT)
+                        .then(if (isDetailExpanded) Modifier.heightIn(max = 96.dp).verticalScroll(rememberScrollState()) else Modifier)
                         .then(
                             if (answers.hasMore) {
                                 Modifier.clickable { isDetailExpanded = !isDetailExpanded }
@@ -1200,13 +1207,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizContent(
                 continueButtonTestTag = LessonScreenTestTags.CONTINUE_BUTTON,
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(16.dp + SubjectDetailHandleHeight + 24.dp))
         }
+        Spacer(modifier = Modifier.height(16.dp + SubjectDetailHandleHeight + 24.dp))
     }
-}
-
-private fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
-    QuestionType.MEANING -> DetailQuestionType.MEANING
-    QuestionType.READING -> DetailQuestionType.READING
 }
 
