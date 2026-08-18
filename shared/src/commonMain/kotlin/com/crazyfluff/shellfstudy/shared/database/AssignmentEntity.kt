@@ -71,14 +71,17 @@ interface AssignmentDao {
     @Query("SELECT srsStage, subjectType, COUNT(*) as count FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL GROUP BY srsStage, subjectType")
     fun observeSrsStageAndTypeCounts(): Flow<List<SrsStageTypeCount>>
 
-    /** Every started assignment's type, subject display text, and passed status at [level]. */
+    /** Every subject's type, display text, and passed status at [level] — driven from [subjects]
+     *  rather than [assignments] so a subject with no assignment row yet (its prerequisites
+     *  haven't been reached, so WaniKani hasn't created one) still shows up as locked (srsStage 0)
+     *  instead of silently missing from the level progress view. */
     @Query(
         """
-        SELECT a.subjectId as subjectId, a.subjectType as subjectType, s.characters as characters, s.characterImageUrl as characterImageUrl, s.slug as slug, a.passedAt as passedAt, a.srsStage as srsStage
-        FROM assignments a
-        JOIN subjects s ON s.id = a.subjectId
-        WHERE s.level = :level AND a.hidden = 0 AND a.unlockedAt IS NOT NULL
-        ORDER BY s.lessonPosition ASC, a.subjectId ASC
+        SELECT s.id as subjectId, s.subjectType as subjectType, s.characters as characters, s.characterImageUrl as characterImageUrl, s.slug as slug, a.passedAt as passedAt, COALESCE(a.srsStage, 0) as srsStage
+        FROM subjects s
+        LEFT JOIN assignments a ON a.subjectId = s.id AND a.hidden = 0
+        WHERE s.level = :level AND s.hiddenAt IS NULL
+        ORDER BY s.lessonPosition ASC, s.id ASC
         """
     )
     fun observeLevelProgressItemRows(level: Int): Flow<List<LevelProgressItemRow>>
@@ -95,13 +98,16 @@ interface AssignmentDao {
     @Query("SELECT burnedAt FROM assignments WHERE hidden = 0 AND burnedAt IS NOT NULL")
     fun observeAllBurnedTimestamps(): Flow<List<String>>
 
-    /** Every kanji assignment's SRS stage at [level] — Guru+ (stage >= 5) counts toward leveling up. */
+    /** Every kanji's SRS stage at [level] — Guru+ (stage >= 5) counts toward leveling up. Driven
+     *  from [subjects], like [observeLevelProgressItemRows], so a kanji with no assignment row
+     *  yet still counts toward the level's total (as locked, stage 0) instead of shrinking the
+     *  90%-of-level denominator. */
     @Query(
         """
-        SELECT a.srsStage as srsStage
-        FROM assignments a
-        JOIN subjects s ON s.id = a.subjectId
-        WHERE s.level = :level AND a.subjectType = 'kanji' AND a.hidden = 0
+        SELECT COALESCE(a.srsStage, 0) as srsStage
+        FROM subjects s
+        LEFT JOIN assignments a ON a.subjectId = s.id AND a.hidden = 0
+        WHERE s.level = :level AND s.subjectType = 'kanji' AND s.hiddenAt IS NULL
         """
     )
     fun observeKanjiLevelUpRows(level: Int): Flow<List<KanjiLevelUpRow>>

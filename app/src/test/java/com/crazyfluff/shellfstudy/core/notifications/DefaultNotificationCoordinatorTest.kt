@@ -56,7 +56,7 @@ class DefaultNotificationCoordinatorTest {
     fun setUp() {
         val api = buildTestApi("http://localhost/")
         subjectDao = FakeSubjectDao()
-        assignmentDao = FakeAssignmentDao(subjectLevelLookup = subjectDao::levelOf, subjectLookup = subjectDao::entityOf)
+        assignmentDao = FakeAssignmentDao(subjectsAtLevel = subjectDao::subjectsAtLevel)
         val syncStateDao = FakeSyncStateDao()
         val pitchAccentRepository = PitchAccentRepository(
             FakePitchAccentBundledSource(emptyMap()), FakePitchAccentCacheDao(), FakeWeblioApi(), WeblioPitchAccentParser()

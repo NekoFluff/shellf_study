@@ -326,6 +326,88 @@ class AssignmentRepositoryTest {
     }
 
     @Test
+    fun `observeLevelProgress includes not-yet-unlocked items in the level`() = runTest {
+        seedSubject(id = 1, level = 12, characters = "一", meaning = "One", reading = "いち")
+        seedSubject(id = 2, level = 12, characters = "二", meaning = "Two", reading = "に")
+        server.enqueue(
+            jsonResponse(
+                collectionJson(
+                    listOf(
+                        assignmentData(id = 201, subjectId = 1, srsStage = 5, unlockedAt = "2020-01-01T00:00:00.000000Z"),
+                        // unlockedAt defaults to null — still locked, not yet started.
+                        assignmentData(id = 202, subjectId = 2, srsStage = 0)
+                    )
+                )
+            )
+        )
+
+        repository.syncAssignments(force = true)
+
+        repository.observeLevelProgress(12).test {
+            val progress = awaitItem()
+            val kanji = progress.breakdown.first { it.subjectType == SubjectType.KANJI }
+            assertThat(kanji.items.map { it.subjectId }).containsExactly(1L, 2L)
+            val locked = kanji.items.first { it.subjectId == 2L }
+            assertThat(locked.srsStage).isEqualTo(SrsStage.LOCKED)
+            assertThat(locked.passed).isFalse()
+        }
+    }
+
+    @Test
+    fun `observeLevelProgress includes subjects with no assignment resource yet as locked`() = runTest {
+        // WaniKani only creates an assignment resource once a subject's prerequisites are met —
+        // a kanji whose component radicals aren't guru'd yet has no assignment row at all, not
+        // merely one with unlockedAt = null. The level's full item set must still surface it.
+        seedSubject(id = 1, level = 12, characters = "一", meaning = "One", reading = "いち")
+        seedSubject(id = 2, level = 12, characters = "二", meaning = "Two", reading = "に")
+        server.enqueue(
+            jsonResponse(
+                collectionJson(
+                    listOf(
+                        assignmentData(id = 201, subjectId = 1, srsStage = 5, unlockedAt = "2020-01-01T00:00:00.000000Z")
+                        // No assignment at all for subjectId 2.
+                    )
+                )
+            )
+        )
+
+        repository.syncAssignments(force = true)
+
+        repository.observeLevelProgress(12).test {
+            val progress = awaitItem()
+            val kanji = progress.breakdown.first { it.subjectType == SubjectType.KANJI }
+            assertThat(kanji.items.map { it.subjectId }).containsExactly(1L, 2L)
+            val locked = kanji.items.first { it.subjectId == 2L }
+            assertThat(locked.srsStage).isEqualTo(SrsStage.LOCKED)
+            assertThat(locked.passed).isFalse()
+        }
+    }
+
+    @Test
+    fun `observeLevelUpProgress counts kanji with no assignment resource yet toward the total`() = runTest {
+        seedSubject(id = 1, level = 12, characters = "一", meaning = "One", reading = "いち")
+        seedSubject(id = 2, level = 12, characters = "二", meaning = "Two", reading = "に")
+        server.enqueue(
+            jsonResponse(
+                collectionJson(
+                    listOf(
+                        assignmentData(id = 201, subjectId = 1, srsStage = 5, unlockedAt = "2020-01-01T00:00:00.000000Z")
+                        // No assignment at all for subjectId 2.
+                    )
+                )
+            )
+        )
+
+        repository.syncAssignments(force = true)
+
+        repository.observeLevelUpProgress(12).test {
+            val progress = awaitItem()
+            assertThat(progress.kanjiTotal).isEqualTo(2)
+            assertThat(progress.kanjiGuruedOrHigher).isEqualTo(1)
+        }
+    }
+
+    @Test
     fun `observeSrsItemSpread buckets started assignments by srs stage`() = runTest {
         seedSubject(id = 1, characters = "1", meaning = "a", reading = "a")
         seedSubject(id = 2, characters = "2", meaning = "b", reading = "b")

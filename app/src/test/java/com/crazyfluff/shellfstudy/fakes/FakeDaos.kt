@@ -49,17 +49,16 @@ class FakeSubjectDao : SubjectDao {
         unlockedIds.value = unlockedIds.value + ids.toSet()
     }
 
-    /** Test-only helper so [FakeAssignmentDao] can resolve a subject's level for join-style queries. */
-    fun levelOf(subjectId: Long): Int? = subjects.value[subjectId]?.level
-
-    /** Test-only helper so [FakeAssignmentDao] can resolve a subject's display fields for join-style queries. */
-    fun entityOf(subjectId: Long): SubjectEntity? = subjects.value[subjectId]
+    /** Test-only helper so [FakeAssignmentDao] can enumerate every (non-hidden) subject at a level
+     *  for its subject-driven, left-join-style level progress/level-up queries — mirroring the real
+     *  DAO's need to surface subjects with no assignment row yet as locked. */
+    fun subjectsAtLevel(level: Int): List<SubjectEntity> =
+        subjects.value.values.filter { it.level == level && it.hiddenAt == null }
 }
 
 /** In-memory stand-in for [AssignmentDao] used by repository/ViewModel unit tests. */
 class FakeAssignmentDao(
-    private val subjectLevelLookup: (Long) -> Int? = { null },
-    private val subjectLookup: (Long) -> SubjectEntity? = { null }
+    private val subjectsAtLevel: (Int) -> List<SubjectEntity> = { emptyList() }
 ) : AssignmentDao {
     private val assignments = MutableStateFlow<Map<Long, AssignmentEntity>>(emptyMap())
 
@@ -98,21 +97,22 @@ class FakeAssignmentDao(
             .map { (key, count) -> SrsStageTypeCount(key.first, key.second, count) }
     }
 
+    private fun visibleAssignmentFor(subjectId: Long, map: Map<Long, AssignmentEntity>): AssignmentEntity? =
+        map.values.firstOrNull { it.subjectId == subjectId && !it.hidden }
+
     override fun observeLevelProgressItemRows(level: Int): Flow<List<LevelProgressItemRow>> = assignments.map { map ->
-        map.values
-            .filter { !it.hidden && it.unlockedAt != null && subjectLevelLookup(it.subjectId) == level }
-            .map { assignment ->
-                val subject = subjectLookup(assignment.subjectId)
-                LevelProgressItemRow(
-                    subjectId = assignment.subjectId,
-                    subjectType = assignment.subjectType,
-                    characters = subject?.characters,
-                    characterImageUrl = subject?.characterImageUrl,
-                    slug = subject?.slug.orEmpty(),
-                    passedAt = assignment.passedAt,
-                    srsStage = assignment.srsStage
-                )
-            }
+        subjectsAtLevel(level).map { subject ->
+            val assignment = visibleAssignmentFor(subject.id, map)
+            LevelProgressItemRow(
+                subjectId = subject.id,
+                subjectType = subject.subjectType,
+                characters = subject.characters,
+                characterImageUrl = subject.characterImageUrl,
+                slug = subject.slug,
+                passedAt = assignment?.passedAt,
+                srsStage = assignment?.srsStage ?: 0
+            )
+        }
     }
 
     override fun observeItemsSeenCount(): Flow<Int> = assignments.map { map ->
@@ -127,9 +127,9 @@ class FakeAssignmentDao(
     }
 
     override fun observeKanjiLevelUpRows(level: Int): Flow<List<KanjiLevelUpRow>> = assignments.map { map ->
-        map.values
-            .filter { !it.hidden && it.subjectType == "kanji" && subjectLevelLookup(it.subjectId) == level }
-            .map { KanjiLevelUpRow(it.srsStage) }
+        subjectsAtLevel(level)
+            .filter { it.subjectType == "kanji" }
+            .map { subject -> KanjiLevelUpRow(visibleAssignmentFor(subject.id, map)?.srsStage ?: 0) }
     }
 
     override fun observeAllStartedTimestamps(): Flow<List<String>> = assignments.map { map ->

@@ -149,10 +149,10 @@ private fun SubjectTypeProgressRow(
     val doneCount = entry.items.count { it.srsStage.raw >= SrsStage.GURU_1.raw }
     val inProgressCount = entry.items.count { it.srsStage != SrsStage.LOCKED && it.srsStage.raw < SrsStage.GURU_1.raw }
     val lockedCount = entry.totalCount - doneCount - inProgressCount
-    // Threshold position is approximate: it mixes this row's own item count with a separately
-    // queried kanji total (see LevelUpProgress) that can differ slightly (e.g. it isn't filtered
-    // to only-unlocked items) — close enough for a quick-glance mark; "Ready to level up!" below
-    // is the exact, authoritative signal once the real requirement is actually met.
+    // entry.totalCount and levelUpProgress.kanjiTotal are both drawn from the same unfiltered
+    // (locked-items-included) per-level assignment set, so this mark lines up exactly with the
+    // real 90% threshold; "Ready to level up!" below is still the authoritative signal for
+    // whether it's actually been met.
     val thresholdFraction = levelUpProgress?.let {
         if (entry.totalCount > 0) (it.requiredCount.toFloat() / entry.totalCount).coerceIn(0f, 1f) else null
     }

@@ -94,7 +94,7 @@ fun buildTestRepositories(
 ): TestRepositories {
     val api = buildTestApi(baseUrl)
     val subjectDao = FakeSubjectDao()
-    val assignmentDao = FakeAssignmentDao(subjectLevelLookup = subjectDao::levelOf, subjectLookup = subjectDao::entityOf)
+    val assignmentDao = FakeAssignmentDao(subjectsAtLevel = subjectDao::subjectsAtLevel)
     val srsSystemDao = FakeSrsSystemDao().apply { seed(DEFAULT_TEST_SRS_SYSTEM) }
     val syncStateDao = FakeSyncStateDao()
     val studyActivityDao = FakeStudyActivityDao()
