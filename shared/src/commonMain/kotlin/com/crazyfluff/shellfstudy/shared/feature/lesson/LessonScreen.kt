@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -111,6 +112,9 @@ import com.crazyfluff.shellfstudy.shared.quiz.label
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
+import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailHandleHeight
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
@@ -163,6 +167,7 @@ object LessonScreenTestTags {
     const val SESSION_SLOWEST_CARD = "lesson_session_slowest_card"
     const val SESSION_MISSED_CARD = "lesson_session_missed_card"
     const val DONE_BUTTON = "lesson_done_button"
+    const val SEARCH_BUTTON = "lesson_search_button"
     const val OVERFLOW_MENU = "lesson_overflow_menu"
     const val ABANDON_MENU_ITEM = "lesson_abandon_menu_item"
     const val ABANDON_CONFIRM_BUTTON = "lesson_abandon_confirm_button"
@@ -188,15 +193,18 @@ sealed interface LessonScreenEvent {
     data object Abandon : LessonScreenEvent
     data object Done : LessonScreenEvent
     data object Back : LessonScreenEvent
+    data class SearchQueryChange(val query: String) : LessonScreenEvent
 }
 
 @Composable
 fun LessonRoute(
     onSessionComplete: () -> Unit,
     onBack: () -> Unit,
-    viewModel: LessonViewModel = koinViewModel()
+    viewModel: LessonViewModel = koinViewModel(),
+    searchViewModel: SearchViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val searchUiState by searchViewModel.uiState.collectAsState()
 
     LaunchedEffect(uiState.isAbandoned) {
         if (uiState.isAbandoned) onBack()
@@ -225,8 +233,10 @@ fun LessonRoute(
                 LessonScreenEvent.Abandon -> viewModel.abandonSession()
                 LessonScreenEvent.Done -> onSessionComplete()
                 LessonScreenEvent.Back -> onBack()
+                is LessonScreenEvent.SearchQueryChange -> searchViewModel.onQueryChange(event.query)
             }
-        }
+        },
+        searchUiState = searchUiState
     )
 }
 
@@ -234,7 +244,8 @@ fun LessonRoute(
 @Composable
 fun LessonScreen(
     uiState: LessonUiState,
-    onEvent: (LessonScreenEvent) -> Unit
+    onEvent: (LessonScreenEvent) -> Unit,
+    searchUiState: SearchUiState = SearchUiState()
 ) {
     val onToggleLessonSelection: (Long) -> Unit = { onEvent(LessonScreenEvent.ToggleLessonSelection(it)) }
     val onSelectFirst: (Int) -> Unit = { onEvent(LessonScreenEvent.SelectFirst(it)) }
@@ -255,10 +266,12 @@ fun LessonScreen(
     val onAbandon = { onEvent(LessonScreenEvent.Abandon) }
     val onDone = { onEvent(LessonScreenEvent.Done) }
     val onBack = { onEvent(LessonScreenEvent.Back) }
+    val onSearchQueryChange: (String) -> Unit = { onEvent(LessonScreenEvent.SearchQueryChange(it)) }
 
     val detailSheetState = rememberSubjectDetailSheetState()
     var menuExpanded by remember { mutableStateOf(false) }
     var showAbandonConfirm by remember { mutableStateOf(false) }
+    var isSearchActive by remember { mutableStateOf(false) }
     // A session only exists to abandon once the user has committed to a lesson batch — the SELECT
     // phase hasn't persisted anything yet (see LessonSessionRepository), so there's nothing there
     // for the dashboard's "Abandon lesson session" entry, or this screen's own copy of it, to act on.
@@ -280,6 +293,12 @@ fun LessonScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { isSearchActive = true },
+                        modifier = Modifier.testTag(LessonScreenTestTags.SEARCH_BUTTON)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = "Search")
+                    }
                     if (canManageSession) {
                         Box {
                             IconButton(
@@ -414,6 +433,15 @@ fun LessonScreen(
         }
     }
 
+    SubjectSearchOverlay(
+        active = isSearchActive,
+        onActiveChange = { isSearchActive = it },
+        uiState = searchUiState,
+        onQueryChange = onSearchQueryChange,
+        modifier = Modifier.fillMaxSize(),
+        onSubjectClick = { detailSheetState.show(it) }
+    )
+
     SubjectDetailSheetHost(detailSheetState)
 
     if (uiState.phase == LessonPhase.QUIZ) {
@@ -426,7 +454,7 @@ fun LessonScreen(
             lastDetailQuestionType?.let { questionType ->
                 SubjectDetailSheet(
                     subjectId = subjectId,
-                    active = uiState.feedback != null,
+                    active = !isSearchActive && uiState.feedback != null,
                     expanded = uiState.isDetailsExpanded,
                     onToggle = onToggleDetails,
                     onDismiss = onCloseDetails,

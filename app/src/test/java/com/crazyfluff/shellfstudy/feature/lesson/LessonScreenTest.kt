@@ -25,6 +25,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
@@ -112,10 +113,25 @@ class LessonScreenTest {
                         LessonScreenEvent.Abandon -> onAbandon()
                         LessonScreenEvent.Done -> onDone()
                         LessonScreenEvent.Back -> onBack()
+                        is LessonScreenEvent.SearchQueryChange -> {}
                     }
                 }
             )
         }
+    }
+
+    @Test
+    fun searchButton_opensInlineSearchOverlay() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(radicalItem, secondRadicalItem),
+                selectedAssignmentIds = setOf(1L)
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SEARCH_BUTTON).performClick()
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.QUERY_FIELD).assertIsDisplayed()
     }
 
     @Test
