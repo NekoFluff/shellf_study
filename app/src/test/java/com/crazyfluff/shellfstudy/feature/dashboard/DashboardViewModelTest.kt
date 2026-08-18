@@ -13,6 +13,9 @@ import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
+import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
@@ -151,7 +154,8 @@ class DashboardViewModelTest {
                     outboxSyncScheduler = repositories.outboxSyncScheduler,
                     friendStatsRepository = friendStatsRepository,
                     logoutCoordinator = logoutCoordinator,
-                    dashboardSyncCoordinator = dashboardSyncCoordinator
+                    dashboardSyncCoordinator = dashboardSyncCoordinator,
+                    lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json)
                 )
             }
         }
@@ -413,6 +417,33 @@ class DashboardViewModelTest {
             while (state.isRefreshing || !state.hasActiveReviewSession) state = awaitItem()
             assertThat(state.hasActiveReviewSession).isTrue()
             assertThat(state.hasActiveLessonSession).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `hasLastSessionSummary reflects whether a last session summary has been persisted`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        val lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, Json { ignoreUnknownKeys = true })
+        lastSessionSummaryRepository.save(
+            LastSessionSummary(
+                kind = LastSessionKind.REVIEW,
+                itemsCount = 3,
+                correctFirstTry = 2,
+                totalElapsedMs = 30_000,
+                averageTimePerItemMs = 10_000,
+                slowestAnswers = emptyList(),
+                missedItems = emptyList(),
+                completedAtMillis = 1_000L
+            )
+        )
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isRefreshing || !state.hasLastSessionSummary) state = awaitItem()
+            assertThat(state.hasLastSessionSummary).isTrue()
             cancelAndIgnoreRemainingEvents()
         }
     }

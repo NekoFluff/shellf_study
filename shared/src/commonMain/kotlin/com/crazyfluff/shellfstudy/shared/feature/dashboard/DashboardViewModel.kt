@@ -6,6 +6,7 @@ import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
@@ -69,7 +70,8 @@ data class DashboardUiState(
     val leaderboard: Leaderboard? = null,
     val leaderboardLoading: Boolean = false,
     val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
-    val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK
+    val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK,
+    val hasLastSessionSummary: Boolean = false
 ) {
     val bannerState: DashboardBannerState
         get() = when {
@@ -140,7 +142,8 @@ class DashboardViewModel(
     private val outboxSyncScheduler: OutboxSyncScheduler,
     private val friendStatsRepository: FriendStatsRepository,
     private val logoutCoordinator: LogoutCoordinator,
-    private val dashboardSyncCoordinator: DashboardSyncCoordinator
+    private val dashboardSyncCoordinator: DashboardSyncCoordinator,
+    private val lastSessionSummaryRepository: LastSessionSummaryRepository
 ) : ViewModel() {
 
     private val _dashboardData = MutableStateFlow(DashboardUiState())
@@ -214,9 +217,14 @@ class DashboardViewModel(
             )
         },
         leaderboardFlow,
-        _leaderboardRefreshing
-    ) { dashboardState, leaderboard, leaderboardLoading ->
-        dashboardState.copy(leaderboard = leaderboard, leaderboardLoading = leaderboardLoading)
+        _leaderboardRefreshing,
+        lastSessionSummaryRepository.exists
+    ) { dashboardState, leaderboard, leaderboardLoading, hasLastSessionSummary ->
+        dashboardState.copy(
+            leaderboard = leaderboard,
+            leaderboardLoading = leaderboardLoading,
+            hasLastSessionSummary = hasLastSessionSummary
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
 
     private var hasCompletedInitialSync = false

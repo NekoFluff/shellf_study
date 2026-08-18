@@ -12,6 +12,8 @@ import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
@@ -60,6 +62,7 @@ class LessonViewModelTest {
     private lateinit var assignmentRepository: AssignmentRepository
     private lateinit var outboxRepository: OutboxRepository
     private lateinit var lessonSessionRepository: LessonSessionRepository
+    private lateinit var lastSessionSummaryRepository: LastSessionSummaryRepository
     private lateinit var pitchAccentRepository: PitchAccentRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var subjectRepository: SubjectRepository
@@ -83,6 +86,7 @@ class LessonViewModelTest {
         strokeOrderRepository = FakeStrokeOrderRepository()
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+        lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, Json { ignoreUnknownKeys = true })
         pronunciationAudioPlayer = FakePronunciationAudioPlayer()
         appForegroundTracker = AppForegroundTracker()
     }
@@ -94,7 +98,7 @@ class LessonViewModelTest {
 
     private fun TestScope.createViewModel() = LessonViewModel(
         assignmentRepository, repositories.statsRepository, outboxRepository, lessonSessionRepository,
-        pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository,
+        lastSessionSummaryRepository, pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository,
         pronunciationAudioPlayer, appForegroundTracker, backgroundScope
     )
 
@@ -377,6 +381,12 @@ class LessonViewModelTest {
         // Session completion should flush the outbox immediately rather than waiting out the
         // per-answer debounce, so the dashboard's pending-sync count doesn't look stale.
         assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isEqualTo(1)
+
+        // Completing a session snapshots its summary so it can be revisited later from the dashboard.
+        val savedSummary = lastSessionSummaryRepository.load()
+        assertThat(savedSummary).isNotNull()
+        assertThat(savedSummary!!.kind).isEqualTo(LastSessionKind.LESSON)
+        assertThat(savedSummary.itemsCount).isEqualTo(1)
     }
 
     @Test

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -76,6 +77,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
+import com.crazyfluff.shellfstudy.shared.util.formatRelativeTime
 
 object DashboardScreenTestTags {
     const val LOADING_INDICATOR = "dashboard_loading_indicator"
@@ -96,6 +98,7 @@ object DashboardScreenTestTags {
     const val ABANDON_LESSON_MENU_ITEM = "dashboard_abandon_lesson_menu_item"
     const val ABANDON_REVIEW_CONFIRM_BUTTON = "dashboard_abandon_review_confirm_button"
     const val ABANDON_LESSON_CONFIRM_BUTTON = "dashboard_abandon_lesson_confirm_button"
+    const val LAST_SESSION_SUMMARY_MENU_ITEM = "dashboard_last_session_summary_menu_item"
 }
 
 /** Bundles [DashboardScreen]'s callback lambdas into one param — the screen otherwise ends up with
@@ -107,6 +110,7 @@ data class DashboardCallbacks(
     val onStartLesson: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val onOpenLeaderboard: () -> Unit = {},
+    val onOpenLastSessionSummary: () -> Unit = {},
     val onAbandonReviewSession: () -> Unit = {},
     val onAbandonLessonSession: () -> Unit = {},
     val onSearchQueryChange: (String) -> Unit = {},
@@ -121,6 +125,7 @@ fun DashboardRoute(
     onStartLesson: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenLeaderboard: () -> Unit,
+    onOpenLastSessionSummary: () -> Unit,
     onLoggedOut: () -> Unit,
     pendingDestination: String? = null,
     onPendingDestinationConsumed: () -> Unit = {},
@@ -162,6 +167,7 @@ fun DashboardRoute(
             onStartLesson = onStartLesson,
             onOpenSettings = onOpenSettings,
             onOpenLeaderboard = onOpenLeaderboard,
+            onOpenLastSessionSummary = onOpenLastSessionSummary,
             onLogOut = viewModel::logOut,
             onAbandonReviewSession = viewModel::abandonReviewSession,
             onAbandonLessonSession = viewModel::abandonLessonSession,
@@ -226,6 +232,15 @@ fun DashboardScreen(
                                         label = "Abandon lesson session",
                                         testTag = DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM,
                                         onClick = { menuExpanded = false; abandonConfirm = AbandonConfirmKind.Lesson }
+                                    )
+                                    HorizontalDivider()
+                                }
+                                if (uiState.hasLastSessionSummary) {
+                                    DropdownMenuItem(
+                                        text = { Text("Last session summary") },
+                                        leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
+                                        onClick = { menuExpanded = false; callbacks.onOpenLastSessionSummary() },
+                                        modifier = Modifier.testTag(DashboardScreenTestTags.LAST_SESSION_SUMMARY_MENU_ITEM)
                                     )
                                     HorizontalDivider()
                                 }
@@ -527,7 +542,9 @@ private fun DashboardStatusBanner(bannerState: DashboardBannerState, onRetry: ()
             onClick = onRetry
         ) {
             Text(
-                text = "You're offline — showing data from ${formatRelativeSyncTime(bannerState.lastSyncedAtMillis)}. Tap to retry.",
+                text = "You're offline — showing data from ${
+                    bannerState.lastSyncedAtMillis?.let(::formatRelativeTime) ?: "an earlier sync"
+                }. Tap to retry.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
@@ -564,22 +581,6 @@ private fun DashboardStatusBanner(bannerState: DashboardBannerState, onRetry: ()
     }
 }
 
-private fun formatRelativeSyncTime(lastSyncedAtMillis: Long?): String {
-    if (lastSyncedAtMillis == null) return "an earlier sync"
-    val minutesAgo = (kotlin.time.Clock.System.now().toEpochMilliseconds() - lastSyncedAtMillis).coerceAtLeast(0) / 60_000
-    return when {
-        minutesAgo < 1 -> "just now"
-        minutesAgo < 60 -> "$minutesAgo minute${if (minutesAgo == 1L) "" else "s"} ago"
-        minutesAgo < 60 * 24 -> {
-            val hoursAgo = minutesAgo / 60
-            "$hoursAgo hour${if (hoursAgo == 1L) "" else "s"} ago"
-        }
-        else -> {
-            val daysAgo = minutesAgo / (60 * 24)
-            "$daysAgo day${if (daysAgo == 1L) "" else "s"} ago"
-        }
-    }
-}
 
 private enum class AbandonConfirmKind { Review, Lesson }
 

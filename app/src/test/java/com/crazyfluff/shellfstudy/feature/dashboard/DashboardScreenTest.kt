@@ -415,6 +415,37 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun lastSessionSummaryMenuItem_isAbsent_whenNoLastSessionSummaryExists() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasLastSessionSummary = false),
+                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onAllNodesWithText("Last session summary").assertCountEquals(0)
+    }
+
+    @Test
+    fun lastSessionSummaryMenuItem_invokesCallback_whenSummaryExists() {
+        var opened = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasLastSessionSummary = true),
+                callbacks = DashboardCallbacks(
+                    onRefresh = {}, onStartReview = {}, onLogOut = {},
+                    onOpenLastSessionSummary = { opened = true }
+                )
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.LAST_SESSION_SUMMARY_MENU_ITEM).performClick()
+        assert(opened)
+    }
+
+    @Test
     fun bothAbandonMenuItems_appearTogether_whenBothSessionsAreActive() {
         composeTestRule.setContent {
             DashboardScreen(

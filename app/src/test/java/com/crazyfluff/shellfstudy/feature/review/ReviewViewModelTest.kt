@@ -9,6 +9,8 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
@@ -53,6 +55,7 @@ class ReviewViewModelTest {
     private lateinit var outboxRepository: OutboxRepository
     private lateinit var statsRepository: StatsRepository
     private lateinit var reviewSessionRepository: ReviewSessionRepository
+    private lateinit var lastSessionSummaryRepository: LastSessionSummaryRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var pronunciationAudioPlayer: FakePronunciationAudioPlayer
     private lateinit var appForegroundTracker: AppForegroundTracker
@@ -70,6 +73,7 @@ class ReviewViewModelTest {
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+        lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, Json { ignoreUnknownKeys = true })
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         val settingsDataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
             scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
@@ -86,8 +90,8 @@ class ReviewViewModelTest {
     }
 
     private fun TestScope.createViewModel() = ReviewViewModel(
-        assignmentRepository, outboxRepository, statsRepository, reviewSessionRepository, pronunciationAudioPlayer, settingsRepository,
-        appForegroundTracker, backgroundScope
+        assignmentRepository, outboxRepository, statsRepository, reviewSessionRepository, lastSessionSummaryRepository,
+        pronunciationAudioPlayer, settingsRepository, appForegroundTracker, backgroundScope
     )
 
     /** Routes by path — refreshing the review queue now syncs subjects and assignments, in either order. */
@@ -163,6 +167,13 @@ class ReviewViewModelTest {
         // Session completion should flush the outbox immediately rather than waiting out the
         // per-answer debounce, so the dashboard's pending-sync count doesn't look stale.
         assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isEqualTo(1)
+
+        // Completing a session snapshots its summary so it can be revisited later from the dashboard.
+        val savedSummary = lastSessionSummaryRepository.load()
+        assertThat(savedSummary).isNotNull()
+        assertThat(savedSummary!!.kind).isEqualTo(LastSessionKind.REVIEW)
+        assertThat(savedSummary.itemsCount).isEqualTo(1)
+        assertThat(savedSummary.correctFirstTry).isEqualTo(1)
     }
 
     @Test

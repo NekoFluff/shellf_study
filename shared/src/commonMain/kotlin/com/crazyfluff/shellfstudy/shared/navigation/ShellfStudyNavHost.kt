@@ -11,6 +11,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthRoute
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardRoute
+import com.crazyfluff.shellfstudy.shared.feature.lastsession.LastSessionSummaryRoute
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardRoute
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonRoute
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewRoute
@@ -27,6 +28,7 @@ sealed interface ShellfStudyDestination {
     @Serializable data object Lesson : ShellfStudyDestination
     @Serializable data object Settings : ShellfStudyDestination
     @Serializable data object Leaderboard : ShellfStudyDestination
+    @Serializable data object LastSessionSummary : ShellfStudyDestination
 }
 
 @Composable
@@ -92,6 +94,7 @@ fun ShellfStudyNavHost(
                 onStartLesson = { navController.navigateSafely(ShellfStudyDestination.Lesson) },
                 onOpenSettings = { navController.navigateSafely(ShellfStudyDestination.Settings) },
                 onOpenLeaderboard = { navController.navigateSafely(ShellfStudyDestination.Leaderboard) },
+                onOpenLastSessionSummary = { navController.navigateSafely(ShellfStudyDestination.LastSessionSummary) },
                 onLoggedOut = {
                     navController.navigateSafely(ShellfStudyDestination.Auth) {
                         popUpTo<ShellfStudyDestination.Dashboard> { inclusive = true }
@@ -121,6 +124,9 @@ fun ShellfStudyNavHost(
         }
         composable<ShellfStudyDestination.Leaderboard> {
             LeaderboardRoute(onBack = { navController.popBackStackSafely() })
+        }
+        composable<ShellfStudyDestination.LastSessionSummary> {
+            LastSessionSummaryRoute(onBack = { navController.popBackStackSafely() })
         }
     }
 }

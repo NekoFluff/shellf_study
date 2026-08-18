@@ -6,6 +6,7 @@ import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
 import com.crazyfluff.shellfstudy.shared.data.FriendRepository
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
@@ -22,6 +23,7 @@ import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
 import com.crazyfluff.shellfstudy.shared.data.strokeorder.CmpStrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthViewModel
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
+import com.crazyfluff.shellfstudy.shared.feature.lastsession.LastSessionSummaryViewModel
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardViewModel
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewViewModel
@@ -114,6 +116,7 @@ val repositoryModule = module {
     single { DashboardSyncCoordinator(waniKaniRepository = get(), syncOrchestrator = get(), dashboardCacheRepository = get()) }
     single { LessonSessionRepository(dataStore = get(), json = get()) }
     single { ReviewSessionRepository(dataStore = get(), json = get()) }
+    single { LastSessionSummaryRepository(dataStore = get(), json = get()) }
     single { FriendRepository(dataStore = get(), json = get(), tokenCipher = get()) }
     single {
         FriendStatsRepository(
@@ -154,6 +157,7 @@ val viewModelModule = module {
     }
 
     viewModel { SearchViewModel(get()) }
+    viewModel { LastSessionSummaryViewModel(get()) }
     viewModel { LeaderboardViewModel(get(), get(), get()) }
 
     viewModel {
@@ -168,7 +172,8 @@ val viewModelModule = module {
             outboxSyncScheduler = get(),
             friendStatsRepository = get(),
             logoutCoordinator = get(),
-            dashboardSyncCoordinator = get()
+            dashboardSyncCoordinator = get(),
+            lastSessionSummaryRepository = get()
         )
     }
 
@@ -178,6 +183,7 @@ val viewModelModule = module {
             statsRepository = get(),
             outboxRepository = get(),
             lessonSessionRepository = get(),
+            lastSessionSummaryRepository = get(),
             pitchAccentRepository = get(),
             settingsRepository = get(),
             subjectRepository = get(),
@@ -194,6 +200,7 @@ val viewModelModule = module {
             outboxRepository = get(),
             statsRepository = get(),
             reviewSessionRepository = get(),
+            lastSessionSummaryRepository = get(),
             pronunciationAudioPlayer = get(),
             settingsRepository = get(),
             appForegroundTracker = get(),

@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
+import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
@@ -25,6 +28,8 @@ import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
+import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
+import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
@@ -91,6 +96,7 @@ class ReviewViewModel(
     private val outboxRepository: OutboxRepository,
     private val statsRepository: StatsRepository,
     private val reviewSessionRepository: ReviewSessionRepository,
+    private val lastSessionSummaryRepository: LastSessionSummaryRepository,
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val settingsRepository: SettingsRepository,
     private val appForegroundTracker: AppForegroundTracker,
@@ -463,12 +469,33 @@ class ReviewViewModel(
         return summarizeQuizSession(reviewedProgress, answeredQuestions, sessionTiming.currentElapsedMs())
     }
 
+    /** Snapshots a just-completed session's summary so it can be revisited later from the
+     *  dashboard, after this ViewModel (and its otherwise-ephemeral session-complete state) is
+     *  gone. Mirrors LessonViewModel.persistLastSessionSummary(). */
+    private fun persistLastSessionSummary(summary: QuizSessionSummary<ReviewItem>) {
+        applicationScope.launch {
+            lastSessionSummaryRepository.save(
+                LastSessionSummary(
+                    kind = LastSessionKind.REVIEW,
+                    itemsCount = summary.itemsCount,
+                    correctFirstTry = summary.correctFirstTry,
+                    totalElapsedMs = summary.totalElapsedMs,
+                    averageTimePerItemMs = summary.averageTimePerItemMs,
+                    slowestAnswers = summary.slowestAnswers.map { it.toSessionAnswerRow() },
+                    missedItems = summary.missedItems.map { it.toSessionMissedItemRow() },
+                    completedAtMillis = Clock.System.now().toEpochMilliseconds()
+                )
+            )
+        }
+    }
+
     private suspend fun advanceToNextQuestion() {
         val next = queue.current
         if (next == null) {
             applicationScope.runDurably { reviewSessionRepository.clear() }
             outboxRepository.requestSyncNow()
             val summary = sessionSummary()
+            persistLastSessionSummary(summary)
             _uiState.update {
                 it.copy(
                     isLoading = false,

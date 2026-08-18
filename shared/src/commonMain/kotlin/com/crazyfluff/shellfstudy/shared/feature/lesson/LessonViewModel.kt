@@ -8,6 +8,9 @@ import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonItemProgress
@@ -40,6 +43,8 @@ import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
+import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
+import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -111,6 +116,7 @@ class LessonViewModel(
     private val statsRepository: StatsRepository,
     private val outboxRepository: OutboxRepository,
     private val lessonSessionRepository: LessonSessionRepository,
+    private val lastSessionSummaryRepository: LastSessionSummaryRepository,
     private val pitchAccentRepository: PitchAccentProvider,
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
@@ -296,7 +302,10 @@ class LessonViewModel(
         // was snapshotted before the user tapped Continue. Clear the stale session so the next
         // visit starts fresh rather than looping on "lesson complete" indefinitely.
         val summary = if (next == null) sessionSummary() else null
-        if (next == null) applicationScope.runDurably { lessonSessionRepository.clear() }
+        if (next == null) {
+            applicationScope.runDurably { lessonSessionRepository.clear() }
+            summary?.let(::persistLastSessionSummary)
+        }
         _uiState.update {
             it.copy(
                 isLoading = false,
@@ -681,12 +690,33 @@ class LessonViewModel(
     private fun sessionSummary(): QuizSessionSummary<LessonItem> =
         summarizeQuizSession(progressByAssignmentId.values, answeredQuestions, sessionTiming.currentElapsedMs())
 
+    /** Snapshots a just-completed session's summary so it can be revisited later from the
+     *  dashboard, after this ViewModel (and its otherwise-ephemeral session-complete state) is
+     *  gone. Mirrors ReviewViewModel.persistLastSessionSummary(). */
+    private fun persistLastSessionSummary(summary: QuizSessionSummary<LessonItem>) {
+        applicationScope.launch {
+            lastSessionSummaryRepository.save(
+                LastSessionSummary(
+                    kind = LastSessionKind.LESSON,
+                    itemsCount = summary.itemsCount,
+                    correctFirstTry = summary.correctFirstTry,
+                    totalElapsedMs = summary.totalElapsedMs,
+                    averageTimePerItemMs = summary.averageTimePerItemMs,
+                    slowestAnswers = summary.slowestAnswers.map { it.toSessionAnswerRow() },
+                    missedItems = summary.missedItems.map { it.toSessionMissedItemRow() },
+                    completedAtMillis = Clock.System.now().toEpochMilliseconds()
+                )
+            )
+        }
+    }
+
     private suspend fun advanceQuiz() {
         val next = quizQueue.current
         if (next == null) {
             applicationScope.runDurably { lessonSessionRepository.clear() }
             outboxRepository.requestSyncNow()
             val summary = sessionSummary()
+            persistLastSessionSummary(summary)
             _uiState.update {
                 it.copy(
                     isSessionComplete = true,
