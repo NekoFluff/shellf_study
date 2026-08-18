@@ -325,13 +325,15 @@ class AssignmentRepository(
                 assignmentDao.observeDueForReview(nowIso),
                 assignmentDao.observeUpcoming(nowIso)
             ) { availableNow, upcoming ->
+                // One grouping pass instead of filtering `upcoming` once per hour bucket — the same
+                // O(hours * upcoming-count) scan the flowOn comment below already calls out.
+                val byHourOffset = upcoming.groupBy { assignment ->
+                    val availableAt = assignment.availableAt?.let(Instant::parse) ?: return@groupBy null
+                    (availableAt - currentHourStart).inWholeHours.toInt()
+                }
                 val buckets = (1..hours).map { hourOffset ->
                     val bucketStart = currentHourStart + hourOffset.hours
-                    val bucketEnd = bucketStart + 1.hours
-                    val inBucket = upcoming.filter { assignment ->
-                        val availableAt = assignment.availableAt?.let(Instant::parse) ?: return@filter false
-                        availableAt >= bucketStart && availableAt < bucketEnd
-                    }
+                    val inBucket = byHourOffset[hourOffset].orEmpty()
                     ReviewForecastBucket(
                         hoursFromNow = hourOffset,
                         availableAt = bucketStart,

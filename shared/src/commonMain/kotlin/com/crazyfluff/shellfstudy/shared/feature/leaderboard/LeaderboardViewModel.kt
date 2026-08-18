@@ -12,6 +12,9 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.safeApiCall
 import com.crazyfluff.shellfstudy.shared.network.createFriendWaniKaniApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -66,7 +69,9 @@ class LeaderboardViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
             val entries = friendRepository.friendsFlow.first()
-            entries.forEach { entry -> friendStatsRepository.refreshFriend(entry) }
+            coroutineScope {
+                entries.map { entry -> async { friendStatsRepository.refreshFriend(entry) } }.awaitAll()
+            }
             _uiState.update { it.copy(isRefreshing = false) }
         }
     }

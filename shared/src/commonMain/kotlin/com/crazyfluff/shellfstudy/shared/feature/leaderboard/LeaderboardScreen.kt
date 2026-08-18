@@ -143,6 +143,9 @@ fun LeaderboardScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
+                val statsByFriendId = remember(uiState.leaderboard) {
+                    uiState.leaderboard?.entries?.associateBy { it.friendEntryId }
+                }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -157,10 +160,10 @@ fun LeaderboardScreen(
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
                         )
                     }
-                    itemsIndexed(uiState.friends) { index, friend ->
+                    itemsIndexed(uiState.friends, key = { _, friend -> friend.id }) { index, friend ->
                         FriendCard(
                             friend = friend,
-                            stats = uiState.leaderboard?.entries?.find { it.friendEntryId == friend.id },
+                            stats = statsByFriendId?.get(friend.id),
                             avatarColor = palette[index % palette.size],
                             onEdit = { friendToEdit = friend },
                             onDelete = { friendToDelete = friend },
