@@ -504,6 +504,7 @@ class ReviewViewModel(
                     remainingCount = 0,
                     feedback = null,
                     rankChange = null,
+                    isDetailsExpanded = false,
                     sessionItemsReviewed = summary.itemsReviewed,
                     sessionItemsCorrectFirstTry = summary.correctFirstTry,
                     sessionMissedItems = summary.missedItems,

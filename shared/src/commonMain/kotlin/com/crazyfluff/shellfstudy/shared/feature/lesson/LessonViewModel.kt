@@ -304,6 +304,8 @@ class LessonViewModel(
                 currentQuizItem = next?.item,
                 currentQuestionType = next?.type,
                 isSessionComplete = next == null,
+                feedback = null,
+                isDetailsExpanded = false,
                 sessionActiveElapsedMs = sessionTiming.elapsedMs,
                 sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
                 questionStartTimeMs = questionShownAtMs,

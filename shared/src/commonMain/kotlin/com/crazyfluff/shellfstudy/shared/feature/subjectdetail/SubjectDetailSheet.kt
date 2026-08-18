@@ -147,13 +147,16 @@ fun SubjectDetailSheet(
             .then(if (active) Modifier else Modifier.clearAndSetSemantics {})
             .testTag(SubjectDetailTestTags.SHEET_ROOT)
     ) {
-        if (isOpenIsh) {
+        // Gated on `active` too, not just `isOpenIsh`: a stale `expanded` flag left over from a
+        // finished session must not leave this scrim/body hit-testable underneath other screens
+        // — see the session-complete "Back to dashboard" dropped-tap bug this caused.
+        if (isOpenIsh && active) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.32f))
                     .clickable(
-                        enabled = active && dragState.settledValue == SheetAnchor.Open,
+                        enabled = dragState.settledValue == SheetAnchor.Open,
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
                         onClick = onDismiss
@@ -221,7 +224,7 @@ fun SubjectDetailSheet(
                     }
                 }
 
-                if (isOpenIsh) {
+                if (isOpenIsh && active) {
                     SubjectDetailBody(
                         subjectId = subjectId,
                         revealMode = revealMode,
