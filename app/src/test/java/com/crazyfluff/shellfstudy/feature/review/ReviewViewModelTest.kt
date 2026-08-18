@@ -62,7 +62,7 @@ class ReviewViewModelTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
-        repositories = buildTestRepositories(server.url("/").toString())
+        repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)
         assignmentRepository = repositories.assignmentRepository
         statsRepository = repositories.statsRepository
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(

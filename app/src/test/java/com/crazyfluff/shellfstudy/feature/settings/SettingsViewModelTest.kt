@@ -46,7 +46,7 @@ class SettingsViewModelTest {
      * nothing reachable) is safe for every other test in this file.
      */
     private fun createViewModel(
-        syncOrchestrator: SyncOrchestrator = buildTestRepositories("http://localhost/").syncOrchestrator
+        syncOrchestrator: SyncOrchestrator = buildTestRepositories("http://localhost/", defaultDispatcher = mainDispatcherRule.dispatcher).syncOrchestrator
     ): SettingsViewModel {
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
             scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
@@ -281,7 +281,7 @@ class SettingsViewModelTest {
             }
         }
         server.start()
-        val viewModel = createViewModel(buildTestRepositories(server.url("/").toString()).syncOrchestrator)
+        val viewModel = createViewModel(buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher).syncOrchestrator)
 
         viewModel.uiState.test {
             assertThat(awaitItem().isFullRefreshing).isFalse()
@@ -303,7 +303,7 @@ class SettingsViewModelTest {
             override fun dispatch(request: RecordedRequest): MockResponse = emptyResponse(500)
         }
         server.start()
-        val viewModel = createViewModel(buildTestRepositories(server.url("/").toString()).syncOrchestrator)
+        val viewModel = createViewModel(buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher).syncOrchestrator)
 
         viewModel.uiState.test {
             assertThat(awaitItem().isFullRefreshing).isFalse()

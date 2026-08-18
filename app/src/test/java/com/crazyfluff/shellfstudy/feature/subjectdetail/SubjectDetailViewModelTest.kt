@@ -53,7 +53,7 @@ class SubjectDetailViewModelTest {
     fun setUp() = runTest(mainDispatcherRule.dispatcher) {
         server = MockWebServer()
         server.start()
-        repositories = buildTestRepositories(server.url("/").toString())
+        repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)
         repositories.subjectDao.upsertAll(
             listOf(
                 subjectEntity(id = 1, characters = "水", meaning = "Water", componentIds = listOf(2)),

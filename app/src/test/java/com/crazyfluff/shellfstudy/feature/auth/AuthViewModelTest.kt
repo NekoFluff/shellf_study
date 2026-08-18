@@ -60,7 +60,7 @@ class AuthViewModelTest {
         )
         tokenRepository = TokenRepository(tokenDataStore, FakeTokenCipher())
         settingsRepository = SettingsRepository(settingsDataStore)
-        waniKaniRepository = buildTestRepositories(server.url("/").toString()).waniKaniRepository
+        waniKaniRepository = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher).waniKaniRepository
         syncScheduler = FakeSyncScheduler()
         pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
         notificationCoordinator = FakeNotificationCoordinator()

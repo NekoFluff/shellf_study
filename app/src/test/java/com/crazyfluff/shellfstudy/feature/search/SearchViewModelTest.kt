@@ -17,7 +17,7 @@ class SearchViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private val repositories = buildTestRepositories("https://api.wanikani.com/v2/")
+    private val repositories = buildTestRepositories("https://api.wanikani.com/v2/", defaultDispatcher = mainDispatcherRule.dispatcher)
     private val subjectDao = repositories.subjectDao
 
     private fun createViewModel() = SearchViewModel(repositories.subjectRepository)

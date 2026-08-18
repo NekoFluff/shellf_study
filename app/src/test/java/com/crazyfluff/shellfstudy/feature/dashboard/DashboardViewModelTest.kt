@@ -84,7 +84,7 @@ class DashboardViewModelTest {
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
-        repositories = buildTestRepositories(server.url("/").toString())
+        repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
@@ -124,7 +124,8 @@ class DashboardViewModelTest {
             json = json,
             selfAssignmentDao = repositories.assignmentDao,
             selfReviewStatisticDao = FakeReviewStatisticDao(),
-            selfLevelProgressionDao = FakeLevelProgressionDao()
+            selfLevelProgressionDao = FakeLevelProgressionDao(),
+            defaultDispatcher = mainDispatcherRule.dispatcher
         )
         val logoutCoordinator = LogoutCoordinator(
             tokenRepository = tokenRepository,

@@ -52,7 +52,8 @@ class LeaderboardViewModelTest {
             json = json,
             selfAssignmentDao = FakeAssignmentDao(),
             selfReviewStatisticDao = FakeReviewStatisticDao(),
-            selfLevelProgressionDao = FakeLevelProgressionDao()
+            selfLevelProgressionDao = FakeLevelProgressionDao(),
+            defaultDispatcher = mainDispatcherRule.dispatcher
         )
         return LeaderboardViewModel(friendRepository, friendStatsRepository, json)
     }

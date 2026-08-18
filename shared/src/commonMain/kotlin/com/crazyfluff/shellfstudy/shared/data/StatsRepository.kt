@@ -11,6 +11,7 @@ import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDao
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDayEntity
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.collectAllPages
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
@@ -35,7 +36,8 @@ class StatsRepository(
     private val reviewStatisticDao: ReviewStatisticDao,
     private val levelProgressionDao: LevelProgressionDao,
     private val studyActivityDao: StudyActivityDao,
-    private val syncStateDao: SyncStateDao
+    private val syncStateDao: SyncStateDao,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     suspend fun syncReviewStatistics(force: Boolean = false): ApiResult<Unit> =
         runSync(syncStateDao, RESOURCE_REVIEW_STATISTICS, force, STALENESS) { cursor ->
@@ -126,7 +128,7 @@ class StatsRepository(
             }
 
             StudyStreak(currentStreakDays = currentStreak, isActiveToday = isActiveToday)
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(defaultDispatcher)
 
     fun observeDaysOnCurrentLevel(): Flow<Int?> =
         levelProgressionDao.observeAll().map { progressions ->

@@ -21,9 +21,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -58,6 +60,23 @@ private data class DetailAndRelated(
 )
 
 /**
+ * Every field [open]/[navigateToRelated]/[goBack] touch, held in one [MutableStateFlow] so a single
+ * `.value =`/`.update {}` assignment changes [currentSubjectId] together with [backStack] and
+ * [pendingScrollOffset] atomically. Splitting these across separate flows (as before) let a
+ * fast-enough subject-detail collector observe the new [currentSubjectId] and re-emit [uiState]
+ * *before* the same function's own follow-up write to `pendingScrollOffset` had happened, handing
+ * that intermediate emission a stale scroll offset — normally masked by [subjectRepository]'s real
+ * background-thread hop, but not guaranteed, and not true at all in tests that collapse everything
+ * onto one dispatcher.
+ */
+private data class NavState(
+    val currentSubjectId: Long? = null,
+    val backStack: List<Long> = emptyList(),
+    val pendingScrollOffset: Int = 0,
+    val forceRevealAll: Boolean = false
+)
+
+/**
  * One instance manages the whole drill-down stack for a detail sheet — navigating into a related
  * subject doesn't recreate the ViewModel, it just pushes onto [SubjectDetailUiState.backStack] and
  * swaps which subject is loaded.
@@ -72,8 +91,7 @@ class SubjectDetailViewModel(
     private val statsRepository: StatsRepository
 ) : ViewModel() {
 
-    private val currentSubjectId = MutableStateFlow<Long?>(null)
-    private val backStack = MutableStateFlow<List<Long>>(emptyList())
+    private val navState = MutableStateFlow(NavState())
 
     /** Last-recorded scroll offset (px) per subject, keyed across the whole drill-down stack so
      *  [goBack] can restore where the user left off. Never persisted beyond this ViewModel's lifetime. */
@@ -86,7 +104,9 @@ class SubjectDetailViewModel(
 
     init {
         viewModelScope.launch {
-            currentSubjectId
+            navState
+                .map { it.currentSubjectId }
+                .distinctUntilChanged()
                 .flatMapLatest { id ->
                     if (id == null) {
                         flowOf(null)
@@ -114,16 +134,18 @@ class SubjectDetailViewModel(
                         DetailAndRelated(detail, related, strokeOrder, assignmentStats, reviewStats)
                     }
                 }
-                .combine(backStack) { detailAndRelated, stack -> detailAndRelated to stack }
+                .combine(navState) { detailAndRelated, nav -> detailAndRelated to nav }
                 .combine(settingsRepository.settings) { pair, settings -> pair to settings }
                 .collect { (pair, settings) ->
-                    val (detailAndRelated, stack) = pair
+                    val (detailAndRelated, nav) = pair
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             detail = detailAndRelated.detail,
                             relatedSubjects = detailAndRelated.related.associateBy { summary -> summary.subjectId },
-                            backStack = stack,
+                            backStack = nav.backStack,
+                            pendingScrollOffset = nav.pendingScrollOffset,
+                            forceRevealAll = nav.forceRevealAll,
                             showPitchAccent = settings.showPitchAccent,
                             restrictAudioToMp3 = settings.restrictAudioToMp3,
                             showStrokeOrder = settings.showStrokeOrder,
@@ -138,33 +160,28 @@ class SubjectDetailViewModel(
 
     /** Opens the sheet fresh at [subjectId], clearing any prior drill-down stack. */
     fun open(subjectId: Long) {
-        backStack.value = emptyList()
-        currentSubjectId.value = subjectId
-        _uiState.update { it.copy(forceRevealAll = false, pendingScrollOffset = 0) }
+        navState.value = NavState(currentSubjectId = subjectId)
     }
 
     /** Toggles the "show all" override for the root subject — see [SubjectDetailUiState.forceRevealAll]. */
     fun toggleForceReveal() {
-        _uiState.update { it.copy(forceRevealAll = !it.forceRevealAll) }
+        navState.update { it.copy(forceRevealAll = !it.forceRevealAll) }
     }
 
     /** Drills into a related subject, pushing the current one onto the back stack. Always starts
      *  the new subject scrolled to the top, even if it was previously visited and scrolled. */
     fun navigateToRelated(subjectId: Long) {
-        val current = currentSubjectId.value ?: return
-        backStack.value = backStack.value + current
-        currentSubjectId.value = subjectId
-        _uiState.update { it.copy(pendingScrollOffset = 0) }
+        val current = navState.value.currentSubjectId ?: return
+        navState.update { it.copy(backStack = it.backStack + current, currentSubjectId = subjectId, pendingScrollOffset = 0) }
     }
 
     /** Pops the back stack if non-empty, restoring the scroll offset [recordScrollOffset] captured
      *  for that subject. Returns false if there was nothing to pop (caller should dismiss). */
     fun goBack(): Boolean {
-        val stack = backStack.value
-        val previous = stack.lastOrNull() ?: return false
-        backStack.value = stack.dropLast(1)
-        currentSubjectId.value = previous
-        _uiState.update { it.copy(pendingScrollOffset = scrollOffsets[previous] ?: 0) }
+        val previous = navState.value.backStack.lastOrNull() ?: return false
+        navState.update {
+            it.copy(backStack = it.backStack.dropLast(1), currentSubjectId = previous, pendingScrollOffset = scrollOffsets[previous] ?: 0)
+        }
         return true
     }
 

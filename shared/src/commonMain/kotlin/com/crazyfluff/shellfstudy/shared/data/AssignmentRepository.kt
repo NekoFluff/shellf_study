@@ -32,6 +32,7 @@ import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.WkResourceItem
 import com.crazyfluff.shellfstudy.shared.network.collectAllPages
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -74,7 +75,8 @@ class AssignmentRepository(
     private val subjectDao: SubjectDao,
     private val syncStateDao: SyncStateDao,
     private val subjectRepository: SubjectRepository,
-    private val srsSystemDao: SrsSystemDao
+    private val srsSystemDao: SrsSystemDao,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     suspend fun syncAssignments(force: Boolean = false): ApiResult<Unit> =
         runSync(syncStateDao, RESOURCE_ASSIGNMENTS, force, ASSIGNMENTS_STALENESS) { cursor ->
@@ -225,7 +227,7 @@ class AssignmentRepository(
                     }
                 }
             }
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(defaultDispatcher)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeLessonQueue(): Flow<List<LessonItem>> =
@@ -266,7 +268,7 @@ class AssignmentRepository(
                     }
                 }
             }
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(defaultDispatcher)
 
     /** The subject's current SRS stage plus its lifecycle dates, or null if it hasn't been
      *  lessoned yet (no assignment exists) — the subject detail view's stat chip and milestone
@@ -332,7 +334,7 @@ class AssignmentRepository(
                     availableNowCountsByType = availableNow.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
                 )
             }
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(defaultDispatcher)
         // Room's InvalidationTracker re-fires observeDueForReview/observeUpcoming on ANY write to
         // the assignments table, anywhere in the app — not just ones this forecast cares about.
         // DashboardViewModel collects this in viewModelScope, which stays alive (and this keeps
@@ -380,7 +382,7 @@ class AssignmentRepository(
                 burnedCount = bucketTotal(ItemSpreadBucket.BURNED),
                 countsByType = countsByBucket.mapValues { it.value.toMap() }
             )
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(defaultDispatcher)
 
     fun observeLevelProgress(level: Int): Flow<LevelProgress> =
         assignmentDao.observeLevelProgressItemRows(level).map { rows ->
@@ -400,7 +402,7 @@ class AssignmentRepository(
                 SubjectTypeProgress(subjectType = type, items = items)
             }
             LevelProgress(level = level, breakdown = breakdown)
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(defaultDispatcher)
 
     fun observeItemsSeenCount(): Flow<Int> = assignmentDao.observeItemsSeenCount()
 
@@ -418,7 +420,7 @@ class AssignmentRepository(
                 kanjiGuruedOrHigher = rows.count { it.srsStage >= GURU_SRS_STAGE },
                 kanjiTotal = rows.size
             )
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(defaultDispatcher)
 
     private fun startOfTodayIso(): String {
         val timeZone = TimeZone.currentSystemDefault()

@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -207,7 +208,8 @@ class FriendStatsRepository(
     private val json: Json,
     private val selfAssignmentDao: AssignmentDao,
     private val selfReviewStatisticDao: ReviewStatisticDao,
-    private val selfLevelProgressionDao: LevelProgressionDao
+    private val selfLevelProgressionDao: LevelProgressionDao,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     // Pre-built self-stats flow; shared across all observeLeaderboard subscriptions so Room
     // doesn't open duplicate queries when metric/window changes (only the re-sort changes).
@@ -218,7 +220,7 @@ class FriendStatsRepository(
         selfLevelProgressionDao.observeAll()
     ) { burnedTs, startedTs, statistics, progressions ->
         buildSelfStats(burnedTs, startedTs, statistics, progressions)
-    }.flowOn(Dispatchers.Default)
+    }.flowOn(defaultDispatcher)
 
     fun observeLeaderboard(
         metric: LeaderboardMetric = LeaderboardMetric.LEARNED,
@@ -239,7 +241,7 @@ class FriendStatsRepository(
             val all = listOf(selfStats) + friendEntries
             Leaderboard(entries = all, metric = metric, window = window, selfRank = null)
                 .sorted(by = metric, window = window)
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(defaultDispatcher)
 
     suspend fun refreshAllIfStale() {
         val friends = friendRepository.friendsFlow.first()

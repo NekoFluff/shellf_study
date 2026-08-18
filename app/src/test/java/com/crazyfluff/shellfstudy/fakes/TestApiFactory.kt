@@ -12,6 +12,8 @@ import com.crazyfluff.shellfstudy.shared.network.SrsStageData
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import mockwebserver3.MockResponse
 
 /**
@@ -77,9 +79,18 @@ class TestRepositories(
     val syncOrchestrator: SyncOrchestrator
 )
 
+/**
+ * [defaultDispatcher] backs every repository's `flowOn(Dispatchers.Default)` hop — ViewModel tests
+ * using [com.crazyfluff.shellfstudy.MainDispatcherRule] must pass its `dispatcher` here so that work
+ * collapses onto the same TestCoroutineScheduler `advanceUntilIdle()` actually drains. Left at the
+ * real [Dispatchers.Default], that work runs on a genuine OS thread outside the test's control and
+ * can outlive the test body, occasionally trying to resume onto `Dispatchers.Main` after the test's
+ * teardown has already reset it — crashing whichever test happens to be running at that moment.
+ */
 fun buildTestRepositories(
     baseUrl: String,
-    pitchAccentEntries: Map<String, List<PitchAccent>> = emptyMap()
+    pitchAccentEntries: Map<String, List<PitchAccent>> = emptyMap(),
+    defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ): TestRepositories {
     val api = buildTestApi(baseUrl)
     val subjectDao = FakeSubjectDao()
@@ -95,9 +106,9 @@ fun buildTestRepositories(
         FakePitchAccentBundledSource(pitchAccentEntries), FakePitchAccentCacheDao(), FakeWeblioApi(), WeblioPitchAccentParser()
     )
     val subjectRepository =
-        SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository)
-    val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao)
-    val statsRepository = StatsRepository(api, reviewStatisticDao, FakeLevelProgressionDao(), studyActivityDao, syncStateDao)
+        SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository, defaultDispatcher)
+    val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao, defaultDispatcher)
+    val statsRepository = StatsRepository(api, reviewStatisticDao, FakeLevelProgressionDao(), studyActivityDao, syncStateDao, defaultDispatcher)
     val waniKaniRepository = WaniKaniRepository(api)
     val syncOrchestrator = SyncOrchestrator(subjectRepository, assignmentRepository, statsRepository, syncStateDao)
 

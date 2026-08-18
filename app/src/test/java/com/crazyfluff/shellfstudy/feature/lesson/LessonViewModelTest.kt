@@ -76,7 +76,7 @@ class LessonViewModelTest {
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         settingsRepository = SettingsRepository(dataStore)
-        repositories = buildTestRepositories(server.url("/").toString())
+        repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)
         assignmentRepository = repositories.assignmentRepository
         pitchAccentRepository = repositories.pitchAccentRepository
         subjectRepository = repositories.subjectRepository

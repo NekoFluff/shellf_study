@@ -14,6 +14,7 @@ import com.crazyfluff.shellfstudy.shared.network.CharacterImageData
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.collectAllPages
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -35,7 +36,8 @@ class SubjectRepository(
     private val subjectDao: SubjectDao,
     private val srsSystemDao: SrsSystemDao,
     private val syncStateDao: SyncStateDao,
-    private val pitchAccentProvider: PitchAccentProvider
+    private val pitchAccentProvider: PitchAccentProvider,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     private val _isSyncingSubjectLibrary = MutableStateFlow(false)
     fun observeIsSyncingSubjectLibrary(): Flow<Boolean> = _isSyncingSubjectLibrary.asStateFlow()
@@ -133,7 +135,7 @@ class SubjectRepository(
                     flowOf(emptyList())
                 }
             pitchAccentsFlow.map { pitchAccents -> entity?.toSubjectDetail(pitchAccents) }
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(defaultDispatcher)
 }
 
 private fun buildSearchTarget(characters: String?, slug: String, meanings: List<String>, readings: List<String>): String =
