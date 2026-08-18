@@ -769,8 +769,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
     }
 
     if (customizeExpanded) {
+        val lessonsByLevel = remember(uiState.availableLessons) { uiState.availableLessons.groupBy { it.level } }
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            uiState.availableLessons.groupBy { it.level }.forEach { (level, itemsForLevel) ->
+            lessonsByLevel.forEach { (level, itemsForLevel) ->
                 val levelExpanded = level in expandedLevels
                 val selectedInLevel = itemsForLevel.count { it.assignmentId in uiState.selectedAssignmentIds }
                 item {

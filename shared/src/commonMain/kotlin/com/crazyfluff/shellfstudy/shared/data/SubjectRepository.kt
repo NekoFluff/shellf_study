@@ -155,28 +155,31 @@ private fun SubjectEntity.toSubjectSummary(): SubjectSummary = SubjectSummary(
     readings = readings.map { it.reading }
 )
 
-private fun SubjectEntity.toSubjectDetail(pitchAccents: List<PitchAccent> = emptyList()): SubjectDetail = SubjectDetail(
-    subjectId = id,
-    subjectType = SubjectType.fromWkString(subjectType),
-    characters = characters,
-    characterImageUrl = characterImageUrl,
-    level = level,
-    meanings = meanings.map { it.meaning },
-    auxiliaryMeanings = auxiliaryMeanings.map { it.meaning },
-    readings = readings.map { it.reading },
-    onyomiReadings = readings.filter { it.type == "onyomi" }.map { it.reading },
-    kunyomiReadings = readings.filter { it.type == "kunyomi" }.map { it.reading },
-    nanoriReadings = readings.filter { it.type == "nanori" }.map { it.reading },
-    documentUrl = documentUrl,
-    meaningMnemonic = meaningMnemonic,
-    meaningHint = meaningHint,
-    readingMnemonic = readingMnemonic,
-    readingHint = readingHint,
-    partsOfSpeech = partsOfSpeech,
-    contextSentences = contextSentences.map { ContextSentence(japanese = it.ja, english = it.en) },
-    componentSubjectIds = componentSubjectIds,
-    amalgamationSubjectIds = amalgamationSubjectIds,
-    visuallySimilarSubjectIds = visuallySimilarSubjectIds,
-    pitchAccents = pitchAccents,
-    pronunciationAudios = toPronunciationAudios()
-)
+private fun SubjectEntity.toSubjectDetail(pitchAccents: List<PitchAccent> = emptyList()): SubjectDetail {
+    val readingsByType = readings.groupBy { it.type }
+    return SubjectDetail(
+        subjectId = id,
+        subjectType = SubjectType.fromWkString(subjectType),
+        characters = characters,
+        characterImageUrl = characterImageUrl,
+        level = level,
+        meanings = meanings.map { it.meaning },
+        auxiliaryMeanings = auxiliaryMeanings.map { it.meaning },
+        readings = readings.map { it.reading },
+        onyomiReadings = readingsByType["onyomi"].orEmpty().map { it.reading },
+        kunyomiReadings = readingsByType["kunyomi"].orEmpty().map { it.reading },
+        nanoriReadings = readingsByType["nanori"].orEmpty().map { it.reading },
+        documentUrl = documentUrl,
+        meaningMnemonic = meaningMnemonic,
+        meaningHint = meaningHint,
+        readingMnemonic = readingMnemonic,
+        readingHint = readingHint,
+        partsOfSpeech = partsOfSpeech,
+        contextSentences = contextSentences.map { ContextSentence(japanese = it.ja, english = it.en) },
+        componentSubjectIds = componentSubjectIds,
+        amalgamationSubjectIds = amalgamationSubjectIds,
+        visuallySimilarSubjectIds = visuallySimilarSubjectIds,
+        pitchAccents = pitchAccents,
+        pronunciationAudios = toPronunciationAudios()
+    )
+}

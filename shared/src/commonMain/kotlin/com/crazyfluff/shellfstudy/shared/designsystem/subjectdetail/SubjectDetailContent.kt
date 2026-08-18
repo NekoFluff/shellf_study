@@ -63,6 +63,9 @@ object SubjectDetailTestTags {
     const val AUXILIARY_MEANINGS_TEXT = "subject_detail_auxiliary_meanings_text"
 }
 
+private fun List<Long>.resolve(relatedSubjects: Map<Long, SubjectSummary>): List<SubjectSummary> =
+    mapNotNull { relatedSubjects[it] }
+
 /**
  * The shared "everything about this subject" content, used from Review (gated), Lesson, Search,
  * and the Dashboard's level-progress breakdown. Section order mirrors Smouldering Durtles'
@@ -149,7 +152,7 @@ fun SubjectDetailContent(
 
         RelatedSubjectsSection(
             title = componentsLabel(detail.subjectType),
-            subjects = detail.componentSubjectIds.mapNotNull { relatedSubjects[it] },
+            subjects = detail.componentSubjectIds.resolve(relatedSubjects),
             onSubjectClick = onRelatedSubjectClick
         )
 
@@ -268,14 +271,14 @@ fun SubjectDetailContent(
         if (detail.subjectType == SubjectType.KANJI) {
             RelatedSubjectsSection(
                 title = "Visually similar",
-                subjects = detail.visuallySimilarSubjectIds.mapNotNull { relatedSubjects[it] },
+                subjects = detail.visuallySimilarSubjectIds.resolve(relatedSubjects),
                 onSubjectClick = onRelatedSubjectClick
             )
         }
 
         RelatedSubjectsSection(
             title = "Used in",
-            subjects = detail.amalgamationSubjectIds.mapNotNull { relatedSubjects[it] },
+            subjects = detail.amalgamationSubjectIds.resolve(relatedSubjects),
             onSubjectClick = onRelatedSubjectClick
         )
 
