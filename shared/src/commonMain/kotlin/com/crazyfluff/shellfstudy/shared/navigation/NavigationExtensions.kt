@@ -14,6 +14,7 @@ fun <T : Any> NavController.navigateSafely(route: T, builder: NavOptionsBuilder.
 }
 
 private val popBackStackDebounceWindow = 500.milliseconds
+private var lastPopBackStackRoute: String? = null
 private var lastPopBackStackMark: TimeSource.Monotonic.ValueTimeMark? = null
 
 // Not gated on isCurrentDestinationResumed() (unlike navigateSafely): that lifecycle check left
@@ -23,10 +24,18 @@ private var lastPopBackStackMark: TimeSource.Monotonic.ValueTimeMark? = null
 // screens like Leaderboard reached via Settings) each fire a real pop, skipping past the
 // intended destination. A short time debounce blocks the second of two near-simultaneous taps
 // without reintroducing the dropped-single-tap bug.
+//
+// Keyed on the current destination's route, not just elapsed time: this is a single app-wide
+// NavController, so every screen's back button shares this debounce window. Without the route
+// key, a legitimate pop on one screen followed within 500ms by an unrelated legitimate pop on a
+// different screen (e.g. back out of Settings, then immediately tap "Back to dashboard" on a
+// session-complete screen) would silently swallow the second one too.
 fun NavController.popBackStackSafely() {
+    val currentRoute = currentBackStackEntry?.destination?.route
     val now = TimeSource.Monotonic.markNow()
     val last = lastPopBackStackMark
-    if (last != null && now - last < popBackStackDebounceWindow) return
+    if (last != null && lastPopBackStackRoute == currentRoute && now - last < popBackStackDebounceWindow) return
+    lastPopBackStackRoute = currentRoute
     lastPopBackStackMark = now
     popBackStack()
 }
