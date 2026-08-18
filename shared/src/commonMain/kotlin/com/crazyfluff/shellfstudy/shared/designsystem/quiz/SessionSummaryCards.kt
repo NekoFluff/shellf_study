@@ -9,15 +9,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -193,6 +198,117 @@ fun SessionMissedItemsCard(
                 }
             }
         }
+    }
+}
+
+/** Test tags for [SessionCompleteContent] — one bundle per feature (Lesson/Review), each following
+ *  the same 1:1 naming scheme their screen's own test-tag object already used. */
+data class SessionCompleteTestTags(
+    val root: String,
+    val overviewCard: String,
+    val itemsText: String,
+    val correctFirstTryText: String,
+    val timingCard: String,
+    val totalTimeText: String,
+    val averageTimeText: String,
+    val slowestCard: String,
+    val missedCard: String,
+    val doneButton: String
+)
+
+/** The "session complete" screen shown after a lesson or review session finishes — shared between
+ *  both features, which previously carried near-identical copies of this composable. */
+@Composable
+fun SessionCompleteContent(
+    title: String,
+    subtitle: String?,
+    itemsLabel: String,
+    averageLabel: String,
+    itemsCount: Int,
+    correctFirstTry: Int,
+    totalElapsedMs: Long,
+    averageTimePerItemMs: Long,
+    slowestAnswers: List<SessionAnswerRow>,
+    missedItems: List<SessionMissedItemRow>,
+    onDone: () -> Unit,
+    onSubjectClick: (Long) -> Unit,
+    testTags: SessionCompleteTestTags,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(testTags.root)
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Filled.Celebration,
+                contentDescription = null,
+                tint = themeAwareColor(CorrectAnswerColor, CorrectAnswerColorDark)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(title, style = MaterialTheme.typography.headlineMedium)
+        }
+        if (subtitle != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (itemsCount > 0) {
+            Spacer(modifier = Modifier.height(24.dp))
+            SessionOverviewCard(
+                itemsLabel = itemsLabel,
+                itemsCount = itemsCount,
+                correctFirstTry = correctFirstTry,
+                cardTestTag = testTags.overviewCard,
+                itemsTextTestTag = testTags.itemsText,
+                correctFirstTryTextTestTag = testTags.correctFirstTryText,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            SessionTimingCard(
+                totalElapsedMs = totalElapsedMs,
+                averageTimePerItemMs = averageTimePerItemMs,
+                averageLabel = averageLabel,
+                cardTestTag = testTags.timingCard,
+                totalTimeTestTag = testTags.totalTimeText,
+                averageTimeTestTag = testTags.averageTimeText,
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (slowestAnswers.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                SessionSlowestAnswersCard(
+                    answers = slowestAnswers,
+                    onSubjectClick = onSubjectClick,
+                    cardTestTag = testTags.slowestCard,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (missedItems.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                SessionMissedItemsCard(
+                    items = missedItems,
+                    onSubjectClick = onSubjectClick,
+                    cardTestTag = testTags.missedCard,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onDone,
+            modifier = Modifier.testTag(testTags.doneButton)
+        ) { Text("Back to dashboard") }
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 

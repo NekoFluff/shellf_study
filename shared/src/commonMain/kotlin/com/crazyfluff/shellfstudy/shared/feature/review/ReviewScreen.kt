@@ -68,6 +68,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.PausableElapsedTimeTe
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizAnswerField
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionAnswerRow
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemsCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionOverviewCard
@@ -318,9 +320,30 @@ fun ReviewScreen(
 
                 uiState.isSessionComplete -> {
                     SessionCompleteContent(
-                        uiState = uiState,
+                        title = "Session complete!",
+                        subtitle = null,
+                        itemsLabel = "Items reviewed",
+                        averageLabel = "Avg. time per item reviewed",
+                        itemsCount = uiState.sessionItemsReviewed,
+                        correctFirstTry = uiState.sessionItemsCorrectFirstTry,
+                        totalElapsedMs = uiState.sessionTotalElapsedMs,
+                        averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
+                        slowestAnswers = uiState.sessionSlowestAnswers.map { it.toRow() },
+                        missedItems = uiState.sessionMissedItems.map { it.toMissedItemRow() },
                         onDone = onDone,
-                        onSubjectClick = { searchDetailSheetState.show(it) }
+                        onSubjectClick = { searchDetailSheetState.show(it) },
+                        testTags = SessionCompleteTestTags(
+                            root = ReviewScreenTestTags.SESSION_COMPLETE,
+                            overviewCard = ReviewScreenTestTags.SESSION_OVERVIEW_CARD,
+                            itemsText = ReviewScreenTestTags.ITEMS_REVIEWED_TEXT,
+                            correctFirstTryText = ReviewScreenTestTags.CORRECT_FIRST_TRY_TEXT,
+                            timingCard = ReviewScreenTestTags.SESSION_TIMING_CARD,
+                            totalTimeText = ReviewScreenTestTags.SESSION_TOTAL_TIME_TEXT,
+                            averageTimeText = ReviewScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
+                            slowestCard = ReviewScreenTestTags.SESSION_SLOWEST_CARD,
+                            missedCard = ReviewScreenTestTags.SESSION_MISSED_CARD,
+                            doneButton = ReviewScreenTestTags.DONE_BUTTON
+                        )
                     )
                 }
 
@@ -636,81 +659,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReviewQuestionContent
     }
 }
 
-@Composable
-private fun SessionCompleteContent(
-    uiState: ReviewUiState,
-    onDone: () -> Unit,
-    onSubjectClick: (Long) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag(ReviewScreenTestTags.SESSION_COMPLETE)
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(modifier = Modifier.height(24.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Filled.Celebration,
-                contentDescription = null,
-                tint = themeAwareColor(CorrectAnswerColor, CorrectAnswerColorDark)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Session complete!", style = MaterialTheme.typography.headlineMedium)
-        }
-
-        if (uiState.sessionItemsReviewed > 0) {
-            Spacer(modifier = Modifier.height(24.dp))
-            SessionOverviewCard(
-                itemsLabel = "Items reviewed",
-                itemsCount = uiState.sessionItemsReviewed,
-                correctFirstTry = uiState.sessionItemsCorrectFirstTry,
-                cardTestTag = ReviewScreenTestTags.SESSION_OVERVIEW_CARD,
-                itemsTextTestTag = ReviewScreenTestTags.ITEMS_REVIEWED_TEXT,
-                correctFirstTryTextTestTag = ReviewScreenTestTags.CORRECT_FIRST_TRY_TEXT,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            SessionTimingCard(
-                totalElapsedMs = uiState.sessionTotalElapsedMs,
-                averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
-                averageLabel = "Avg. time per item reviewed",
-                cardTestTag = ReviewScreenTestTags.SESSION_TIMING_CARD,
-                totalTimeTestTag = ReviewScreenTestTags.SESSION_TOTAL_TIME_TEXT,
-                averageTimeTestTag = ReviewScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
-                modifier = Modifier.fillMaxWidth()
-            )
-            if (uiState.sessionSlowestAnswers.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                SessionSlowestAnswersCard(
-                    answers = uiState.sessionSlowestAnswers.map { it.toRow() },
-                    onSubjectClick = onSubjectClick,
-                    cardTestTag = ReviewScreenTestTags.SESSION_SLOWEST_CARD,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            if (uiState.sessionMissedItems.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                SessionMissedItemsCard(
-                    items = uiState.sessionMissedItems.map { it.toMissedItemRow() },
-                    onSubjectClick = onSubjectClick,
-                    cardTestTag = ReviewScreenTestTags.SESSION_MISSED_CARD,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = onDone,
-            modifier = Modifier.testTag(ReviewScreenTestTags.DONE_BUTTON)
-        ) { Text("Back to dashboard") }
-        Spacer(modifier = Modifier.height(24.dp))
-    }
-}
 
 private fun SlowAnswer<ReviewItem>.toRow(): SessionAnswerRow = SessionAnswerRow(
     label = item.characters ?: item.meanings.firstOrNull() ?: "?",

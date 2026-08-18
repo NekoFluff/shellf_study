@@ -82,6 +82,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.PausableElapsedTimeTe
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizAnswerField
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionAnswerRow
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemsCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionOverviewCard
@@ -392,9 +394,30 @@ fun LessonScreen(
 
                 uiState.isSessionComplete -> {
                     SessionCompleteContent(
-                        uiState = uiState,
+                        title = "Lesson complete!",
+                        subtitle = "Great work. These items will start showing up in your reviews.",
+                        itemsLabel = "Items learned",
+                        averageLabel = "Avg. time per item learned",
+                        itemsCount = uiState.sessionItemsLearned,
+                        correctFirstTry = uiState.sessionItemsCorrectFirstTry,
+                        totalElapsedMs = uiState.sessionTotalElapsedMs,
+                        averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
+                        slowestAnswers = uiState.sessionSlowestAnswers.map { it.toRow() },
+                        missedItems = uiState.sessionMissedItems.map { it.toMissedItemRow() },
                         onDone = onDone,
-                        onSubjectClick = { detailSheetState.show(it) }
+                        onSubjectClick = { detailSheetState.show(it) },
+                        testTags = SessionCompleteTestTags(
+                            root = LessonScreenTestTags.SESSION_COMPLETE,
+                            overviewCard = LessonScreenTestTags.SESSION_OVERVIEW_CARD,
+                            itemsText = LessonScreenTestTags.ITEMS_LEARNED_TEXT,
+                            correctFirstTryText = LessonScreenTestTags.CORRECT_FIRST_TRY_TEXT,
+                            timingCard = LessonScreenTestTags.SESSION_TIMING_CARD,
+                            totalTimeText = LessonScreenTestTags.SESSION_TOTAL_TIME_TEXT,
+                            averageTimeText = LessonScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
+                            slowestCard = LessonScreenTestTags.SESSION_SLOWEST_CARD,
+                            missedCard = LessonScreenTestTags.SESSION_MISSED_CARD,
+                            doneButton = LessonScreenTestTags.DONE_BUTTON
+                        )
                     )
                 }
 
@@ -468,88 +491,6 @@ fun LessonScreen(
             }
         }
     }
-    }
-}
-
-@Composable
-private fun SessionCompleteContent(
-    uiState: LessonUiState,
-    onDone: () -> Unit,
-    onSubjectClick: (Long) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag(LessonScreenTestTags.SESSION_COMPLETE)
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(modifier = Modifier.height(24.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Filled.Celebration,
-                contentDescription = null,
-                tint = themeAwareColor(CorrectAnswerColor, CorrectAnswerColorDark)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Lesson complete!", style = MaterialTheme.typography.headlineMedium)
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Great work. These items will start showing up in your reviews.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        if (uiState.sessionItemsLearned > 0) {
-            Spacer(modifier = Modifier.height(24.dp))
-            SessionOverviewCard(
-                itemsLabel = "Items learned",
-                itemsCount = uiState.sessionItemsLearned,
-                correctFirstTry = uiState.sessionItemsCorrectFirstTry,
-                cardTestTag = LessonScreenTestTags.SESSION_OVERVIEW_CARD,
-                itemsTextTestTag = LessonScreenTestTags.ITEMS_LEARNED_TEXT,
-                correctFirstTryTextTestTag = LessonScreenTestTags.CORRECT_FIRST_TRY_TEXT,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            SessionTimingCard(
-                totalElapsedMs = uiState.sessionTotalElapsedMs,
-                averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
-                averageLabel = "Avg. time per item learned",
-                cardTestTag = LessonScreenTestTags.SESSION_TIMING_CARD,
-                totalTimeTestTag = LessonScreenTestTags.SESSION_TOTAL_TIME_TEXT,
-                averageTimeTestTag = LessonScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
-                modifier = Modifier.fillMaxWidth()
-            )
-            if (uiState.sessionSlowestAnswers.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                SessionSlowestAnswersCard(
-                    answers = uiState.sessionSlowestAnswers.map { it.toRow() },
-                    onSubjectClick = onSubjectClick,
-                    cardTestTag = LessonScreenTestTags.SESSION_SLOWEST_CARD,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            if (uiState.sessionMissedItems.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                SessionMissedItemsCard(
-                    items = uiState.sessionMissedItems.map { it.toMissedItemRow() },
-                    onSubjectClick = onSubjectClick,
-                    cardTestTag = LessonScreenTestTags.SESSION_MISSED_CARD,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = onDone,
-            modifier = Modifier.testTag(LessonScreenTestTags.DONE_BUTTON)
-        ) { Text("Back to dashboard") }
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
