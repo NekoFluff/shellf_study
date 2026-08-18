@@ -46,6 +46,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
+import com.crazyfluff.shellfstudy.shared.quiz.undoLastIncorrectAnswer
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -560,7 +561,8 @@ class LessonViewModel(
     }
 
     /** Reverts the most recent incorrect answer — for a typo, not a genuine miss. Mirrors
-     *  ReviewViewModel.undoLastAnswer(). */
+     *  ReviewViewModel.undoLastAnswer(); the queue/progress mutation itself is shared via
+     *  [undoLastIncorrectAnswer]. */
     fun undoLastAnswer() {
         val state = _uiState.value
         val item = state.currentQuizItem ?: return
@@ -569,22 +571,16 @@ class LessonViewModel(
         if (feedback.isCorrect) return
 
         viewModelScope.launch {
-            val itemProgress = progressByAssignmentId[item.assignmentId] ?: return@launch
-            when (type) {
-                QuestionType.MEANING -> itemProgress.hadIncorrectMeaning = false
-                QuestionType.READING -> itemProgress.hadIncorrectReading = false
-            }
-            // The wrong submission moved this question to the back of the queue via requeue();
-            // move it back to the front so it stays "current" (quizQueue.current == currentQuizItem
-            // is the invariant advanceQuiz relies on), rather than dropping it entirely.
-            quizQueue.moveMatchingToFront { it.item.assignmentId == item.assignmentId && it.type == type }
+            val newQuestionShownAtMs = undoLastIncorrectAnswer(
+                queue = quizQueue,
+                progressByAssignmentId = progressByAssignmentId,
+                answeredQuestions = answeredQuestions,
+                item = item,
+                questionType = type,
+                persist = { applicationScope.runDurably { persistCurrentState() } }
+            ) ?: return@launch
+            questionShownAtMs = newQuestionShownAtMs
 
-            // Undo removes the incorrect attempt just recorded by gradeAnswer, and restarts this
-            // question's clock so the retry's timing doesn't inherit time spent before the undo.
-            answeredQuestions.removeLastOrNull()
-            questionShownAtMs = Clock.System.now().toEpochMilliseconds()
-
-            applicationScope.runDurably { persistCurrentState() }
             // undoCounter changes even though currentQuizItem/currentQuestionType don't — this is
             // what the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't
             // change either of those but still needs to refocus the field the user just tapped away
