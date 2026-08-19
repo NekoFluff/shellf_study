@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
 
 import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.parseWkMarkup
@@ -74,5 +75,41 @@ class WkMnemonicTextTest {
         val kanjiSpan = result.spanStyles.first { result.text.substring(it.start, it.end) == "water" }
         assertThat(radicalSpan.item.color).isEqualTo(SubjectTypeColors.Radical)
         assertThat(kanjiSpan.item.color).isEqualTo(SubjectTypeColors.Kanji)
+    }
+
+    @Test
+    fun `bare url becomes a clickable link and is not left as plain text`() {
+        val url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        val result = parseWkMarkup("check this out: $url")
+
+        assertThat(result.text).isEqualTo("check this out: $url")
+        val annotation = result.getLinkAnnotations(0, result.text.length).single()
+        assertThat(result.text.substring(annotation.start, annotation.end)).isEqualTo(url)
+        assertThat((annotation.item as LinkAnnotation.Url).url).isEqualTo(url)
+    }
+
+    @Test
+    fun `url alongside semantic tags keeps both the link and the tag styling`() {
+        val url = "https://youtu.be/abc123"
+        val result = parseWkMarkup("<radical>drop</radical> like this video $url")
+
+        assertThat(result.text).isEqualTo("drop like this video $url")
+        val linkAnnotation = result.getLinkAnnotations(0, result.text.length).single()
+        assertThat((linkAnnotation.item as LinkAnnotation.Url).url).isEqualTo(url)
+        val radicalSpan = result.spanStyles.single()
+        assertThat(result.text.substring(radicalSpan.start, radicalSpan.end)).isEqualTo("drop")
+    }
+
+    @Test
+    fun `html anchor tag becomes a clickable link using its anchor text, with no raw markup leaking`() {
+        val href = "https://www.youtube.com/watch?v=XaCrQL_8eMY"
+        val result = parseWkMarkup(
+            "you're the <a href=\"$href\" target=\"_blank\">Whole. Damn. Meal.</a> apparently"
+        )
+
+        assertThat(result.text).isEqualTo("you're the Whole. Damn. Meal. apparently")
+        val annotation = result.getLinkAnnotations(0, result.text.length).single()
+        assertThat(result.text.substring(annotation.start, annotation.end)).isEqualTo("Whole. Damn. Meal.")
+        assertThat((annotation.item as LinkAnnotation.Url).url).isEqualTo(href)
     }
 }

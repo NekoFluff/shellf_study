@@ -4,24 +4,36 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
-private val markupTagRegex = Regex("<(/?)([a-zA-Z_]+)>")
+private val markupRegex = Regex(
+    "<a\\s+href=\"([^\"]*)\"[^>]*>" + // group 1: <a href="..."> opening anchor tag
+        "|<(/?)([a-zA-Z_]+)>" + // group 2: closing slash, group 3: WK semantic tag name
+        "|(https?://[^\\s<>\"]+)" // group 4: bare URL
+)
+private val DefaultLinkColor = Color(0xFF0066CC)
 
 /**
  * WaniKani mnemonics embed semantic tags (`<radical>`, `<kanji>`, `<vocabulary>`,
- * `<kana_vocabulary>`, `<reading>`, `<ja>`) around terms they reference. This parses those flat,
- * non-nesting tags into an [AnnotatedString] with per-type colored spans, mirroring how WaniKani's
- * own apps render mnemonic text. Unrecognized tags are stripped silently — never leaked as raw text.
+ * `<kana_vocabulary>`, `<reading>`, `<ja>`) around terms they reference, and occasionally a link —
+ * either a bare URL or an `<a href="...">...</a>` anchor. This parses those flat, non-nesting tags
+ * into an [AnnotatedString] with per-type colored spans, mirroring how WaniKani's own apps render
+ * mnemonic text, and turns links into clickable [LinkAnnotation.Url] spans. Unrecognized tags are
+ * stripped silently — never leaked as raw text.
  *
  * Colors default to the plain (non-theme-aware) brand palette so this stays a pure function
  * outside of composition (see WkMnemonicTextTest); [WkMnemonicText] passes theme-resolved colors
@@ -31,17 +43,34 @@ fun parseWkMarkup(
     text: String,
     radicalColor: Color = SubjectTypeColors.Radical,
     kanjiColor: Color = SubjectTypeColors.Kanji,
-    vocabularyColor: Color = SubjectTypeColors.Vocabulary
+    vocabularyColor: Color = SubjectTypeColors.Vocabulary,
+    linkColor: Color = DefaultLinkColor
 ): AnnotatedString = buildAnnotatedString {
     var cursor = 0
     val openTags = ArrayDeque<String>()
+    val linkStyle = TextLinkStyles(style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline))
 
-    for (match in markupTagRegex.findAll(text)) {
+    for (match in markupRegex.findAll(text)) {
         append(text.substring(cursor, match.range.first))
         cursor = match.range.last + 1
 
-        val isClosing = match.groupValues[1] == "/"
-        val tag = match.groupValues[2]
+        val anchorHref = match.groupValues[1]
+        if (anchorHref.isNotEmpty()) {
+            pushLink(LinkAnnotation.Url(url = anchorHref, styles = linkStyle))
+            openTags.addLast("a")
+            continue
+        }
+
+        val url = match.groupValues[4]
+        if (url.isNotEmpty()) {
+            pushLink(LinkAnnotation.Url(url = url, styles = linkStyle))
+            append(url)
+            pop()
+            continue
+        }
+
+        val isClosing = match.groupValues[2] == "/"
+        val tag = match.groupValues[3]
         if (isClosing) {
             if (openTags.isNotEmpty() && openTags.last() == tag) {
                 openTags.removeLast()
@@ -77,7 +106,8 @@ fun WkMnemonicText(
         text = text,
         radicalColor = subjectColor(SubjectType.RADICAL),
         kanjiColor = subjectColor(SubjectType.KANJI),
-        vocabularyColor = subjectColor(SubjectType.VOCABULARY)
+        vocabularyColor = subjectColor(SubjectType.VOCABULARY),
+        linkColor = themeAwareColor(DefaultLinkColor, MaterialTheme.colorScheme.primary)
     )
     Text(text = annotated, modifier = modifier, style = style)
 }
