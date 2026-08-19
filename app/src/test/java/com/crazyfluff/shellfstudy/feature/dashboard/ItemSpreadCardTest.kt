@@ -41,8 +41,12 @@ class ItemSpreadCardTest {
         }
 
         composeTestRule.onNodeWithTag(ItemSpreadTestTags.BAR).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Guru: 120 (12%)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Burned: 200 (20%)").assertIsDisplayed()
+        // total = 970; count and percentage are now separate Text nodes, with the percentage
+        // rounded to one decimal place (120/970 = 12.4%, 200/970 = 20.6%).
+        composeTestRule.onNodeWithText("Guru: 120").assertIsDisplayed()
+        composeTestRule.onNodeWithText("12.4%").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Burned: 200").assertIsDisplayed()
+        composeTestRule.onNodeWithText("20.6%").assertIsDisplayed()
     }
 
 }
