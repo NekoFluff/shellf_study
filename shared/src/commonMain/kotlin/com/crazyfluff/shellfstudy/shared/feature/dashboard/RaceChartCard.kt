@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.CornerRadius
@@ -59,10 +60,6 @@ private val DAY_MS_CHART = 24.hours.inWholeMilliseconds
 // bar/day would already have at least this much room, so there's nowhere useful left to zoom to.
 private val MIN_POINT_SPACING = 32.dp
 private val Y_AXIS_WIDTH = 36.dp
-
-// A little breathing room so the first/last point and its dot never sit flush against the plot's
-// own edge — without this the line looks clipped/"bled off" rather than cleanly ending on-screen.
-private val PLOT_HORIZONTAL_INSET = 6.dp
 
 private fun formatMonthYear(epochMillis: Long): String {
     val dt = Instant.fromEpochMilliseconds(epochMillis)
@@ -203,7 +200,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .padding(horizontal = PLOT_HORIZONTAL_INSET)
+                        .clipToBounds()
                         .onSizeChanged { viewportWPx = it.width.toFloat() }
                         .pointerInput(leaderboard.window) {
                             detectTransformGestures { centroid, pan, zoom, _ ->
@@ -400,7 +397,7 @@ private fun ActivityWindowChart(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .padding(horizontal = PLOT_HORIZONTAL_INSET)
+                        .clipToBounds()
                         .onSizeChanged { viewportWPx = it.width.toFloat() }
                         .pointerInput(numPoints) {
                             detectTransformGestures { centroid, pan, zoom, _ ->
