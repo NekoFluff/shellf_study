@@ -197,6 +197,8 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                     }
                 }
 
+                Spacer(Modifier.width(8.dp))
+
                 Canvas(
                     modifier = Modifier
                         .weight(1f)
@@ -391,6 +393,8 @@ private fun ActivityWindowChart(
                         drawText(lr, labelColor, Offset((size.width - lr.size.width - 4.dp.toPx()).coerceAtLeast(0f), y - lr.size.height / 2f))
                     }
                 }
+
+                Spacer(Modifier.width(8.dp))
 
                 Canvas(
                     modifier = Modifier
