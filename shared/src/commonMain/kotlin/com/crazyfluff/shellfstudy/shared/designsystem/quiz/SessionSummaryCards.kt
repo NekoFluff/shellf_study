@@ -250,6 +250,12 @@ fun SessionCompleteContent(
             )
         }
 
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onDone,
+            modifier = Modifier.fillMaxWidth().testTag(testTags.doneButton)
+        ) { Text("Back to dashboard") }
+
         if (itemsCount > 0) {
             Spacer(modifier = Modifier.height(24.dp))
             SessionOverviewCard(
@@ -290,13 +296,6 @@ fun SessionCompleteContent(
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = onDone,
-            modifier = Modifier.testTag(testTags.doneButton)
-        ) { Text("Back to dashboard") }
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
