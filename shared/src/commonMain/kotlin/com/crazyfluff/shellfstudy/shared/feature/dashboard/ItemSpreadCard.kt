@@ -80,12 +80,32 @@ private fun ItemSpreadBar(segments: List<SpreadSegment>) {
     )
 }
 
+// Rounds to one decimal place via integer arithmetic (tenths of a percent) rather than Double
+// formatting, since String.format/"%.1f" aren't available in commonMain.
+private fun formatPercentOneDecimal(count: Int, total: Int): String {
+    if (total <= 0) return "0.0"
+    val tenths = (count * 1000 + total / 2) / total
+    return "${tenths / 10}.${tenths % 10}"
+}
+
 @Composable
 private fun StatRow(segment: SpreadSegment, total: Int) {
-    val percent = if (total > 0) segment.count * 100 / total else 0
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+    val percent = formatPercentOneDecimal(segment.count, total)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
         Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(segment.color))
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text = "${segment.label}: ${segment.count} ($percent%)", style = MaterialTheme.typography.bodySmall)
+        Text(
+            text = "${segment.label}: ${segment.count}",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "$percent%",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
