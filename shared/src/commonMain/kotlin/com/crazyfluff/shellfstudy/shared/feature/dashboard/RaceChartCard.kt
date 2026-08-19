@@ -2,9 +2,11 @@ package com.crazyfluff.shellfstudy.shared.feature.dashboard
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -53,6 +55,15 @@ import kotlin.time.Instant
 
 private val DAY_MS_CHART = 24.hours.inWholeMilliseconds
 
+// Below this, points get too cramped to read or tap reliably — pinch-zoom is capped once every
+// bar/day would already have at least this much room, so there's nowhere useful left to zoom to.
+private val MIN_POINT_SPACING = 32.dp
+private val Y_AXIS_WIDTH = 36.dp
+
+// A little breathing room so the first/last point and its dot never sit flush against the plot's
+// own edge — without this the line looks clipped/"bled off" rather than cleanly ending on-screen.
+private val PLOT_HORIZONTAL_INSET = 6.dp
+
 private fun formatMonthYear(epochMillis: Long): String {
     val dt = Instant.fromEpochMilliseconds(epochMillis)
         .toLocalDateTime(TimeZone.currentSystemDefault())
@@ -60,6 +71,31 @@ private fun formatMonthYear(epochMillis: Long): String {
     return "${MonthNames.ENGLISH_ABBREVIATED.names[dt.monthNumber - 1]} '$year"
 }
 
+/**
+ * Pinch-to-zoom/pan math shared by both charts below. Content is conceptually [viewportWPx] wide
+ * at scale 1 (i.e. the whole window fits on screen with no panning needed — the chart always
+ * *opens* this way), and up to [maxScale] times wider once the user pinches in. [offsetX] is the
+ * screen-space x of the content's left edge, always <= 0 and clamped so content can't be panned
+ * past its own bounds. Zooming is anchored at the pinch centroid so the point under your fingers
+ * stays put instead of the view jumping around.
+ */
+private fun zoomPanUpdate(
+    centroidX: Float,
+    panX: Float,
+    zoom: Float,
+    scale: Float,
+    offsetX: Float,
+    viewportWPx: Float,
+    maxScale: Float
+): Pair<Float, Float> {
+    if (viewportWPx <= 0f) return scale to offsetX
+    val newScale = (scale * zoom).coerceIn(1f, maxScale.coerceAtLeast(1f))
+    val contentUnscaledX = (centroidX - offsetX) / scale
+    val rawOffsetX = centroidX - contentUnscaledX * newScale + panX
+    val contentW = viewportWPx * newScale
+    val minOffsetX = -(contentW - viewportWPx).coerceAtLeast(0f)
+    return newScale to rawOffsetX.coerceIn(minOffsetX, 0f)
+}
 
 @Composable
 fun RaceChartCard(
@@ -129,8 +165,19 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
         windowStartMs
     }
     val timeRange = (nowMillis - globalMinMs).coerceAtLeast(1L)
+    val numDays = (timeRange / DAY_MS_CHART).toInt().coerceAtLeast(1)
 
-    var selectedX by remember(leaderboard.window) { mutableStateOf<Float?>(null) }
+    // Defaults to "now" so today's levels are visible with no interaction at all.
+    var selectedMs by remember(leaderboard.window) { mutableStateOf(nowMillis) }
+
+    val density = LocalDensity.current
+    val minSpacingPx = with(density) { MIN_POINT_SPACING.toPx() }
+    var viewportWPx by remember { mutableStateOf(0f) }
+
+    // Opens fully zoomed out — the whole window fits on screen, exactly like a static chart.
+    // Pinching in reveals more detail, up to one day having its guaranteed minimum width.
+    var scale by remember(leaderboard.window) { mutableStateOf(1f) }
+    var offsetX by remember(leaderboard.window) { mutableStateOf(0f) }
 
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -138,110 +185,131 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
 
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .pointerInput(leaderboard.window) {
-                        detectTapGestures { offset ->
-                            val prev = selectedX
-                            selectedX = if (prev != null && kotlin.math.abs(offset.x - prev) < 20.dp.toPx()) null else offset.x
+            Row(Modifier.fillMaxWidth().height(180.dp)) {
+                // Fixed Y-axis — stays in place while the plot is panned/zoomed.
+                Canvas(Modifier.width(Y_AXIS_WIDTH).fillMaxHeight()) {
+                    val plotH = size.height - 20.dp.toPx()
+                    val maxLvl = 60f
+                    for (lvl in listOf(10, 20, 30, 40, 50)) {
+                        val y = plotH * (1f - lvl / maxLvl)
+                        val lr = textMeasurer.measure("$lvl", labelStyle)
+                        drawText(lr, labelColor, Offset(0f, y - lr.size.height / 2f))
+                    }
+                }
+
+                Canvas(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(horizontal = PLOT_HORIZONTAL_INSET)
+                        .onSizeChanged { viewportWPx = it.width.toFloat() }
+                        .pointerInput(leaderboard.window) {
+                            detectTransformGestures { centroid, pan, zoom, _ ->
+                                val maxScale = (minSpacingPx * numDays / viewportWPx).coerceAtLeast(1f)
+                                val (newScale, newOffsetX) = zoomPanUpdate(
+                                    centroidX = centroid.x, panX = pan.x, zoom = zoom,
+                                    scale = scale, offsetX = offsetX,
+                                    viewportWPx = viewportWPx, maxScale = maxScale
+                                )
+                                scale = newScale
+                                offsetX = newOffsetX
+                            }
+                        }
+                        .pointerInput(leaderboard.window) {
+                            detectTapGestures { tap ->
+                                val contentW = viewportWPx * scale
+                                if (contentW <= 0f) return@detectTapGestures
+                                selectedMs = (globalMinMs + ((tap.x - offsetX) / contentW * timeRange).toLong())
+                                    .coerceIn(globalMinMs, nowMillis)
+                            }
+                        }
+                ) {
+                    val w = size.width
+                    val plotH = size.height - 20.dp.toPx()
+                    val maxLvl = 60f
+                    val contentW = w * scale
+
+                    fun xOf(ms: Long) = (ms - globalMinMs).toFloat() / timeRange * contentW + offsetX
+                    fun yOf(lvl: Int) = plotH * (1f - lvl / maxLvl)
+
+                    // Horizontal grid lines
+                    for (lvl in listOf(10, 20, 30, 40, 50)) {
+                        drawLine(gridColor, Offset(0f, yOf(lvl)), Offset(w, yOf(lvl)), 1.dp.toPx())
+                    }
+
+                    // X-axis date labels — 4 evenly spaced across the currently visible range
+                    val visStartMs = (globalMinMs + ((0f - offsetX) / contentW * timeRange).toLong()).coerceIn(globalMinMs, nowMillis)
+                    val visEndMs = (globalMinMs + ((w - offsetX) / contentW * timeRange).toLong()).coerceIn(globalMinMs, nowMillis)
+                    val visRange = (visEndMs - visStartMs).coerceAtLeast(1L)
+                    for (i in 0..3) {
+                        val ms = visStartMs + (i.toFloat() / 3f * visRange).toLong()
+                        val x = xOf(ms)
+                        val label = when (window) {
+                            LeaderboardWindow.WEEK, LeaderboardWindow.MONTH -> formatShortDate(ms)
+                            else -> formatMonthYear(ms)
+                        }
+                        val lr = textMeasurer.measure(label, labelStyle)
+                        drawText(lr, labelColor, Offset((x - lr.size.width / 2f).coerceIn(0f, w - lr.size.width), plotH + 4.dp.toPx()))
+                    }
+
+                    // User lines
+                    userTimelines.forEachIndexed { idx, (user, points) ->
+                        val color = palette.getOrElse(idx) { palette.last() }
+                        val strokeW = if (user.isCurrentUser) 3.dp.toPx() else 1.5.dp.toPx()
+
+                        if (points.size == 1) {
+                            val (ms, lvl) = points.first()
+                            drawCircle(color, 4.dp.toPx(), Offset(xOf(ms), yOf(lvl)))
+                        } else {
+                            val path = Path()
+                            var prevY = 0f
+                            points.forEachIndexed { pIdx, (ms, lvl) ->
+                                val x = xOf(ms); val y = yOf(lvl)
+                                if (pIdx == 0) { path.moveTo(x, y); prevY = y }
+                                else { path.lineTo(x, prevY); path.lineTo(x, y); prevY = y }
+                            }
+                            drawPath(path, color, style = Stroke(strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                            val (lastMs, lastLvl) = points.last()
+                            drawCircle(color, 4.dp.toPx(), Offset(xOf(lastMs), yOf(lastLvl)))
                         }
                     }
-            ) {
-                val w = size.width
-                val plotH = size.height - 20.dp.toPx()
-                val yLabelW = 28.dp.toPx()
-                val maxLvl = 60f
 
-                fun xOf(ms: Long) = yLabelW + (ms - globalMinMs).toFloat() / timeRange * (w - yLabelW)
-                fun yOf(lvl: Int) = plotH * (1f - lvl / maxLvl)
+                    // Selection overlay — always shows something (defaults to "now")
+                    val sx = xOf(selectedMs)
 
-                // Horizontal grid lines
-                for (lvl in listOf(10, 20, 30, 40, 50)) {
-                    val y = yOf(lvl)
-                    drawLine(gridColor, Offset(yLabelW, y), Offset(w, y), 1.dp.toPx())
-                    val lr = textMeasurer.measure("$lvl", labelStyle)
-                    drawText(lr, labelColor, Offset(0f, y - lr.size.height / 2f))
-                }
+                    drawLine(
+                        color = labelColor.copy(alpha = 0.6f),
+                        start = Offset(sx, 0f),
+                        end = Offset(sx, plotH),
+                        strokeWidth = 1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
+                    )
 
-                // X-axis date labels (4 evenly spaced, edge-anchored)
-                for (i in 0..3) {
-                    val ms = globalMinMs + (i.toFloat() / 3f * timeRange).toLong()
-                    val x = xOf(ms)
-                    val label = when (window) {
-                        LeaderboardWindow.WEEK, LeaderboardWindow.MONTH -> formatShortDate(ms)
-                        else -> formatMonthYear(ms)
+                    // Intersection dots + tooltip
+                    val dateLabel = when (window) {
+                        LeaderboardWindow.WEEK, LeaderboardWindow.MONTH -> formatShortDate(selectedMs)
+                        else -> formatMonthYear(selectedMs)
                     }
-                    val lr = textMeasurer.measure(label, labelStyle)
-                    val lx = when (i) {
-                        0 -> yLabelW
-                        3 -> w - lr.size.width
-                        else -> x - lr.size.width / 2f
+                    val headerResult = textMeasurer.measure(dateLabel, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))
+                    val userResults = userTimelines.mapIndexed { idx, (user, points) ->
+                        val color = palette.getOrElse(idx) { palette.last() }
+                        val lvl = points.lastOrNull { (ms, _) -> ms <= selectedMs }?.second
+                            ?: points.firstOrNull()?.second
+                            ?: user.level
+                        drawCircle(color, 5.dp.toPx(), Offset(sx, yOf(lvl)))
+                        drawCircle(Color.White, 2.5.dp.toPx(), Offset(sx, yOf(lvl)))
+                        Triple(textMeasurer.measure("${user.nickname}: Lv. $lvl", labelStyle), color, lvl)
                     }
-                    drawText(lr, labelColor, Offset(lx, plotH + 4.dp.toPx()))
+
+                    drawTooltip(
+                        header = headerResult,
+                        rows = userResults.map { it.first to it.second },
+                        anchorX = sx,
+                        canvasWidth = w,
+                        bg = tooltipBg,
+                        fg = tooltipFg
+                    )
                 }
-
-                // User lines
-                userTimelines.forEachIndexed { idx, (user, points) ->
-                    val color = palette.getOrElse(idx) { palette.last() }
-                    val strokeW = if (user.isCurrentUser) 3.dp.toPx() else 1.5.dp.toPx()
-
-                    if (points.size == 1) {
-                        val (ms, lvl) = points.first()
-                        drawCircle(color, 4.dp.toPx(), Offset(xOf(ms), yOf(lvl)))
-                    } else {
-                        val path = Path()
-                        var prevY = 0f
-                        points.forEachIndexed { pIdx, (ms, lvl) ->
-                            val x = xOf(ms); val y = yOf(lvl)
-                            if (pIdx == 0) { path.moveTo(x, y); prevY = y }
-                            else { path.lineTo(x, prevY); path.lineTo(x, y); prevY = y }
-                        }
-                        drawPath(path, color, style = Stroke(strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round))
-                        val (lastMs, lastLvl) = points.last()
-                        drawCircle(color, 4.dp.toPx(), Offset(xOf(lastMs), yOf(lastLvl)))
-                    }
-                }
-
-                // Tap overlay
-                val sx = selectedX?.coerceIn(yLabelW, w) ?: return@Canvas
-                val scrubMs = (globalMinMs + ((sx - yLabelW) / (w - yLabelW) * timeRange).toLong())
-                    .coerceIn(globalMinMs, nowMillis)
-
-                // Crosshair
-                drawLine(
-                    color = labelColor.copy(alpha = 0.6f),
-                    start = Offset(sx, 0f),
-                    end = Offset(sx, plotH),
-                    strokeWidth = 1.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
-                )
-
-                // Intersection dots + tooltip
-                val dateLabel = when (window) {
-                    LeaderboardWindow.WEEK, LeaderboardWindow.MONTH -> formatShortDate(scrubMs)
-                    else -> formatMonthYear(scrubMs)
-                }
-                val headerResult = textMeasurer.measure(dateLabel, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))
-                val userResults = userTimelines.mapIndexed { idx, (user, points) ->
-                    val color = palette.getOrElse(idx) { palette.last() }
-                    val lvl = points.lastOrNull { (ms, _) -> ms <= scrubMs }?.second
-                        ?: points.firstOrNull()?.second
-                        ?: user.level
-                    drawCircle(color, 5.dp.toPx(), Offset(sx, yOf(lvl)))
-                    drawCircle(Color.White, 2.5.dp.toPx(), Offset(sx, yOf(lvl)))
-                    Triple(textMeasurer.measure("${user.nickname}: Lv. $lvl", labelStyle), color, lvl)
-                }
-
-                drawTooltip(
-                    header = headerResult,
-                    rows = userResults.map { it.first to it.second },
-                    anchorX = sx,
-                    canvasWidth = w,
-                    bg = tooltipBg,
-                    fg = tooltipFg
-                )
             }
 
             Spacer(Modifier.height(12.dp))
@@ -272,6 +340,7 @@ private fun ActivityWindowChart(
     val entries = leaderboard.entries
 
     val bars = buildActivityBars(entries, leaderboard.metric, leaderboard.window, nowMillis)
+    if (bars.isEmpty()) return
 
     val subtitle = activityChartSubtitle(leaderboard.window)
 
@@ -291,9 +360,18 @@ private fun ActivityWindowChart(
     val maxVal = cumulativeSeries.flatten().maxOrNull()?.coerceAtLeast(1) ?: 1
     val numPoints = bars.size
 
-    var selectedIdx by remember(leaderboard.window) { mutableStateOf<Int?>(null) }
-    var canvasW by remember { mutableStateOf(0f) }
-    val yLabelWPx = with(LocalDensity.current) { 36.dp.toPx() }
+    // Default to the most recent bar so "today"'s numbers are visible with no interaction at
+    // all — the hardest point to land a tap on precisely is also the one people check the most.
+    var selectedIdx by remember(leaderboard.window, numPoints) { mutableStateOf(numPoints - 1) }
+
+    val density = LocalDensity.current
+    val minSpacingPx = with(density) { MIN_POINT_SPACING.toPx() }
+    var viewportWPx by remember { mutableStateOf(0f) }
+
+    // Opens fully zoomed out — every bar fits on screen, exactly like a static chart. Pinching in
+    // reveals more detail, up to every bar having its guaranteed minimum width.
+    var scale by remember(leaderboard.window, numPoints) { mutableStateOf(1f) }
+    var offsetX by remember(leaderboard.window, numPoints) { mutableStateOf(0f) }
 
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -301,107 +379,124 @@ private fun ActivityWindowChart(
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
 
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-                    .onSizeChanged { canvasW = it.width.toFloat() }
-                    .pointerInput(numPoints) {
-                        detectTapGestures { offset ->
-                            val plotW = canvasW - yLabelWPx
-                            if (plotW <= 0f || numPoints <= 1) return@detectTapGestures
-                            val idx = ((offset.x - yLabelWPx) / (plotW / (numPoints - 1)))
-                                .roundToInt().coerceIn(0, numPoints - 1)
-                            selectedIdx = if (selectedIdx == idx) null else idx
+            Row(Modifier.fillMaxWidth().height(160.dp)) {
+                // Fixed Y-axis — stays in place while the plot is panned/zoomed.
+                Canvas(Modifier.width(Y_AXIS_WIDTH).fillMaxHeight()) {
+                    val plotH = size.height - 20.dp.toPx()
+                    for (frac in listOf(0.25f, 0.5f, 0.75f, 1f)) {
+                        val yVal = (maxVal * frac).toInt()
+                        val y = plotH * (1f - frac)
+                        val label = if (yVal >= 1000) "${yVal / 1000}k" else "$yVal"
+                        val lr = textMeasurer.measure(label, labelStyle)
+                        drawText(lr, labelColor, Offset((size.width - lr.size.width - 4.dp.toPx()).coerceAtLeast(0f), y - lr.size.height / 2f))
+                    }
+                }
+
+                Canvas(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(horizontal = PLOT_HORIZONTAL_INSET)
+                        .onSizeChanged { viewportWPx = it.width.toFloat() }
+                        .pointerInput(numPoints) {
+                            detectTransformGestures { centroid, pan, zoom, _ ->
+                                val maxScale = (minSpacingPx * (numPoints - 1) / viewportWPx).coerceAtLeast(1f)
+                                val (newScale, newOffsetX) = zoomPanUpdate(
+                                    centroidX = centroid.x, panX = pan.x, zoom = zoom,
+                                    scale = scale, offsetX = offsetX,
+                                    viewportWPx = viewportWPx, maxScale = maxScale
+                                )
+                                scale = newScale
+                                offsetX = newOffsetX
+                            }
+                        }
+                        .pointerInput(numPoints) {
+                            detectTapGestures { tap ->
+                                if (numPoints <= 1) return@detectTapGestures
+                                val contentW = viewportWPx * scale
+                                if (contentW <= 0f) return@detectTapGestures
+                                selectedIdx = (((tap.x - offsetX) / contentW) * (numPoints - 1))
+                                    .roundToInt().coerceIn(0, numPoints - 1)
+                            }
+                        }
+                ) {
+                    val w = size.width
+                    val plotH = size.height - 20.dp.toPx()
+                    val contentW = w * scale
+
+                    fun xOf(i: Int): Float = i.toFloat() / (numPoints - 1).coerceAtLeast(1) * contentW + offsetX
+                    fun yOf(v: Int): Float = plotH * (1f - v.toFloat() / maxVal)
+
+                    // Grid lines (labels live in the fixed Y-axis column to the left)
+                    for (frac in listOf(0.25f, 0.5f, 0.75f, 1f)) {
+                        val y = plotH * (1f - frac)
+                        drawLine(gridColor, Offset(0f, y), Offset(w, y), 1.dp.toPx())
+                    }
+
+                    // X-axis labels — evenly distributed across the currently *visible* bars, so
+                    // they stay relevant instead of clumping together once you've zoomed in.
+                    val visStart = (((0f - offsetX) / contentW) * (numPoints - 1)).roundToInt().coerceIn(0, numPoints - 1)
+                    val visEnd = (((w - offsetX) / contentW) * (numPoints - 1)).roundToInt().coerceIn(0, numPoints - 1)
+                    val labelIndices = if (visEnd - visStart <= 7) {
+                        (visStart..visEnd).toList()
+                    } else {
+                        List(4) { i -> visStart + (i.toFloat() / 3f * (visEnd - visStart)).roundToInt() }.distinct()
+                    }
+                    labelIndices.forEach { bi ->
+                        val x = xOf(bi)
+                        val lr = textMeasurer.measure(bars[bi].label, labelStyle)
+                        drawText(lr, labelColor, Offset((x - lr.size.width / 2f).coerceIn(0f, w - lr.size.width), plotH + 4.dp.toPx()))
+                    }
+
+                    // Lines per user
+                    cumulativeSeries.forEachIndexed { ui, cumValues ->
+                        val color = palette.getOrElse(ui) { palette.last() }
+                        val strokeW = if (entries.getOrNull(ui)?.isCurrentUser == true) 3.dp.toPx() else 1.5.dp.toPx()
+                        if (cumValues.size >= 2) {
+                            val path = Path()
+                            cumValues.forEachIndexed { i, v ->
+                                val x = xOf(i); val y = yOf(v)
+                                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                            }
+                            drawPath(path, color, style = Stroke(strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        }
+                        val lastIdx = cumValues.lastIndex
+                        if (lastIdx >= 0) {
+                            drawCircle(color, 4.dp.toPx(), Offset(xOf(lastIdx), yOf(cumValues[lastIdx])))
                         }
                     }
-            ) {
-                val w = size.width
-                val yLabelW = 36.dp.toPx()
-                val plotW = w - yLabelW
-                val plotH = size.height - 20.dp.toPx()
 
-                fun xOf(i: Int): Float = yLabelW + i.toFloat() / (numPoints - 1).coerceAtLeast(1) * plotW
-                fun yOf(v: Int): Float = plotH * (1f - v.toFloat() / maxVal)
+                    // Selection overlay — always shows something (defaults to the latest bar)
+                    val snapIdx = selectedIdx.coerceIn(0, numPoints - 1)
+                    val snapX = xOf(snapIdx)
 
-                // Y-axis grid + labels
-                for (frac in listOf(0.25f, 0.5f, 0.75f, 1f)) {
-                    val yVal = (maxVal * frac).toInt()
-                    val y = plotH * (1f - frac)
-                    drawLine(gridColor, Offset(yLabelW, y), Offset(w, y), 1.dp.toPx())
-                    val label = if (yVal >= 1000) "${yVal / 1000}k" else "$yVal"
-                    val lr = textMeasurer.measure(label, labelStyle)
-                    drawText(lr, labelColor, Offset((yLabelW - lr.size.width - 4.dp.toPx()).coerceAtLeast(0f), y - lr.size.height / 2f))
-                }
+                    drawLine(
+                        color = labelColor.copy(alpha = 0.6f),
+                        start = Offset(snapX, 0f),
+                        end = Offset(snapX, plotH),
+                        strokeWidth = 1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
+                    )
 
-                // X-axis labels — evenly distributed, edge-anchored
-                val labelIndices = when (leaderboard.window) {
-                    LeaderboardWindow.YEAR ->
-                        listOf(0, 4, 8, numPoints - 1)
-                    LeaderboardWindow.ALL_TIME ->
-                        List(4) { i -> (i.toFloat() / 3f * (numPoints - 1)).roundToInt() }.distinct()
-                    else -> (0 until numPoints).toList()
-                }
-                labelIndices.forEach { bi ->
-                    val x = xOf(bi)
-                    val lr = textMeasurer.measure(bars[bi].label, labelStyle)
-                    val lx = when (bi) {
-                        0 -> yLabelW
-                        numPoints - 1 -> w - lr.size.width
-                        else -> x - lr.size.width / 2f
+                    // Intersection dots + tooltip
+                    val headerResult = textMeasurer.measure(bars[snapIdx].label, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))
+                    val userResults = cumulativeSeries.mapIndexed { ui, cumValues ->
+                        val color = palette.getOrElse(ui) { palette.last() }
+                        val v = cumValues.getOrElse(snapIdx) { 0 }
+                        drawCircle(color, 5.dp.toPx(), Offset(snapX, yOf(v)))
+                        drawCircle(Color.White, 2.5.dp.toPx(), Offset(snapX, yOf(v)))
+                        val nickname = entries.getOrNull(ui)?.nickname ?: "?"
+                        textMeasurer.measure("$nickname: $v", labelStyle) to color
                     }
-                    drawText(lr, labelColor, Offset(lx, plotH + 4.dp.toPx()))
+                    drawTooltip(
+                        header = headerResult,
+                        rows = userResults,
+                        anchorX = snapX,
+                        canvasWidth = w,
+                        bg = tooltipBg,
+                        fg = tooltipFg
+                    )
                 }
-
-                // Lines per user
-                cumulativeSeries.forEachIndexed { ui, cumValues ->
-                    val color = palette.getOrElse(ui) { palette.last() }
-                    val strokeW = if (entries.getOrNull(ui)?.isCurrentUser == true) 3.dp.toPx() else 1.5.dp.toPx()
-                    if (cumValues.size >= 2) {
-                        val path = Path()
-                        cumValues.forEachIndexed { i, v ->
-                            val x = xOf(i); val y = yOf(v)
-                            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                        }
-                        drawPath(path, color, style = Stroke(strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round))
-                    }
-                    val lastIdx = cumValues.lastIndex
-                    if (lastIdx >= 0) {
-                        drawCircle(color, 4.dp.toPx(), Offset(xOf(lastIdx), yOf(cumValues[lastIdx])))
-                    }
-                }
-
-                // Tap overlay
-                val snapIdx = selectedIdx ?: return@Canvas
-                val snapX = xOf(snapIdx)
-
-                // Crosshair
-                drawLine(
-                    color = labelColor.copy(alpha = 0.6f),
-                    start = Offset(snapX, 0f),
-                    end = Offset(snapX, plotH),
-                    strokeWidth = 1.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
-                )
-
-                // Intersection dots + tooltip
-                val headerResult = textMeasurer.measure(bars[snapIdx].label, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))
-                val userResults = cumulativeSeries.mapIndexed { ui, cumValues ->
-                    val color = palette.getOrElse(ui) { palette.last() }
-                    val v = cumValues.getOrElse(snapIdx) { 0 }
-                    drawCircle(color, 5.dp.toPx(), Offset(snapX, yOf(v)))
-                    drawCircle(Color.White, 2.5.dp.toPx(), Offset(snapX, yOf(v)))
-                    val nickname = entries.getOrNull(ui)?.nickname ?: "?"
-                    textMeasurer.measure("$nickname: $v", labelStyle) to color
-                }
-                drawTooltip(
-                    header = headerResult,
-                    rows = userResults,
-                    anchorX = snapX,
-                    canvasWidth = w,
-                    bg = tooltipBg,
-                    fg = tooltipFg
-                )
             }
 
             Spacer(Modifier.height(12.dp))
