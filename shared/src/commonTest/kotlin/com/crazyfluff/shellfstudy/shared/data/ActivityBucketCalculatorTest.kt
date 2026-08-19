@@ -156,7 +156,7 @@ class ActivityBucketCalculatorTest {
             "2026-08-14T23:00:00Z",  // 13h ago — rolling 24h would count this, calendar today should not
             "2026-08-15T01:00:00Z",  // today at 1am — calendar today
         )
-        val counts = computeWindowedCounts(ts, nowMillis, tz)
+        val counts = computeWindowedCounts(computeActivityBuckets(ts, nowMillis, tz))
         assertEquals(1, counts.today)   // only the Aug 15 event
         assertEquals(2, counts.week)    // both within 7 days
     }
@@ -168,7 +168,7 @@ class ActivityBucketCalculatorTest {
             "2022-06-15T12:00:00Z",
             "2026-08-15T11:00:00Z",
         )
-        val counts = computeWindowedCounts(ts, nowMillis, tz)
+        val counts = computeWindowedCounts(computeActivityBuckets(ts, nowMillis, tz))
         assertEquals(3, counts.allTime)
     }
 }

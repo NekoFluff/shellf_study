@@ -8,9 +8,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelTimelinePoint
-import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
@@ -42,9 +40,6 @@ import kotlin.time.Instant
 
 private val FRIEND_STATS_TTL = 30.minutes
 private val DAY = 1.days
-private val WEEK = 7.days
-private val MONTH = 30.days
-private val YEAR = 365.days
 
 @Serializable
 internal data class TimelinePointJson(val daysSinceStart: Int, val level: Int)
@@ -103,26 +98,19 @@ internal fun computeActivityBuckets(
     return ActivityBuckets(weekDays.toList(), monthDays.toList(), yearMonths.toList(), allTimeMonths.toList())
 }
 
-internal fun computeWindowedCounts(
-    isoTimestamps: List<String?>,
-    nowMillis: Long,
-    tz: TimeZone = TimeZone.currentSystemDefault()
-): WindowedCounts {
-    val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(tz)
-    // Start of today in local time (midnight)
-    val todayStartMillis = LocalDateTime(nowDt.year, nowDt.month, nowDt.dayOfMonth, 0, 0, 0)
-        .toInstant(tz).toEpochMilliseconds()
-    val millis = isoTimestamps.mapNotNull { ts ->
-        ts?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
-    }
-    return WindowedCounts(
-        today = millis.count { it >= todayStartMillis },
-        week = millis.count { (nowMillis - it).milliseconds < WEEK },
-        month = millis.count { (nowMillis - it).milliseconds < MONTH },
-        year = millis.count { (nowMillis - it).milliseconds < YEAR },
-        allTime = millis.size
-    )
-}
+/**
+ * Derived directly from [ActivityBuckets] — the same buckets rendered as the graph's bars — so a
+ * window total is *structurally* guaranteed to equal the sum of the matching bars, rather than
+ * relying on two separate implementations of the same calendar-day math staying in sync by
+ * coincidence. `today` is the bucket for daysAgo == 0, i.e. the last entry of `weekDays`.
+ */
+internal fun computeWindowedCounts(buckets: ActivityBuckets): WindowedCounts = WindowedCounts(
+    today = buckets.weekDays.last(),
+    week = buckets.weekDays.sum(),
+    month = buckets.monthDays.sum(),
+    year = buckets.yearMonths.sum(),
+    allTime = buckets.allTimeMonths.sum()
+)
 
 internal fun computeAvgDaysPerLevel(sortedProgressions: List<Pair<Int, String>>): Float? {
     if (sortedProgressions.size < 2) return null
@@ -146,28 +134,24 @@ internal data class StatsCore(
 /**
  * Shared arithmetic behind both [FriendStatsRepository.fetchFriendStats] (network path, API item
  * lists) and [FriendStatsRepository.buildSelfStats] (local-DB path, Room entities) — each caller
- * extracts its own input-shape-specific raw timestamps/counts first, then converges here.
+ * extracts its own input-shape-specific raw timestamps first, then converges here.
  *
- * [learnedRawCount]/[burnedRawCount] deliberately override [computeWindowedCounts]' own `allTime`
- * (which only counts successfully-parsed timestamps) with the caller's raw item count — matters for
- * the network path, where the API can return an item whose expected-non-null timestamp field
- * failed to parse; harmless for the local-DB path, whose timestamp lists are already
- * non-null-filtered by the DAO query so the two counts already agree.
+ * An assignment only counts as learned/burned once it has a real, parseable started_at/burned_at.
+ * [computeWindowedCounts] is derived from the same [ActivityBuckets] rendered as the graph, so the
+ * table's totals and the graph's bars can never disagree.
  */
 internal fun buildStatsCore(
     burnedTimestamps: List<String?>,
     learnedTimestamps: List<String?>,
-    burnedRawCount: Int,
-    learnedRawCount: Int,
     totalCorrect: Float,
     totalAttempts: Float,
     sortedProgressions: List<Pair<Int, String>>,
     nowMillis: Long
 ): StatsCore {
-    val burnedCounts = computeWindowedCounts(burnedTimestamps, nowMillis).copy(allTime = burnedRawCount)
-    val learnedCounts = computeWindowedCounts(learnedTimestamps, nowMillis).copy(allTime = learnedRawCount)
     val learnedBuckets = computeActivityBuckets(learnedTimestamps, nowMillis)
     val burnedBuckets = computeActivityBuckets(burnedTimestamps, nowMillis)
+    val learnedCounts = computeWindowedCounts(learnedBuckets)
+    val burnedCounts = computeWindowedCounts(burnedBuckets)
 
     val accuracy = if (totalAttempts > 0) totalCorrect / totalAttempts else -1f
 
@@ -319,8 +303,6 @@ class FriendStatsRepository(
         val core = buildStatsCore(
             burnedTimestamps = burnedTimestamps,
             learnedTimestamps = learnedTimestamps,
-            burnedRawCount = burnedItems.size,
-            learnedRawCount = learnedItems.size,
             totalCorrect = totalCorrect,
             totalAttempts = totalAttempts.toFloat(),
             sortedProgressions = sortedProgressions,
@@ -374,8 +356,6 @@ class FriendStatsRepository(
         val core = buildStatsCore(
             burnedTimestamps = burnedTimestamps,
             learnedTimestamps = startedTimestamps,
-            burnedRawCount = burnedTimestamps.size,
-            learnedRawCount = startedTimestamps.size,
             totalCorrect = totalCorrect,
             totalAttempts = totalAttempts.toFloat(),
             sortedProgressions = sortedProgressions,

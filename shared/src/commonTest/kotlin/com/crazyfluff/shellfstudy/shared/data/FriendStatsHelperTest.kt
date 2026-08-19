@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.data
 
+import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -60,13 +61,13 @@ class FriendStatsHelperTest {
         assertEquals(3, result[2].level)
     }
 
-    // computeWindowedCounts — already exercised indirectly via ActivityBucketCalculatorTest,
-    // so only the edge cases for the windowed-count branch are needed here.
+    // computeWindowedCounts — derived from ActivityBuckets, so it's exercised mostly through
+    // ActivityBucketCalculatorTest; these just confirm the summing/indexing itself.
 
     @Test
-    fun computeWindowedCounts_emptyList_returnsAllZeros() {
-        val now = 1_000_000_000_000L
-        val result = computeWindowedCounts(emptyList(), now)
+    fun computeWindowedCounts_emptyBuckets_returnsAllZeros() {
+        val buckets = computeActivityBuckets(emptyList(), 1_000_000_000_000L)
+        val result = computeWindowedCounts(buckets)
         assertEquals(0, result.today)
         assertEquals(0, result.week)
         assertEquals(0, result.month)
@@ -76,8 +77,8 @@ class FriendStatsHelperTest {
 
     @Test
     fun computeWindowedCounts_skipsNullAndUnparseableTimestamps() {
-        val now = 1_000_000_000_000L
-        val result = computeWindowedCounts(listOf(null, "not-a-timestamp"), now)
+        val buckets = computeActivityBuckets(listOf(null, "not-a-timestamp"), 1_000_000_000_000L)
+        val result = computeWindowedCounts(buckets)
         assertEquals(0, result.allTime)
     }
 
@@ -87,20 +88,55 @@ class FriendStatsHelperTest {
         val nowMillis = 1_750_000_000_000L  // some fixed point ~2025
         val recent = "2025-01-01T00:00:00.000Z"
         val old = "2015-01-01T00:00:00.000Z"
-        val result = computeWindowedCounts(listOf(recent, old), nowMillis)
+        val buckets = computeActivityBuckets(listOf(recent, old), nowMillis)
+        val result = computeWindowedCounts(buckets)
         assertEquals(2, result.allTime)
     }
 
     @Test
-    fun computeWindowedCounts_timestampExactlySevenDaysOld_isExcludedFromWeekBucket() {
-        // The window comparison is a strict `<`, not `<=` — a timestamp exactly on the boundary
-        // (7 days ago to the millisecond) must not count toward `week`, only `month`/`year`.
-        val nowMillis = 1_750_000_000_000L
-        val exactlySevenDaysAgo = Instant.fromEpochMilliseconds(nowMillis - 7 * 86_400_000L).toString()
-        val result = computeWindowedCounts(listOf(exactlySevenDaysAgo), nowMillis)
+    fun computeWindowedCounts_timestampSevenCalendarDaysAgo_isExcludedFromWeekBucket() {
+        // week counts the last 7 *calendar* days (today + 6 prior), matching computeActivityBuckets'
+        // weekDays bucketing — a timestamp on the 7th-prior calendar day falls outside that range.
+        val tz = TimeZone.UTC
+        val nowMillis = Instant.parse("2025-06-15T12:00:00Z").toEpochMilliseconds()
+        val sevenCalendarDaysAgo = "2025-06-08T12:00:00Z"
+        val buckets = computeActivityBuckets(listOf(sevenCalendarDaysAgo), nowMillis, tz)
+        val result = computeWindowedCounts(buckets)
         assertEquals(0, result.week)
         assertEquals(1, result.month)
         assertEquals(1, result.year)
+    }
+
+    @Test
+    fun computeWindowedCounts_timestampSixCalendarDaysAgo_isIncludedInWeekBucket() {
+        val tz = TimeZone.UTC
+        val nowMillis = Instant.parse("2025-06-15T12:00:00Z").toEpochMilliseconds()
+        val sixCalendarDaysAgo = "2025-06-09T00:00:01Z"
+        val buckets = computeActivityBuckets(listOf(sixCalendarDaysAgo), nowMillis, tz)
+        val result = computeWindowedCounts(buckets)
+        assertEquals(1, result.week)
+    }
+
+    @Test
+    fun computeWindowedCounts_alwaysAgreesWithSumOfActivityBuckets() {
+        // Structural guarantee: computeWindowedCounts is derived from the same ActivityBuckets
+        // rendered as the graph, so the table and graph can never disagree.
+        val tz = TimeZone.UTC
+        val nowMillis = Instant.parse("2025-06-15T12:00:00Z").toEpochMilliseconds()
+        val timestamps = listOf(
+            "2025-06-15T01:00:00Z", // today
+            "2025-06-09T23:00:00Z", // 6 days ago
+            "2025-06-08T23:00:00Z", // 7 days ago — outside the week window
+            "2025-05-01T00:00:00Z"  // long ago
+        )
+        val buckets = computeActivityBuckets(timestamps, nowMillis, tz)
+        val counts = computeWindowedCounts(buckets)
+        assertEquals(2, counts.week)
+        assertEquals(buckets.weekDays.sum(), counts.week)
+        assertEquals(buckets.monthDays.sum(), counts.month)
+        assertEquals(buckets.yearMonths.sum(), counts.year)
+        assertEquals(buckets.allTimeMonths.sum(), counts.allTime)
+        assertEquals(buckets.weekDays.last(), counts.today)
     }
 
     // computeAvgDaysPerLevel
@@ -135,8 +171,6 @@ class FriendStatsHelperTest {
         val core = buildStatsCore(
             burnedTimestamps = emptyList(),
             learnedTimestamps = emptyList(),
-            burnedRawCount = 0,
-            learnedRawCount = 0,
             totalCorrect = 80f,
             totalAttempts = 100f,
             sortedProgressions = emptyList(),
@@ -150,8 +184,6 @@ class FriendStatsHelperTest {
         val core = buildStatsCore(
             burnedTimestamps = emptyList(),
             learnedTimestamps = emptyList(),
-            burnedRawCount = 0,
-            learnedRawCount = 0,
             totalCorrect = 0f,
             totalAttempts = 0f,
             sortedProgressions = emptyList(),
@@ -161,21 +193,18 @@ class FriendStatsHelperTest {
     }
 
     @Test
-    fun buildStatsCore_rawCountOverridesAllTime_evenWhenATimestampFailsToParse() {
-        // A raw item count of 3 with only 2 parseable timestamps — allTime must reflect the raw
-        // count (3), not computeWindowedCounts' own count of successfully-parsed entries (2). This
-        // is the exact network-path scenario buildStatsCore's rawCount params exist to handle.
+    fun buildStatsCore_allTimeIgnoresEntriesWithUnparseableTimestamp() {
+        // A missing/unparseable burned_at means the assignment isn't actually burned yet — allTime
+        // must reflect only the 2 successfully-parsed entries, not the raw item count of 3.
         val core = buildStatsCore(
             burnedTimestamps = listOf("2025-01-01T00:00:00.000Z", "not-a-timestamp", "2025-06-01T00:00:00.000Z"),
             learnedTimestamps = emptyList(),
-            burnedRawCount = 3,
-            learnedRawCount = 0,
             totalCorrect = 0f,
             totalAttempts = 0f,
             sortedProgressions = emptyList(),
             nowMillis = 1_750_000_000_000L
         )
-        assertEquals(3, core.burned.allTime)
+        assertEquals(2, core.burned.allTime)
     }
 
     @Test
@@ -192,8 +221,6 @@ class FriendStatsHelperTest {
         val core = buildStatsCore(
             burnedTimestamps = emptyList(),
             learnedTimestamps = emptyList(),
-            burnedRawCount = 0,
-            learnedRawCount = 0,
             totalCorrect = 0f,
             totalAttempts = 0f,
             sortedProgressions = progressions,
@@ -213,8 +240,6 @@ class FriendStatsHelperTest {
         val core = buildStatsCore(
             burnedTimestamps = emptyList(),
             learnedTimestamps = emptyList(),
-            burnedRawCount = 0,
-            learnedRawCount = 0,
             totalCorrect = 0f,
             totalAttempts = 0f,
             sortedProgressions = emptyList(),
