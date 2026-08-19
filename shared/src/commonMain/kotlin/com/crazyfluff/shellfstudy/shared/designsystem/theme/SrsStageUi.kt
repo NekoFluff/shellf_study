@@ -51,10 +51,7 @@ fun srsStageColor(stage: SrsStage): Color = when (stage) {
     SrsStage.GURU_1, SrsStage.GURU_2 -> themeAwareColor(SrsStageColors.Guru, EinkStageColors.Guru)
     SrsStage.MASTER -> themeAwareColor(SrsStageColors.Master, EinkStageColors.Master)
     SrsStage.ENLIGHTENED -> themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened)
-    SrsStage.BURNED -> themeAwareColor(
-        default = if (LocalDarkTheme.current) BurnedDark else SrsStageColors.Burned,
-        einkValue = EinkStageColors.Burned
-    )
+    SrsStage.BURNED -> themeAwareColor(SrsStageColors.Burned, EinkStageColors.Burned)
 }
 
 @Composable
