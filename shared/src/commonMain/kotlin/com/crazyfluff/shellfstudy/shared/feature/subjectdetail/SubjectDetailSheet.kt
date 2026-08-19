@@ -61,6 +61,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.PlatformBackHandler
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.canOfferForceReveal
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.resolveEffectiveRevealMode
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailHandleHeight
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailViewModel
@@ -259,14 +261,8 @@ private fun ColumnScope.SubjectDetailBody(
     PlatformBackHandler(enabled = uiState.backStack.isNotEmpty()) { viewModel.goBack() }
     PlatformBackHandler(enabled = uiState.backStack.isEmpty(), onBack = onCollapse)
 
-    val canShowAll = revealMode == DetailRevealMode.HIDE_UNTIL_ANSWERED &&
-        uiState.backStack.isEmpty() &&
-        !uiState.forceRevealAll
-    val effectiveRevealMode = if (uiState.forceRevealAll || uiState.backStack.isNotEmpty()) {
-        DetailRevealMode.FULL
-    } else {
-        revealMode
-    }
+    val canShowAll = canOfferForceReveal(revealMode, uiState.backStack.isNotEmpty(), uiState.forceRevealAll)
+    val effectiveRevealMode = resolveEffectiveRevealMode(revealMode, uiState.backStack.isNotEmpty(), uiState.forceRevealAll)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,

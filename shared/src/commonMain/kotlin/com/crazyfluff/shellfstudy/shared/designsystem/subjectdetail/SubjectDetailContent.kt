@@ -51,6 +51,18 @@ enum class DetailRevealMode { FULL, HIDE_UNTIL_ANSWERED }
 
 enum class DetailQuestionType { MEANING, READING }
 
+/** True when the sheet's own "Show all" override should be offered — i.e. this field is still
+ *  genuinely gated by [DetailRevealMode.HIDE_UNTIL_ANSWERED] and hasn't already been forced open
+ *  by drilling into a related subject or a prior tap on this button. */
+fun canOfferForceReveal(revealMode: DetailRevealMode, hasBackStack: Boolean, forceRevealAll: Boolean): Boolean =
+    revealMode == DetailRevealMode.HIDE_UNTIL_ANSWERED && !hasBackStack && !forceRevealAll
+
+/** The reveal mode actually applied this render: forced to [DetailRevealMode.FULL] once the user
+ *  has drilled into a related subject (nothing to hide once you're browsing, not being quizzed) or
+ *  tapped "Show all" — otherwise whatever the caller asked for. */
+fun resolveEffectiveRevealMode(revealMode: DetailRevealMode, hasBackStack: Boolean, forceRevealAll: Boolean): DetailRevealMode =
+    if (forceRevealAll || hasBackStack) DetailRevealMode.FULL else revealMode
+
 fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
     QuestionType.MEANING -> DetailQuestionType.MEANING
     QuestionType.READING -> DetailQuestionType.READING
@@ -120,178 +132,262 @@ fun SubjectDetailContent(
             .testTag(SubjectDetailTestTags.CONTENT_ROOT),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Headline: title, level/type subtitle, and part-of-speech tags read as one tight cluster —
-        // they're all "what is this" at a glance, so they sit closer together than the sections below.
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            SubjectGlyph(
-                characters = detail.characters,
-                characterImageUrl = detail.characterImageUrl,
-                subjectType = detail.subjectType,
-                size = 80.dp
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Level ${detail.level} · ${subjectTypeLabel(detail.subjectType)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (assignmentStats != null) {
-                    SrsStageChip(assignmentStats.srsStage)
-                }
-            }
-            if (isVocabulary && detail.partsOfSpeech.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    detail.partsOfSpeech.forEach { part ->
-                        AssistChip(onClick = {}, label = { Text(part) })
-                    }
-                }
-            }
-        }
-        if (showStrokeOrder) {
-            StrokeOrderSection(strokeOrder, autoPlay = autoPlayStrokeOrder)
-            WritingPracticeSection(strokeOrder = strokeOrder, resetKey = detail.subjectId)
-        }
-
-        RelatedSubjectsSection(
-            title = componentsLabel(detail.subjectType),
-            subjects = detail.componentSubjectIds.resolve(relatedSubjects),
-            onSubjectClick = onRelatedSubjectClick
+        SubjectHeadline(detail, assignmentStats, isVocabulary)
+        SubjectWritingZone(strokeOrder, autoPlayStrokeOrder, showStrokeOrder, detail.subjectId)
+        SubjectComponentsSection(detail, relatedSubjects, onRelatedSubjectClick)
+        SubjectMeaningZone(detail, revealMeaning)
+        SubjectReadingZone(
+            detail = detail,
+            revealReading = revealReading,
+            hasReadings = hasReadings,
+            isVocabulary = isVocabulary,
+            showPitchAccent = showPitchAccent,
+            onPlayReading = onPlayReading,
+            showDividerAbove = revealMeaning
         )
+        SubjectContextSentencesSection(detail, isVocabulary)
+        SubjectVisuallySimilarSection(detail, relatedSubjects, onRelatedSubjectClick)
+        SubjectUsedInSection(detail, relatedSubjects, onRelatedSubjectClick)
+        SubjectStatsZone(assignmentStats, reviewStats)
+    }
+}
 
-        val hasReadingBreakdown =
-            detail.onyomiReadings.isNotEmpty() || detail.kunyomiReadings.isNotEmpty() || detail.nanoriReadings.isNotEmpty()
-        val showMeaningZone = revealMeaning
-        val showReadingZone = revealReading && hasReadings
-        val meaningMnemonic = detail.meaningMnemonic
-        val readingMnemonic = detail.readingMnemonic
-        val meaningHint = detail.meaningHint
-        val readingHint = detail.readingHint
-        val hasMeaningMnemonic = !meaningMnemonic.isNullOrBlank()
-        val hasReadingMnemonic = !readingMnemonic.isNullOrBlank()
-
-        // Meaning and Reading are deliberately structured the same way — title, then its own
-        // mnemonic right underneath — so the two read as parallel, equal-weight sections rather than
-        // one standing out from the other. Plain sections (no card) keep them visually lightweight
-        // for a view learners scroll through constantly; a divider between them is enough separation.
-        if (showMeaningZone) {
-            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Meaning",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(detail.meanings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
-                    if (detail.auxiliaryMeanings.isNotEmpty()) {
-                        AuxiliaryMeaningsText(detail.auxiliaryMeanings, resetKey = detail.subjectId)
-                    }
-                }
-
-                if (hasMeaningMnemonic) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        SectionEyebrow("Meaning mnemonic")
-                        WkMnemonicText(meaningMnemonic, style = MaterialTheme.typography.bodyMedium)
-                        if (!meaningHint.isNullOrBlank()) {
-                            WkMnemonicText(meaningHint, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-        }
-
-        if (showReadingZone) {
-            if (showMeaningZone) HorizontalDivider()
-            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Reading",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    if (detail.subjectType == SubjectType.KANJI && hasReadingBreakdown) {
-                        if (detail.onyomiReadings.isNotEmpty()) {
-                            ReadingTypeRow(label = "On'yomi", readings = detail.onyomiReadings)
-                        }
-                        if (detail.kunyomiReadings.isNotEmpty()) {
-                            ReadingTypeRow(label = "Kun'yomi", readings = detail.kunyomiReadings)
-                        }
-                        if (detail.nanoriReadings.isNotEmpty()) {
-                            ReadingTypeRow(label = "Nanori", readings = detail.nanoriReadings)
-                        }
-                    } else if (isVocabulary) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            detail.readings.forEach { reading ->
-                                VocabReadingRow(
-                                    reading = reading,
-                                    pitchAccents = detail.pitchAccents,
-                                    showPitchAccent = showPitchAccent,
-                                    hasAudio = detail.pronunciationAudios.isNotEmpty(),
-                                    onPlayReading = onPlayReading
-                                )
-                            }
-                        }
-                    } else {
-                        Text(detail.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-
-                if (hasReadingMnemonic) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        SectionEyebrow("Reading mnemonic")
-                        WkMnemonicText(readingMnemonic, style = MaterialTheme.typography.bodyMedium)
-                        if (!readingHint.isNullOrBlank()) {
-                            WkMnemonicText(readingHint, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-        }
-
-        if (isVocabulary && detail.contextSentences.isNotEmpty()) {
-            HorizontalDivider()
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionEyebrow("Context sentences")
-                // 20dp between example sentences (vs. 2dp between a sentence's own JP/EN pair) so
-                // each example reads as its own distinct card of information while scanning.
-                AkebiSelectableContainer {
-                    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                        detail.contextSentences.forEach { sentence ->
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    text = sentence.english,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (detail.subjectType == SubjectType.KANJI) {
-            RelatedSubjectsSection(
-                title = "Visually similar",
-                subjects = detail.visuallySimilarSubjectIds.resolve(relatedSubjects),
-                onSubjectClick = onRelatedSubjectClick
-            )
-        }
-
-        RelatedSubjectsSection(
-            title = "Used in",
-            subjects = detail.amalgamationSubjectIds.resolve(relatedSubjects),
-            onSubjectClick = onRelatedSubjectClick
+// Headline: title, level/type subtitle, and part-of-speech tags read as one tight cluster —
+// they're all "what is this" at a glance, so they sit closer together than the sections below.
+@Composable
+private fun SubjectHeadline(detail: SubjectDetail, assignmentStats: SubjectAssignmentStats?, isVocabulary: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SubjectGlyph(
+            characters = detail.characters,
+            characterImageUrl = detail.characterImageUrl,
+            subjectType = detail.subjectType,
+            size = 80.dp
         )
-
-        if (assignmentStats != null) {
-            HorizontalDivider()
-            SubjectStatsSection(assignmentStats = assignmentStats, reviewStats = reviewStats)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Level ${detail.level} · ${subjectTypeLabel(detail.subjectType)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (assignmentStats != null) {
+                SrsStageChip(assignmentStats.srsStage)
+            }
+        }
+        if (isVocabulary && detail.partsOfSpeech.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                detail.partsOfSpeech.forEach { part ->
+                    AssistChip(onClick = {}, label = { Text(part) })
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun SubjectWritingZone(
+    strokeOrder: StrokeOrderUiState,
+    autoPlayStrokeOrder: Boolean,
+    showStrokeOrder: Boolean,
+    resetKey: Long
+) {
+    if (!showStrokeOrder) return
+    StrokeOrderSection(strokeOrder, autoPlay = autoPlayStrokeOrder)
+    WritingPracticeSection(strokeOrder = strokeOrder, resetKey = resetKey)
+}
+
+@Composable
+private fun SubjectComponentsSection(
+    detail: SubjectDetail,
+    relatedSubjects: Map<Long, SubjectSummary>,
+    onRelatedSubjectClick: (Long) -> Unit
+) {
+    RelatedSubjectsSection(
+        title = componentsLabel(detail.subjectType),
+        subjects = detail.componentSubjectIds.resolve(relatedSubjects),
+        onSubjectClick = onRelatedSubjectClick
+    )
+}
+
+// Meaning and Reading are deliberately structured the same way — title, then its own mnemonic
+// right underneath — so the two read as parallel, equal-weight sections rather than one standing
+// out from the other. Plain sections (no card) keep them visually lightweight for a view learners
+// scroll through constantly; a divider between them is enough separation.
+@Composable
+private fun SubjectMeaningZone(detail: SubjectDetail, revealMeaning: Boolean) {
+    if (!revealMeaning) return
+    val meaningMnemonic = detail.meaningMnemonic
+    val meaningHint = detail.meaningHint
+    val hasMeaningMnemonic = !meaningMnemonic.isNullOrBlank()
+
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Meaning",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(detail.meanings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
+            if (detail.auxiliaryMeanings.isNotEmpty()) {
+                AuxiliaryMeaningsText(detail.auxiliaryMeanings, resetKey = detail.subjectId)
+            }
+        }
+
+        if (hasMeaningMnemonic) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SectionEyebrow("Meaning mnemonic")
+                WkMnemonicText(meaningMnemonic, style = MaterialTheme.typography.bodyMedium)
+                if (!meaningHint.isNullOrBlank()) {
+                    WkMnemonicText(meaningHint, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+private enum class ReadingDisplayStyle { KANJI_BREAKDOWN, VOCABULARY, PLAIN }
+
+private fun readingDisplayStyle(
+    subjectType: SubjectType,
+    hasReadingBreakdown: Boolean,
+    isVocabulary: Boolean
+): ReadingDisplayStyle = when {
+    subjectType == SubjectType.KANJI && hasReadingBreakdown -> ReadingDisplayStyle.KANJI_BREAKDOWN
+    isVocabulary -> ReadingDisplayStyle.VOCABULARY
+    else -> ReadingDisplayStyle.PLAIN
+}
+
+@Composable
+private fun KanjiReadingBreakdown(detail: SubjectDetail) {
+    if (detail.onyomiReadings.isNotEmpty()) {
+        ReadingTypeRow(label = "On'yomi", readings = detail.onyomiReadings)
+    }
+    if (detail.kunyomiReadings.isNotEmpty()) {
+        ReadingTypeRow(label = "Kun'yomi", readings = detail.kunyomiReadings)
+    }
+    if (detail.nanoriReadings.isNotEmpty()) {
+        ReadingTypeRow(label = "Nanori", readings = detail.nanoriReadings)
+    }
+}
+
+@Composable
+private fun VocabularyReadingList(detail: SubjectDetail, showPitchAccent: Boolean, onPlayReading: ((String) -> Unit)?) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        detail.readings.forEach { reading ->
+            VocabReadingRow(
+                reading = reading,
+                pitchAccents = detail.pitchAccents,
+                showPitchAccent = showPitchAccent,
+                hasAudio = detail.pronunciationAudios.isNotEmpty(),
+                onPlayReading = onPlayReading
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubjectReadingZone(
+    detail: SubjectDetail,
+    revealReading: Boolean,
+    hasReadings: Boolean,
+    isVocabulary: Boolean,
+    showPitchAccent: Boolean,
+    onPlayReading: ((String) -> Unit)?,
+    showDividerAbove: Boolean
+) {
+    if (!(revealReading && hasReadings)) return
+    val hasReadingBreakdown =
+        detail.onyomiReadings.isNotEmpty() || detail.kunyomiReadings.isNotEmpty() || detail.nanoriReadings.isNotEmpty()
+    val readingMnemonic = detail.readingMnemonic
+    val readingHint = detail.readingHint
+    val hasReadingMnemonic = !readingMnemonic.isNullOrBlank()
+
+    if (showDividerAbove) HorizontalDivider()
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Reading",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            when (readingDisplayStyle(detail.subjectType, hasReadingBreakdown, isVocabulary)) {
+                ReadingDisplayStyle.KANJI_BREAKDOWN -> KanjiReadingBreakdown(detail)
+                ReadingDisplayStyle.VOCABULARY -> VocabularyReadingList(detail, showPitchAccent, onPlayReading)
+                ReadingDisplayStyle.PLAIN -> Text(detail.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+
+        if (hasReadingMnemonic) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SectionEyebrow("Reading mnemonic")
+                WkMnemonicText(readingMnemonic, style = MaterialTheme.typography.bodyMedium)
+                if (!readingHint.isNullOrBlank()) {
+                    WkMnemonicText(readingHint, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubjectContextSentencesSection(detail: SubjectDetail, isVocabulary: Boolean) {
+    if (!isVocabulary || detail.contextSentences.isEmpty()) return
+    HorizontalDivider()
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionEyebrow("Context sentences")
+        // 20dp between example sentences (vs. 2dp between a sentence's own JP/EN pair) so
+        // each example reads as its own distinct card of information while scanning.
+        AkebiSelectableContainer {
+            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                detail.contextSentences.forEach { sentence ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = sentence.english,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubjectVisuallySimilarSection(
+    detail: SubjectDetail,
+    relatedSubjects: Map<Long, SubjectSummary>,
+    onRelatedSubjectClick: (Long) -> Unit
+) {
+    if (detail.subjectType != SubjectType.KANJI) return
+    RelatedSubjectsSection(
+        title = "Visually similar",
+        subjects = detail.visuallySimilarSubjectIds.resolve(relatedSubjects),
+        onSubjectClick = onRelatedSubjectClick
+    )
+}
+
+@Composable
+private fun SubjectUsedInSection(
+    detail: SubjectDetail,
+    relatedSubjects: Map<Long, SubjectSummary>,
+    onRelatedSubjectClick: (Long) -> Unit
+) {
+    RelatedSubjectsSection(
+        title = "Used in",
+        subjects = detail.amalgamationSubjectIds.resolve(relatedSubjects),
+        onSubjectClick = onRelatedSubjectClick
+    )
+}
+
+@Composable
+private fun SubjectStatsZone(assignmentStats: SubjectAssignmentStats?, reviewStats: SubjectReviewStats?) {
+    if (assignmentStats == null) return
+    HorizontalDivider()
+    SubjectStatsSection(assignmentStats = assignmentStats, reviewStats = reviewStats)
 }
 
 fun componentsLabel(type: SubjectType): String = when (type) {

@@ -31,6 +31,11 @@ fun rememberSubjectDetailSheetState(): SubjectDetailSheetState = remember { Subj
  * answered, ungated) for any screen that just wants tapping a subject to show its detail.
  * Stays mounted once the first subject has ever been shown so browsing several subjects reuses
  * the same [SubjectDetailSheet] instance instead of paying first-mount cost on every open.
+ *
+ * `active` is tied directly to `state.subjectId != null` (there's no separate "peek" state here
+ * the way Review/Lesson have via quiz feedback) so the sheet's scrim is never left hit-testable
+ * over the host screen's own content during the close animation — see the session-complete
+ * "Back to dashboard" dropped-tap bug in [SubjectDetailSheet]'s doc comment.
  */
 @Composable
 fun SubjectDetailSheetHost(state: SubjectDetailSheetState) {
@@ -39,15 +44,17 @@ fun SubjectDetailSheetHost(state: SubjectDetailSheetState) {
 
     lastShownSubjectId?.let { id ->
         val dismiss = { state.dismiss() }
+        val expanded = state.subjectId != null
         SubjectDetailSheet(
             subjectId = id,
-            expanded = state.subjectId != null,
+            expanded = expanded,
             onToggle = dismiss,
             onDismiss = dismiss,
             revealMode = DetailRevealMode.FULL,
             isAnswered = true,
             questionType = null,
-            dismissesFully = true
+            dismissesFully = true,
+            active = expanded
         )
     }
 }
