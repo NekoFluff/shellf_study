@@ -27,9 +27,11 @@ import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
+import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.fakes.FakeFriendStatsDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
+import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
@@ -76,6 +78,7 @@ class DashboardViewModelTest {
     private lateinit var syncScheduler: FakeSyncScheduler
     private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
     private lateinit var notificationCoordinator: FakeNotificationCoordinator
+    private lateinit var appForegroundTracker: AppForegroundTracker
 
     @Before
     fun setUp() {
@@ -96,6 +99,7 @@ class DashboardViewModelTest {
         syncScheduler = FakeSyncScheduler()
         pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
         notificationCoordinator = FakeNotificationCoordinator()
+        appForegroundTracker = AppForegroundTracker()
     }
 
     private val viewModelStore = ViewModelStore()
@@ -155,7 +159,8 @@ class DashboardViewModelTest {
                     friendStatsRepository = friendStatsRepository,
                     logoutCoordinator = logoutCoordinator,
                     dashboardSyncCoordinator = dashboardSyncCoordinator,
-                    lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json)
+                    lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),
+                    appForegroundTracker = appForegroundTracker
                 )
             }
         }
@@ -226,6 +231,35 @@ class DashboardViewModelTest {
         val requests = generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
         assertThat(requests.count { it.path.orEmpty().startsWith("/user") }).isEqualTo(1)
         assertThat(requests.count { it.path.orEmpty().startsWith("/summary") }).isEqualTo(1)
+    }
+
+    @Test
+    fun `resyncs when the app returns to foreground, not just on the dashboard's first appearance`() = runTest(mainDispatcherRule.dispatcher) {
+        // DashboardViewModel survives ordinary Review/Lesson navigation, so DashboardRoute's
+        // LaunchedEffect(Unit) only re-fires onDashboardResumed() on true cold start. Backgrounding
+        // and foregrounding the app (home button, app switcher) while still on the Dashboard route
+        // doesn't recompose that LaunchedEffect at all — the appForegroundTracker collector wired
+        // in init{} is what has to pick up the slack. This drives that collector directly (without
+        // a preceding onDashboardResumed() call) since it's the mechanism under test here; the
+        // hasCompletedInitialSync escalation itself is already covered by the "first appearance"
+        // tests above.
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+
+            while (state.isRefreshing) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isAtLeast(1)
+        val requests = generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
+        assertThat(requests.count { it.path.orEmpty().startsWith("/user") }).isAtLeast(1)
+        assertThat(requests.count { it.path.orEmpty().startsWith("/summary") }).isAtLeast(1)
     }
 
     @Test

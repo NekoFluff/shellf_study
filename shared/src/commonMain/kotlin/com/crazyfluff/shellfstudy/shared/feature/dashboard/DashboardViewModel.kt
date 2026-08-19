@@ -24,6 +24,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -143,7 +146,8 @@ class DashboardViewModel(
     private val friendStatsRepository: FriendStatsRepository,
     private val logoutCoordinator: LogoutCoordinator,
     private val dashboardSyncCoordinator: DashboardSyncCoordinator,
-    private val lastSessionSummaryRepository: LastSessionSummaryRepository
+    private val lastSessionSummaryRepository: LastSessionSummaryRepository,
+    private val appForegroundTracker: AppForegroundTracker
 ) : ViewModel() {
 
     private val _dashboardData = MutableStateFlow(DashboardUiState())
@@ -232,6 +236,18 @@ class DashboardViewModel(
     init {
         viewModelScope.launch {
             seedFromCache()
+        }
+
+        // Compose Navigation only re-fires DashboardRoute's LaunchedEffect(Unit) on true cold
+        // start, since this ViewModel survives ordinary Review/Lesson round trips. Returning from
+        // background (home button, app switcher, lock screen) without navigating away wouldn't
+        // otherwise trigger a sync at all, so mirror the same resume logic on every foreground
+        // transition after the first (the first is left to LaunchedEffect(Unit) to avoid a
+        // redundant double sync on cold start).
+        viewModelScope.launch {
+            appForegroundTracker.isForeground.drop(1).filter { it }.collect {
+                onDashboardResumed()
+            }
         }
     }
 

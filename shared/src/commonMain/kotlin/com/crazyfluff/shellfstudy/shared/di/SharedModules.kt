@@ -173,7 +173,8 @@ val viewModelModule = module {
             friendStatsRepository = get(),
             logoutCoordinator = get(),
             dashboardSyncCoordinator = get(),
-            lastSessionSummaryRepository = get()
+            lastSessionSummaryRepository = get(),
+            appForegroundTracker = get()
         )
     }
 
