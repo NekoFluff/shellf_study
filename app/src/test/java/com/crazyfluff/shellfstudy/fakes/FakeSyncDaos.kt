@@ -43,6 +43,10 @@ class FakeReviewStatisticDao : ReviewStatisticDao {
         this.statistics.value = this.statistics.value + statistics.associateBy { it.id }
     }
 
+    override suspend fun clearAll() {
+        statistics.value = emptyMap()
+    }
+
     override fun observeAll(): Flow<List<ReviewStatisticEntity>> = statistics.map { it.values.toList() }
 
     override fun observeBySubjectId(subjectId: Long): Flow<ReviewStatisticEntity?> = statistics.map { map ->
@@ -55,6 +59,10 @@ class FakeLevelProgressionDao : LevelProgressionDao {
 
     override suspend fun upsertAll(progressions: List<LevelProgressionEntity>) {
         this.progressions.value = this.progressions.value + progressions.associateBy { it.id }
+    }
+
+    override suspend fun clearAll() {
+        progressions.value = emptyMap()
     }
 
     override fun observeAll(): Flow<List<LevelProgressionEntity>> = progressions.map { it.values.toList() }
@@ -79,6 +87,10 @@ class FakeStudyActivityDao : StudyActivityDao {
 
     override suspend fun markActive(entity: StudyActivityDayEntity) {
         activeDays.value = activeDays.value + entity.date
+    }
+
+    override suspend fun clearAll() {
+        activeDays.value = emptySet()
     }
 
     override fun observeActiveDays(): Flow<List<String>> = activeDays.map { it.sortedDescending() }
@@ -131,6 +143,14 @@ class FakeOutboxDao : OutboxDao {
 
     override fun observePendingLessonStartCount(): Flow<Int> =
         lessonStarts.map { map -> map.values.count { it.status == OutboxStatus.PENDING.name } }
+
+    override suspend fun clearReviewSubmissions() {
+        reviewSubmissions.value = emptyMap()
+    }
+
+    override suspend fun clearLessonStarts() {
+        lessonStarts.value = emptyMap()
+    }
 
     /** Test-only: every row regardless of status, for asserting on terminal/deleted state. */
     fun allReviewSubmissions(): List<PendingReviewSubmissionEntity> = reviewSubmissions.value.values.sortedBy { it.id }

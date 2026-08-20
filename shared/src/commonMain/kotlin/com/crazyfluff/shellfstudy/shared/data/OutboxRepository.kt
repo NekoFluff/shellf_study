@@ -67,4 +67,6 @@ class OutboxRepository(
     suspend fun setBlockedOnAuth(blocked: Boolean) {
         dataStore.edit { prefs -> prefs[BLOCKED_ON_AUTH_KEY] = blocked }
     }
+
+    suspend fun resetAuthBlock() = setBlockedOnAuth(false)
 }

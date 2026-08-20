@@ -11,6 +11,7 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
+import com.crazyfluff.shellfstudy.shared.data.AccountDataCleaner
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
@@ -134,11 +135,25 @@ class DashboardViewModelTest {
             selfLevelProgressionDao = FakeLevelProgressionDao(),
             defaultDispatcher = mainDispatcherRule.dispatcher
         )
+        val accountDataCleaner = AccountDataCleaner(
+            assignmentDao = repositories.assignmentDao,
+            reviewStatisticDao = repositories.reviewStatisticDao,
+            levelProgressionDao = FakeLevelProgressionDao(),
+            syncStateDao = repositories.syncStateDao,
+            outboxDao = repositories.outboxDao,
+            studyActivityDao = repositories.studyActivityDao,
+            outboxRepository = outboxRepository,
+            dashboardCacheRepository = dashboardCacheRepository,
+            lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),
+            reviewSessionRepository = reviewSessionRepository,
+            lessonSessionRepository = lessonSessionRepository
+        )
         val logoutCoordinator = LogoutCoordinator(
             tokenRepository = tokenRepository,
             syncScheduler = syncScheduler,
             pitchAccentScrapeScheduler = pitchAccentScrapeScheduler,
-            notificationCoordinator = notificationCoordinator
+            notificationCoordinator = notificationCoordinator,
+            accountDataCleaner = accountDataCleaner
         )
         val dashboardSyncCoordinator = DashboardSyncCoordinator(
             waniKaniRepository = repositories.waniKaniRepository,

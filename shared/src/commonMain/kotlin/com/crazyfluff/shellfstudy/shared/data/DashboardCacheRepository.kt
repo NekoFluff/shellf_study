@@ -57,4 +57,14 @@ class DashboardCacheRepository(
             prefs[lastSyncedAtKey] = syncedAtMillis
         }
     }
+
+    suspend fun clear() {
+        dataStore.edit { prefs ->
+            prefs.remove(usernameKey)
+            prefs.remove(levelKey)
+            prefs.remove(lessonCountKey)
+            prefs.remove(reviewCountKey)
+            prefs.remove(lastSyncedAtKey)
+        }
+    }
 }

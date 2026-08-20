@@ -34,6 +34,9 @@ interface ReviewStatisticDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(statistics: List<ReviewStatisticEntity>)
 
+    @Query("DELETE FROM review_statistics")
+    suspend fun clearAll()
+
     @Query("SELECT * FROM review_statistics")
     fun observeAll(): Flow<List<ReviewStatisticEntity>>
 

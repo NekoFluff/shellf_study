@@ -66,6 +66,10 @@ class FakeAssignmentDao(
         this.assignments.value = this.assignments.value + assignments.associateBy { it.id }
     }
 
+    override suspend fun clearAll() {
+        assignments.value = emptyMap()
+    }
+
     override suspend fun getById(id: Long): AssignmentEntity? = assignments.value[id]
 
     override fun observeBySubjectId(subjectId: Long): Flow<AssignmentEntity?> = assignments.map { map ->

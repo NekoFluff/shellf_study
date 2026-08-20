@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.di
 
 import com.crazyfluff.shellfstudy.shared.ThemeViewModel
+import com.crazyfluff.shellfstudy.shared.data.AccountDataCleaner
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
@@ -112,7 +113,30 @@ val repositoryModule = module {
     single { OutboxRepository(outboxDao = get(), outboxSyncScheduler = get(), dataStore = get()) }
     single { WeblioPitchAccentParser() }
     single { DashboardCacheRepository(get()) }
-    single { LogoutCoordinator(tokenRepository = get(), syncScheduler = get(), pitchAccentScrapeScheduler = get(), notificationCoordinator = get()) }
+    single {
+        AccountDataCleaner(
+            assignmentDao = get(),
+            reviewStatisticDao = get(),
+            levelProgressionDao = get(),
+            syncStateDao = get(),
+            outboxDao = get(),
+            studyActivityDao = get(),
+            outboxRepository = get(),
+            dashboardCacheRepository = get(),
+            lastSessionSummaryRepository = get(),
+            reviewSessionRepository = get(),
+            lessonSessionRepository = get()
+        )
+    }
+    single {
+        LogoutCoordinator(
+            tokenRepository = get(),
+            syncScheduler = get(),
+            pitchAccentScrapeScheduler = get(),
+            notificationCoordinator = get(),
+            accountDataCleaner = get()
+        )
+    }
     single { DashboardSyncCoordinator(waniKaniRepository = get(), syncOrchestrator = get(), dashboardCacheRepository = get()) }
     single { LessonSessionRepository(dataStore = get(), json = get()) }
     single { ReviewSessionRepository(dataStore = get(), json = get()) }

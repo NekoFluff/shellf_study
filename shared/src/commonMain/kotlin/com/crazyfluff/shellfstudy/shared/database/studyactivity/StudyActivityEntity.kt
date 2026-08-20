@@ -18,6 +18,9 @@ interface StudyActivityDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun markActive(entity: StudyActivityDayEntity)
 
+    @Query("DELETE FROM study_activity_days")
+    suspend fun clearAll()
+
     @Query("SELECT date FROM study_activity_days ORDER BY date DESC")
     fun observeActiveDays(): Flow<List<String>>
 }

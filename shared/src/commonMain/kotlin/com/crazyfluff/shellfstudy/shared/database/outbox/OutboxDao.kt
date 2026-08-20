@@ -37,4 +37,10 @@ interface OutboxDao {
 
     @Query("SELECT COUNT(*) FROM pending_lesson_starts WHERE status = 'PENDING'")
     fun observePendingLessonStartCount(): Flow<Int>
+
+    @Query("DELETE FROM pending_review_submissions")
+    suspend fun clearReviewSubmissions()
+
+    @Query("DELETE FROM pending_lesson_starts")
+    suspend fun clearLessonStarts()
 }

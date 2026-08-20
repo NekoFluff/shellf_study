@@ -41,4 +41,6 @@ class LastSessionSummaryRepository(
     suspend fun save(summary: LastSessionSummary) = store.save(summary)
 
     suspend fun load(): LastSessionSummary? = store.load()
+
+    suspend fun clear() = store.clear()
 }

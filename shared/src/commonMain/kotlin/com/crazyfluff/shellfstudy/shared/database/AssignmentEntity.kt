@@ -47,6 +47,9 @@ interface AssignmentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(assignments: List<AssignmentEntity>)
 
+    @Query("DELETE FROM assignments")
+    suspend fun clearAll()
+
     @Query("SELECT * FROM assignments WHERE id = :id")
     suspend fun getById(id: Long): AssignmentEntity?
 

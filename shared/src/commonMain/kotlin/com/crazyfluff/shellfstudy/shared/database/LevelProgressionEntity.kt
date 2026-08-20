@@ -26,6 +26,9 @@ interface LevelProgressionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(progressions: List<LevelProgressionEntity>)
 
+    @Query("DELETE FROM level_progressions")
+    suspend fun clearAll()
+
     @Query("SELECT * FROM level_progressions")
     fun observeAll(): Flow<List<LevelProgressionEntity>>
 }
