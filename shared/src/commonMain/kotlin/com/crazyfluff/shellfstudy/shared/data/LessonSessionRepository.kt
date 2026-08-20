@@ -18,6 +18,16 @@ data class PersistedLessonItemProgress(
     val hadIncorrectReading: Boolean
 )
 
+/** One graded answer, for rebuilding the "slowest answers" summary across a pause/resume — see
+ *  [com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord], the in-memory shape this mirrors. */
+@Serializable
+data class PersistedLessonAnsweredQuestion(
+    val assignmentId: Long,
+    val questionType: String,
+    val isCorrect: Boolean,
+    val elapsedMs: Long
+)
+
 /** Which phase of a lesson session [PersistedLessonSession] represents — the study flashcards
  *  ([studyAssignmentIds]/[PersistedLessonSession.studyIndex]) or the quiz
  *  ([PersistedLessonSession.quizQueue]/progress). Only one half of the payload is meaningful at a
@@ -37,7 +47,11 @@ data class PersistedLessonSession(
     // activeElapsedMs/AppForegroundTracker. 0 means "not started yet" (a STUDY-phase snapshot, where
     // the quiz clock hasn't started) or "no value was ever persisted" (data from before this field
     // existed).
-    val sessionActiveElapsedMs: Long = 0L
+    val sessionActiveElapsedMs: Long = 0L,
+    // Defaults to empty for data persisted before this field existed — a resume against an older
+    // snapshot just starts the "slowest answers" summary from the post-resume segment, as it always
+    // used to.
+    val answeredQuestions: List<PersistedLessonAnsweredQuestion> = emptyList()
 )
 
 /**

@@ -8,6 +8,7 @@ import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
+import com.crazyfluff.shellfstudy.shared.data.PersistedAnsweredQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
@@ -113,10 +114,9 @@ class ReviewViewModel(
 
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
-    // Individual per-answer records (used for the "slowest answers" summary) stay in-memory only —
-    // a resume starts this list fresh, so that card only reflects answers given since the most
-    // recent resume. activeElapsedMs, by contrast, is restored from persisted state on resume (see
-    // resumeFromPersisted) so the total/average time summaries stay accurate across a resume.
+    // Individual per-answer records, used for the "slowest answers" summary — persisted and
+    // restored across a resume just like progressByAssignmentId (see resumeFromPersisted), so the
+    // summary reflects the whole session, not just the segment since the most recent resume.
     private val answeredQuestions = mutableListOf<AnsweredQuestionRecord<ReviewItem>>()
 
     // Tracks only the time the session was actively being viewed — see QuizSessionTiming. Pause
@@ -188,20 +188,17 @@ class ReviewViewModel(
     }
 
     private suspend fun resumeFromPersisted(persisted: PersistedReviewSession) {
-        val itemsById = assignmentRepository.observeReviewQueue().first().associateBy { it.assignmentId }
+        // Resolve exactly the assignments this persisted session references, by id — not via
+        // observeReviewQueue()'s due filter. A fully-completed item's next-review time is pushed
+        // into the future the moment it's finished (applyOptimisticReviewResult), so by the time
+        // the user pauses and resumes it may no longer be "due" even though it's still part of
+        // this session's progress tally.
+        val neededIds = (persisted.queue.map { it.assignmentId } + persisted.progress.map { it.assignmentId }).toSet()
+        val itemsById = assignmentRepository.getReviewItems(neededIds).associateBy { it.assignmentId }
 
         // A *queue* entry referencing an item we can no longer look up (e.g. app storage was
         // cleared) is genuinely unrecoverable — rebuilding its PendingQuestion needs the full
         // ReviewItem. Fall back to a fresh fetch rather than crash on that.
-        //
-        // A stale *progress* entry, on the other hand, is the normal, expected shape of a
-        // partially-completed session: applyOptimisticReviewResult() pushes a fully-completed
-        // item's next-review time into the future the moment it's finished, so it drops out of
-        // observeReviewQueue()/itemsById well before the session as a whole ends. Discarding the
-        // whole session over that would throw away progress on every other still-in-progress item
-        // just because one item happened to finish first — so that entry is simply dropped instead
-        // (it only feeds the end-of-session summary tally, which already can't reconstruct a
-        // completed item's full ReviewItem without its still-cached-elsewhere subject data).
         if (persisted.queue.any { it.assignmentId !in itemsById }) {
             reviewSessionRepository.clear()
             fetchFreshQueue()
@@ -215,6 +212,8 @@ class ReviewViewModel(
         )
         progressByAssignmentId.clear()
         persisted.progress.forEach { p ->
+            // itemsById was resolved by id above, so this only misses for the same
+            // genuinely-unrecoverable case handled above — not merely "no longer due".
             val item = itemsById[p.assignmentId] ?: return@forEach
             progressByAssignmentId[p.assignmentId] = ItemProgress(item).apply {
                 meaningDone = p.meaningDone
@@ -225,6 +224,12 @@ class ReviewViewModel(
         }
         totalQuestions = persisted.totalQuestions
         answeredQuestions.clear()
+        answeredQuestions.addAll(
+            persisted.answeredQuestions.mapNotNull { p ->
+                val item = itemsById[p.assignmentId] ?: return@mapNotNull null
+                AnsweredQuestionRecord(item, QuestionType.valueOf(p.questionType), p.isCorrect, p.elapsedMs)
+            }
+        )
         // Restores the session's accumulated active time rather than restarting the clock — this is
         // deliberately *not* wall-clock time since the session began; time spent away (backgrounded,
         // or navigated off and back) must not count. sessionTiming.resume() then starts a fresh
@@ -544,7 +549,10 @@ class ReviewViewModel(
             PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },
         totalQuestions = totalQuestions,
-        sessionActiveElapsedMs = sessionTiming.currentElapsedMs()
+        sessionActiveElapsedMs = sessionTiming.currentElapsedMs(),
+        answeredQuestions = answeredQuestions.map {
+            PersistedAnsweredQuestion(it.item.assignmentId, it.type.name, it.isCorrect, it.elapsedMs)
+        }
     )
 
     private suspend fun persistCurrentState() {

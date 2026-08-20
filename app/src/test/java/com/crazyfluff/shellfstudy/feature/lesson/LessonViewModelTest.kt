@@ -671,12 +671,11 @@ class LessonViewModelTest {
             awaitItem() // quiz begins, persisted
         }
 
-        // Simulate the assignment being started elsewhere (e.g. synced in from another device)
-        // between sessions — it's no longer due for a lesson, so the persisted queue entry
-        // referencing it can't be resolved on resume, and resumeFromPersisted must fall back to a
-        // fresh fetch instead of crashing.
-        val existing = repositories.assignmentDao.getById(101L)!!
-        repositories.assignmentDao.upsertAll(listOf(existing.copy(startedAt = "2026-01-02T00:00:00.000000Z")))
+        // Simulate the assignment's row genuinely vanishing from local cache (e.g. app storage was
+        // cleared) between sessions — resumeQuizPhase resolves persisted entries by id regardless
+        // of due status, so only an actually-missing row (not merely "no longer due") can't be
+        // resolved on resume, and must fall back to a fresh fetch instead of crashing.
+        repositories.assignmentDao.clearAll()
 
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
@@ -875,6 +874,86 @@ class LessonViewModelTest {
             assertThat(state.isSessionComplete).isTrue()
             assertThat(state.sessionItemsLearned).isEqualTo(2)
             assertThat(state.sessionMissedItems).hasSize(1)
+        }
+    }
+
+    @Test
+    fun `resuming after fully completing one lesson item preserves it in the eventual session summary`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: finishing assignment 101 here calls applyOptimisticLessonStart, which
+        // sets its startedAt and drops it out of observeDueForLesson() even though its (completed)
+        // progress is still persisted. resumeQuizPhase must still resolve it on resume so it
+        // contributes to the final session summary, instead of silently disappearing from the tally.
+        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            firstViewModel.startSelectedLessons()
+            awaitItem()
+            firstViewModel.nextStudyCard()
+            awaitItem()
+            firstViewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            var oneCompleted = false
+            var safetyCounter = 0
+            while (!oneCompleted && safetyCounter < 10) {
+                safetyCounter++
+                val item = state.currentQuizItem!!
+                if (item.assignmentId == 101L) {
+                    firstViewModel.onAnswerInputChange("Mouth")
+                    awaitItem()
+                    firstViewModel.submitAnswer()
+                    awaitItem()
+                    oneCompleted = true
+                } else {
+                    // Keep the other item in-progress (never finishing it) so the session stays
+                    // meaningfully incomplete going into the pause.
+                    firstViewModel.onAnswerInputChange("wrong")
+                    awaitItem()
+                    firstViewModel.submitAnswer()
+                    awaitItem()
+                }
+                firstViewModel.onContinue()
+                state = awaitItem()
+            }
+
+            assertThat(oneCompleted).isTrue()
+            assertThat(state.isSessionComplete).isFalse()
+        }
+
+        // Simulate leaving and coming back: assignment 101 is no longer due for a lesson (it's
+        // started), but its completed progress must still be resolved and counted on resume.
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.isSessionComplete).isFalse()
+
+            var isComplete = false
+            var safetyCounter = 0
+            while (!isComplete && safetyCounter < 10) {
+                safetyCounter++
+                val item = state.currentQuizItem!!
+                secondViewModel.onAnswerInputChange(item.meanings.first())
+                awaitItem()
+                secondViewModel.submitAnswer()
+                awaitItem()
+                secondViewModel.onContinue()
+                state = awaitItem()
+                isComplete = state.isSessionComplete
+            }
+
+            assertThat(state.isSessionComplete).isTrue()
+            // The real assertion: both items count toward the final tally, not just the one
+            // answered after resume — a dropped progress entry for item 101 would report 1 here.
+            assertThat(state.sessionItemsLearned).isEqualTo(2)
+            // Item 101's answer, graded before the pause, must still show up in the "slowest
+            // answers" summary — answeredQuestions is restored from the persisted session just like
+            // progressByAssignmentId, not reset to only the post-resume segment.
+            assertThat(state.sessionSlowestAnswers.map { it.item.assignmentId }).contains(101L)
         }
     }
 

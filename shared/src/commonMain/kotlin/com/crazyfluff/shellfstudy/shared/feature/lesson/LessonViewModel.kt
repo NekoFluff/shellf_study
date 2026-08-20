@@ -13,6 +13,7 @@ import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
+import com.crazyfluff.shellfstudy.shared.data.PersistedLessonAnsweredQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonItemProgress
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonPhase
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonQuestion
@@ -140,10 +141,9 @@ class LessonViewModel(
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
     private val progressByAssignmentId = mutableMapOf<Long, LessonItemProgress>()
-    // Individual per-answer records (used for the "slowest answers" summary) stay in-memory only —
-    // a resume starts this list fresh, so that card only reflects answers given since the most
-    // recent resume. activeElapsedMs, by contrast, is restored from persisted state on resume (see
-    // resumeQuizPhase) so the total/average time summaries stay accurate across a resume.
+    // Individual per-answer records, used for the "slowest answers" summary — persisted and
+    // restored across a resume just like progressByAssignmentId (see resumeQuizPhase), so the
+    // summary reflects the whole quiz, not just the segment since the most recent resume.
     private val answeredQuestions = mutableListOf<AnsweredQuestionRecord<LessonItem>>()
 
     // Tracks only the time the quiz was actively being viewed — see QuizSessionTiming. Pause skips
@@ -265,7 +265,13 @@ class LessonViewModel(
     }
 
     private suspend fun resumeQuizPhase(persisted: PersistedLessonSession) {
-        val itemsById = assignmentRepository.observeLessonQueue().first().associateBy { it.assignmentId }
+        // Resolve exactly the assignments this persisted session references, by id — not via
+        // observeLessonQueue()'s due filter. An item's "started" transition happens the moment
+        // it finishes its quiz questions (applyOptimisticLessonStart), so by the time the user
+        // pauses and resumes it may no longer be "due for lesson" even though it's still part of
+        // this session's progress tally.
+        val neededIds = (persisted.quizQueue.map { it.assignmentId } + persisted.progress.map { it.assignmentId }).toSet()
+        val itemsById = assignmentRepository.getLessonItems(neededIds).associateBy { it.assignmentId }
 
         // The cache backing this persisted session is gone (e.g. app storage was cleared) — fall
         // back to a fresh fetch rather than show a broken quiz.
@@ -283,6 +289,8 @@ class LessonViewModel(
         startedAssignmentIds.clear()
         progressByAssignmentId.clear()
         persisted.progress.forEach { p ->
+            // itemsById was resolved by id above, so this only misses for the same
+            // genuinely-unrecoverable case handled above — not merely "no longer due for lesson".
             val item = itemsById[p.assignmentId] ?: return@forEach
             progressByAssignmentId[p.assignmentId] = LessonItemProgress(item).apply {
                 meaningDone = p.meaningDone
@@ -292,6 +300,12 @@ class LessonViewModel(
             }
         }
         answeredQuestions.clear()
+        answeredQuestions.addAll(
+            persisted.answeredQuestions.mapNotNull { p ->
+                val item = itemsById[p.assignmentId] ?: return@mapNotNull null
+                AnsweredQuestionRecord(item, QuestionType.valueOf(p.questionType), p.isCorrect, p.elapsedMs)
+            }
+        )
         // Restores the quiz's accumulated active time rather than restarting the clock — this is
         // deliberately *not* wall-clock time since the quiz began; time spent away (backgrounded, or
         // navigated off and back) must not count. sessionTiming.resume() then starts a fresh viewing
@@ -689,7 +703,10 @@ class LessonViewModel(
             PersistedLessonItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },
         totalQuizCount = totalQuizCount,
-        sessionActiveElapsedMs = sessionTiming.currentElapsedMs()
+        sessionActiveElapsedMs = sessionTiming.currentElapsedMs(),
+        answeredQuestions = answeredQuestions.map {
+            PersistedLessonAnsweredQuestion(it.item.assignmentId, it.type.name, it.isCorrect, it.elapsedMs)
+        }
     )
 
     private suspend fun persistCurrentState() {

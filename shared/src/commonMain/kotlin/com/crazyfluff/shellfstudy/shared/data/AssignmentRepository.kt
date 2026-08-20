@@ -218,27 +218,42 @@ class AssignmentRepository(
                 flowOf(emptyList())
             } else {
                 subjectDao.observeByIds(assignments.map { it.subjectId }).map { subjects ->
-                    val subjectsById = subjects.associateBy { it.id }
-                    assignments.mapNotNull { assignment ->
-                        val subject = subjectsById[assignment.subjectId] ?: return@mapNotNull null
-                        ReviewItem(
-                            assignmentId = assignment.id,
-                            subjectId = subject.id,
-                            subjectType = SubjectType.fromWkString(subject.subjectType),
-                            characters = subject.characters,
-                            characterImageUrl = subject.characterImageUrl,
-                            level = subject.level,
-                            srsStage = assignment.srsStage,
-                            meanings = subject.acceptedMeanings(),
-                            readings = subject.acceptedGradableReadings(),
-                            auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
-                            pronunciationAudios = subject.toPronunciationAudios(),
-                            srsSystemId = subject.srsSystemId
-                        )
-                    }
+                    buildReviewItems(assignments, subjects)
                 }
             }
         }.flowOn(defaultDispatcher)
+
+    /** Resolves specific assignments to [ReviewItem]s by id, regardless of due status — for
+     *  restoring a persisted session's progress, which may reference an item that has since
+     *  graduated out of [observeReviewQueue]'s due filter. */
+    suspend fun getReviewItems(assignmentIds: Collection<Long>): List<ReviewItem> {
+        if (assignmentIds.isEmpty()) return emptyList()
+        val assignments = assignmentDao.getByIds(assignmentIds.toList())
+        if (assignments.isEmpty()) return emptyList()
+        val subjects = subjectDao.observeByIds(assignments.map { it.subjectId }).first()
+        return buildReviewItems(assignments, subjects)
+    }
+
+    private fun buildReviewItems(assignments: List<AssignmentEntity>, subjects: List<SubjectEntity>): List<ReviewItem> {
+        val subjectsById = subjects.associateBy { it.id }
+        return assignments.mapNotNull { assignment ->
+            val subject = subjectsById[assignment.subjectId] ?: return@mapNotNull null
+            ReviewItem(
+                assignmentId = assignment.id,
+                subjectId = subject.id,
+                subjectType = SubjectType.fromWkString(subject.subjectType),
+                characters = subject.characters,
+                characterImageUrl = subject.characterImageUrl,
+                level = subject.level,
+                srsStage = assignment.srsStage,
+                meanings = subject.acceptedMeanings(),
+                readings = subject.acceptedGradableReadings(),
+                auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
+                pronunciationAudios = subject.toPronunciationAudios(),
+                srsSystemId = subject.srsSystemId
+            )
+        }
+    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeLessonQueue(): Flow<List<LessonItem>> =
@@ -247,39 +262,54 @@ class AssignmentRepository(
                 flowOf(emptyList())
             } else {
                 subjectDao.observeByIds(assignments.map { it.subjectId }).map { subjects ->
-                    val subjectsById = subjects.associateBy { it.id }
-                    assignments.mapNotNull { assignment ->
-                        val subject = subjectsById[assignment.subjectId] ?: return@mapNotNull null
-                        LessonItem(
-                            assignmentId = assignment.id,
-                            subjectId = subject.id,
-                            subjectType = SubjectType.fromWkString(subject.subjectType),
-                            characters = subject.characters,
-                            characterImageUrl = subject.characterImageUrl,
-                            level = subject.level,
-                            lessonPosition = subject.lessonPosition,
-                            meanings = subject.acceptedMeanings(),
-                            readings = subject.acceptedGradableReadings(),
-                            meaningMnemonic = subject.meaningMnemonic,
-                            readingMnemonic = subject.readingMnemonic,
-                            auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
-                            meaningHint = subject.meaningHint,
-                            readingHint = subject.readingHint,
-                            onyomiReadings = subject.readings.filter { it.type == "onyomi" }.map { it.reading },
-                            kunyomiReadings = subject.readings.filter { it.type == "kunyomi" }.map { it.reading },
-                            nanoriReadings = subject.readings.filter { it.type == "nanori" }.map { it.reading },
-                            partsOfSpeech = subject.partsOfSpeech,
-                            pronunciationAudios = subject.toPronunciationAudios(),
-                            contextSentences = subject.contextSentences.map { ContextSentence(japanese = it.ja, english = it.en) },
-                            componentSubjectIds = subject.componentSubjectIds,
-                            amalgamationSubjectIds = subject.amalgamationSubjectIds,
-                            visuallySimilarSubjectIds = subject.visuallySimilarSubjectIds,
-                            srsSystemId = subject.srsSystemId
-                        )
-                    }
+                    buildLessonItems(assignments, subjects)
                 }
             }
         }.flowOn(defaultDispatcher)
+
+    /** Resolves specific assignments to [LessonItem]s by id, regardless of due status — for
+     *  restoring a persisted session's progress, which may reference an item that has since
+     *  been started out of [observeLessonQueue]'s due filter. */
+    suspend fun getLessonItems(assignmentIds: Collection<Long>): List<LessonItem> {
+        if (assignmentIds.isEmpty()) return emptyList()
+        val assignments = assignmentDao.getByIds(assignmentIds.toList())
+        if (assignments.isEmpty()) return emptyList()
+        val subjects = subjectDao.observeByIds(assignments.map { it.subjectId }).first()
+        return buildLessonItems(assignments, subjects)
+    }
+
+    private fun buildLessonItems(assignments: List<AssignmentEntity>, subjects: List<SubjectEntity>): List<LessonItem> {
+        val subjectsById = subjects.associateBy { it.id }
+        return assignments.mapNotNull { assignment ->
+            val subject = subjectsById[assignment.subjectId] ?: return@mapNotNull null
+            LessonItem(
+                assignmentId = assignment.id,
+                subjectId = subject.id,
+                subjectType = SubjectType.fromWkString(subject.subjectType),
+                characters = subject.characters,
+                characterImageUrl = subject.characterImageUrl,
+                level = subject.level,
+                lessonPosition = subject.lessonPosition,
+                meanings = subject.acceptedMeanings(),
+                readings = subject.acceptedGradableReadings(),
+                meaningMnemonic = subject.meaningMnemonic,
+                readingMnemonic = subject.readingMnemonic,
+                auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
+                meaningHint = subject.meaningHint,
+                readingHint = subject.readingHint,
+                onyomiReadings = subject.readings.filter { it.type == "onyomi" }.map { it.reading },
+                kunyomiReadings = subject.readings.filter { it.type == "kunyomi" }.map { it.reading },
+                nanoriReadings = subject.readings.filter { it.type == "nanori" }.map { it.reading },
+                partsOfSpeech = subject.partsOfSpeech,
+                pronunciationAudios = subject.toPronunciationAudios(),
+                contextSentences = subject.contextSentences.map { ContextSentence(japanese = it.ja, english = it.en) },
+                componentSubjectIds = subject.componentSubjectIds,
+                amalgamationSubjectIds = subject.amalgamationSubjectIds,
+                visuallySimilarSubjectIds = subject.visuallySimilarSubjectIds,
+                srsSystemId = subject.srsSystemId
+            )
+        }
+    }
 
     /** The subject's current SRS stage plus its lifecycle dates, or null if it hasn't been
      *  lessoned yet (no assignment exists) — the subject detail view's stat chip and milestone

@@ -53,6 +53,9 @@ interface AssignmentDao {
     @Query("SELECT * FROM assignments WHERE id = :id")
     suspend fun getById(id: Long): AssignmentEntity?
 
+    @Query("SELECT * FROM assignments WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<AssignmentEntity>
+
     /** The assignment (if any — the subject may not have been lessoned yet) backing a subject,
      *  for surfacing its current SRS stage in the subject detail view. */
     @Query("SELECT * FROM assignments WHERE subjectId = :subjectId LIMIT 1")

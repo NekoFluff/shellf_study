@@ -18,6 +18,16 @@ data class PersistedItemProgress(
     val hadIncorrectReading: Boolean
 )
 
+/** One graded answer, for rebuilding the "slowest answers" summary across a pause/resume — see
+ *  [com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord], the in-memory shape this mirrors. */
+@Serializable
+data class PersistedAnsweredQuestion(
+    val assignmentId: Long,
+    val questionType: String,
+    val isCorrect: Boolean,
+    val elapsedMs: Long
+)
+
 @Serializable
 data class PersistedReviewSession(
     val queue: List<PersistedQuestion>,
@@ -26,7 +36,11 @@ data class PersistedReviewSession(
     // Active time accumulated so far, excluding any time spent away from the session (backgrounded,
     // or navigated off-screen) — see ReviewViewModel's activeElapsedMs/AppForegroundTracker. Defaults
     // to 0 for data persisted before this field existed.
-    val sessionActiveElapsedMs: Long = 0L
+    val sessionActiveElapsedMs: Long = 0L,
+    // Defaults to empty for data persisted before this field existed — a resume against an older
+    // snapshot just starts the "slowest answers" summary from the post-resume segment, as it always
+    // used to.
+    val answeredQuestions: List<PersistedAnsweredQuestion> = emptyList()
 )
 
 /**

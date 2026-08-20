@@ -928,6 +928,26 @@ class ReviewViewModelTest {
             // (1 radical + 2 kanji), not a recomputed 2 (only the kanji still due) — which is what
             // a silent fetchFreshQueue() fallback would produce.
             assertThat(state.totalCount).isEqualTo(3)
+
+            // Finish the session and confirm the graduated radical (101), answered before the
+            // pause, still contributes to the final tally instead of silently vanishing from it.
+            while (!state.isSessionComplete) {
+                val answer = if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+                secondViewModel.onAnswerInputChange(answer)
+                awaitItem()
+                secondViewModel.submitAnswer()
+                awaitItem()
+                secondViewModel.onContinue()
+                state = awaitItem()
+            }
+
+            assertThat(state.sessionItemsReviewed).isEqualTo(2)
+            assertThat(state.sessionItemsCorrectFirstTry).isEqualTo(1)
+            assertThat(state.sessionMissedItems.map { it.subjectId }).containsExactly(440L)
+            // The radical's answer, graded before the pause, must still show up in the "slowest
+            // answers" summary — answeredQuestions is restored from the persisted session just like
+            // progressByAssignmentId, not reset to only the post-resume segment.
+            assertThat(state.sessionSlowestAnswers.map { it.item.assignmentId }).contains(101L)
         }
         // No fresh sync should have been needed either — the persisted queue was reused as-is.
         assertThat(server.requestCount).isEqualTo(requestCountBeforeResume)

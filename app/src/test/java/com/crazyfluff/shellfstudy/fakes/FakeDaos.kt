@@ -72,6 +72,9 @@ class FakeAssignmentDao(
 
     override suspend fun getById(id: Long): AssignmentEntity? = assignments.value[id]
 
+    override suspend fun getByIds(ids: List<Long>): List<AssignmentEntity> =
+        ids.mapNotNull { assignments.value[it] }
+
     override fun observeBySubjectId(subjectId: Long): Flow<AssignmentEntity?> = assignments.map { map ->
         map.values.firstOrNull { it.subjectId == subjectId }
     }
