@@ -84,16 +84,27 @@ fun QuizAnswerField(
         }
     }
 
+    // Compose keys BasicTextField's internal transformed-state (and the IME session tied to it)
+    // on this instance's identity, recreating both whenever it changes — a plain class with no
+    // equals() override is a fresh, "changed" instance every recomposition, so a freshly allocated
+    // RomajiOutputTransformation on every keystroke was tearing down and re-establishing the IME
+    // session on every letter typed (the software keyboard hiding and reshowing). remember() here
+    // keeps its identity stable across keystrokes, only creating a new one when what it actually
+    // depends on changes.
+    val outputTransformation = remember(useJapaneseKeyboard, questionType, isAnswered) {
+        if (!useJapaneseKeyboard && questionType == QuestionType.READING) {
+            RomajiOutputTransformation(isComplete = isAnswered)
+        } else {
+            null
+        }
+    }
+
     OutlinedTextField(
         state = fieldState,
         label = { Text("答え") },
         lineLimits = TextFieldLineLimits.SingleLine,
         enabled = !isAnswered,
-        outputTransformation = if (!useJapaneseKeyboard && questionType == QuestionType.READING) {
-            RomajiOutputTransformation(isComplete = isAnswered)
-        } else {
-            null
-        },
+        outputTransformation = outputTransformation,
         trailingIcon = trailingIcon,
         supportingText = if (showTypeMismatchWarning) {
             {
