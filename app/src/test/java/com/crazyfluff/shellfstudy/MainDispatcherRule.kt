@@ -26,6 +26,28 @@ class MainDispatcherRule(
         // process-wide ExceptionCollector, which then surfaces as `UncaughtExceptionsBeforeTest`
         // in whichever test happens to call runTest next.
         dispatcher.scheduler.advanceUntilIdle()
+        settleRealThreadHandoffs()
         Dispatchers.resetMain()
+    }
+
+    /**
+     * Real worker threads can still be resuming coroutines when the test body ends: Ktor's OkHttp
+     * engine delivers responses on Dispatchers.IO, and DataStore performs its writes on its own
+     * actor threads. If such a handoff lands after [Dispatchers.resetMain] below, the continuation
+     * resumes onto a Main dispatcher that has already been torn down and dies with the fatal
+     * `CompletedContinuation cannot be cast to DispatchedContinuation` ClassCastException in
+     * `CoroutineDispatcher.releaseInterceptedContinuation` (the kotlinx.coroutines
+     * unconfined-test-dispatcher race, see Kotlin/kotlinx.coroutines#3773/#3493) — the exception
+     * then surfaces in whichever test happens to run next.
+     *
+     * Give in-flight handoffs a bounded chance to land *while this test's dispatcher is still
+     * installed*, then drain whatever they dispatched onto the test scheduler. 2 x 25ms is plenty
+     * for localhost MockWebServer round-trips without noticeably slowing the suite.
+     */
+    private fun settleRealThreadHandoffs() {
+        repeat(2) {
+            Thread.sleep(25)
+            dispatcher.scheduler.advanceUntilIdle()
+        }
     }
 }
