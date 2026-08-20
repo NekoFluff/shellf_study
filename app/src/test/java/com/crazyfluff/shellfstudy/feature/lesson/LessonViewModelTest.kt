@@ -170,7 +170,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `starting the quiz sets sessionActiveSegmentStartMs and questionStartTimeMs`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `starting the quiz sets sessionActiveSegmentStartMs and questionActiveSegmentStartMs`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -185,7 +185,7 @@ class LessonViewModelTest {
             val quizState = awaitItem()
 
             assertThat(quizState.sessionActiveSegmentStartMs).isNotNull()
-            assertThat(quizState.questionStartTimeMs).isNotNull()
+            assertThat(quizState.questionActiveSegmentStartMs).isNotNull()
         }
     }
 
@@ -1031,6 +1031,50 @@ class LessonViewModelTest {
             // Resumes right where it left off — the time spent "away" (backgrounded) must not have
             // been folded in as if it were active quiz time.
             assertThat(resumedState.sessionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+        }
+    }
+
+    @Test
+    fun `backgrounding the app pauses the per-question timer, and returning to it resumes without resetting the accumulated time`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: the per-question timer used to be plain wall-clock (Clock.System.now()
+        // minus a stored "question shown at" timestamp) with no connection to AppForegroundTracker,
+        // so backgrounding mid-question inflated both the live display and the elapsedMs recorded
+        // for "slowest answers". It's now driven by the same QuizSessionTiming primitive as the
+        // total-session timer above, so it must behave identically across a background/foreground
+        // cycle.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            val quizState = awaitItem() // quiz begins
+            assertThat(quizState.questionActiveSegmentStartMs).isNotNull()
+
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            val pausedState = awaitItem()
+            assertThat(pausedState.questionActiveSegmentStartMs).isNull()
+            val elapsedWhilePaused = pausedState.questionActiveElapsedMs
+
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+            val resumedState = awaitItem()
+            assertThat(resumedState.questionActiveSegmentStartMs).isNotNull()
+            // Resumes right where it left off — the time spent "away" (backgrounded) must not have
+            // been folded in as if it were active question time.
+            assertThat(resumedState.questionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+
+            // Grading now must record an elapsedMs built on that same paused-and-resumed total, not
+            // a fresh wall-clock read from when the question first appeared.
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val gradedState = awaitItem()
+            assertThat(gradedState.questionElapsedMs).isAtLeast(elapsedWhilePaused)
         }
     }
 

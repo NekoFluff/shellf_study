@@ -36,7 +36,7 @@ class SubjectRepository(
     private val subjectDao: SubjectDao,
     private val srsSystemDao: SrsSystemDao,
     private val syncStateDao: SyncStateDao,
-    private val pitchAccentProvider: PitchAccentProvider,
+    private val pitchAccentRepository: PitchAccentRepository,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     private val _isSyncingSubjectLibrary = MutableStateFlow(false)
@@ -130,7 +130,7 @@ class SubjectRepository(
             val characters = entity?.characters
             val pitchAccentsFlow: Flow<List<PitchAccent>> =
                 if (characters != null && (type == SubjectType.VOCABULARY || type == SubjectType.KANA_VOCABULARY)) {
-                    pitchAccentProvider.observePitchAccents(characters)
+                    pitchAccentRepository.observePitchAccents(characters)
                 } else {
                     flowOf(emptyList())
                 }

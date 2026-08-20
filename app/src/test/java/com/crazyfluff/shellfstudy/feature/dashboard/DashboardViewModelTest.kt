@@ -21,7 +21,6 @@ import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
-import com.crazyfluff.shellfstudy.shared.data.PersistedLessonQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
@@ -450,7 +449,7 @@ class DashboardViewModelTest {
     )
 
     private val sampleLessonSession = PersistedLessonSession(
-        quizQueue = listOf(PersistedLessonQuestion(assignmentId = 1, questionType = "MEANING")),
+        quizQueue = listOf(PersistedQuestion(assignmentId = 1, questionType = "MEANING")),
         totalQuizCount = 1
     )
 

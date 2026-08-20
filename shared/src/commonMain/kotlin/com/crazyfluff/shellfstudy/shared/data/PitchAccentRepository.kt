@@ -17,8 +17,8 @@ class PitchAccentRepository(
     private val cacheDao: PitchAccentCacheDao,
     private val weblioApi: WeblioApi,
     private val parser: WeblioPitchAccentParser
-) : PitchAccentProvider {
-    override fun observePitchAccents(characters: String): Flow<List<PitchAccent>> =
+) {
+    fun observePitchAccents(characters: String): Flow<List<PitchAccent>> =
         cacheDao.observeByCharacters(characters).transform { cached ->
             emit(cached?.pitchAccents ?: bundledSource.get(characters))
         }

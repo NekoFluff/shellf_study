@@ -11,7 +11,6 @@ import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
-import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
@@ -83,7 +82,7 @@ val repositoryModule = module {
             subjectDao = get(),
             srsSystemDao = get(),
             syncStateDao = get(),
-            pitchAccentProvider = get()
+            pitchAccentRepository = get()
         )
     }
 
@@ -160,7 +159,7 @@ val repositoryModule = module {
             weblioApi = get(),
             parser = get()
         )
-    } bind PitchAccentProvider::class
+    }
 }
 
 val viewModelModule = module {

@@ -13,12 +13,12 @@ import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
-import com.crazyfluff.shellfstudy.shared.data.PersistedLessonAnsweredQuestion
-import com.crazyfluff.shellfstudy.shared.data.PersistedLessonItemProgress
+import com.crazyfluff.shellfstudy.shared.data.PersistedAnsweredQuestion
+import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonPhase
-import com.crazyfluff.shellfstudy.shared.data.PersistedLessonQuestion
+import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
-import com.crazyfluff.shellfstudy.shared.data.PitchAccentProvider
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
@@ -98,7 +98,10 @@ data class LessonUiState(
     // instead of letting it count straight through that gap.
     val sessionActiveElapsedMs: Long = 0L,
     val sessionActiveSegmentStartMs: Long? = null,
-    val questionStartTimeMs: Long? = null,
+    // Same pause-aware shape as sessionActiveElapsedMs/sessionActiveSegmentStartMs above, but for
+    // the current question rather than the whole quiz — see LessonViewModel's questionTiming.
+    val questionActiveElapsedMs: Long = 0L,
+    val questionActiveSegmentStartMs: Long? = null,
     // Non-null once the current question has been answered — freezes the "time on this question"
     // display at this value instead of letting it keep ticking through the feedback screen. Reset
     // to null whenever a fresh, unanswered question is shown (see beginQuiz, advanceQuiz).
@@ -122,7 +125,7 @@ class LessonViewModel(
     private val outboxRepository: OutboxRepository,
     private val lessonSessionRepository: LessonSessionRepository,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
-    private val pitchAccentRepository: PitchAccentProvider,
+    private val pitchAccentRepository: PitchAccentRepository,
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
     private val strokeOrderRepository: StrokeOrderRepository,
@@ -163,7 +166,15 @@ class LessonViewModel(
             applicationScope.launch { persistCurrentState() }
         }
     )
-    private var questionShownAtMs: Long = 0L
+
+    // Same idea as sessionTiming, but for the current question — pauses on backgrounding just like
+    // the session timer, instead of counting straight through time spent away (see restart()/
+    // freeze(), used when a new question is shown / the current one is graded, versus resume()/
+    // pause(), used only by wireForegroundTracking below for background/foreground transitions).
+    private val questionTiming = QuizSessionTiming(
+        onResume = { now -> _uiState.update { it.copy(questionActiveSegmentStartMs = now) } },
+        onPause = { newElapsed -> _uiState.update { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }
+    )
 
     // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
     // flags as a plain field instead of calling `settingsRepository.settings.first()` — see
@@ -192,6 +203,7 @@ class LessonViewModel(
         // The initial value is handled by beginQuiz/resumeQuizPhase/sessionTiming.resume() below
         // instead — see QuizSessionTiming.wireForegroundTracking's doc comment.
         sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
+        questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
     }
 
     /** Explicit fresh fetch — bound to the error screen's retry action, so it always discards any
@@ -312,7 +324,7 @@ class LessonViewModel(
         // segment on top of that restored base, so the clock resumes right where it left off.
         sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
         sessionTiming.resume()
-        questionShownAtMs = Clock.System.now().toEpochMilliseconds()
+        val questionStartedAt = questionTiming.restart()
         totalQuizCount = persisted.totalQuizCount
         val next = quizQueue.current
         // next == null when an empty-queue QUIZ snapshot landed in DataStore — e.g. a phase
@@ -337,7 +349,8 @@ class LessonViewModel(
                 isDetailsExpanded = false,
                 sessionActiveElapsedMs = sessionTiming.elapsedMs,
                 sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                questionStartTimeMs = questionShownAtMs,
+                questionActiveElapsedMs = 0L,
+                questionActiveSegmentStartMs = questionStartedAt,
                 questionElapsedMs = null,
                 sessionItemsLearned = summary?.itemsCount ?: it.sessionItemsLearned,
                 sessionItemsCorrectFirstTry = summary?.correctFirstTry ?: it.sessionItemsCorrectFirstTry,
@@ -518,7 +531,7 @@ class LessonViewModel(
         answeredQuestions.clear()
         sessionTiming.elapsedMs = 0L
         sessionTiming.resume()
-        questionShownAtMs = Clock.System.now().toEpochMilliseconds()
+        val questionStartedAt = questionTiming.restart()
 
         val next = quizQueue.current
         _uiState.update {
@@ -533,7 +546,8 @@ class LessonViewModel(
                 isSessionComplete = next == null,
                 sessionActiveElapsedMs = sessionTiming.elapsedMs,
                 sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                questionStartTimeMs = questionShownAtMs,
+                questionActiveElapsedMs = 0L,
+                questionActiveSegmentStartMs = questionStartedAt,
                 questionElapsedMs = null
             )
         }
@@ -585,15 +599,18 @@ class LessonViewModel(
         if (feedback.isCorrect) return
 
         viewModelScope.launch {
-            val newQuestionShownAtMs = undoLastIncorrectAnswer(
+            val didUndo = undoLastIncorrectAnswer(
                 queue = quizQueue,
                 progressByAssignmentId = progressByAssignmentId,
                 answeredQuestions = answeredQuestions,
                 item = item,
                 questionType = type,
                 persist = { applicationScope.runDurably { persistCurrentState() } }
-            ) ?: return@launch
-            questionShownAtMs = newQuestionShownAtMs
+            )
+            if (!didUndo) return@launch
+            // Restarts this question's clock so the retry's timing doesn't inherit time spent
+            // before the undo.
+            val questionStartedAt = questionTiming.restart()
 
             // undoCounter changes even though currentQuizItem/currentQuestionType don't — this is
             // what the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't
@@ -605,7 +622,8 @@ class LessonViewModel(
                     answerInput = "",
                     remainingQuizCount = quizQueue.size,
                     undoCounter = it.undoCounter + 1,
-                    questionStartTimeMs = questionShownAtMs,
+                    questionActiveElapsedMs = 0L,
+                    questionActiveSegmentStartMs = questionStartedAt,
                     questionElapsedMs = null
                 )
             }
@@ -620,7 +638,7 @@ class LessonViewModel(
         wasCloseMatch: Boolean = false
     ) {
         val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { LessonItemProgress(item) }
-        val questionElapsedMs = Clock.System.now().toEpochMilliseconds() - questionShownAtMs
+        val questionElapsedMs = questionTiming.freeze()
         answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, questionElapsedMs))
 
         quizQueue.removeCurrent()
@@ -668,7 +686,8 @@ class LessonViewModel(
                 // than letting it keep ticking while the feedback/Continue screen is up — matches
                 // the elapsedMs recorded for the slowest-answers summary above, stamped at this
                 // same moment.
-                questionElapsedMs = questionElapsedMs
+                questionElapsedMs = questionElapsedMs,
+                questionActiveSegmentStartMs = null
             )
         }
 
@@ -698,14 +717,14 @@ class LessonViewModel(
      *  afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). */
     private fun currentPersistSnapshot(): PersistedLessonSession = PersistedLessonSession(
         phase = PersistedLessonPhase.QUIZ,
-        quizQueue = quizQueue.toList().map { PersistedLessonQuestion(it.item.assignmentId, it.type.name) },
+        quizQueue = quizQueue.toList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
         progress = progressByAssignmentId.map { (id, p) ->
-            PersistedLessonItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
+            PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },
         totalQuizCount = totalQuizCount,
         sessionActiveElapsedMs = sessionTiming.currentElapsedMs(),
         answeredQuestions = answeredQuestions.map {
-            PersistedLessonAnsweredQuestion(it.item.assignmentId, it.type.name, it.isCorrect, it.elapsedMs)
+            PersistedAnsweredQuestion(it.item.assignmentId, it.type.name, it.isCorrect, it.elapsedMs)
         }
     )
 
@@ -802,7 +821,7 @@ class LessonViewModel(
             }
             return
         }
-        questionShownAtMs = Clock.System.now().toEpochMilliseconds()
+        val questionStartedAt = questionTiming.restart()
         _uiState.update {
             it.copy(
                 currentQuizItem = next.item,
@@ -812,7 +831,8 @@ class LessonViewModel(
                 rankChange = null,
                 isDetailsExpanded = false,
                 remainingQuizCount = quizQueue.size,
-                questionStartTimeMs = questionShownAtMs,
+                questionActiveElapsedMs = 0L,
+                questionActiveSegmentStartMs = questionStartedAt,
                 questionElapsedMs = null
             )
         }

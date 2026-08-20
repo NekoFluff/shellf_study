@@ -1,7 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.quiz
 
 import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
-import kotlin.time.Clock
 
 /**
  * Reverts the most recent incorrect answer — for a typo, not a genuine miss. Shared mutation core
@@ -10,8 +9,10 @@ import kotlin.time.Clock
  * (current item/question type/feedback) and its own `_uiState.update` (field names differ), but
  * delegates the queue/progress mutation and persistence here.
  *
- * Returns the new "question shown at" timestamp to store, or null if there was no progress entry
- * to revert (nothing to do — the caller's `viewModelScope.launch` should just return).
+ * Returns true if there was a progress entry to revert, false if there was nothing to do — the
+ * caller's `viewModelScope.launch` should just return in that case. The caller is responsible for
+ * restarting its own per-question timer (e.g. via `QuizSessionTiming.restart()`) on a true result;
+ * that's presentation-layer state this shared core doesn't own.
  */
 suspend fun <T : QuizDisplayItem> undoLastIncorrectAnswer(
     queue: QuizQueue<T>,
@@ -20,8 +21,8 @@ suspend fun <T : QuizDisplayItem> undoLastIncorrectAnswer(
     item: T,
     questionType: QuestionType,
     persist: suspend () -> Unit
-): Long? {
-    val itemProgress = progressByAssignmentId[item.assignmentId] ?: return null
+): Boolean {
+    val itemProgress = progressByAssignmentId[item.assignmentId] ?: return false
     when (questionType) {
         QuestionType.MEANING -> itemProgress.hadIncorrectMeaning = false
         QuestionType.READING -> itemProgress.hadIncorrectReading = false
@@ -32,11 +33,9 @@ suspend fun <T : QuizDisplayItem> undoLastIncorrectAnswer(
     // entirely.
     queue.moveMatchingToFront { it.item.assignmentId == item.assignmentId && it.type == questionType }
 
-    // Undo removes the incorrect attempt just recorded by gradeAnswer, and restarts this
-    // question's clock so the retry's timing doesn't inherit time spent before the undo.
+    // Undo removes the incorrect attempt just recorded by gradeAnswer.
     answeredQuestions.removeLastOrNull()
-    val newQuestionShownAtMs = Clock.System.now().toEpochMilliseconds()
 
     persist()
-    return newQuestionShownAtMs
+    return true
 }

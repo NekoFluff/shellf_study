@@ -95,7 +95,8 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     val showQuestionTimer: Boolean,
     val showTotalTimer: Boolean,
     val questionElapsedMs: Long?,
-    val questionStartTimeMs: Long?,
+    val questionActiveElapsedMs: Long,
+    val questionActiveSegmentStartMs: Long?,
     val sessionActiveElapsedMs: Long,
     val sessionActiveSegmentStartMs: Long?,
     val useJapaneseKeyboard: Boolean
@@ -143,7 +144,6 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (uiState.showQuestionTimer) {
                 val questionElapsedMs = uiState.questionElapsedMs
-                val questionStartTimeMs = uiState.questionStartTimeMs
                 if (questionElapsedMs != null) {
                     // Frozen at the instant the question was answered, matching the elapsedMs recorded
                     // for the slowest-answers summary, rather than continuing to tick through feedback.
@@ -153,9 +153,12 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.testTag(testTags.questionTimerText)
                     )
-                } else if (questionStartTimeMs != null) {
-                    ElapsedTimeText(
-                        startTimeMs = questionStartTimeMs,
+                } else {
+                    // Pause-aware like the total-session timer below, so backgrounding mid-question
+                    // freezes this instead of counting straight through the time spent away.
+                    PausableElapsedTimeText(
+                        baseElapsedMs = uiState.questionActiveElapsedMs,
+                        segmentStartMs = uiState.questionActiveSegmentStartMs,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.testTag(testTags.questionTimerText)
                     )

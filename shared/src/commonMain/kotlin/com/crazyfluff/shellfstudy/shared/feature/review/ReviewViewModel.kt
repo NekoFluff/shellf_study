@@ -80,7 +80,10 @@ data class ReviewUiState(
     // instead of letting it count straight through that gap.
     val sessionActiveElapsedMs: Long = 0L,
     val sessionActiveSegmentStartMs: Long? = null,
-    val questionStartTimeMs: Long? = null,
+    // Same pause-aware shape as sessionActiveElapsedMs/sessionActiveSegmentStartMs above, but for
+    // the current question rather than the whole session — see ReviewViewModel's questionTiming.
+    val questionActiveElapsedMs: Long = 0L,
+    val questionActiveSegmentStartMs: Long? = null,
     // Non-null once the current question has been answered — freezes the "time on this question"
     // display at this value instead of letting it keep ticking through the feedback screen. Reset
     // to null whenever a fresh, unanswered question is shown (see advanceToNextQuestion, undo).
@@ -131,7 +134,15 @@ class ReviewViewModel(
             applicationScope.launch { persistCurrentState() }
         }
     )
-    private var questionShownAtMs: Long = 0L
+
+    // Same idea as sessionTiming, but for the current question — pauses on backgrounding just like
+    // the session timer, instead of counting straight through time spent away (see restart()/
+    // freeze(), used when a new question is shown / the current one is graded, versus resume()/
+    // pause(), used only by wireForegroundTracking below for background/foreground transitions).
+    private val questionTiming = QuizSessionTiming(
+        onResume = { now -> _uiState.update { it.copy(questionActiveSegmentStartMs = now) } },
+        onPause = { newElapsed -> _uiState.update { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }
+    )
 
     // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
     // flags as a plain field instead of calling `settingsRepository.settings.first()` — starting a
@@ -161,6 +172,7 @@ class ReviewViewModel(
         // The initial value is handled by loadOrResume/sessionTiming.resume() below instead — see
         // QuizSessionTiming.wireForegroundTracking's doc comment.
         sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
+        questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
     }
 
     /** Resumes a persisted in-progress session if one exists, otherwise fetches a fresh queue. */
@@ -315,7 +327,7 @@ class ReviewViewModel(
     ) {
         val (grade, snapshot) = run {
             val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress(item) }
-            val questionElapsedMs = Clock.System.now().toEpochMilliseconds() - questionShownAtMs
+            val questionElapsedMs = questionTiming.freeze()
             answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, questionElapsedMs))
 
             queue.removeCurrent()
@@ -361,7 +373,8 @@ class ReviewViewModel(
                     // rather than letting it keep ticking while the feedback/Continue screen is up
                     // — matches the elapsedMs recorded for the slowest-answers summary above, which
                     // is stamped at this same moment.
-                    questionElapsedMs = questionElapsedMs
+                    questionElapsedMs = questionElapsedMs,
+                    questionActiveSegmentStartMs = null
                 )
             }
 
@@ -391,15 +404,18 @@ class ReviewViewModel(
         if (feedback.isCorrect) return
 
         viewModelScope.launch {
-            val newQuestionShownAtMs = undoLastIncorrectAnswer(
+            val didUndo = undoLastIncorrectAnswer(
                 queue = queue,
                 progressByAssignmentId = progressByAssignmentId,
                 answeredQuestions = answeredQuestions,
                 item = item,
                 questionType = type,
                 persist = { applicationScope.runDurably { persistCurrentState() } }
-            ) ?: return@launch
-            questionShownAtMs = newQuestionShownAtMs
+            )
+            if (!didUndo) return@launch
+            // Restarts this question's clock so the retry's timing doesn't inherit time spent
+            // before the undo.
+            val questionStartedAt = questionTiming.restart()
 
             // undoCounter changes even though currentItem/currentQuestionType don't — this is what
             // the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't change
@@ -410,7 +426,8 @@ class ReviewViewModel(
                     answerInput = "",
                     remainingCount = queue.size,
                     undoCounter = it.undoCounter + 1,
-                    questionStartTimeMs = questionShownAtMs,
+                    questionActiveElapsedMs = 0L,
+                    questionActiveSegmentStartMs = questionStartedAt,
                     questionElapsedMs = null
                 )
             }
@@ -517,7 +534,7 @@ class ReviewViewModel(
             }
             return
         }
-        questionShownAtMs = Clock.System.now().toEpochMilliseconds()
+        val questionStartedAt = questionTiming.restart()
         _uiState.update {
             it.copy(
                 isLoading = false,
@@ -531,7 +548,8 @@ class ReviewViewModel(
                 remainingCount = queue.size,
                 sessionActiveElapsedMs = sessionTiming.elapsedMs,
                 sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                questionStartTimeMs = questionShownAtMs,
+                questionActiveElapsedMs = 0L,
+                questionActiveSegmentStartMs = questionStartedAt,
                 questionElapsedMs = null
             )
         }

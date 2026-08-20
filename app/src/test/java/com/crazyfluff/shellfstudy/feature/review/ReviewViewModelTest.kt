@@ -751,7 +751,7 @@ class ReviewViewModelTest {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
             assertThat(state.sessionActiveSegmentStartMs).isNotNull()
-            assertThat(state.questionStartTimeMs).isNotNull()
+            assertThat(state.questionActiveSegmentStartMs).isNotNull()
 
             // Miss the first question drawn (whichever type it is), then work through both question
             // types until the session completes.
@@ -888,9 +888,15 @@ class ReviewViewModelTest {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
 
+            // The queue's draw order is shuffled, so don't stop as soon as the radical happens to
+            // complete — keep going until the kanji has also been missed at least once, whichever
+            // order they're drawn in. Otherwise, when the radical is drawn first, the loop would
+            // exit before ever touching the kanji, leaving it with a first-try-correct outcome
+            // after resume and making the assertions below flaky.
             var radicalCompleted = false
+            var kanjiMissed = false
             var safetyCounter = 0
-            while (!radicalCompleted && safetyCounter < 10) {
+            while (!(radicalCompleted && kanjiMissed) && safetyCounter < 10) {
                 safetyCounter++
                 if (state.currentItem?.assignmentId == 101L) {
                     // The radical — a single meaning question; answering it correctly completes it.
@@ -904,12 +910,14 @@ class ReviewViewModelTest {
                     // session (and the resumed one below) meaningfully in-progress.
                     firstViewModel.dontKnowAnswer()
                     awaitItem()
+                    kanjiMissed = true
                 }
                 firstViewModel.onContinue()
                 state = awaitItem()
             }
 
             assertThat(radicalCompleted).isTrue()
+            assertThat(kanjiMissed).isTrue()
             assertThat(state.isSessionComplete).isFalse()
         }
 
@@ -1030,6 +1038,45 @@ class ReviewViewModelTest {
             // Resumes right where it left off — the time spent "away" (backgrounded) must not have
             // been folded in as if it were active review time.
             assertThat(resumedState.sessionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+        }
+    }
+
+    @Test
+    fun `backgrounding the app pauses the per-question timer, and returning to it resumes without resetting the accumulated time`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: the per-question timer used to be plain wall-clock (Clock.System.now()
+        // minus a stored "question shown at" timestamp) with no connection to AppForegroundTracker,
+        // so backgrounding mid-question inflated both the live display and the elapsedMs recorded
+        // for "slowest answers". It's now driven by the same QuizSessionTiming primitive as the
+        // total-session timer above, so it must behave identically across a background/foreground
+        // cycle.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.questionActiveSegmentStartMs).isNotNull()
+
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            val pausedState = awaitItem()
+            assertThat(pausedState.questionActiveSegmentStartMs).isNull()
+            val elapsedWhilePaused = pausedState.questionActiveElapsedMs
+
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+            val resumedState = awaitItem()
+            assertThat(resumedState.questionActiveSegmentStartMs).isNotNull()
+            // Resumes right where it left off — the time spent "away" (backgrounded) must not have
+            // been folded in as if it were active question time.
+            assertThat(resumedState.questionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+
+            // Grading now must record an elapsedMs built on that same paused-and-resumed total, not
+            // a fresh wall-clock read from when the question first appeared.
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val gradedState = awaitItem()
+            assertThat(gradedState.questionElapsedMs).isAtLeast(elapsedWhilePaused)
         }
     }
 

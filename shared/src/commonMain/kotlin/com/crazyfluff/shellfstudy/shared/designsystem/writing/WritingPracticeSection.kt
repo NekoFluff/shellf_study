@@ -39,7 +39,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiS
 
 /**
  * Ungraded, ephemeral stylus practice for a subject's glyph, slotted right next to the reference
- * [com.crazyfluff.shellfstudy.core.designsystem.strokeorder.StrokeOrderSection] it's meant to
+ * [com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection] it's meant to
  * pair with. Self-assessed only: never submitted to WaniKani (its API has no writing-grade
  * concept) and never persisted (no self-study/backup layer exists yet). Renders nothing unless
  * [strokeOrder] is [StrokeOrderUiState.Available] — the same gate as the reference diagram, so

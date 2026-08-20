@@ -456,7 +456,8 @@ fun LessonScreen(
                                 showQuestionTimer = uiState.showQuestionTimer,
                                 showTotalTimer = uiState.showTotalTimer,
                                 questionElapsedMs = uiState.questionElapsedMs,
-                                questionStartTimeMs = uiState.questionStartTimeMs,
+                                questionActiveElapsedMs = uiState.questionActiveElapsedMs,
+                                questionActiveSegmentStartMs = uiState.questionActiveSegmentStartMs,
                                 sessionActiveElapsedMs = uiState.sessionActiveElapsedMs,
                                 sessionActiveSegmentStartMs = uiState.sessionActiveSegmentStartMs,
                                 useJapaneseKeyboard = uiState.useJapaneseKeyboard

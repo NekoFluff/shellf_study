@@ -66,7 +66,7 @@ data class ParsedStrokes(val paths: List<Path>, val measures: List<PathMeasure>)
  * related-subject drill-downs), so redoing it from scratch every open is wasted main-thread work.
  * Deliberately unbounded: what's cached is derived from WaniKani's fixed, small kanji corpus, so
  * even a session touching every kanji in the app tops out at a few thousand tiny entries — mirrors
- * [com.crazyfluff.shellfstudy.core.data.strokeorder.StrokeOrderRepository]'s own unbounded cache
+ * [com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository]'s own unbounded cache
  * for the same underlying reason.
  */
 object ParsedStrokesCache {

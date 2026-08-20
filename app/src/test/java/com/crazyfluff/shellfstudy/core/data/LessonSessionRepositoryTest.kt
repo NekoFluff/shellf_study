@@ -7,7 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
-import com.crazyfluff.shellfstudy.shared.data.PersistedLessonQuestion
+import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -31,7 +31,7 @@ class LessonSessionRepositoryTest {
     }
 
     private val sampleSession = PersistedLessonSession(
-        quizQueue = listOf(PersistedLessonQuestion(assignmentId = 1, questionType = "MEANING")),
+        quizQueue = listOf(PersistedQuestion(assignmentId = 1, questionType = "MEANING")),
         totalQuizCount = 2
     )
 

@@ -6,32 +6,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-@Serializable
-data class PersistedLessonQuestion(val assignmentId: Long, val questionType: String)
-
-@Serializable
-data class PersistedLessonItemProgress(
-    val assignmentId: Long,
-    val meaningDone: Boolean,
-    val readingDone: Boolean,
-    val hadIncorrectMeaning: Boolean,
-    val hadIncorrectReading: Boolean
-)
-
-/** One graded answer, for rebuilding the "slowest answers" summary across a pause/resume — see
- *  [com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord], the in-memory shape this mirrors. */
-@Serializable
-data class PersistedLessonAnsweredQuestion(
-    val assignmentId: Long,
-    val questionType: String,
-    val isCorrect: Boolean,
-    val elapsedMs: Long
-)
-
 /** Which phase of a lesson session [PersistedLessonSession] represents — the study flashcards
- *  ([studyAssignmentIds]/[PersistedLessonSession.studyIndex]) or the quiz
+ *  ([PersistedLessonSession.studyAssignmentIds]/[PersistedLessonSession.studyIndex]) or the quiz
  *  ([PersistedLessonSession.quizQueue]/progress). Only one half of the payload is meaningful at a
- *  time, matching [com.crazyfluff.shellfstudy.feature.lesson.LessonPhase]. */
+ *  time, matching [com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPhase]. */
 enum class PersistedLessonPhase { STUDY, QUIZ }
 
 @Serializable
@@ -39,8 +17,8 @@ data class PersistedLessonSession(
     val phase: PersistedLessonPhase = PersistedLessonPhase.QUIZ,
     val studyAssignmentIds: List<Long> = emptyList(),
     val studyIndex: Int = 0,
-    val quizQueue: List<PersistedLessonQuestion> = emptyList(),
-    val progress: List<PersistedLessonItemProgress> = emptyList(),
+    val quizQueue: List<PersistedQuestion> = emptyList(),
+    val progress: List<PersistedItemProgress> = emptyList(),
     val totalQuizCount: Int = 0,
     // Active time accumulated so far in the quiz phase, excluding any time spent away from the
     // session (backgrounded, or navigated off-screen) — see LessonViewModel's
@@ -51,7 +29,7 @@ data class PersistedLessonSession(
     // Defaults to empty for data persisted before this field existed — a resume against an older
     // snapshot just starts the "slowest answers" summary from the post-resume segment, as it always
     // used to.
-    val answeredQuestions: List<PersistedLessonAnsweredQuestion> = emptyList()
+    val answeredQuestions: List<PersistedAnsweredQuestion> = emptyList()
 )
 
 /**

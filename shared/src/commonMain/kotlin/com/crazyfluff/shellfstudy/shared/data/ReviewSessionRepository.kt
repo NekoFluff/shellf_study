@@ -7,28 +7,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 @Serializable
-data class PersistedQuestion(val assignmentId: Long, val questionType: String)
-
-@Serializable
-data class PersistedItemProgress(
-    val assignmentId: Long,
-    val meaningDone: Boolean,
-    val readingDone: Boolean,
-    val hadIncorrectMeaning: Boolean,
-    val hadIncorrectReading: Boolean
-)
-
-/** One graded answer, for rebuilding the "slowest answers" summary across a pause/resume — see
- *  [com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord], the in-memory shape this mirrors. */
-@Serializable
-data class PersistedAnsweredQuestion(
-    val assignmentId: Long,
-    val questionType: String,
-    val isCorrect: Boolean,
-    val elapsedMs: Long
-)
-
-@Serializable
 data class PersistedReviewSession(
     val queue: List<PersistedQuestion>,
     val progress: List<PersistedItemProgress>,

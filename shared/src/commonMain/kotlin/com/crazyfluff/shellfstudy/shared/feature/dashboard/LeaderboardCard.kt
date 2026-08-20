@@ -44,6 +44,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserPalette
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.vocabularyColor
 

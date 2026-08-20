@@ -6,7 +6,7 @@ import kotlin.time.Instant
 
 /**
  * "N due now · M more in the next 24h" / "Next up: N at 3 PM" / "All caught up" — shared by
- * [com.crazyfluff.shellfstudy.feature.dashboard.ReviewForecastCard]'s default summary and the
+ * [com.crazyfluff.shellfstudy.shared.feature.dashboard.ReviewForecastCard]'s default summary and the
  * reviews-available notification body, so the two don't drift out of sync.
  */
 fun reviewForecastSummary(forecast: ReviewForecast): String {

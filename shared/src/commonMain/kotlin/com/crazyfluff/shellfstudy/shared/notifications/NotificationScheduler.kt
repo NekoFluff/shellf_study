@@ -11,7 +11,7 @@ object DeferredNotificationCategory {
 
 /**
  * Schedules the notification system's background wakeups. An interface (like
- * [com.crazyfluff.shellfstudy.core.sync.SyncScheduler]) so it can be swapped for a fake in
+ * [com.crazyfluff.shellfstudy.shared.sync.SyncScheduler]) so it can be swapped for a fake in
  * ViewModel/coordinator unit tests, since the real implementation needs WorkManager/a real
  * Context to run.
  */

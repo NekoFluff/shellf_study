@@ -15,47 +15,22 @@ import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
 
-/** A running "m:ss" clock counting up from [startTimeMs] — used for both the total-session and
- *  per-question timers on the Review/Lesson quiz screens (see [ElapsedTimeText]'s call sites).
- *  Ticks locally in the Composable rather than through a ViewModel's StateFlow — purely
- *  presentational, so it doesn't need a per-second state emission. */
-@Composable
-fun ElapsedTimeText(
-    startTimeMs: Long,
-    modifier: Modifier = Modifier,
-    style: TextStyle = MaterialTheme.typography.labelMedium,
-    color: Color = LocalContentColor.current
-) {
-    var elapsedMs by remember(startTimeMs) { mutableStateOf(Clock.System.now().toEpochMilliseconds() - startTimeMs) }
-    LaunchedEffect(startTimeMs) {
-        while (true) {
-            elapsedMs = Clock.System.now().toEpochMilliseconds() - startTimeMs
-            delay(1000)
-        }
-    }
-    Text(
-        text = formatElapsedClock(elapsedMs),
-        style = style,
-        color = color,
-        modifier = modifier
-    )
-}
-
-/** Same "m:ss" clock format [ElapsedTimeText] ticks with — shared so a frozen elapsed time (e.g.
- *  the per-question timer once an answer's been submitted) reads identically to the live version
- *  it replaces, instead of jarringly changing format the instant it stops ticking. */
+/** Same "m:ss" clock format [PausableElapsedTimeText] ticks with — shared so a frozen elapsed time
+ *  (e.g. the per-question timer once an answer's been submitted) reads identically to the live
+ *  version it replaces, instead of jarringly changing format the instant it stops ticking. */
 fun formatElapsedClock(elapsedMs: Long): String {
     val elapsedSeconds = elapsedMs / 1000
     val seconds = (elapsedSeconds % 60).toString().padStart(2, '0')
     return "${elapsedSeconds / 60}:$seconds"
 }
 
-/** Like [ElapsedTimeText], but for a clock that can pause — the total session timer, which should
- *  exclude time spent away from the session (app backgrounded, or navigated off-screen) rather than
- *  count straight through it. Ticks up from [baseElapsedMs] while [segmentStartMs] is non-null (the
- *  session is actively being viewed), and freezes at [baseElapsedMs] once it goes null. See
- *  ReviewViewModel/LessonViewModel's activeElapsedMs/activeSegmentStartMs, which this mirrors
- *  exactly, and AppForegroundTracker, which drives the pause/resume transitions. */
+/** A running "m:ss" clock for a pausable timer — used for both the total-session and per-question
+ *  timers on the Review/Lesson quiz screens, both of which should exclude time spent away from the
+ *  session (app backgrounded, or navigated off-screen) rather than count straight through it.
+ *  Ticks up from [baseElapsedMs] while [segmentStartMs] is non-null (a segment is actively
+ *  running), and freezes at [baseElapsedMs] once it goes null. See ReviewViewModel/
+ *  LessonViewModel's `QuizSessionTiming` fields, which this mirrors exactly, and
+ *  AppForegroundTracker, which drives the pause/resume transitions. */
 @Composable
 fun PausableElapsedTimeText(
     baseElapsedMs: Long,
