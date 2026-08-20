@@ -253,6 +253,9 @@ class LessonScreenTest {
             onEvent = { if (it is LessonScreenEvent.AnswerInputChange) typed = it.value }
         )
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_FIELD).performTextInput("Water")
+        // TextFieldState pushes edits up via a LaunchedEffect/snapshotFlow, one dispatch removed
+        // from performTextInput itself — wait for that to land before reading the callback value.
+        composeTestRule.waitForIdle()
         assert(typed == "Water")
     }
 
@@ -417,13 +420,28 @@ class LessonScreenTest {
                 currentQuizItem = sampleItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 showQuestionTimer = true,
-                questionStartTimeMs = System.currentTimeMillis() - 60_000,
+                questionActiveSegmentStartMs = System.currentTimeMillis() - 60_000,
                 questionElapsedMs = 5_000L,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
             )
         )
         composeTestRule.onNodeWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT)
             .assertTextEquals(formatElapsedClock(5_000L))
+    }
+
+    @Test
+    fun quizPhase_questionTimer_freezesWhilePaused_notTickingWithoutAnActiveSegment() {
+        // questionActiveSegmentStartMs is null (as if the app were backgrounded mid-question) — the
+        // timer must show the frozen base, not restart from "0:00" or keep ticking through the gap.
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ,
+                currentQuizItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                showQuestionTimer = true, questionActiveElapsedMs = 5_000L, questionActiveSegmentStartMs = null
+            )
+        )
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals("0:05")
     }
 
     // ── Session complete ──────────────────────────────────────────────────────

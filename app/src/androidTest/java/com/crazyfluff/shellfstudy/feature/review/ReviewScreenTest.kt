@@ -118,6 +118,9 @@ class ReviewScreenTest {
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).performTextInput("Water")
+        // TextFieldState pushes edits up via a LaunchedEffect/snapshotFlow, one dispatch removed
+        // from performTextInput itself — wait for that to land before reading the callback value.
+        composeTestRule.waitForIdle()
         assert(typed == "Water")
     }
 
@@ -227,7 +230,7 @@ class ReviewScreenTest {
             ReviewUiState(
                 isLoading = false, totalCount = 1, remainingCount = 1,
                 currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showQuestionTimer = true, questionStartTimeMs = System.currentTimeMillis()
+                showQuestionTimer = true, questionActiveSegmentStartMs = System.currentTimeMillis()
             )
         )
 
@@ -240,7 +243,7 @@ class ReviewScreenTest {
             ReviewUiState(
                 isLoading = false, totalCount = 1, remainingCount = 1,
                 currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showQuestionTimer = false, questionStartTimeMs = System.currentTimeMillis()
+                showQuestionTimer = false, questionActiveSegmentStartMs = System.currentTimeMillis()
             )
         )
 
@@ -249,20 +252,35 @@ class ReviewScreenTest {
 
     @Test
     fun questionTimer_freezesAtAnsweredElapsedTime_onceFeedbackIsShown() {
-        // questionStartTimeMs is a full minute in the past — if the timer were still live-ticking
-        // from it, it would show "1:00". The frozen questionElapsedMs must win instead.
+        // questionActiveSegmentStartMs is a full minute in the past — if the timer were still
+        // live-ticking from it, it would show "1:00". The frozen questionElapsedMs must win instead.
         setScreen(
             ReviewUiState(
                 isLoading = false, totalCount = 1, remainingCount = 1,
                 currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
                 showQuestionTimer = true,
-                questionStartTimeMs = System.currentTimeMillis() - 60_000,
+                questionActiveSegmentStartMs = System.currentTimeMillis() - 60_000,
                 questionElapsedMs = 5_000L,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
             )
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals(formatElapsedClock(5_000L))
+    }
+
+    @Test
+    fun questionTimer_freezesWhilePaused_notTickingWithoutAnActiveSegment() {
+        // questionActiveSegmentStartMs is null (as if the app were backgrounded mid-question) — the
+        // timer must show the frozen base, not restart from "0:00" or keep ticking through the gap.
+        setScreen(
+            ReviewUiState(
+                isLoading = false, totalCount = 1, remainingCount = 1,
+                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+                showQuestionTimer = true, questionActiveElapsedMs = 5_000L, questionActiveSegmentStartMs = null
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals("0:05")
     }
 
     @Test
