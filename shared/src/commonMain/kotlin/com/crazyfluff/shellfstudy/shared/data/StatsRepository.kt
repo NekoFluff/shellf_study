@@ -142,5 +142,5 @@ class StatsRepository(
         levelProgressionDao.observeAll().map { progressions -> currentLevelProgression(progressions)?.level }
 
     private fun currentLevelProgression(progressions: List<LevelProgressionEntity>): LevelProgressionEntity? =
-        progressions.filter { it.passedAt == null }.maxByOrNull { it.level }
+        progressions.filter { it.passedAt == null && it.abandonedAt == null }.maxByOrNull { it.level }
 }

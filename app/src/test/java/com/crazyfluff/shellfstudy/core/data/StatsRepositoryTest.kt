@@ -12,6 +12,8 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.time.LocalDate
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
 class StatsRepositoryTest {
@@ -51,6 +53,32 @@ class StatsRepositoryTest {
 
         repository.observeDaysOnCurrentLevel().test {
             assertThat(awaitItem()).isNull()
+        }
+    }
+
+    @Test
+    fun `observeCurrentLevel skips an abandoned level reset even if it is the highest level number`() = runTest {
+        val realLevelStartedAt = (Clock.System.now() - 19.days).toString()
+        server.enqueue(jsonResponse(abandonedResetJson(realLevelStartedAt)))
+
+        repository.syncLevelProgressions(force = true)
+
+        repository.observeCurrentLevel().test {
+            assertThat(awaitItem()).isEqualTo(3)
+        }
+    }
+
+    @Test
+    fun `observeDaysOnCurrentLevel computes from the real in-progress level, not an abandoned reset`() = runTest {
+        val realLevelStartedAt = (Clock.System.now() - 19.days).toString()
+        server.enqueue(jsonResponse(abandonedResetJson(realLevelStartedAt)))
+
+        repository.syncLevelProgressions(force = true)
+
+        repository.observeDaysOnCurrentLevel().test {
+            // Level 3's startedAt is 19 days ago; the abandoned level 15 row's startedAt is years
+            // earlier and must not be the one used, otherwise this would be in the thousands.
+            assertThat(awaitItem()).isEqualTo(20)
         }
     }
 
@@ -234,6 +262,42 @@ class StatsRepositoryTest {
                 "level": 12,
                 "unlocked_at": "$startedAt",
                 "started_at": "$startedAt"
+              }
+            }
+          ]
+        }
+    """.trimIndent()
+
+    private fun abandonedResetJson(realLevelStartedAt: String) = """
+        {
+          "object": "collection",
+          "url": "https://api.wanikani.com/v2/level_progressions",
+          "total_count": 2,
+          "data": [
+            {
+              "id": 1,
+              "object": "level_progression",
+              "url": "https://api.wanikani.com/v2/level_progressions/1",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z",
+                "level": 15,
+                "unlocked_at": "2020-01-01T00:00:00.000000Z",
+                "started_at": "2020-01-01T00:00:00.000000Z",
+                "passed_at": null,
+                "abandoned_at": "2020-03-01T00:00:00.000000Z"
+              }
+            },
+            {
+              "id": 2,
+              "object": "level_progression",
+              "url": "https://api.wanikani.com/v2/level_progressions/2",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "$realLevelStartedAt",
+                "level": 3,
+                "unlocked_at": "$realLevelStartedAt",
+                "started_at": "$realLevelStartedAt"
               }
             }
           ]
