@@ -11,8 +11,8 @@ import kotlinx.serialization.json.Json
 
 /**
  * CMP resource-backed implementation of [StrokeOrderRepository] — reads stroke_data.json from
- * shared composeResources instead of Android's res/raw, making it available on all targets.
- * Same Mutex-guarded lazy-load pattern as the former AndroidStrokeOrderRepository.
+ * shared composeResources, so it works on both Android and iOS. The dictionary is ~8 MB, so it is
+ * lazy-loaded once behind a Mutex and cached for the process lifetime.
  */
 class CmpStrokeOrderRepository : StrokeOrderRepository {
 

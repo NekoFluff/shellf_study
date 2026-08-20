@@ -11,3 +11,7 @@ local.properties
 .kotlin
 /app/google-services.json
 .vscode/
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/

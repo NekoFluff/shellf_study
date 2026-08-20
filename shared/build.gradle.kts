@@ -17,6 +17,13 @@ compose.resources {
 }
 
 kotlin {
+    // Room's KSP-generated `actual object *DatabaseConstructor` declarations are expect/actual
+    // classes, which Kotlin still reports as Beta (KT-61573). The generated code is not ours to
+    // annotate, so opt in build-wide rather than leaving 12 unactionable warnings in every build.
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
     android {
         namespace = "com.crazyfluff.shellfstudy.shared"
         compileSdk = 37

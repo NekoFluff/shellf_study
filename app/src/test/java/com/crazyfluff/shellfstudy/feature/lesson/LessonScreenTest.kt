@@ -866,4 +866,116 @@ class LessonScreenTest {
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.ABANDON_CONFIRM_BUTTON).assertCountEquals(0)
         assert(!abandoned)
     }
+
+    // The following eight tests were ported from the instrumented LessonScreenTest when that file
+    // was consolidated into this Robolectric suite — they are the cases it covered that this file
+    // did not. All are pure state-drives-UI assertions with no device dependency.
+
+    @Test
+    fun loadingState_showsLoadingIndicator() {
+        setScreen(LessonUiState(isLoading = true))
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.LOADING_INDICATOR).assertIsDisplayed()
+    }
+
+    @Test
+    fun studyPhase_nextButton_invokesNextStudyCard() {
+        var advancedNext = false
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.STUDY,
+                studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 0
+            ),
+            onNextStudyCard = { advancedNext = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_NEXT_BUTTON).performClick()
+        assert(advancedNext)
+    }
+
+    @Test
+    fun studyPhase_previousButton_invokesCallback() {
+        var wentBack = false
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.STUDY,
+                studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 1
+            ),
+            onPreviousStudyCard = { wentBack = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_PREVIOUS_BUTTON).performClick()
+        assert(wentBack)
+    }
+
+    @Test
+    fun quizPhase_showsCharactersAndAnswerField() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.QUIZ_CHARACTERS).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_FIELD).assertIsDisplayed()
+    }
+
+    @Test
+    fun quizPhase_submitButton_disabledWhenAnswerBlank() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1, answerInput = ""
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SUBMIT_BUTTON).assertIsNotEnabled()
+    }
+
+    @Test
+    fun quizPhase_submitButton_enabledWhenAnswerNonBlank() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1, answerInput = "Mouth"
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SUBMIT_BUTTON).assertIsEnabled()
+    }
+
+    @Test
+    fun quizPhase_dontKnowButton_displayedBeforeAnswering_andInvokesCallback() {
+        var dontKnow = false
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1
+            ),
+            onDontKnow = { dontKnow = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.DONT_KNOW_BUTTON).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.DONT_KNOW_BUTTON).performClick()
+        assert(dontKnow)
+    }
+
+    @Test
+    fun quizPhase_dontKnowButton_hiddenAfterFeedbackIsShown() {
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.QUIZ,
+                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Mouth")
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.DONT_KNOW_BUTTON).assertCountEquals(0)
+    }
 }

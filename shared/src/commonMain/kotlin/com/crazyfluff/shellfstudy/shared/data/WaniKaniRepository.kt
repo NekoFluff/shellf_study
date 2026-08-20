@@ -16,8 +16,7 @@ class WaniKaniRepository(
         val response = api.getUser()
         WaniKaniUser(
             username = response.data.username,
-            level = response.data.level,
-            profileUrl = response.data.profileUrl
+            level = response.data.level
         )
     }
 

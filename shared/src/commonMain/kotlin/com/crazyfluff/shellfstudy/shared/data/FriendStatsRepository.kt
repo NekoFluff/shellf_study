@@ -9,6 +9,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelTimelinePoint
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
@@ -64,7 +65,7 @@ internal fun computeActivityBuckets(
     tz: TimeZone = TimeZone.currentSystemDefault()
 ): ActivityBuckets {
     val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(tz)
-    val nowTotalMonths = nowDt.year * 12 + (nowDt.monthNumber - 1)
+    val nowTotalMonths = nowDt.year * 12 + (nowDt.month.number - 1)
     val nowLocalDays = nowDt.date.toEpochDays()
 
     val weekDays = IntArray(7)
@@ -78,7 +79,7 @@ internal fun computeActivityBuckets(
 
     val earliestTotalMonths = parsed.minOfOrNull { inst ->
         val dt = inst.toLocalDateTime(tz)
-        dt.year * 12 + (dt.monthNumber - 1)
+        dt.year * 12 + (dt.month.number - 1)
     } ?: nowTotalMonths
     val allTimeLen = (nowTotalMonths - earliestTotalMonths + 1).coerceAtLeast(1)
     val allTimeMonths = IntArray(allTimeLen)
@@ -88,7 +89,7 @@ internal fun computeActivityBuckets(
         val daysAgo = (nowLocalDays - tsDt.date.toEpochDays()).toInt()
         if (daysAgo in 0..6) weekDays[6 - daysAgo]++
         if (daysAgo in 0..29) monthDays[29 - daysAgo]++
-        val tsTotalMonths = tsDt.year * 12 + (tsDt.monthNumber - 1)
+        val tsTotalMonths = tsDt.year * 12 + (tsDt.month.number - 1)
         val monthsAgo = nowTotalMonths - tsTotalMonths
         if (monthsAgo in 0..11) yearMonths[11 - monthsAgo]++
         val allTimeIdx = tsTotalMonths - earliestTotalMonths

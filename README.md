@@ -73,6 +73,22 @@ iosApp/                  Xcode project — Swift wrapper, calls into shared KMP 
 ./gradlew :shared:iosSimulatorArm64Test  # commonTest suite on the iOS Simulator
 ```
 
+## Crash reporting & analytics
+
+Release and debug builds include **Firebase Crashlytics** and **Firebase Analytics**. You will not
+find any Firebase code in the sources, and that is intentional: both SDKs self-initialize through
+Android `ContentProvider`s, so crash reports and baseline session events (`first_open`, session
+start) are collected without any explicit calls. There is deliberately no custom event logging, no
+user identifiers, and no `setCustomKey`/`recordException` instrumentation.
+
+Building requires an `app/google-services.json`. It is gitignored (it identifies a specific Firebase
+project), so CI generates a placeholder — see `.github/workflows/tests.yml`. To build locally, either
+supply your own from a Firebase project or remove the `google-services` and `firebase-crashlytics`
+plugins from `app/build.gradle.kts`.
+
+`firebaseAppDistribution` is separate and build-only: it uploads debug builds to testers and needs
+no SDK or code.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

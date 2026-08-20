@@ -270,7 +270,7 @@ fun ReviewScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = uiState.errorMessage ?: "",
+                            text = uiState.errorMessage,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.testTag(ReviewScreenTestTags.ERROR_TEXT)
                         )
@@ -311,52 +311,50 @@ fun ReviewScreen(
                 uiState.currentItem != null && uiState.currentQuestionType != null -> {
                     val item = uiState.currentItem
                     val questionType = uiState.currentQuestionType
-                    if (item != null && questionType != null) {
-                        QuizQuestionContent(
-                            uiState = QuizQuestionUiState(
-                                item = item,
-                                questionType = questionType,
-                                totalCount = uiState.totalCount,
-                                remainingCount = uiState.remainingCount,
-                                answerInput = uiState.answerInput,
-                                feedback = uiState.feedback,
-                                rankChange = uiState.rankChange,
-                                undoCounter = uiState.undoCounter,
-                                answerTypeMismatchCount = uiState.answerTypeMismatchCount,
-                                showSubjectTypeLabel = uiState.showSubjectTypeLabel,
-                                showQuestionTimer = uiState.showQuestionTimer,
-                                showTotalTimer = uiState.showTotalTimer,
-                                questionElapsedMs = uiState.questionElapsedMs,
-                                questionActiveElapsedMs = uiState.questionActiveElapsedMs,
-                                questionActiveSegmentStartMs = uiState.questionActiveSegmentStartMs,
-                                sessionActiveElapsedMs = uiState.sessionActiveElapsedMs,
-                                sessionActiveSegmentStartMs = uiState.sessionActiveSegmentStartMs,
-                                useJapaneseKeyboard = uiState.useJapaneseKeyboard
-                            ),
-                            onAnswerInputChange = onAnswerInputChange,
-                            onSubmit = onSubmit,
-                            onDontKnow = onDontKnow,
-                            onContinue = onContinue,
-                            onUndo = onUndo,
-                            testTags = QuizQuestionTestTags(
-                                progressCount = ReviewScreenTestTags.PROGRESS_COUNT,
-                                questionTimerText = ReviewScreenTestTags.QUESTION_TIMER_TEXT,
-                                totalTimerText = ReviewScreenTestTags.TOTAL_TIMER_TEXT,
-                                characters = ReviewScreenTestTags.CHARACTERS,
-                                subjectTypeLabel = ReviewScreenTestTags.SUBJECT_TYPE_LABEL,
-                                rankChangeText = ReviewScreenTestTags.RANK_CHANGE_TEXT,
-                                questionLabel = ReviewScreenTestTags.QUESTION_LABEL,
-                                answerField = ReviewScreenTestTags.ANSWER_FIELD,
-                                typeMismatchText = ReviewScreenTestTags.TYPE_MISMATCH_TEXT,
-                                dontKnowButton = ReviewScreenTestTags.DONT_KNOW_BUTTON,
-                                submitButton = ReviewScreenTestTags.SUBMIT_BUTTON,
-                                undoButton = ReviewScreenTestTags.UNDO_BUTTON,
-                                feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
-                                answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
-                                continueButton = ReviewScreenTestTags.CONTINUE_BUTTON
-                            )
+                    QuizQuestionContent(
+                        uiState = QuizQuestionUiState(
+                            item = item,
+                            questionType = questionType,
+                            totalCount = uiState.totalCount,
+                            remainingCount = uiState.remainingCount,
+                            answerInput = uiState.answerInput,
+                            feedback = uiState.feedback,
+                            rankChange = uiState.rankChange,
+                            undoCounter = uiState.undoCounter,
+                            answerTypeMismatchCount = uiState.answerTypeMismatchCount,
+                            showSubjectTypeLabel = uiState.showSubjectTypeLabel,
+                            showQuestionTimer = uiState.showQuestionTimer,
+                            showTotalTimer = uiState.showTotalTimer,
+                            questionElapsedMs = uiState.questionElapsedMs,
+                            questionActiveElapsedMs = uiState.questionActiveElapsedMs,
+                            questionActiveSegmentStartMs = uiState.questionActiveSegmentStartMs,
+                            sessionActiveElapsedMs = uiState.sessionActiveElapsedMs,
+                            sessionActiveSegmentStartMs = uiState.sessionActiveSegmentStartMs,
+                            useJapaneseKeyboard = uiState.useJapaneseKeyboard
+                        ),
+                        onAnswerInputChange = onAnswerInputChange,
+                        onSubmit = onSubmit,
+                        onDontKnow = onDontKnow,
+                        onContinue = onContinue,
+                        onUndo = onUndo,
+                        testTags = QuizQuestionTestTags(
+                            progressCount = ReviewScreenTestTags.PROGRESS_COUNT,
+                            questionTimerText = ReviewScreenTestTags.QUESTION_TIMER_TEXT,
+                            totalTimerText = ReviewScreenTestTags.TOTAL_TIMER_TEXT,
+                            characters = ReviewScreenTestTags.CHARACTERS,
+                            subjectTypeLabel = ReviewScreenTestTags.SUBJECT_TYPE_LABEL,
+                            rankChangeText = ReviewScreenTestTags.RANK_CHANGE_TEXT,
+                            questionLabel = ReviewScreenTestTags.QUESTION_LABEL,
+                            answerField = ReviewScreenTestTags.ANSWER_FIELD,
+                            typeMismatchText = ReviewScreenTestTags.TYPE_MISMATCH_TEXT,
+                            dontKnowButton = ReviewScreenTestTags.DONT_KNOW_BUTTON,
+                            submitButton = ReviewScreenTestTags.SUBMIT_BUTTON,
+                            undoButton = ReviewScreenTestTags.UNDO_BUTTON,
+                            feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
+                            answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
+                            continueButton = ReviewScreenTestTags.CONTINUE_BUTTON
                         )
-                    }
+                    )
                 }
             }
         }

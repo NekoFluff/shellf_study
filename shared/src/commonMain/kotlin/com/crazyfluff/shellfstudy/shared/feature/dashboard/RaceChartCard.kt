@@ -49,6 +49,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserPalette
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.format.MonthNames
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.roundToInt
 import kotlin.time.Clock
@@ -66,7 +67,7 @@ private fun formatMonthYear(epochMillis: Long): String {
     val dt = Instant.fromEpochMilliseconds(epochMillis)
         .toLocalDateTime(TimeZone.currentSystemDefault())
     val year = (dt.year % 100).toString().padStart(2, '0')
-    return "${MonthNames.ENGLISH_ABBREVIATED.names[dt.monthNumber - 1]} '$year"
+    return "${MonthNames.ENGLISH_ABBREVIATED.names[dt.month.number - 1]} '$year"
 }
 
 /**

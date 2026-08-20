@@ -20,7 +20,7 @@ private val CSS_VAR = Regex("""var\(\s*--[\w-]+\s*,\s*([^()]+)\)""")
 object SvgCssVariableInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
-        val body = response.body ?: return response
+        val body = response.body
         val contentType = body.contentType()
         if (contentType?.toString()?.contains("svg", ignoreCase = true) != true) return response
 

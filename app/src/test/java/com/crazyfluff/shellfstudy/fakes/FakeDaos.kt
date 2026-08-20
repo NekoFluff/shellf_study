@@ -29,8 +29,6 @@ class FakeSubjectDao : SubjectDao {
 
     override suspend fun getById(id: Long): SubjectEntity? = subjects.value[id]
 
-    override fun observeAll(): Flow<List<SubjectEntity>> = subjects.map { it.values.toList() }
-
     override fun observeSearch(query: String): Flow<List<SubjectEntity>> =
         subjects.map { map -> map.values.filter { it.searchTarget.contains(query, ignoreCase = true) }.take(200) }
 

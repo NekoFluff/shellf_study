@@ -376,7 +376,7 @@ class DashboardViewModel(
                 )
             }
 
-            if (!fetchFailed && user != null && summary != null) {
+            if (user != null && summary != null) {
                 dashboardSyncCoordinator.cacheSummary(user, summary, syncedAtMillis)
             }
         }

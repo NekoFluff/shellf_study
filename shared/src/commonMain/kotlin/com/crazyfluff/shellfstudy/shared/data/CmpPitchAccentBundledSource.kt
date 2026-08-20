@@ -14,8 +14,8 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * CMP resource-backed implementation of [PitchAccentBundledSource] — reads pitch_info.json from
- * shared composeResources instead of Android's res/raw. Same heterogeneous-tuple JSON parsing
- * as the former AndroidPitchAccentBundledSource, but now available on all targets.
+ * shared composeResources, so it works on both Android and iOS. The file stores each entry as a
+ * heterogeneous tuple rather than an object, hence the manual JsonArray parsing below.
  */
 class CmpPitchAccentBundledSource : PitchAccentBundledSource {
 

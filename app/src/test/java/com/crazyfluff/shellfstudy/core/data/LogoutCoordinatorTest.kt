@@ -171,7 +171,7 @@ class LogoutCoordinatorTest {
             assertThat(friends.first().nickname).isEqualTo("rival")
         }
         settingsRepository.settings.test { assertThat(awaitItem().dailyLessonGoal).isEqualTo(15) }
-        subjectDao.observeAll().test { assertThat(awaitItem()).hasSize(1) }
+        subjectDao.observeTotalCount().test { assertThat(awaitItem()).isEqualTo(1) }
         srsSystemDao.observeAll().test { assertThat(awaitItem()).hasSize(1) }
     }
 

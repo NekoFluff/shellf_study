@@ -23,9 +23,20 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
+/**
+ * Runs under Robolectric (JVM) — this screen is driven purely by state, no device features needed.
+ * Moved here from the instrumented suite, which this project keeps for genuinely device-bound
+ * tests only (Keystore, system back gesture). Pinned to SDK 35: Robolectric 4.15.1 doesn't yet
+ * have shadows for this project's targetSdk (37).
+ */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35], qualifiers = "w411dp-h891dp")
 class ReviewScreenTest {
 
     @get:Rule

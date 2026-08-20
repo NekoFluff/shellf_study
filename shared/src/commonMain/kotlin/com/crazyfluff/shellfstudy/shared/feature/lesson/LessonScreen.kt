@@ -355,7 +355,7 @@ fun LessonScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = uiState.errorMessage ?: "",
+                            text = uiState.errorMessage,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.testTag(LessonScreenTestTags.ERROR_TEXT)
                         )

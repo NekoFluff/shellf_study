@@ -6,23 +6,12 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
-import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
-import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationPoster
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationScheduler
-import com.crazyfluff.shellfstudy.fakes.FakePitchAccentBundledSource
-import com.crazyfluff.shellfstudy.fakes.FakePitchAccentCacheDao
-import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
-import com.crazyfluff.shellfstudy.fakes.FakeSrsSystemDao
-import com.crazyfluff.shellfstudy.fakes.FakeStudyActivityDao
 import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
-import com.crazyfluff.shellfstudy.fakes.FakeSyncStateDao
-import com.crazyfluff.shellfstudy.fakes.FakeWeblioApi
-import com.crazyfluff.shellfstudy.fakes.buildTestApi
-import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
-import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
+import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.shared.notifications.DefaultNotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationChannels
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationStateRepository
@@ -54,17 +43,14 @@ class DefaultNotificationCoordinatorTest {
 
     @Before
     fun setUp() {
-        val api = buildTestApi("http://localhost/")
-        subjectDao = FakeSubjectDao()
-        assignmentDao = FakeAssignmentDao(subjectsAtLevel = subjectDao::subjectsAtLevel)
-        val syncStateDao = FakeSyncStateDao()
-        val pitchAccentRepository = PitchAccentRepository(
-            FakePitchAccentBundledSource(emptyMap()), FakePitchAccentCacheDao(), FakeWeblioApi(), WeblioPitchAccentParser()
-        )
-        val srsSystemDao = FakeSrsSystemDao()
-        val subjectRepository = SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository)
-        assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao)
-        statsRepository = StatsRepository(api, FakeReviewStatisticDao(), FakeLevelProgressionDao(), FakeStudyActivityDao(), syncStateDao)
+        // The standard repository graph (in-memory DAOs + MockWebServer API) — the coordinator only
+        // needs assignmentRepository/statsRepository, so reuse the shared factory instead of
+        // hand-wiring a second copy of the graph here.
+        val repos = buildTestRepositories("http://localhost/")
+        subjectDao = repos.subjectDao
+        assignmentDao = repos.assignmentDao
+        assignmentRepository = repos.assignmentRepository
+        statsRepository = repos.statsRepository
 
         val settingsDataStore: DataStore<Preferences> =
             PreferenceDataStoreFactory.create(produceFile = { tempFolder.newFile("settings.preferences_pb") })

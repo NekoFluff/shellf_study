@@ -9,10 +9,10 @@ Usage:
     unzip /tmp/kanjivg.zip -d /tmp/kanjivg
     python3 tools/kanjivg/generate_stroke_data.py /tmp/kanjivg/kanjivg-master
 
-Output: app/src/main/res/raw/stroke_data.json — a JSON object mapping each character to its
-ordered list of strokes, read at runtime by StrokeOrderRepository (same res/raw + Context
-pattern this app already uses for its bundled pitch-accent dictionary, see
-PitchAccentBundledSource). Each stroke is `{"d": ..., "x": ..., "y": ...}`: "d" is the SVG path
+Output: shared/src/commonMain/composeResources/files/stroke_data.json — a JSON object mapping
+each character to its ordered list of strokes, read at runtime by CmpStrokeOrderRepository via
+Compose Multiplatform resources (the same composeResources pattern this app already uses for
+its bundled pitch-accent dictionary, see CmpPitchAccentBundledSource). Each stroke is `{"d": ..., "x": ..., "y": ...}`: "d" is the SVG path
 "d" attribute (KanjiVG's native 109x109 unit square), and "x"/"y" is where KanjiVG's own
 maintainers hand-placed that stroke's number label (from the sibling "StrokeNumbers" <text>
 group) — reusing their placement instead of computing one avoids numbers overlapping each

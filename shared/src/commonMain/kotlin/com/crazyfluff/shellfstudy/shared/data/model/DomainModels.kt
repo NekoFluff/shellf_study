@@ -6,8 +6,7 @@ import kotlinx.serialization.Serializable
 
 data class WaniKaniUser(
     val username: String,
-    val level: Int,
-    val profileUrl: String
+    val level: Int
 )
 
 data class DashboardSummary(

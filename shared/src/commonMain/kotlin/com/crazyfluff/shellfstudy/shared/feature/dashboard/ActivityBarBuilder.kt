@@ -6,6 +6,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.format.MonthNames
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
@@ -15,7 +16,7 @@ internal data class ActivityBar(val label: String, val counts: List<Int>)
 
 internal fun formatShortDate(epochMillis: Long, tz: TimeZone = TimeZone.currentSystemDefault()): String {
     val dt = Instant.fromEpochMilliseconds(epochMillis).toLocalDateTime(tz)
-    return "${dt.monthNumber}/${dt.dayOfMonth}"
+    return "${dt.month.number}/${dt.day}"
 }
 
 internal fun levelChartSubtitle(window: LeaderboardWindow): String = when (window) {
@@ -59,7 +60,7 @@ internal fun buildActivityBars(
         }
         LeaderboardWindow.YEAR -> {
             val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(tz)
-            val nowTotalMonths = nowDt.year * 12 + (nowDt.monthNumber - 1)
+            val nowTotalMonths = nowDt.year * 12 + (nowDt.month.number - 1)
             (0..11).map { i ->
                 val targetMonth = (nowTotalMonths - (11 - i)) % 12
                 ActivityBar(MonthNames.ENGLISH_ABBREVIATED.names[targetMonth], entries.map { buckets(it).yearMonths.getOrElse(i) { 0 } })
@@ -67,7 +68,7 @@ internal fun buildActivityBars(
         }
         LeaderboardWindow.ALL_TIME -> {
             val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(tz)
-            val nowTotalMonths = nowDt.year * 12 + (nowDt.monthNumber - 1)
+            val nowTotalMonths = nowDt.year * 12 + (nowDt.month.number - 1)
             val allTimeBuckets = entries.map { buckets(it).allTimeMonths }
             val maxLen = allTimeBuckets.maxOfOrNull { it.size }.takeIf { it != null && it > 0 } ?: 12
             if (maxLen <= 12 && allTimeBuckets.all { it.isEmpty() }) {

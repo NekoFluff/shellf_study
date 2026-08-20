@@ -328,6 +328,7 @@ class AssignmentRepository(
             }
         }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun observeReviewForecast(hours: Int = 24): Flow<ReviewForecast> {
         // Re-subscribe to the DAO at every hour boundary. The DAO query parameters (nowIso) are
         // baked in at subscription time — Room re-fires the query on table writes but can't update
