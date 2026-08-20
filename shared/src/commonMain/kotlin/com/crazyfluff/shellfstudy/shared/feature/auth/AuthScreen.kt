@@ -10,25 +10,28 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import com.crazyfluff.shellfstudy.shared.designsystem.rememberNotificationPermissionRequest
+import kotlinx.coroutines.flow.drop
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
@@ -106,12 +109,19 @@ fun AuthScreen(
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            OutlinedTextField(
-                value = uiState.tokenInput,
-                onValueChange = onTokenInputChange,
+            // Owned locally rather than driven by `value`/`onValueChange` directly so the field
+            // goes through Compose's modern text-input pipeline instead of the legacy CoreTextField
+            // path, whose IME cursor-anchor bookkeeping has a framework crash (see
+            // LegacyCursorAnchorInfoBuilder). The token is never reset from outside once typed, so
+            // a one-time initial value is enough — no need for continuous two-way sync.
+            val tokenFieldState = remember { TextFieldState(uiState.tokenInput) }
+            LaunchedEffect(tokenFieldState) {
+                snapshotFlow { tokenFieldState.text.toString() }.drop(1).collect(onTokenInputChange)
+            }
+
+            OutlinedSecureTextField(
+                state = tokenFieldState,
                 label = { Text("WaniKani API token") },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done

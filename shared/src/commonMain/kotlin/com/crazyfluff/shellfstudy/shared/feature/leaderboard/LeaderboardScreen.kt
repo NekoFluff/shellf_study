@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -43,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +60,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.vocabularyColor
+import kotlinx.coroutines.flow.drop
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -343,19 +346,29 @@ private fun AddFriendDialog(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(12.dp))
+                // Owned locally rather than driven by `value`/`onValueChange` directly so these
+                // fields go through Compose's modern text-input pipeline instead of the legacy
+                // CoreTextField path, whose IME cursor-anchor bookkeeping has a framework crash
+                // (see LegacyCursorAnchorInfoBuilder). Neither value is ever reset from outside
+                // while this dialog is open — it's torn down and rebuilt fresh on next open — so a
+                // one-time initial value is enough, no need for continuous two-way sync.
+                val nicknameFieldState = rememberTextFieldState(nickname)
+                LaunchedEffect(nicknameFieldState) {
+                    snapshotFlow { nicknameFieldState.text.toString() }.drop(1).collect(onNicknameChange)
+                }
                 OutlinedTextField(
-                    value = nickname,
-                    onValueChange = onNicknameChange,
+                    state = nicknameFieldState,
                     label = { Text("Nickname") },
-                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+                val tokenFieldState = rememberTextFieldState(token)
+                LaunchedEffect(tokenFieldState) {
+                    snapshotFlow { tokenFieldState.text.toString() }.drop(1).collect(onTokenChange)
+                }
                 OutlinedTextField(
-                    value = token,
-                    onValueChange = onTokenChange,
+                    state = tokenFieldState,
                     label = { Text("API token") },
-                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     isError = error != null
                 )
@@ -386,16 +399,21 @@ private fun EditNicknameDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val nicknameFieldState = rememberTextFieldState(initialNickname)
+    // Only read at Save time, so unlike the fields above this needs no push-up effect — but it
+    // still needs a live value for the Save button's enabled check, hence collectAsState-by-hand
+    // via a plain remembered var kept in sync with the field.
     var nickname by remember { mutableStateOf(initialNickname) }
+    LaunchedEffect(nicknameFieldState) {
+        snapshotFlow { nicknameFieldState.text.toString() }.drop(1).collect { nickname = it }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit nickname") },
         text = {
             OutlinedTextField(
-                value = nickname,
-                onValueChange = { nickname = it },
+                state = nicknameFieldState,
                 label = { Text("Nickname") },
-                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
         },

@@ -55,6 +55,9 @@ class AuthScreenTest {
         }
 
         composeTestRule.onNodeWithTag(AuthScreenTestTags.TOKEN_FIELD).performTextInput("abc123")
+        // TextFieldState pushes edits up via a LaunchedEffect/snapshotFlow, one dispatch removed
+        // from performTextInput itself — wait for that to land before reading the callback value.
+        composeTestRule.waitForIdle()
 
         assert(lastValue == "abc123") { "Expected 'abc123' but got '$lastValue'" }
     }

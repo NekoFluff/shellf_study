@@ -4,8 +4,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.KeyboardActionHandler
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -15,19 +17,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.IntOffset
-import com.crazyfluff.shellfstudy.shared.designsystem.text.RomajiVisualTransformation
+import com.crazyfluff.shellfstudy.shared.designsystem.text.RomajiOutputTransformation
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.label
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.drop
 
 /** The answer input shared by review sessions and lesson quizzes — a WaniKani-romaji-aware text
  *  field that shakes and warns when the typed answer looks like the *other* question type (see
@@ -65,19 +68,31 @@ fun QuizAnswerField(
         }
     }
 
-    OutlinedTextField(
-        value = value,
-        onValueChange = {
+    // Owned locally rather than driven by `value`/`onValueChange` directly so the field goes
+    // through Compose's modern text-input pipeline instead of the legacy CoreTextField path, whose
+    // IME cursor-anchor bookkeeping has a framework crash (see LegacyCursorAnchorInfoBuilder).
+    // Re-created whenever focusResetKey changes, which is exactly when the ViewModel itself resets
+    // `value` back to "" (new question or undo) — so there's no need for continuous two-way sync.
+    val fieldState = remember(focusResetKey) { TextFieldState(value) }
+    LaunchedEffect(fieldState) {
+        // Drop the initial emission (the seed value the state was just created with) — only
+        // react to actual edits, so this can't race the reset that happens on the same
+        // recomposition that creates a fresh fieldState.
+        snapshotFlow { fieldState.text.toString() }.drop(1).collect {
             showTypeMismatchWarning = false
             onValueChange(it)
-        },
+        }
+    }
+
+    OutlinedTextField(
+        state = fieldState,
         label = { Text("答え") },
-        singleLine = true,
+        lineLimits = TextFieldLineLimits.SingleLine,
         enabled = !isAnswered,
-        visualTransformation = if (!useJapaneseKeyboard && questionType == QuestionType.READING) {
-            RomajiVisualTransformation(isComplete = isAnswered)
+        outputTransformation = if (!useJapaneseKeyboard && questionType == QuestionType.READING) {
+            RomajiOutputTransformation(isComplete = isAnswered)
         } else {
-            VisualTransformation.None
+            null
         },
         trailingIcon = trailingIcon,
         supportingText = if (showTypeMismatchWarning) {
@@ -95,7 +110,7 @@ fun QuizAnswerField(
                 LocaleList(Locale(if (questionType == QuestionType.READING) "ja" else "en"))
             } else null
         ),
-        keyboardActions = KeyboardActions(onDone = { if (!isAnswered) onSubmit() }),
+        onKeyboardAction = KeyboardActionHandler { if (!isAnswered) onSubmit() },
         modifier = modifier
             .fillMaxWidth()
             .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }

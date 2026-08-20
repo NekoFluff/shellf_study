@@ -426,6 +426,9 @@ class LessonScreenTest {
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_FIELD).performTextInput("Mouth")
+        // TextFieldState pushes edits up via a LaunchedEffect/snapshotFlow, one dispatch removed
+        // from performTextInput itself — wait for that to land before reading the callback value.
+        composeTestRule.waitForIdle()
         assert(typed == "Mouth")
     }
 

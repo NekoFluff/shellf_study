@@ -27,6 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -44,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -67,6 +71,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.PlatformBackHandler
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
+import kotlinx.coroutines.flow.drop
 
 object SearchOverlayTestTags {
     const val TRIGGER_BUTTON = "search_trigger_button"
@@ -173,10 +178,29 @@ fun SubjectSearchOverlay(
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
+                            // Owned locally rather than driven by `value`/`onValueChange` directly
+                            // so the field goes through Compose's modern text-input pipeline instead
+                            // of the legacy CoreTextField path, whose IME cursor-anchor bookkeeping
+                            // has a framework crash (see LegacyCursorAnchorInfoBuilder). Unlike
+                            // QuizAnswerField, this field stays mounted across resets (clearing via
+                            // the "X" button, or re-opening the overlay), so — rather than a
+                            // reset key — external changes to uiState.query are synced back in
+                            // whenever they didn't originate from this field's own typing.
+                            val queryFieldState = rememberTextFieldState(uiState.query)
+                            LaunchedEffect(queryFieldState) {
+                                // Drop the initial emission (the seed value the state was just
+                                // created with) — only push up actual edits, so this can't race an
+                                // external reset (e.g. the clear button) landing the same frame.
+                                snapshotFlow { queryFieldState.text.toString() }.drop(1).collect(onQueryChange)
+                            }
+                            LaunchedEffect(uiState.query) {
+                                if (uiState.query != queryFieldState.text.toString()) {
+                                    queryFieldState.setTextAndPlaceCursorAtEnd(uiState.query)
+                                }
+                            }
                             BasicTextField(
-                                value = uiState.query,
-                                onValueChange = onQueryChange,
-                                singleLine = true,
+                                state = queryFieldState,
+                                lineLimits = TextFieldLineLimits.SingleLine,
                                 textStyle = MaterialTheme.typography.bodyLarge.copy(
                                     color = MaterialTheme.colorScheme.onSurface
                                 ),

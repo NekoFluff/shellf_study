@@ -90,6 +90,9 @@ class SubjectSearchOverlayTest {
         }
 
         composeTestRule.onNodeWithTag(SearchOverlayTestTags.QUERY_FIELD).performTextInput("water")
+        // TextFieldState pushes edits up via a LaunchedEffect/snapshotFlow, one dispatch removed
+        // from performTextInput itself — wait for that to land before reading the callback value.
+        composeTestRule.waitForIdle()
         assert(typed == "water")
     }
 
