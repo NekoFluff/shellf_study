@@ -241,15 +241,28 @@ class ReviewViewModelTest {
         // back-press clears the ViewModel (cancelling viewModelScope) the instant feedback is shown,
         // and that must not be able to cancel the write. viewModelScope.cancel() here simulates
         // exactly what ViewModel.clear() does to viewModelScope when the screen is left.
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        // Uses the two-item queue (rather than the single-item radical fixture) so grading the
+        // first question doesn't complete the whole session — that path clears the session
+        // snapshot outright instead of saving one (see gradeAnswer's queueIsEmpty), which is
+        // covered separately.
+        dispatch(jsonResponse(twoItemAssignmentsJson()), jsonResponse(twoItemSubjectsJson()))
 
         val viewModel = createViewModel()
 
+        var gradedItemId = -1L
+        var gradedType = QuestionType.MEANING
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
 
-            viewModel.onAnswerInputChange("Mouth")
+            gradedItemId = state.currentItem!!.assignmentId
+            gradedType = state.currentQuestionType!!
+            val answer = when {
+                gradedItemId == 101L -> "Mouth"
+                gradedType == QuestionType.MEANING -> "Water"
+                else -> "mizu"
+            }
+            viewModel.onAnswerInputChange(answer)
             awaitItem()
             viewModel.submitAnswer()
             var settled = awaitItem()
@@ -258,12 +271,26 @@ class ReviewViewModelTest {
             viewModel.viewModelScope.cancel()
         }
 
+        // The radical (101) is meaning-only, so answering it correctly completes it in one shot
+        // and queues an outbox submission; the kanji (555) needs both meaning and reading, so
+        // answering just one doesn't complete it yet — either way, the session snapshot below is
+        // what's under test.
         val queued = repositories.outboxDao.allReviewSubmissions()
-        assertThat(queued).hasSize(1)
-        assertThat(queued.first().assignmentId).isEqualTo(101L)
+        if (gradedItemId == 101L) {
+            assertThat(queued).hasSize(1)
+            assertThat(queued.first().assignmentId).isEqualTo(101L)
+        } else {
+            assertThat(queued).isEmpty()
+        }
         // The session snapshot persisted at grading time is durability bookkeeping too, and must
         // equally survive the cancellation — this item's progress must be recorded, not lost.
-        assertThat(reviewSessionRepository.load()?.progress?.single()?.meaningDone).isTrue()
+        val progress = reviewSessionRepository.load()?.progress?.firstOrNull { it.assignmentId == gradedItemId }
+        assertThat(progress).isNotNull()
+        if (gradedType == QuestionType.MEANING) {
+            assertThat(progress!!.meaningDone).isTrue()
+        } else {
+            assertThat(progress!!.readingDone).isTrue()
+        }
     }
 
     @Test
@@ -1110,6 +1137,64 @@ class ReviewViewModelTest {
             appForegroundTracker.onStop(FakeLifecycleOwner)
             val pausedState = awaitItem()
             assertThat(pausedState.isSessionComplete).isTrue()
+        }
+
+        assertThat(reviewSessionRepository.load()).isNull()
+    }
+
+    @Test
+    fun `grading the last question clears the persisted session immediately, before Continue is tapped`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test for a race where grading the last question saved a snapshot of the
+        // now-empty queue, and advanceToNextQuestion's completion-time clear (fired later, once the
+        // user tapped Continue) raced that save on applicationScope's multi-threaded dispatcher —
+        // occasionally the stale save landed after the clear and resurrected the session. gradeAnswer
+        // now clears reviewSessionRepository outright the instant grading empties the queue, so
+        // there's no save left to race — verified here by checking the repository *before*
+        // onContinue() is even called, not after.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            // Still on the feedback screen — isSessionComplete only flips once onContinue() runs —
+            // yet the savepoint must already be gone.
+            assertThat(feedbackState.isSessionComplete).isFalse()
+            assertThat(reviewSessionRepository.load()).isNull()
+        }
+    }
+
+    @Test
+    fun `backgrounding between grading the last question and tapping Continue does not resurrect a resumable session`() = runTest(mainDispatcherRule.dispatcher) {
+        // Companion to the "grading the last question clears..." test above: once gradeAnswer has
+        // cleared the savepoint but before onContinue() has run, isSessionComplete is still false —
+        // the pause handler's guard must key off the queue being empty too, not just
+        // isSessionComplete, or backgrounding in this exact window would re-save a stale snapshot
+        // and undo the clear.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.isSessionComplete).isFalse()
+            assertThat(reviewSessionRepository.load()).isNull()
+
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            awaitItem()
         }
 
         assertThat(reviewSessionRepository.load()).isNull()

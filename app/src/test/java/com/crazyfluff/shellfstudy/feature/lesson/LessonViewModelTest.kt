@@ -965,7 +965,11 @@ class LessonViewModelTest {
         // instead carry over only the accumulated *active* time — proven with a fake, unmistakably
         // large value rather than comparing real wall-clock reads, since this whole test executes
         // in well under a second.
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        // Uses the two-question kanji fixture (rather than the single-question radical one) so
+        // answering one question below doesn't complete the whole quiz — that path clears the
+        // session snapshot outright instead of saving one (see gradeAnswer's queueIsEmpty), which
+        // would leave nothing for this test to inspect.
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
 
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
@@ -990,8 +994,10 @@ class LessonViewModelTest {
             assertThat(state.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)
             assertThat(state.sessionActiveSegmentStartMs).isNotNull()
 
-            // Forces a fresh persisted snapshot so the resumed accumulated time can be inspected.
-            secondViewModel.onAnswerInputChange("Mouth")
+            // Forces a fresh persisted snapshot so the resumed accumulated time can be inspected —
+            // answering just one of the kanji's two questions leaves the quiz still in progress.
+            val answer = if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+            secondViewModel.onAnswerInputChange(answer)
             awaitItem()
             secondViewModel.submitAnswer()
             awaitItem()
@@ -1112,6 +1118,73 @@ class LessonViewModelTest {
             appForegroundTracker.onStop(FakeLifecycleOwner)
             val pausedState = awaitItem()
             assertThat(pausedState.isSessionComplete).isTrue()
+        }
+
+        assertThat(lessonSessionRepository.load()).isNull()
+    }
+
+    @Test
+    fun `grading the last quiz question clears the persisted session immediately, before Continue is tapped`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test for a race where grading the last question saved a snapshot of the
+        // now-empty quiz queue, and advanceQuiz's completion-time clear (fired later, once the user
+        // tapped Continue) raced that save on applicationScope's multi-threaded dispatcher —
+        // occasionally the stale save landed after the clear and resurrected the session. gradeAnswer
+        // now clears lessonSessionRepository outright the instant grading empties the queue, so
+        // there's no save left to race — verified here by checking the repository *before*
+        // onContinue() is even called, not after.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            // Still on the feedback screen — isSessionComplete only flips once onContinue() runs —
+            // yet the savepoint must already be gone.
+            assertThat(feedbackState.isSessionComplete).isFalse()
+            assertThat(lessonSessionRepository.load()).isNull()
+        }
+    }
+
+    @Test
+    fun `backgrounding between grading the last quiz question and tapping Continue does not resurrect a resumable session`() = runTest(mainDispatcherRule.dispatcher) {
+        // Companion to the "grading the last quiz question clears..." test above: once gradeAnswer
+        // has cleared the savepoint but before onContinue() has run, isSessionComplete is still
+        // false — the pause handler's guard must key off the quiz queue being empty too, not just
+        // isSessionComplete/isAbandoned, or backgrounding in this exact window would re-save a
+        // stale snapshot and undo the clear.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.isSessionComplete).isFalse()
+            assertThat(lessonSessionRepository.load()).isNull()
+
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            awaitItem()
         }
 
         assertThat(lessonSessionRepository.load()).isNull()

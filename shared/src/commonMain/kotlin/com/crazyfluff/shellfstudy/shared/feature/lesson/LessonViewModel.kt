@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
-import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
+import com.crazyfluff.shellfstudy.shared.coroutines.SerialDurableWork
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
@@ -143,6 +143,13 @@ class LessonViewModel(
 
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
+    // Every write to lessonSessionRepository (save or clear, STUDY or QUIZ phase alike) is routed
+    // through this queue so writes apply in the order they were issued, even though each one
+    // actually runs on applicationScope's multi-threaded dispatcher — otherwise grading the last
+    // question's save (which does extra outbox work first) can land after the completion-time
+    // clear that logically followed it, resurrecting a savepoint the app just erased.
+    private val sessionWriteQueue = SerialDurableWork(applicationScope)
+
     private val progressByAssignmentId = mutableMapOf<Long, LessonItemProgress>()
     // Individual per-answer records, used for the "slowest answers" summary — persisted and
     // restored across a resume just like progressByAssignmentId (see resumeQuizPhase), so the
@@ -150,20 +157,23 @@ class LessonViewModel(
     private val answeredQuestions = mutableListOf<AnsweredQuestionRecord<LessonItem>>()
 
     // Tracks only the time the quiz was actively being viewed — see QuizSessionTiming. Pause skips
-    // re-persisting once the session is complete or abandoned (would resurrect a stale session in
-    // DataStore), and also skips it outside the QUIZ phase — currentPersistSnapshot() always writes
-    // phase = QUIZ, and in STUDY phase the correct snapshot is already kept current by
-    // persistStudySnapshot on every card change; overwriting it here with an empty-queue QUIZ
-    // record would make resumeQuizPhase() misread it as "session complete". The foreground tracker
-    // calls resume() unconditionally on app-foreground, so a segment can be running even while in
-    // STUDY phase — without this guard, a Home press in STUDY phase would write the corrupt snapshot.
+    // re-persisting once the session is complete or abandoned, OR the quiz queue has already
+    // emptied but isSessionComplete hasn't caught up yet (gradeAnswer clears lessonSessionRepository
+    // the instant the last question is graded, before the user taps Continue — re-persisting here
+    // in that window would resurrect the stale, empty-queue session it just cleared). Also skips it
+    // outside the QUIZ phase — currentPersistSnapshot() always writes phase = QUIZ, and in STUDY
+    // phase the correct snapshot is already kept current by persistStudySnapshot on every card
+    // change; overwriting it here with an empty-queue QUIZ record would make resumeQuizPhase()
+    // misread it as "session complete". The foreground tracker calls resume() unconditionally on
+    // app-foreground, so a segment can be running even while in STUDY phase — without this guard, a
+    // Home press in STUDY phase would write the corrupt snapshot.
     private val sessionTiming = QuizSessionTiming(
         onResume = { now -> _uiState.update { it.copy(sessionActiveSegmentStartMs = now) } },
         onPause = pause@{ newElapsed ->
             _uiState.update { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
-            if (_uiState.value.isSessionComplete || _uiState.value.isAbandoned) return@pause
+            if (_uiState.value.isSessionComplete || _uiState.value.isAbandoned || quizQueue.current == null) return@pause
             if (_uiState.value.phase != LessonPhase.QUIZ) return@pause
-            applicationScope.launch { persistCurrentState() }
+            viewModelScope.launch { sessionWriteQueue.run { persistCurrentState() } }
         }
     )
 
@@ -333,7 +343,7 @@ class LessonViewModel(
         // visit starts fresh rather than looping on "lesson complete" indefinitely.
         val summary = if (next == null) sessionSummary() else null
         if (next == null) {
-            applicationScope.runDurably { lessonSessionRepository.clear() }
+            sessionWriteQueue.run { lessonSessionRepository.clear() }
             summary?.let(::persistLastSessionSummary)
         }
         _uiState.update {
@@ -442,7 +452,7 @@ class LessonViewModel(
                     strokeOrderBySubjectId = strokeOrders
                 )
             }
-            applicationScope.runDurably { persistStudySnapshot(selected, 0) }
+            sessionWriteQueue.run { persistStudySnapshot(selected, 0) }
         }
     }
 
@@ -486,7 +496,7 @@ class LessonViewModel(
         val state = _uiState.value
         if (state.phase != LessonPhase.STUDY || index !in state.studyItems.indices) return
         _uiState.update { it.copy(studyIndex = index) }
-        viewModelScope.launch { applicationScope.runDurably { persistStudySnapshot(state.studyItems, index) } }
+        viewModelScope.launch { sessionWriteQueue.run { persistStudySnapshot(state.studyItems, index) } }
     }
 
     fun nextStudyCard() {
@@ -497,7 +507,7 @@ class LessonViewModel(
             viewModelScope.launch { beginQuiz(state.studyItems) }
         } else {
             _uiState.update { it.copy(studyIndex = nextIndex) }
-            viewModelScope.launch { applicationScope.runDurably { persistStudySnapshot(state.studyItems, nextIndex) } }
+            viewModelScope.launch { sessionWriteQueue.run { persistStudySnapshot(state.studyItems, nextIndex) } }
         }
     }
 
@@ -506,7 +516,7 @@ class LessonViewModel(
         if (state.phase != LessonPhase.STUDY || state.studyIndex == 0) return
         val previousIndex = state.studyIndex - 1
         _uiState.update { it.copy(studyIndex = previousIndex) }
-        viewModelScope.launch { applicationScope.runDurably { persistStudySnapshot(state.studyItems, previousIndex) } }
+        viewModelScope.launch { sessionWriteQueue.run { persistStudySnapshot(state.studyItems, previousIndex) } }
     }
 
     /** Persists just enough to resume mid-flashcard-study: which items are in the batch (in order)
@@ -551,7 +561,7 @@ class LessonViewModel(
                 questionElapsedMs = null
             )
         }
-        applicationScope.runDurably { persistCurrentState() }
+        sessionWriteQueue.run { persistCurrentState() }
     }
 
     fun onAnswerInputChange(value: String) {
@@ -605,7 +615,7 @@ class LessonViewModel(
                 answeredQuestions = answeredQuestions,
                 item = item,
                 questionType = type,
-                persist = { applicationScope.runDurably { persistCurrentState() } }
+                persist = { sessionWriteQueue.run { persistCurrentState() } }
             )
             if (!didUndo) return@launch
             // Restarts this question's clock so the retry's timing doesn't inherit time spent
@@ -659,6 +669,13 @@ class LessonViewModel(
             quizQueue.noneMatches { it.item.assignmentId == item.assignmentId }
         }
 
+        // Whether this answer was the very last one due — if so, persistDurabilityWork clears
+        // lessonSessionRepository outright instead of saving a snapshot of the now-empty queue.
+        // That snapshot would only ever get overwritten by advanceQuiz's own clear once the user
+        // taps Continue anyway; not writing it in the first place, right when the queue empties, is
+        // simpler and safer than writing it and racing a later clear against it.
+        val queueIsEmpty = quizQueue.current == null
+
         // Snapshotted synchronously, right after mutating quizQueue above, so the detached
         // durability write below can safely run concurrently with the next question's own
         // grading/advance — quizQueue is a plain, non-thread-safe collection, and once feedback
@@ -701,7 +718,7 @@ class LessonViewModel(
             }
         }
 
-        persistDurabilityWork(isNewlyStarted, item, snapshot)
+        persistDurabilityWork(isNewlyStarted, item, snapshot, queueIsEmpty)
     }
 
     /** Manual play from the study card's reading row — mirrors SubjectDetailViewModel.playReading. */
@@ -733,14 +750,18 @@ class LessonViewModel(
     }
 
     /** Runs the post-grading durability writes (outbox enqueue, session persistence) — see
-     *  [runDurably] for why this needs [applicationScope] rather than `viewModelScope`. */
-    private suspend fun persistDurabilityWork(isNewlyStarted: Boolean, item: LessonItem, snapshot: PersistedLessonSession) {
-        applicationScope.runDurably {
+     *  [SerialDurableWork] for why this needs [applicationScope] rather than `viewModelScope`.
+     *  Clears lessonSessionRepository instead of saving [snapshot] when [queueIsEmpty] — this was
+     *  the last due question, so [snapshot] is already an empty-queue shell that advanceQuiz's own
+     *  clear would just overwrite once the user taps Continue; not saving it in the first place is
+     *  simpler than saving it and racing a later clear against it. */
+    private suspend fun persistDurabilityWork(isNewlyStarted: Boolean, item: LessonItem, snapshot: PersistedLessonSession, queueIsEmpty: Boolean) {
+        sessionWriteQueue.run {
             if (isNewlyStarted) {
                 assignmentRepository.applyOptimisticLessonStart(item.assignmentId, item.srsSystemId)
                 outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
             }
-            lessonSessionRepository.save(snapshot)
+            if (queueIsEmpty) lessonSessionRepository.clear() else lessonSessionRepository.save(snapshot)
         }
     }
 
@@ -760,7 +781,7 @@ class LessonViewModel(
      *  next time. Mirrors ReviewViewModel.abandonSession. */
     fun abandonSession() {
         viewModelScope.launch {
-            lessonSessionRepository.clear()
+            sessionWriteQueue.run { lessonSessionRepository.clear() }
             _uiState.update { it.copy(isAbandoned = true) }
         }
     }
@@ -799,7 +820,7 @@ class LessonViewModel(
     private suspend fun advanceQuiz() {
         val next = quizQueue.current
         if (next == null) {
-            applicationScope.runDurably { lessonSessionRepository.clear() }
+            sessionWriteQueue.run { lessonSessionRepository.clear() }
             outboxRepository.requestSyncNow()
             val summary = sessionSummary()
             persistLastSessionSummary(summary)
