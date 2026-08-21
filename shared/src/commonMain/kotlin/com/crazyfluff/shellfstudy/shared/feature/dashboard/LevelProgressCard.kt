@@ -145,9 +145,7 @@ private fun SubjectTypeProgressRow(
     levelUpProgress: LevelUpProgress? = null
 ) {
     val accent = subjectColor(entry.subjectType)
-    val doneCount = entry.items.count { it.srsStage.raw >= SrsStage.GURU_1.raw }
-    val inProgressCount = entry.items.count { it.srsStage != SrsStage.LOCKED && it.srsStage.raw < SrsStage.GURU_1.raw }
-    val lockedCount = entry.totalCount - doneCount - inProgressCount
+    val (doneCount, inProgressCount, lockedCount) = barSegmentCounts(entry)
     // entry.totalCount and levelUpProgress.kanjiTotal are both drawn from the same unfiltered
     // (locked-items-included) per-level assignment set, so this mark lines up exactly with the
     // real 90% threshold; "Ready to level up!" below is still the authoritative signal for
@@ -286,6 +284,17 @@ private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
             }
         }
     }
+}
+
+/** (done, inProgress, locked) segment counts for [entry]'s bar. Gated on [LevelItem.passed]
+ *  (ever reached Guru), not live [LevelItem.srsStage], so the bar agrees with the passedCount
+ *  label above it and the chip fill below it — a demotion back to Apprentice shouldn't move an
+ *  item out of the "done" segment when it's still shown as passed everywhere else in the row. */
+internal fun barSegmentCounts(entry: SubjectTypeProgress): Triple<Int, Int, Int> {
+    val doneCount = entry.items.count { it.passed }
+    val inProgressCount = entry.items.count { !it.passed && it.srsStage != SrsStage.LOCKED }
+    val lockedCount = entry.totalCount - doneCount - inProgressCount
+    return Triple(doneCount, inProgressCount, lockedCount)
 }
 
 /** Dot count (of 4) for an unpassed item's Apprentice sub-stage — null for Locked (nothing studied
