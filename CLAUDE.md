@@ -69,6 +69,20 @@ For iOS: open `iosApp/iosApp.xcodeproj`. The Run Script phase calls
 - DTOs use `ignoreUnknownKeys = true` / `coerceInputValues = true` — the real API has more fields than modelled here. Cross-check names against https://docs.api.wanikani.com/20170710/ before trusting an untested DTO field.
 - Review submission in `WaniKaniRepository.submitReview` is simplified to "had any incorrect attempt" (0 or 1) rather than WaniKani's exact incorrect-count tracking — correct SRS progression, not a byte-for-byte match.
 
+## Code quality
+
+Kotlin/Compose-specific rules for keeping this codebase simple and free of smells. These apply on top of the general engineering guidance you already follow.
+
+- **Model state with types, not flags.** Use a `sealed interface`/`sealed class` for `UiState` and `ApiResult` variants instead of a data class with multiple nullable fields and boolean flags that imply each other (`isLoading` + `error: String?` + `data: T?` all on one class). If two fields can never both be non-null, that's a sign the type should be a sealed hierarchy instead.
+- **No `!!`, no unchecked cast.** Use safe calls, `requireNotNull(x) { "why this should never be null here" }`, or restructure so the nullable case is handled instead of asserted away. A `!!` in review is treated as a bug unless the surrounding code makes non-nullness structurally guaranteed.
+- **Guard clauses over nested conditionals.** Return/continue early on the invalid or no-op case (empty selection, session already complete, missing DB row) rather than wrapping the happy path in an `if`. Match the existing "silent drops produce empty collections, not crashes" pattern.
+- **Composables stay small and stateless.** A screen composable takes `uiState` + callbacks and renders; if a composable's body needs scrolling past to read, extract a named child composable rather than adding a comment to delineate sections. Hoist state to the ViewModel — no composable-local `var` for anything that outlives a single gesture.
+- **ViewModels expose one `StateFlow<UiState>`**, not a grab-bag of separate flows the screen has to combine itself. If a ViewModel accumulates many unrelated public methods, that's a sign it's covering more than one feature and should split.
+- **Favor Kotlin idioms already in use in the file over inventing new ones** — `when` over `if/else if` chains for closed sets, extension functions on domain types over static utility objects, data classes with `copy()` over manual field-by-field rebuilding, scope functions (`let`, `run`, `also`) only where they remove real duplication, not by default.
+- **No magic numbers/strings in logic** — SRS stage thresholds, level caps, WaniKani revision headers, etc. get a named `const val` near their use, not an inline literal a reader has to trace back to the API docs.
+- **Repositories own one data source's worth of responsibility.** If a repository method is reaching into Room, DataStore, and the Ktor client all at once, that's a sign the orchestration belongs in a use-case/coordinator (e.g. `SyncOrchestrator`) rather than growing the repository.
+- **Exceptions are for the exceptional.** Expected failure paths (network error, validation failure, empty queue) flow through `ApiResult`/sealed return types, not `try/catch` used as control flow.
+
 ## Testing
 
 Tests are split across three source sets. Default new tests to the fastest set that can run them.
