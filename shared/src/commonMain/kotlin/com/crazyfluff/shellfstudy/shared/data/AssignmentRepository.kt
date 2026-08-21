@@ -44,8 +44,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.todayIn
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
@@ -450,9 +450,21 @@ class AssignmentRepository(
 
     fun observeItemsSeenCount(): Flow<Int> = assignmentDao.observeItemsSeenCount()
 
-    /** Count of assignments started since local midnight — used for the "lessons done today" indicator. */
+    /**
+     * Count of assignments started on the current local calendar date — used for the "lessons done
+     * today" indicator. Recomputed against the actual current date on every emission (same approach
+     * as [FriendStatsRepository]'s "learned today" stat) rather than binding "today" as a fixed SQL
+     * parameter at subscription time, which would freeze the cutoff at whatever midnight the flow
+     * was first collected and never roll over while the app stays open past midnight.
+     */
     fun observeLessonsCompletedToday(): Flow<Int> =
-        assignmentDao.observeStartedTodayCount(startOfTodayIso())
+        assignmentDao.observeAllStartedTimestamps().map { timestamps ->
+            val timeZone = TimeZone.currentSystemDefault()
+            val today = Clock.System.todayIn(timeZone)
+            timestamps.count { ts ->
+                runCatching { Instant.parse(ts).toLocalDateTime(timeZone).date == today }.getOrDefault(false)
+            }
+        }.flowOn(defaultDispatcher)
 
     /**
      * How many of the current level's kanji are at Guru or higher, out of the total — WaniKani
@@ -465,11 +477,6 @@ class AssignmentRepository(
                 kanjiTotal = rows.size
             )
         }.flowOn(defaultDispatcher)
-
-    private fun startOfTodayIso(): String {
-        val timeZone = TimeZone.currentSystemDefault()
-        return Clock.System.todayIn(timeZone).atStartOfDayIn(timeZone).toString()
-    }
 }
 
 /** Meanings WaniKani actually accepts as a correct answer — excludes any explicitly flagged

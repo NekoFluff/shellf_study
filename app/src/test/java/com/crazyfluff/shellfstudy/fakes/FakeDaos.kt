@@ -124,13 +124,6 @@ class FakeAssignmentDao(
         map.values.count { !it.hidden && it.startedAt != null }
     }
 
-    override fun observeStartedTodayCount(startOfDayIso: String): Flow<Int> = assignments.map { map ->
-        map.values.count {
-            val startedAt = it.startedAt
-            !it.hidden && startedAt != null && startedAt >= startOfDayIso
-        }
-    }
-
     override fun observeKanjiLevelUpRows(level: Int): Flow<List<KanjiLevelUpRow>> = assignments.map { map ->
         subjectsAtLevel(level)
             .filter { it.subjectType == "kanji" }
