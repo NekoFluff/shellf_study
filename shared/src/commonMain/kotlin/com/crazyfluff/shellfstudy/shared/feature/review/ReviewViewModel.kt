@@ -487,6 +487,7 @@ class ReviewViewModel(
     override fun onCleared() {
         super.onCleared()
         sessionTiming.pause()
+        pronunciationAudioPlayer.stop()
     }
 
     /** Only counts items with [QuizItemProgress.hasAnyProgress] — progressByAssignmentId is seeded

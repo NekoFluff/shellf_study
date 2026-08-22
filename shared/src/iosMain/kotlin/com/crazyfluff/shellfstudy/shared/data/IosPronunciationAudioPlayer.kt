@@ -35,6 +35,15 @@ import platform.darwin.NSObjectProtocol
  * player needs — plus notification observers for end-of-playback and failure. There's no
  * multiplatform equivalent of ExoPlayer's [androidx.media3.common.Player.Listener], so this
  * mirrors the same states by different means.
+ *
+ * The audio session is activated right before each clip and deactivated right after — never left
+ * active in between. [AVAudioSessionCategoryOptionDuckOthers] makes the OS lower (not pause) any
+ * other app's audio for exactly that window, which is both the "tone down the music" behavior and
+ * what keeps this from ever telling the OS another app is now free to resume: deactivation here
+ * never passes `notifyOthersOnDeactivation`, so a paused app is never nudged back into playing.
+ * Scoping activation tightly to each play() (rather than once for the player's lifetime) also
+ * means the OS is asked "is other audio playing right now?" fresh for every clip, instead of an
+ * app-lifetime-old answer becoming stale once the user pauses their own music mid-session.
  */
 @OptIn(ExperimentalForeignApi::class)
 class IosPronunciationAudioPlayer : PronunciationAudioPlayer {
@@ -47,30 +56,50 @@ class IosPronunciationAudioPlayer : PronunciationAudioPlayer {
     private var failureObserver: NSObjectProtocol? = null
 
     init {
-        val session = AVAudioSession.sharedInstance()
-        session.setCategory(
+        AVAudioSession.sharedInstance().setCategory(
             AVAudioSessionCategoryPlayback,
             withOptions = AVAudioSessionCategoryOptionDuckOthers,
             error = null
         )
-        session.setActive(true, null)
-
-        endObserver = NSNotificationCenter.defaultCenter.addObserverForName(
-            name = AVPlayerItemDidPlayToEndTimeNotification,
-            `object` = null,
-            queue = NSOperationQueue.mainQueue
-        ) { _state.value = PlaybackState.IDLE }
-
-        failureObserver = NSNotificationCenter.defaultCenter.addObserverForName(
-            name = AVPlayerItemFailedToPlayToEndTimeNotification,
-            `object` = null,
-            queue = NSOperationQueue.mainQueue
-        ) { _state.value = PlaybackState.ERROR }
 
         NSTimer.scheduledTimerWithTimeInterval(
             interval = 0.2,
             repeats = true
         ) { pollState() }
+    }
+
+    private fun removeItemObservers() {
+        endObserver?.let { NSNotificationCenter.defaultCenter.removeObserver(it) }
+        failureObserver?.let { NSNotificationCenter.defaultCenter.removeObserver(it) }
+        endObserver = null
+        failureObserver = null
+    }
+
+    /** Scoped to [item] rather than observed globally (`object = null`) so a stale notification
+     *  from a clip that already finished can't fire after a newer clip has started playing. */
+    private fun addItemObservers(item: AVPlayerItem) {
+        endObserver = NSNotificationCenter.defaultCenter.addObserverForName(
+            name = AVPlayerItemDidPlayToEndTimeNotification,
+            `object` = item,
+            queue = NSOperationQueue.mainQueue
+        ) {
+            _state.value = PlaybackState.IDLE
+            deactivateSession()
+        }
+
+        failureObserver = NSNotificationCenter.defaultCenter.addObserverForName(
+            name = AVPlayerItemFailedToPlayToEndTimeNotification,
+            `object` = item,
+            queue = NSOperationQueue.mainQueue
+        ) {
+            _state.value = PlaybackState.ERROR
+            deactivateSession()
+        }
+    }
+
+    /** Never passes `notifyOthersOnDeactivation` — see class doc. */
+    private fun deactivateSession() {
+        AVAudioSession.sharedInstance().setActive(false, null)
     }
 
     private fun pollState() {
@@ -88,14 +117,20 @@ class IosPronunciationAudioPlayer : PronunciationAudioPlayer {
             _state.value = PlaybackState.ERROR
             return
         }
-        player.replaceCurrentItemWithPlayerItem(AVPlayerItem(uRL = url))
+        removeItemObservers()
+        AVAudioSession.sharedInstance().setActive(true, null)
+        val item = AVPlayerItem(uRL = url)
+        addItemObservers(item)
+        player.replaceCurrentItemWithPlayerItem(item)
         player.play()
     }
 
     override fun stop() {
+        removeItemObservers()
         player.pause()
         player.seekToTime(CMTimeMake(0, 1))
         player.replaceCurrentItemWithPlayerItem(null)
         _state.value = PlaybackState.IDLE
+        deactivateSession()
     }
 }

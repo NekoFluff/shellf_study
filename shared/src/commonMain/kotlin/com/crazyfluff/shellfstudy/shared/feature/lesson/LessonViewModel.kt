@@ -789,6 +789,7 @@ class LessonViewModel(
     override fun onCleared() {
         super.onCleared()
         sessionTiming.pause()
+        pronunciationAudioPlayer.stop()
     }
 
     /** Items learned, how many were correct without ever missing, which were missed at least once,

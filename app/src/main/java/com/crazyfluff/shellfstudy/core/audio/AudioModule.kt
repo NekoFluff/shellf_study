@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.core.audio
 
+import android.media.AudioManager
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
@@ -39,9 +40,13 @@ val audioModule = module {
                     .setUsage(C.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
                     .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
                     .build(),
-                /* handleAudioFocus = */ true
+                // ExoPlayer's automatic focus handling only supports USAGE_MEDIA/USAGE_GAME (it
+                // silently never requests focus for any other usage, including this one) — see
+                // RealPronunciationAudioPlayer, which requests focus itself instead.
+                /* handleAudioFocus = */ false
             )
             .build()
     }
-    single { RealPronunciationAudioPlayer(get()) } bind PronunciationAudioPlayer::class
+    single { androidContext().getSystemService(AudioManager::class.java) }
+    single { RealPronunciationAudioPlayer(get(), get()) } bind PronunciationAudioPlayer::class
 }
