@@ -53,7 +53,8 @@ import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
-import com.crazyfluff.shellfstudy.shared.data.model.formatHourOfDay
+import com.crazyfluff.shellfstudy.shared.data.model.bucketMomentPhrase
+import com.crazyfluff.shellfstudy.shared.data.model.formatBucketDate
 import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.srsStageColor
@@ -72,7 +73,9 @@ object ReviewForecastTestTags {
     const val SUMMARY = "review_forecast_summary"
 }
 
-/** "3p"/"11a" — deliberately compact so it fits a narrow axis-label slot on one line. */
+/** "3p"/"11a" — deliberately compact so it fits a narrow axis-label slot on one line. Only used for
+ *  [ReviewForecastWindow.DAY]'s hourly buckets; every wider window uses [formatBucketDate] instead
+ *  (see [axisLabelFor]), since a bucket spanning a day or more isn't identified by an hour-of-day. */
 private fun compactHourLabel(instant: Instant): String {
     val hour = instant.toLocalDateTime(TimeZone.currentSystemDefault()).hour
     val hour12 = if (hour % 12 == 0) 12 else hour % 12
@@ -80,27 +83,13 @@ private fun compactHourLabel(instant: Instant): String {
     return "$hour12$suffix"
 }
 
-/** "Mon"/"Tue" — every bucket in a day-granularity window (e.g. [ReviewForecastWindow.WEEK]) lands
- *  on the same hour-of-day (see [AssignmentRepository.observeReviewForecast]'s "now"-rolling, not
- *  midnight-aligned, bucketing), so [compactHourLabel] would print the same "2p" under every bar. */
-private fun compactWeekdayLabel(instant: Instant): String =
-    instant.toLocalDateTime(TimeZone.currentSystemDefault()).dayOfWeek.name.take(3)
-        .lowercase().replaceFirstChar { it.uppercase() }
-
-/** "3/15" — for a bucket wider than a day (e.g. [ReviewForecastWindow.FOUR_MONTHS]'s ~10-day
- *  buckets), even a weekday name doesn't identify it; a short date does. */
-private fun compactDateLabel(instant: Instant): String {
-    val local = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-    return "${local.monthNumber}/${local.dayOfMonth}"
-}
-
 /** Picks the axis label format that actually distinguishes one bucket from its neighbor at
- *  [bucketHours]' granularity — see [compactHourLabel]/[compactWeekdayLabel]/[compactDateLabel]. */
-private fun axisLabelFor(instant: Instant, bucketHours: Int): String = when {
-    bucketHours < 24 -> compactHourLabel(instant)
-    bucketHours == 24 -> compactWeekdayLabel(instant)
-    else -> compactDateLabel(instant)
-}
+ *  [bucketHours]' granularity: an hour-of-day for [ReviewForecastWindow.DAY]'s hourly buckets, a
+ *  short date (shared with the summary sentence's [bucketMomentPhrase]) for every wider window —
+ *  3d/7d/30d/4mo all use it, so a bucket several hours or days wide is identified by which day it
+ *  falls on rather than a repeating, uninformative hour-of-day. */
+private fun axisLabelFor(instant: Instant, bucketHours: Int): String =
+    if (bucketHours <= 1) compactHourLabel(instant) else formatBucketDate(instant)
 
 /** How many bar slots to skip between axis labels so a 7-bar week and a 30-bar month both end up
  *  with roughly this many labels shown, instead of a fixed stride cramming or starving either one. */
@@ -135,9 +124,7 @@ fun ReviewForecastCard(
                 Text(text = "Review Forecast", style = MaterialTheme.typography.titleMedium)
                 ReviewForecastWindowDropdownButton(selectedWindow = selectedWindow, onWindowChange = onWindowChange)
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            ReviewForecastColorModeChips(selectedColorMode = selectedColorMode, onColorModeChange = onColorModeChange)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = summaryText(forecast, selectedIndex, selectedWindow),
                 style = MaterialTheme.typography.bodyMedium,
@@ -148,7 +135,9 @@ fun ReviewForecastCard(
                 color = kanjiColor(),
                 modifier = Modifier.testTag(ReviewForecastTestTags.SUMMARY)
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+            ReviewForecastColorModeChips(selectedColorMode = selectedColorMode, onColorModeChange = onColorModeChange)
+            Spacer(modifier = Modifier.height(4.dp))
 
             when {
                 forecast == null ->
@@ -251,10 +240,11 @@ private fun summaryText(forecast: ReviewForecast?, selectedIndex: Int?, selected
             "${forecast.reviewsAvailableNow} due now"
         } else {
             val bucket = forecast.buckets[selectedIndex - 1]
-            val time = formatHourOfDay(bucket.availableAt)
-            val atHour = bucket.newlyAvailableCount
+            val bucketHours = forecast.buckets.first().hoursFromNow
+            val moment = bucketMomentPhrase(bucket.availableAt, bucketHours)
+            val newlyAvailable = bucket.newlyAvailableCount
             val totalByThen = forecast.reviewsAvailableNow + forecast.buckets.take(selectedIndex).sumOf { it.newlyAvailableCount }
-            "$atHour at $time · $totalByThen total"
+            "$newlyAvailable $moment · $totalByThen total"
         }
     }
     return reviewForecastSummary(forecast, selectedWindow.label)

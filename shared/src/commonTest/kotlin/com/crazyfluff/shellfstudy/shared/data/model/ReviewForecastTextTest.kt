@@ -43,4 +43,24 @@ class ReviewForecastTextTest {
         val forecast = ReviewForecast(reviewsAvailableNow = 0, buckets = (1..24).map { bucket(it, 0) })
         assertEquals("All caught up", reviewForecastSummary(forecast))
     }
+
+    @Test
+    fun nothingDueNowButSomethingUpcoming_onAWiderThanHourlyWindow_namesTheNextBatchByDate() {
+        // A week/month/4-month window's buckets span more than an hour each, so "at 3 PM" would be
+        // uninformative (or actively misleading — every bucket lands on the same rolling hour-of-
+        // day). It should switch to "by <date>" instead, matching the axis labels for those windows.
+        val forecast = ReviewForecast(
+            reviewsAvailableNow = 0,
+            buckets = (1..7).map { index -> bucket(hoursFromNow = index * 24, count = if (index == 2) 3 else 0) }
+        )
+        assertTrue(reviewForecastSummary(forecast).startsWith("Next: 3 by"))
+    }
+
+    @Test
+    fun bucketMomentPhrase_usesAtForAnHourlyBucket_andByForAnythingWider() {
+        val instant = Instant.parse("2026-08-10T15:00:00Z")
+        assertTrue(bucketMomentPhrase(instant, bucketHours = 1).startsWith("at "))
+        assertTrue(bucketMomentPhrase(instant, bucketHours = 24).startsWith("by "))
+        assertTrue(bucketMomentPhrase(instant, bucketHours = 240).startsWith("by "))
+    }
 }

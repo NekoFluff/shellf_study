@@ -19,7 +19,8 @@ fun reviewForecastSummary(forecast: ReviewForecast, windowLabel: String = Review
         forecast.reviewsAvailableNow > 0 -> "${forecast.reviewsAvailableNow} due now"
         upcomingTotal > 0 -> {
             val next = forecast.buckets.first { it.newlyAvailableCount > 0 }
-            "Next: ${next.newlyAvailableCount} at ${formatHourOfDay(next.availableAt)}"
+            val bucketHours = forecast.buckets.first().hoursFromNow
+            "Next: ${next.newlyAvailableCount} ${bucketMomentPhrase(next.availableAt, bucketHours)}"
         }
         else -> "All caught up"
     }
@@ -33,3 +34,18 @@ fun formatHourOfDay(instant: Instant): String {
     val hour12 = if (hour24 % 12 == 0) 12 else hour24 % 12
     return "$hour12 $amPm"
 }
+
+/** "3/15" — a bucket wider than an hour rolls many different hours-of-day together (see
+ *  [com.crazyfluff.shellfstudy.shared.data.AssignmentRepository.observeReviewForecast]'s "now"-
+ *  rolling bucketing), so [formatHourOfDay] alone can't identify which one it is; a short date can. */
+fun formatBucketDate(instant: Instant): String {
+    val local = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+    return "${local.monthNumber}/${local.dayOfMonth}"
+}
+
+/** "at 3 PM" for an hourly bucket, "by 3/15" for anything wider — [bucketHours] is a bucket's own
+ *  span (a [ReviewForecastBucket.hoursFromNow] taken from the first bucket, since bucket 1's
+ *  cumulative offset from now equals its span). Shared so the summary sentence and the chart's
+ *  tap-to-inspect detail describe the same moment the same way. */
+fun bucketMomentPhrase(instant: Instant, bucketHours: Int): String =
+    if (bucketHours <= 1) "at ${formatHourOfDay(instant)}" else "by ${formatBucketDate(instant)}"
