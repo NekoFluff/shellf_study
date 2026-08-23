@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.feature.dashboard
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,11 +23,11 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -206,7 +207,15 @@ private fun ReviewForecastWindowDropdownButton(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
-        TextButton(onClick = { expanded = true }) {
+        // A plain clickable Row rather than TextButton: Material3 enforces a ~40dp minimum button
+        // height (well above this trigger's own label+icon size), which was inflating the title
+        // row it sits in — the title, vertically centered against that taller sibling, ended up
+        // with several extra dp of dead space below it that no amount of shrinking the explicit
+        // Spacer below could remove, since that space was inside the row, not in the Spacer.
+        Row(
+            modifier = Modifier.clickable(onClick = { expanded = true }),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 text = selectedWindow.label,
                 style = MaterialTheme.typography.labelMedium,
@@ -281,6 +290,16 @@ private fun representativeStage(bucket: ItemSpreadBucket): SrsStage = when (buck
     ItemSpreadBucket.BURNED -> SrsStage.BURNED
 }
 
+/** Everything the tap handler in [ReviewForecastBarChart] needs to resolve a screen offset to a
+ *  bar index, bundled so one [rememberUpdatedState] keeps all of it current — see that composable's
+ *  comment for why the handler can't just capture these values directly. */
+private data class BarTapGeometry(
+    val isSelectable: Boolean,
+    val barCount: Int,
+    val yLabelColumnWidth: Float,
+    val onSelect: (Int) -> Unit
+)
+
 @Composable
 private fun ReviewForecastBarChart(
     forecast: ReviewForecast?,
@@ -341,20 +360,32 @@ private fun ReviewForecastBarChart(
     val yLabelColumnWidth = yMeasured.maxOf { it.size.width }.toFloat()
     val yLabelGap = 4.dp
 
+    // The gesture detector below is installed once (`pointerInput(Unit)`) and left running for the
+    // composable's whole lifetime, so it never captures a stale barCount/yLabelColumnWidth/onSelect
+    // from whichever composition happened to be active when it started — rememberUpdatedState keeps
+    // this bundle current on every read instead. A key like `pointerInput(barCount)` looks safe but
+    // isn't: DAY and THREE_DAYS both have 24 buckets, so switching between them never restarts the
+    // detector, yet yLabelColumnWidth (driven by the data's max count, not the window) still moves —
+    // taps silently drift out of alignment with the bars actually drawn until something else happens
+    // to change barCount.
+    val currentTapGeometry by rememberUpdatedState(
+        BarTapGeometry(isSelectable = forecast != null, barCount = barCount, yLabelColumnWidth = yLabelColumnWidth, onSelect = onSelect)
+    )
+
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
             .height(120.dp)
             .testTag(ReviewForecastTestTags.CHART)
-            .pointerInput(barCount) {
-                if (forecast != null) {
-                    detectTapGestures { offset ->
-                        val gap = 2.dp.toPx()
-                        val barsWidth = size.width - yLabelColumnWidth - yLabelGap.toPx()
-                        val barWidth = (barsWidth - gap * (barCount - 1)) / barCount
-                        val index = (offset.x / (barWidth + gap)).toInt().coerceIn(0, barCount - 1)
-                        onSelect(index)
-                    }
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    val geometry = currentTapGeometry
+                    if (!geometry.isSelectable) return@detectTapGestures
+                    val gap = 2.dp.toPx()
+                    val barsWidth = size.width - geometry.yLabelColumnWidth - yLabelGap.toPx()
+                    val barWidth = (barsWidth - gap * (geometry.barCount - 1)) / geometry.barCount
+                    val index = (offset.x / (barWidth + gap)).toInt().coerceIn(0, geometry.barCount - 1)
+                    geometry.onSelect(index)
                 }
             }
     ) {
@@ -377,11 +408,12 @@ private fun ReviewForecastBarChart(
         counts.forEachIndexed { index, count ->
             val barHeight = if (forecast == null) 4.dp.toPx() else (size.height * (count.toFloat() / maxCount)).coerceAtLeast(2f)
             val x = index * (barWidth + gap)
-            val isDimmed = selectedIndex != null && selectedIndex != index
-            // Full strength for "now" (index 0), a lighter tint for future bars — dimmed further
-            // still once another bar is selected.
+            // Baseline (nothing selected): "now" pops at full strength, future bars sit at a
+            // lighter tint. Once a bar is tapped, IT pops to full strength instead — even a future
+            // bar, not just "now" — and every other bar (now included) fades further to make room.
             val alpha = when {
-                isDimmed -> 0.2f
+                selectedIndex == index -> 1f
+                selectedIndex != null -> 0.2f
                 index == 0 -> 1f
                 else -> 0.55f
             }
