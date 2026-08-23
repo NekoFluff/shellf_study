@@ -67,6 +67,15 @@ private fun bucketFor(stage: SrsStage): ItemSpreadBucket = when (stage) {
     SrsStage.BURNED -> ItemSpreadBucket.BURNED
 }
 
+/** Which item-spread bucket [currentSrsStage] advances INTO on a correct review — a simple "+1
+ *  stage, capped at Burned" rather than [SrsStageCalculator.nextStageOnCorrect], since that needs
+ *  each assignment's [SrsSystemEntity] (a per-subject join the forecast doesn't otherwise load) and
+ *  every SRS system currently ships burning at stage 9, matching this approximation exactly. */
+private fun nextStageBucketFor(currentSrsStage: Int): ItemSpreadBucket {
+    val nextStage = SrsStage.fromRaw((currentSrsStage + 1).coerceAtMost(SrsStage.BURNED.raw))
+    return bucketFor(nextStage)
+}
+
 private fun Instant.truncatedToHour(): Instant = Instant.fromEpochSeconds((epochSeconds / 3600) * 3600)
 
 /** Owns the full assignment mirror — SRS progress for every subject the user has encountered. */
@@ -372,13 +381,15 @@ class AssignmentRepository(
                         hoursFromNow = bucketIndex * window.bucketHours,
                         availableAt = bucketStart,
                         newlyAvailableCount = inBucket.size,
-                        countsByType = inBucket.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
+                        countsByType = inBucket.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount(),
+                        countsByNextStage = inBucket.groupingBy { nextStageBucketFor(it.srsStage) }.eachCount()
                     )
                 }
                 ReviewForecast(
                     reviewsAvailableNow = availableNow.size,
                     buckets = buckets,
-                    availableNowCountsByType = availableNow.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()
+                    availableNowCountsByType = availableNow.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount(),
+                    availableNowCountsByNextStage = availableNow.groupingBy { nextStageBucketFor(it.srsStage) }.eachCount()
                 )
             }
         }.flowOn(defaultDispatcher)

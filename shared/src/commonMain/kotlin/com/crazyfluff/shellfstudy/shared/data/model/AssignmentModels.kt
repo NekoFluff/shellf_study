@@ -7,14 +7,28 @@ data class ReviewForecastBucket(
     val hoursFromNow: Int,
     val availableAt: Instant,
     val newlyAvailableCount: Int,
-    val countsByType: Map<SubjectType, Int> = emptyMap()
+    val countsByType: Map<SubjectType, Int> = emptyMap(),
+    /** Grouped by the SRS stage each assignment advances TO if this review is passed — not its
+     *  current stage. See [com.crazyfluff.shellfstudy.shared.data.AssignmentRepository]'s
+     *  `nextStageBucketFor` for how this is approximated. */
+    val countsByNextStage: Map<ItemSpreadBucket, Int> = emptyMap()
 )
 
 data class ReviewForecast(
     val reviewsAvailableNow: Int,
     val buckets: List<ReviewForecastBucket>,
-    val availableNowCountsByType: Map<SubjectType, Int> = emptyMap()
+    val availableNowCountsByType: Map<SubjectType, Int> = emptyMap(),
+    val availableNowCountsByNextStage: Map<ItemSpreadBucket, Int> = emptyMap()
 )
+
+/** Which dimension [ReviewForecastCard][com.crazyfluff.shellfstudy.shared.feature.dashboard.ReviewForecastCard]'s
+ *  bar segments break down by — user-selectable via its color-mode toggle. Pure display state (both
+ *  breakdowns are always present on [ReviewForecast]), unlike [ReviewForecastWindow] which changes
+ *  what's actually fetched. */
+enum class ReviewForecastColorMode(val label: String) {
+    SUBJECT_TYPE("Type"),
+    SRS_STAGE("Stage")
+}
 
 /** How far ahead [ReviewForecastCard][com.crazyfluff.shellfstudy.shared.feature.dashboard.ReviewForecastCard]
  *  projects upcoming reviews, and how finely — user-selectable via its window dropdown, mirroring

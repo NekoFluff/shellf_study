@@ -7,8 +7,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
+import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import org.junit.Rule
 import org.junit.Test
@@ -112,6 +114,45 @@ class ReviewForecastCardTest {
                 forecast = forecastFor(ReviewForecastWindow.DAY),
                 selectedWindow = ReviewForecastWindow.MONTH
             )
+        }
+
+        composeTestRule.onNodeWithTag(ReviewForecastTestTags.CHART).assertIsDisplayed()
+    }
+
+    @Test
+    fun colorModeChips_showBothOptions_andReportSelection() {
+        var selected: ReviewForecastColorMode? = null
+        composeTestRule.setContent {
+            ReviewForecastCard(
+                forecast = forecastFor(ReviewForecastWindow.DAY),
+                selectedColorMode = ReviewForecastColorMode.SUBJECT_TYPE,
+                onColorModeChange = { selected = it }
+            )
+        }
+
+        composeTestRule.onNodeWithText(ReviewForecastColorMode.SRS_STAGE.label).performClick()
+
+        assertThat(selected).isEqualTo(ReviewForecastColorMode.SRS_STAGE)
+    }
+
+    @Test
+    fun srsStageColorMode_rendersTheChartFromNextStageCounts() {
+        // Distinct from the subject-type breakdown: same bucket, but colored by the SRS stage each
+        // assignment would advance to on a pass rather than its subject type.
+        val forecast = ReviewForecast(
+            reviewsAvailableNow = 2,
+            buckets = (1..ReviewForecastWindow.DAY.bucketCount).map { index ->
+                ReviewForecastBucket(
+                    hoursFromNow = index,
+                    availableAt = Clock.System.now(),
+                    newlyAvailableCount = 3,
+                    countsByNextStage = mapOf(ItemSpreadBucket.GURU to 2, ItemSpreadBucket.MASTER to 1)
+                )
+            },
+            availableNowCountsByNextStage = mapOf(ItemSpreadBucket.BURNED to 2)
+        )
+        composeTestRule.setContent {
+            ReviewForecastCard(forecast = forecast, selectedColorMode = ReviewForecastColorMode.SRS_STAGE)
         }
 
         composeTestRule.onNodeWithTag(ReviewForecastTestTags.CHART).assertIsDisplayed()

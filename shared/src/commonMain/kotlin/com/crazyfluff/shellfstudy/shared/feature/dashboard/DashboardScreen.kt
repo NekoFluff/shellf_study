@@ -75,6 +75,7 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
@@ -118,7 +119,8 @@ data class DashboardCallbacks(
     val onLevelProgressLevelChange: (Int) -> Unit = {},
     val onLeaderboardMetricChange: (LeaderboardMetric) -> Unit = {},
     val onLeaderboardWindowChange: (LeaderboardWindow) -> Unit = {},
-    val onReviewForecastWindowChange: (ReviewForecastWindow) -> Unit = {}
+    val onReviewForecastWindowChange: (ReviewForecastWindow) -> Unit = {},
+    val onReviewForecastColorModeChange: (ReviewForecastColorMode) -> Unit = {}
 )
 
 @Composable
@@ -177,7 +179,8 @@ fun DashboardRoute(
             onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
             onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange,
             onLeaderboardWindowChange = viewModel::onLeaderboardWindowChange,
-            onReviewForecastWindowChange = viewModel::onReviewForecastWindowChange
+            onReviewForecastWindowChange = viewModel::onReviewForecastWindowChange,
+            onReviewForecastColorModeChange = viewModel::onReviewForecastColorModeChange
         ),
         searchUiState = searchUiState
     )
@@ -382,6 +385,8 @@ fun DashboardScreen(
                                 forecast = uiState.reviewForecast,
                                 selectedWindow = uiState.selectedForecastWindow,
                                 onWindowChange = callbacks.onReviewForecastWindowChange,
+                                selectedColorMode = uiState.selectedForecastColorMode,
+                                onColorModeChange = callbacks.onReviewForecastColorModeChange,
                                 modifier = Modifier.fillMaxWidth()
                             )
 

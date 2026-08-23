@@ -24,6 +24,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -76,6 +77,7 @@ data class DashboardUiState(
     val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
     val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK,
     val selectedForecastWindow: ReviewForecastWindow = ReviewForecastWindow.DAY,
+    val selectedForecastColorMode: ReviewForecastColorMode = ReviewForecastColorMode.SUBJECT_TYPE,
     val hasLastSessionSummary: Boolean = false
 ) {
     val bannerState: DashboardBannerState
@@ -272,6 +274,10 @@ class DashboardViewModel(
 
     fun onReviewForecastWindowChange(window: ReviewForecastWindow) {
         _dashboardData.update { it.copy(selectedForecastWindow = window) }
+    }
+
+    fun onReviewForecastColorModeChange(colorMode: ReviewForecastColorMode) {
+        _dashboardData.update { it.copy(selectedForecastColorMode = colorMode) }
     }
 
     private suspend fun seedFromCache() {

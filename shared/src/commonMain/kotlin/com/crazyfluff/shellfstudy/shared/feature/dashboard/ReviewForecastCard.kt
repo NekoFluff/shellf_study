@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,11 +48,15 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.formatHourOfDay
 import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.srsStageColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlinx.datetime.TimeZone
@@ -108,12 +114,15 @@ fun ReviewForecastCard(
     forecast: ReviewForecast?,
     selectedWindow: ReviewForecastWindow = ReviewForecastWindow.DAY,
     onWindowChange: (ReviewForecastWindow) -> Unit = {},
+    selectedColorMode: ReviewForecastColorMode = ReviewForecastColorMode.SUBJECT_TYPE,
+    onColorModeChange: (ReviewForecastColorMode) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Index into the combined "now + N buckets" bar list; null means nothing tapped, showing the
     // default summary instead of a specific bar's detail. Keyed on selectedWindow so switching the
     // forecast window (which changes the bucket count) can't leave a stale index pointing at a bar
-    // that no longer exists.
+    // that no longer exists. Not keyed on selectedColorMode: that only changes segment coloring
+    // within each bar, never the bar count, so a tapped index stays valid across it.
     var selectedIndex by remember(selectedWindow) { mutableStateOf<Int?>(null) }
 
     Card(modifier = modifier.fillMaxWidth().testTag(ReviewForecastTestTags.CARD)) {
@@ -127,6 +136,8 @@ fun ReviewForecastCard(
                 ReviewForecastWindowDropdownButton(selectedWindow = selectedWindow, onWindowChange = onWindowChange)
             }
             Spacer(modifier = Modifier.height(4.dp))
+            ReviewForecastColorModeChips(selectedColorMode = selectedColorMode, onColorModeChange = onColorModeChange)
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = summaryText(forecast, selectedIndex, selectedWindow),
                 style = MaterialTheme.typography.bodyMedium,
@@ -141,7 +152,13 @@ fun ReviewForecastCard(
 
             when {
                 forecast == null ->
-                    ReviewForecastBarChart(forecast = null, bucketCount = selectedWindow.bucketCount, selectedIndex = null, onSelect = {})
+                    ReviewForecastBarChart(
+                        forecast = null,
+                        bucketCount = selectedWindow.bucketCount,
+                        colorMode = selectedColorMode,
+                        selectedIndex = null,
+                        onSelect = {}
+                    )
                 forecast.reviewsAvailableNow == 0 && forecast.buckets.all { it.newlyAvailableCount == 0 } -> {
                     Text(
                         text = "All caught up.",
@@ -154,6 +171,7 @@ fun ReviewForecastCard(
                     ReviewForecastBarChart(
                         forecast = forecast,
                         bucketCount = selectedWindow.bucketCount,
+                        colorMode = selectedColorMode,
                         selectedIndex = selectedIndex,
                         onSelect = { index -> selectedIndex = if (selectedIndex == index) null else index }
                     )
@@ -161,6 +179,32 @@ fun ReviewForecastCard(
                     ReviewForecastAxisLabels(forecast)
                 }
             }
+        }
+    }
+}
+
+/** Compact pill toggle between the bar chart's two color breakdowns — mirrors LeaderboardCard's
+ *  metric pills. Both breakdowns are always present on [ReviewForecast], so switching here never
+ *  needs a re-fetch, unlike the window dropdown. */
+@Composable
+private fun ReviewForecastColorModeChips(
+    selectedColorMode: ReviewForecastColorMode,
+    onColorModeChange: (ReviewForecastColorMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ReviewForecastColorMode.entries.forEach { mode ->
+            val selected = mode == selectedColorMode
+            FilterChip(
+                selected = selected,
+                onClick = { onColorModeChange(mode) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                border = if (selected) null else FilterChipDefaults.filterChipBorder(enabled = true, selected = false),
+                label = { Text(text = mode.label, style = MaterialTheme.typography.labelSmall) }
+            )
         }
     }
 }
@@ -225,19 +269,51 @@ private fun countsByStackOrder(countsByType: Map<SubjectType, Int>): List<Pair<S
     SubjectType.VOCABULARY to (countsByType[SubjectType.VOCABULARY] ?: 0) + (countsByType[SubjectType.KANA_VOCABULARY] ?: 0)
 )
 
+/** Stacking order for the "next SRS stage" breakdown — earliest stage at the bottom, most advanced
+ *  (Burned) at the top, matching [countsByStackOrder]'s low-to-high convention. LOCKED is omitted:
+ *  an assignment already in the forecast is unlocked, so it can never be the *next* stage. */
+private fun countsByStageStackOrder(countsByStage: Map<ItemSpreadBucket, Int>): List<Pair<ItemSpreadBucket, Int>> = listOf(
+    ItemSpreadBucket.APPRENTICE to (countsByStage[ItemSpreadBucket.APPRENTICE] ?: 0),
+    ItemSpreadBucket.GURU to (countsByStage[ItemSpreadBucket.GURU] ?: 0),
+    ItemSpreadBucket.MASTER to (countsByStage[ItemSpreadBucket.MASTER] ?: 0),
+    ItemSpreadBucket.ENLIGHTENED to (countsByStage[ItemSpreadBucket.ENLIGHTENED] ?: 0),
+    ItemSpreadBucket.BURNED to (countsByStage[ItemSpreadBucket.BURNED] ?: 0)
+)
+
+/** Representative [SrsStage] for each bucket's color, matching [srsStageColor]'s per-stage palette
+ *  and ItemSpreadCard's own bucket→representative-stage choices. */
+private fun representativeStage(bucket: ItemSpreadBucket): SrsStage = when (bucket) {
+    ItemSpreadBucket.LOCKED -> SrsStage.LOCKED
+    ItemSpreadBucket.APPRENTICE -> SrsStage.APPRENTICE_1
+    ItemSpreadBucket.GURU -> SrsStage.GURU_1
+    ItemSpreadBucket.MASTER -> SrsStage.MASTER
+    ItemSpreadBucket.ENLIGHTENED -> SrsStage.ENLIGHTENED
+    ItemSpreadBucket.BURNED -> SrsStage.BURNED
+}
+
 @Composable
 private fun ReviewForecastBarChart(
     forecast: ReviewForecast?,
     bucketCount: Int,
+    colorMode: ReviewForecastColorMode,
     selectedIndex: Int?,
     onSelect: (Int) -> Unit
 ) {
     // Resolved here (composable scope) rather than inside the Canvas draw lambda, since
-    // subjectColor() is theme-aware (dark/e-ink) and DrawScope isn't a composable context.
+    // subjectColor()/srsStageColor() are theme-aware (dark/e-ink) and DrawScope isn't a composable
+    // context. Base colors only — the alpha (dimmed/full/lighter) that depends on tap state and bar
+    // position is applied per-segment down in the draw loop below.
     val typeColors = mapOf(
         SubjectType.RADICAL to subjectColor(SubjectType.RADICAL),
         SubjectType.KANJI to subjectColor(SubjectType.KANJI),
         SubjectType.VOCABULARY to subjectColor(SubjectType.VOCABULARY)
+    )
+    val stageColors = mapOf(
+        ItemSpreadBucket.APPRENTICE to srsStageColor(representativeStage(ItemSpreadBucket.APPRENTICE)),
+        ItemSpreadBucket.GURU to srsStageColor(representativeStage(ItemSpreadBucket.GURU)),
+        ItemSpreadBucket.MASTER to srsStageColor(representativeStage(ItemSpreadBucket.MASTER)),
+        ItemSpreadBucket.ENLIGHTENED to srsStageColor(representativeStage(ItemSpreadBucket.ENLIGHTENED)),
+        ItemSpreadBucket.BURNED to srsStageColor(representativeStage(ItemSpreadBucket.BURNED))
     )
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val gridColor = MaterialTheme.colorScheme.outlineVariant
@@ -251,8 +327,19 @@ private fun ReviewForecastBarChart(
     // forecast that hasn't caught up to a just-changed window can't be indexed past its own end.
     val counts: List<Int> = listOf(forecast?.reviewsAvailableNow ?: 0) +
         (forecast?.buckets?.map { it.newlyAvailableCount } ?: List(bucketCount) { 0 })
-    val countsByType: List<Map<SubjectType, Int>> = listOf(forecast?.availableNowCountsByType ?: emptyMap()) +
-        (forecast?.buckets?.map { it.countsByType } ?: List(bucketCount) { emptyMap() })
+    // Each bar's segments pre-resolved to (base color, count) pairs, bottom-to-top, so the draw
+    // loop below stays agnostic to whether the underlying key was a SubjectType or an
+    // ItemSpreadBucket — it only ever deals in Color from this point on.
+    val segmentsByBar: List<List<Pair<Color, Int>>> = when (colorMode) {
+        ReviewForecastColorMode.SUBJECT_TYPE ->
+            (listOf(forecast?.availableNowCountsByType ?: emptyMap()) +
+                (forecast?.buckets?.map { it.countsByType } ?: List(bucketCount) { emptyMap() }))
+                .map { byType -> countsByStackOrder(byType).map { (type, count) -> typeColors.getValue(type) to count } }
+        ReviewForecastColorMode.SRS_STAGE ->
+            (listOf(forecast?.availableNowCountsByNextStage ?: emptyMap()) +
+                (forecast?.buckets?.map { it.countsByNextStage } ?: List(bucketCount) { emptyMap() }))
+                .map { byStage -> countsByStageStackOrder(byStage).map { (stage, count) -> stageColors.getValue(stage) to count } }
+    }
     val maxCount = (counts.maxOrNull() ?: 0).coerceAtLeast(1)
     val barCount = counts.size
 
@@ -315,9 +402,8 @@ private fun ReviewForecastBarChart(
                     x = x,
                     width = barWidth,
                     barHeight = barHeight,
-                    segments = countsByStackOrder(countsByType[index]),
-                    total = count,
-                    colorFor = { type -> typeColors.getValue(type).copy(alpha = alpha) }
+                    segments = segmentsByBar[index].map { (color, segmentCount) -> color.copy(alpha = alpha) to segmentCount },
+                    total = count
                 )
             }
         }
@@ -375,26 +461,26 @@ private fun DrawScope.drawRoundedTopBar(x: Float, width: Float, barHeight: Float
     drawPath(path, color = color)
 }
 
-/** Draws [segments] (subject type to its count within this bar) stacked bottom-to-top within the
- *  bar's own rounded-top outline — radicals at the bottom, vocabulary at the top — so the bar's
- *  overall (volume-scaled) height is unchanged, but its composition by subject type is now visible. */
+/** Draws [segments] (a color and its count within this bar) stacked bottom-to-top within the bar's
+ *  own rounded-top outline — order and color already decided by the caller (see
+ *  [countsByStackOrder]/[countsByStageStackOrder]) — so the bar's overall (volume-scaled) height is
+ *  unchanged, but its composition by whichever breakdown is selected is now visible. */
 private fun DrawScope.drawStackedBar(
     x: Float,
     width: Float,
     barHeight: Float,
-    segments: List<Pair<SubjectType, Int>>,
-    total: Int,
-    colorFor: (SubjectType) -> Color
+    segments: List<Pair<Color, Int>>,
+    total: Int
 ) {
     val top = size.height - barHeight
     val path = roundedTopBarPath(x, top, width, barHeight)
     clipPath(path) {
         var yOffset = size.height
-        segments.forEach { (type, typeCount) ->
-            if (typeCount <= 0) return@forEach
-            val segmentHeight = barHeight * (typeCount.toFloat() / total)
+        segments.forEach { (color, segmentCount) ->
+            if (segmentCount <= 0) return@forEach
+            val segmentHeight = barHeight * (segmentCount.toFloat() / total)
             val segmentTop = yOffset - segmentHeight
-            drawRect(color = colorFor(type), topLeft = Offset(x, segmentTop), size = Size(width, segmentHeight))
+            drawRect(color = color, topLeft = Offset(x, segmentTop), size = Size(width, segmentHeight))
             yOffset = segmentTop
         }
     }

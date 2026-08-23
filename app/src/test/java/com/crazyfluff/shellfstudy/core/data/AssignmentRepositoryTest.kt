@@ -522,6 +522,38 @@ class AssignmentRepositoryTest {
     }
 
     @Test
+    fun `observeReviewForecast groups both the now-count and each bucket's count by the stage a pass would advance them to`() = runTest {
+        val now = Clock.System.now()
+        val nextHour = now.truncatedToHour() + 1.hours
+        repositories.assignmentDao.upsertAll(
+            listOf(
+                // Apprentice IV (raw 4) -> Guru on a pass.
+                AssignmentEntity(
+                    id = 1, subjectId = 1, subjectType = "radical", srsStage = 4,
+                    createdAt = "2026-01-01T00:00:00.000000Z", availableAt = nextHour.toString(), hidden = false
+                ),
+                // Guru I (raw 5) -> Guru on a pass (both Guru sub-stages roll up the same bucket).
+                AssignmentEntity(
+                    id = 2, subjectId = 2, subjectType = "kanji", srsStage = 5,
+                    createdAt = "2026-01-01T00:00:00.000000Z", availableAt = nextHour.toString(), hidden = false
+                ),
+                // Enlightened (raw 8) -> Burned on a pass, available right now rather than upcoming.
+                AssignmentEntity(
+                    id = 3, subjectId = 3, subjectType = "vocabulary", srsStage = 8,
+                    createdAt = "2026-01-01T00:00:00.000000Z", availableAt = (now - 60.seconds).toString(), hidden = false
+                )
+            )
+        )
+
+        repository.observeReviewForecast().test {
+            val forecast = awaitItem()
+            assertThat(forecast.availableNowCountsByNextStage[ItemSpreadBucket.BURNED]).isEqualTo(1)
+            val bucket = forecast.buckets.first { it.availableAt == nextHour }
+            assertThat(bucket.countsByNextStage[ItemSpreadBucket.GURU]).isEqualTo(2)
+        }
+    }
+
+    @Test
     fun `observeReviewForecast for a wider window buckets by day, not by hour`() = runTest {
         // WEEK's bucketHours is 24, so it should produce exactly 7 buckets (not 168 hourly ones),
         // each merging every assignment that becomes available within that day-wide span.
