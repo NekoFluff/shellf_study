@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.shared.data.ApiResult
 
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
@@ -517,6 +518,42 @@ class AssignmentRepositoryTest {
             val bucket = forecast.buckets.first { it.availableAt == nextHour }
             assertThat(bucket.countsByType[SubjectType.RADICAL]).isEqualTo(1)
             assertThat(bucket.countsByType[SubjectType.KANJI]).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `observeReviewForecast for a wider window buckets by day, not by hour`() = runTest {
+        // WEEK's bucketHours is 24, so it should produce exactly 7 buckets (not 168 hourly ones),
+        // each merging every assignment that becomes available within that day-wide span.
+        val currentHourStart = Clock.System.now().truncatedToHour()
+        repositories.assignmentDao.upsertAll(
+            listOf(
+                // Both land inside day-bucket 1 (hours 1-24 from now) despite being on different hours.
+                AssignmentEntity(
+                    id = 1, subjectId = 1, subjectType = "radical", srsStage = 1,
+                    createdAt = "2026-01-01T00:00:00.000000Z",
+                    availableAt = (currentHourStart + 2.hours).toString(), hidden = false
+                ),
+                AssignmentEntity(
+                    id = 2, subjectId = 2, subjectType = "kanji", srsStage = 1,
+                    createdAt = "2026-01-01T00:00:00.000000Z",
+                    availableAt = (currentHourStart + 20.hours).toString(), hidden = false
+                ),
+                // Lands in day-bucket 2 (hours 25-48 from now).
+                AssignmentEntity(
+                    id = 3, subjectId = 3, subjectType = "vocabulary", srsStage = 1,
+                    createdAt = "2026-01-01T00:00:00.000000Z",
+                    availableAt = (currentHourStart + 30.hours).toString(), hidden = false
+                )
+            )
+        )
+
+        repository.observeReviewForecast(ReviewForecastWindow.WEEK).test {
+            val forecast = awaitItem()
+            assertThat(forecast.buckets).hasSize(ReviewForecastWindow.WEEK.bucketCount)
+            assertThat(forecast.buckets[0].newlyAvailableCount).isEqualTo(2)
+            assertThat(forecast.buckets[0].availableAt).isEqualTo(currentHourStart + 24.hours)
+            assertThat(forecast.buckets[1].newlyAvailableCount).isEqualTo(1)
         }
     }
 

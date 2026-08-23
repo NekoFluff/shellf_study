@@ -11,6 +11,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
@@ -329,7 +330,7 @@ class AssignmentRepository(
         }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun observeReviewForecast(hours: Int = 24): Flow<ReviewForecast> {
+    fun observeReviewForecast(window: ReviewForecastWindow = ReviewForecastWindow.DAY): Flow<ReviewForecast> {
         // Re-subscribe to the DAO at every hour boundary. The DAO query parameters (nowIso) are
         // baked in at subscription time — Room re-fires the query on table writes but can't update
         // the `availableAt <= :nowIso` predicate itself. Without re-subscribing, reviews that
@@ -356,17 +357,19 @@ class AssignmentRepository(
                 assignmentDao.observeDueForReview(nowIso),
                 assignmentDao.observeUpcoming(nowIso)
             ) { availableNow, upcoming ->
-                // One grouping pass instead of filtering `upcoming` once per hour bucket — the same
-                // O(hours * upcoming-count) scan the flowOn comment below already calls out.
-                val byHourOffset = upcoming.groupBy { assignment ->
+                // Grouped straight into window.bucketCount buckets (not one bucket per hour then
+                // merged down later) — a 4-month window would otherwise mean building 2880 mostly-
+                // empty hourly buckets just to immediately discard all but 12 of them.
+                val byBucketIndex = upcoming.groupBy { assignment ->
                     val availableAt = assignment.availableAt?.let(Instant::parse) ?: return@groupBy null
-                    (availableAt - currentHourStart).inWholeHours.toInt()
+                    val hoursFromNow = (availableAt - currentHourStart).inWholeHours.toInt()
+                    ((hoursFromNow - 1) / window.bucketHours) + 1
                 }
-                val buckets = (1..hours).map { hourOffset ->
-                    val bucketStart = currentHourStart + hourOffset.hours
-                    val inBucket = byHourOffset[hourOffset].orEmpty()
+                val buckets = (1..window.bucketCount).map { bucketIndex ->
+                    val bucketStart = currentHourStart + (bucketIndex * window.bucketHours).hours
+                    val inBucket = byBucketIndex[bucketIndex].orEmpty()
                     ReviewForecastBucket(
-                        hoursFromNow = hourOffset,
+                        hoursFromNow = bucketIndex * window.bucketHours,
                         availableAt = bucketStart,
                         newlyAvailableCount = inBucket.size,
                         countsByType = inBucket.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()

@@ -24,6 +24,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -74,6 +75,7 @@ data class DashboardUiState(
     val leaderboardLoading: Boolean = false,
     val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
     val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK,
+    val selectedForecastWindow: ReviewForecastWindow = ReviewForecastWindow.DAY,
     val hasLastSessionSummary: Boolean = false
 ) {
     val bannerState: DashboardBannerState
@@ -124,7 +126,6 @@ private data class SessionSyncState(
 private data class ProgressStatsState(
     val lessonsCompletedToday: Int,
     val daysOnCurrentLevel: Int?,
-    val reviewForecast: ReviewForecast,
     val itemSpread: ItemSpread,
     val completionProjection: CompletionProjection
 )
@@ -174,12 +175,17 @@ class DashboardViewModel(
     private val progressStatsState: Flow<ProgressStatsState> = combine(
         assignmentRepository.observeLessonsCompletedToday(),
         statsRepository.observeDaysOnCurrentLevel(),
-        assignmentRepository.observeReviewForecast(),
         assignmentRepository.observeSrsItemSpread(),
         completionProjectionFlow
-    ) { lessonsToday, daysOnLevel, forecast, itemSpread, projection ->
-        ProgressStatsState(lessonsToday, daysOnLevel, forecast, itemSpread, projection)
+    ) { lessonsToday, daysOnLevel, itemSpread, projection ->
+        ProgressStatsState(lessonsToday, daysOnLevel, itemSpread, projection)
     }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val reviewForecastFlow: Flow<ReviewForecast> = _dashboardData
+        .map { it.selectedForecastWindow }
+        .distinctUntilChanged()
+        .flatMapLatest { window -> assignmentRepository.observeReviewForecast(window) }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val levelDependentState: Flow<LevelDependentState> = currentLevel.flatMapLatest { level ->
@@ -213,7 +219,6 @@ class DashboardViewModel(
                 dailyLessonGoal = sessionSync.dailyLessonGoal,
                 lessonsCompletedToday = progress.lessonsCompletedToday,
                 daysOnCurrentLevel = progress.daysOnCurrentLevel,
-                reviewForecast = progress.reviewForecast,
                 itemSpread = progress.itemSpread,
                 completionProjection = progress.completionProjection,
                 levelUpProgress = levelDependent.levelUpProgress,
@@ -222,12 +227,14 @@ class DashboardViewModel(
         },
         leaderboardFlow,
         _leaderboardRefreshing,
-        lastSessionSummaryRepository.exists
-    ) { dashboardState, leaderboard, leaderboardLoading, hasLastSessionSummary ->
+        lastSessionSummaryRepository.exists,
+        reviewForecastFlow
+    ) { dashboardState, leaderboard, leaderboardLoading, hasLastSessionSummary, reviewForecast ->
         dashboardState.copy(
             leaderboard = leaderboard,
             leaderboardLoading = leaderboardLoading,
-            hasLastSessionSummary = hasLastSessionSummary
+            hasLastSessionSummary = hasLastSessionSummary,
+            reviewForecast = reviewForecast
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
 
@@ -261,6 +268,10 @@ class DashboardViewModel(
 
     fun onLeaderboardWindowChange(window: LeaderboardWindow) {
         _dashboardData.update { it.copy(selectedWindow = window) }
+    }
+
+    fun onReviewForecastWindowChange(window: ReviewForecastWindow) {
+        _dashboardData.update { it.copy(selectedForecastWindow = window) }
     }
 
     private suspend fun seedFromCache() {

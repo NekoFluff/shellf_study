@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.feature.dashboard
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,9 +10,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,7 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
-import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import com.crazyfluff.shellfstudy.shared.data.model.formatHourOfDay
 import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
@@ -65,18 +74,61 @@ private fun compactHourLabel(instant: Instant): String {
     return "$hour12$suffix"
 }
 
+/** "Mon"/"Tue" — every bucket in a day-granularity window (e.g. [ReviewForecastWindow.WEEK]) lands
+ *  on the same hour-of-day (see [AssignmentRepository.observeReviewForecast]'s "now"-rolling, not
+ *  midnight-aligned, bucketing), so [compactHourLabel] would print the same "2p" under every bar. */
+private fun compactWeekdayLabel(instant: Instant): String =
+    instant.toLocalDateTime(TimeZone.currentSystemDefault()).dayOfWeek.name.take(3)
+        .lowercase().replaceFirstChar { it.uppercase() }
+
+/** "3/15" — for a bucket wider than a day (e.g. [ReviewForecastWindow.FOUR_MONTHS]'s ~10-day
+ *  buckets), even a weekday name doesn't identify it; a short date does. */
+private fun compactDateLabel(instant: Instant): String {
+    val local = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+    return "${local.monthNumber}/${local.dayOfMonth}"
+}
+
+/** Picks the axis label format that actually distinguishes one bucket from its neighbor at
+ *  [bucketHours]' granularity — see [compactHourLabel]/[compactWeekdayLabel]/[compactDateLabel]. */
+private fun axisLabelFor(instant: Instant, bucketHours: Int): String = when {
+    bucketHours < 24 -> compactHourLabel(instant)
+    bucketHours == 24 -> compactWeekdayLabel(instant)
+    else -> compactDateLabel(instant)
+}
+
+/** How many bar slots to skip between axis labels so a 7-bar week and a 30-bar month both end up
+ *  with roughly this many labels shown, instead of a fixed stride cramming or starving either one. */
+private const val TARGET_AXIS_LABEL_COUNT = 6
+
+private fun axisLabelIntervalFor(bucketCount: Int): Int =
+    ((bucketCount + TARGET_AXIS_LABEL_COUNT - 1) / TARGET_AXIS_LABEL_COUNT).coerceAtLeast(1)
+
 @Composable
-fun ReviewForecastCard(forecast: ReviewForecast?, modifier: Modifier = Modifier) {
-    // Index into the combined "now + 24 buckets" bar list; null means nothing tapped, showing the
-    // default summary instead of a specific bar's detail.
-    var selectedIndex by remember { mutableStateOf<Int?>(null) }
+fun ReviewForecastCard(
+    forecast: ReviewForecast?,
+    selectedWindow: ReviewForecastWindow = ReviewForecastWindow.DAY,
+    onWindowChange: (ReviewForecastWindow) -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    // Index into the combined "now + N buckets" bar list; null means nothing tapped, showing the
+    // default summary instead of a specific bar's detail. Keyed on selectedWindow so switching the
+    // forecast window (which changes the bucket count) can't leave a stale index pointing at a bar
+    // that no longer exists.
+    var selectedIndex by remember(selectedWindow) { mutableStateOf<Int?>(null) }
 
     Card(modifier = modifier.fillMaxWidth().testTag(ReviewForecastTestTags.CARD)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Review Forecast", style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Review Forecast", style = MaterialTheme.typography.titleMedium)
+                ReviewForecastWindowDropdownButton(selectedWindow = selectedWindow, onWindowChange = onWindowChange)
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = summaryText(forecast, selectedIndex),
+                text = summaryText(forecast, selectedIndex, selectedWindow),
                 style = MaterialTheme.typography.bodyMedium,
                 // A fixed brand color rather than MaterialTheme.colorScheme.secondary: in the dark
                 // scheme, secondary maps to a pale tint (see DashboardScreen's SummaryCard comment)
@@ -88,7 +140,8 @@ fun ReviewForecastCard(forecast: ReviewForecast?, modifier: Modifier = Modifier)
             Spacer(modifier = Modifier.height(12.dp))
 
             when {
-                forecast == null -> ReviewForecastBarChart(forecast = null, selectedIndex = null, onSelect = {})
+                forecast == null ->
+                    ReviewForecastBarChart(forecast = null, bucketCount = selectedWindow.bucketCount, selectedIndex = null, onSelect = {})
                 forecast.reviewsAvailableNow == 0 && forecast.buckets.all { it.newlyAvailableCount == 0 } -> {
                     Text(
                         text = "All caught up.",
@@ -100,6 +153,7 @@ fun ReviewForecastCard(forecast: ReviewForecast?, modifier: Modifier = Modifier)
                 else -> {
                     ReviewForecastBarChart(
                         forecast = forecast,
+                        bucketCount = selectedWindow.bucketCount,
                         selectedIndex = selectedIndex,
                         onSelect = { index -> selectedIndex = if (selectedIndex == index) null else index }
                     )
@@ -111,7 +165,42 @@ fun ReviewForecastCard(forecast: ReviewForecast?, modifier: Modifier = Modifier)
     }
 }
 
-private fun summaryText(forecast: ReviewForecast?, selectedIndex: Int?): String {
+@Composable
+private fun ReviewForecastWindowDropdownButton(
+    selectedWindow: ReviewForecastWindow,
+    onWindowChange: (ReviewForecastWindow) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        TextButton(onClick = { expanded = true }) {
+            Text(
+                text = selectedWindow.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = "Change forecast window",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ReviewForecastWindow.entries.forEach { window ->
+                DropdownMenuItem(
+                    text = { Text(window.label) },
+                    onClick = { onWindowChange(window); expanded = false },
+                    trailingIcon = if (window == selectedWindow) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    } else null
+                )
+            }
+        }
+    }
+}
+
+private fun summaryText(forecast: ReviewForecast?, selectedIndex: Int?, selectedWindow: ReviewForecastWindow): String {
     if (forecast == null) return "Loading…"
     if (selectedIndex != null) {
         return if (selectedIndex == 0) {
@@ -124,7 +213,7 @@ private fun summaryText(forecast: ReviewForecast?, selectedIndex: Int?): String 
             "$atHour at $time · $totalByThen total"
         }
     }
-    return reviewForecastSummary(forecast)
+    return reviewForecastSummary(forecast, selectedWindow.label)
 }
 
 /** Stacking order for a bar's colored segments — radicals at the bottom, vocabulary at the top,
@@ -139,6 +228,7 @@ private fun countsByStackOrder(countsByType: Map<SubjectType, Int>): List<Pair<S
 @Composable
 private fun ReviewForecastBarChart(
     forecast: ReviewForecast?,
+    bucketCount: Int,
     selectedIndex: Int?,
     onSelect: (Int) -> Unit
 ) {
@@ -155,10 +245,14 @@ private fun ReviewForecastBarChart(
     val textMeasurer = rememberTextMeasurer()
     val yLabelStyle = TextStyle(fontSize = 9.sp, color = yLabelColor)
 
+    // bucketCount only matters for the forecast == null skeleton below (drawn while genuinely
+    // loading, sized to whichever window is currently selected) — once real data arrives, bar
+    // count always comes from forecast.buckets.size itself, never from the selected window, so a
+    // forecast that hasn't caught up to a just-changed window can't be indexed past its own end.
     val counts: List<Int> = listOf(forecast?.reviewsAvailableNow ?: 0) +
-        (forecast?.buckets?.map { it.newlyAvailableCount } ?: List(24) { 0 })
+        (forecast?.buckets?.map { it.newlyAvailableCount } ?: List(bucketCount) { 0 })
     val countsByType: List<Map<SubjectType, Int>> = listOf(forecast?.availableNowCountsByType ?: emptyMap()) +
-        (forecast?.buckets?.map { it.countsByType } ?: List(24) { emptyMap() })
+        (forecast?.buckets?.map { it.countsByType } ?: List(bucketCount) { emptyMap() })
     val maxCount = (counts.maxOrNull() ?: 0).coerceAtLeast(1)
     val barCount = counts.size
 
@@ -232,14 +326,19 @@ private fun ReviewForecastBarChart(
 
 @Composable
 private fun ReviewForecastAxisLabels(forecast: ReviewForecast) {
+    // Derived from forecast.buckets itself — not the selected window — so a forecast that hasn't
+    // caught up to a just-changed window (see ReviewForecastBarChart's comment) renders consistent,
+    // in-bounds labels for the data it actually has, just briefly in the outgoing window's format.
+    val bucketHours = forecast.buckets.firstOrNull()?.hoursFromNow ?: 1
+    val labelInterval = axisLabelIntervalFor(forecast.buckets.size)
     Row(modifier = Modifier.fillMaxWidth()) {
-        // 25 slots (now + 24 hourly buckets), matching the bar chart's layout exactly so labels
-        // line up under the bars they describe. Only every 4th slot gets a label to avoid clutter.
-        repeat(25) { index ->
+        // now + one slot per bucket, matching the bar chart's layout exactly so labels line up
+        // under the bars they describe. Only every labelInterval-th slot gets a label.
+        repeat(forecast.buckets.size + 1) { index ->
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 val label = when {
                     index == 0 -> "now"
-                    index % 4 == 0 -> compactHourLabel(forecast.buckets[index - 1].availableAt)
+                    index % labelInterval == 0 -> axisLabelFor(forecast.buckets[index - 1].availableAt, bucketHours)
                     else -> null
                 }
                 if (label != null) {

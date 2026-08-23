@@ -7,13 +7,15 @@ import kotlin.time.Instant
 /**
  * "N due now · M more in the next 24h" / "Next up: N at 3 PM" / "All caught up" — shared by
  * [com.crazyfluff.shellfstudy.shared.feature.dashboard.ReviewForecastCard]'s default summary and the
- * reviews-available notification body, so the two don't drift out of sync.
+ * reviews-available notification body, so the two don't drift out of sync. [windowLabel] reflects
+ * [forecast]'s actual bucket span (e.g. "48h") — the notification always forecasts the default
+ * [ReviewForecastWindow.DAY], so it relies on this parameter's default rather than passing one.
  */
-fun reviewForecastSummary(forecast: ReviewForecast): String {
+fun reviewForecastSummary(forecast: ReviewForecast, windowLabel: String = ReviewForecastWindow.DAY.label): String {
     val upcomingTotal = forecast.buckets.sumOf { it.newlyAvailableCount }
     return when {
         forecast.reviewsAvailableNow > 0 && upcomingTotal > 0 ->
-            "${forecast.reviewsAvailableNow} due now · $upcomingTotal more in 24h"
+            "${forecast.reviewsAvailableNow} due now · $upcomingTotal more in $windowLabel"
         forecast.reviewsAvailableNow > 0 -> "${forecast.reviewsAvailableNow} due now"
         upcomingTotal > 0 -> {
             val next = forecast.buckets.first { it.newlyAvailableCount > 0 }

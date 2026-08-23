@@ -75,6 +75,7 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
 import com.crazyfluff.shellfstudy.shared.util.formatRelativeTime
@@ -116,7 +117,8 @@ data class DashboardCallbacks(
     val onSearchQueryChange: (String) -> Unit = {},
     val onLevelProgressLevelChange: (Int) -> Unit = {},
     val onLeaderboardMetricChange: (LeaderboardMetric) -> Unit = {},
-    val onLeaderboardWindowChange: (LeaderboardWindow) -> Unit = {}
+    val onLeaderboardWindowChange: (LeaderboardWindow) -> Unit = {},
+    val onReviewForecastWindowChange: (ReviewForecastWindow) -> Unit = {}
 )
 
 @Composable
@@ -174,7 +176,8 @@ fun DashboardRoute(
             onSearchQueryChange = searchViewModel::onQueryChange,
             onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
             onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange,
-            onLeaderboardWindowChange = viewModel::onLeaderboardWindowChange
+            onLeaderboardWindowChange = viewModel::onLeaderboardWindowChange,
+            onReviewForecastWindowChange = viewModel::onReviewForecastWindowChange
         ),
         searchUiState = searchUiState
     )
@@ -375,7 +378,12 @@ fun DashboardScreen(
                             }
 
                             Spacer(modifier = Modifier.height(24.dp))
-                            ReviewForecastCard(forecast = uiState.reviewForecast, modifier = Modifier.fillMaxWidth())
+                            ReviewForecastCard(
+                                forecast = uiState.reviewForecast,
+                                selectedWindow = uiState.selectedForecastWindow,
+                                onWindowChange = callbacks.onReviewForecastWindowChange,
+                                modifier = Modifier.fillMaxWidth()
+                            )
 
                             if (uiState.levelProgress != null) {
                                 Spacer(modifier = Modifier.height(16.dp))

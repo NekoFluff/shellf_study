@@ -16,6 +16,26 @@ data class ReviewForecast(
     val availableNowCountsByType: Map<SubjectType, Int> = emptyMap()
 )
 
+/** How far ahead [ReviewForecastCard][com.crazyfluff.shellfstudy.shared.feature.dashboard.ReviewForecastCard]
+ *  projects upcoming reviews, and how finely — user-selectable via its window dropdown, mirroring
+ *  [LeaderboardWindow]. A short window buckets hourly; a longer one buckets by day (or wider) so
+ *  [AssignmentRepository][com.crazyfluff.shellfstudy.shared.data.AssignmentRepository] groups
+ *  straight into [bucketCount] buckets instead of computing e.g. 2880 near-empty hourly ones only
+ *  to discard almost all of them. [bucketHours] must divide [totalHours] evenly.
+ *
+ *  4 months (not a full year) caps [FOUR_MONTHS]: WaniKani's SRS never schedules a review further
+ *  out than the Enlightened→Burned interval, so a year-long forecast would spend its back three
+ *  quarters showing nothing. */
+enum class ReviewForecastWindow(val totalHours: Int, val bucketHours: Int, val label: String) {
+    DAY(totalHours = 24, bucketHours = 1, label = "24h"),
+    THREE_DAYS(totalHours = 24 * 3, bucketHours = 3, label = "3d"),
+    WEEK(totalHours = 24 * 7, bucketHours = 24, label = "7d"),
+    MONTH(totalHours = 24 * 30, bucketHours = 24, label = "30d"),
+    FOUR_MONTHS(totalHours = 24 * 120, bucketHours = 240, label = "4mo");
+
+    val bucketCount: Int get() = totalHours / bucketHours
+}
+
 enum class ItemSpreadBucket { LOCKED, APPRENTICE, GURU, MASTER, ENLIGHTENED, BURNED }
 
 /** [SubjectType.KANA_VOCABULARY] shares [SubjectType.VOCABULARY]'s color/segment wherever subject
