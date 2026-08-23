@@ -43,9 +43,11 @@ fun formatBucketDate(instant: Instant): String {
     return "${local.monthNumber}/${local.dayOfMonth}"
 }
 
-/** "at 3 PM" for an hourly bucket, "by 3/15" for anything wider — [bucketHours] is a bucket's own
- *  span (a [ReviewForecastBucket.hoursFromNow] taken from the first bucket, since bucket 1's
- *  cumulative offset from now equals its span). Shared so the summary sentence and the chart's
- *  tap-to-inspect detail describe the same moment the same way. */
+/** "at 3 PM" for an hourly bucket, "by 3/15, 3 PM" for anything wider (the date disambiguates which
+ *  day; the time is kept too since a bucket's [ReviewForecastBucket.availableAt] is still a precise
+ *  hour, not a whole-day range). [bucketHours] is a bucket's own span (a
+ *  [ReviewForecastBucket.hoursFromNow] taken from the first bucket, since bucket 1's cumulative
+ *  offset from now equals its span). Shared so the summary sentence and the chart's tap-to-inspect
+ *  detail describe the same moment the same way. */
 fun bucketMomentPhrase(instant: Instant, bucketHours: Int): String =
-    if (bucketHours <= 1) "at ${formatHourOfDay(instant)}" else "by ${formatBucketDate(instant)}"
+    if (bucketHours <= 1) "at ${formatHourOfDay(instant)}" else "by ${formatBucketDate(instant)}, ${formatHourOfDay(instant)}"
