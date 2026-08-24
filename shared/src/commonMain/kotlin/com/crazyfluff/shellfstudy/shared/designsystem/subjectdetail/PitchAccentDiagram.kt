@@ -1,13 +1,16 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -17,7 +20,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
-import com.crazyfluff.shellfstudy.shared.data.model.forReading
+import com.crazyfluff.shellfstudy.shared.data.model.allForReading
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.PitchAccentColors
 import kotlin.math.hypot
@@ -135,14 +138,34 @@ fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modi
     }
 }
 
-/** A reading with its pitch-accent diagram above it, or a plain reading if no pitch data matches. */
+/**
+ * A reading, with a slot for trailing content (e.g. a play button) that always sits next to the
+ * reading text no matter how many pitch patterns render below — and every matching pitch pattern
+ * stacked underneath it, one per line. A reading can have more than one accepted pitch pattern
+ * (e.g. one per part of speech); stacking rather than placing them side by side means any number
+ * of patterns stay fully visible without needing horizontal scrolling. Each pattern is labeled by
+ * its part of speech when more than one pattern is shown and that label is available.
+ */
 @Composable
-fun PitchAccentReadingRow(reading: String, pitchAccents: List<PitchAccent>, modifier: Modifier = Modifier) {
-    val match = remember(reading, pitchAccents) { pitchAccents.forReading(reading) }
+fun PitchAccentReadingRow(
+    reading: String,
+    pitchAccents: List<PitchAccent>,
+    modifier: Modifier = Modifier,
+    trailingContent: @Composable () -> Unit = {}
+) {
+    val matches = remember(reading, pitchAccents) { pitchAccents.allForReading(reading) }
     Column(modifier = modifier) {
-        if (match != null) {
-            PitchAccentDiagram(reading = reading, pitchAccent = match)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(reading, style = MaterialTheme.typography.bodyLarge)
+            trailingContent()
         }
-        Text(reading, style = MaterialTheme.typography.bodyLarge)
+        matches.forEach { match ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PitchAccentDiagram(reading = reading, pitchAccent = match)
+                if (matches.size > 1 && match.partOfSpeech != null) {
+                    Text(match.partOfSpeech, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
     }
 }

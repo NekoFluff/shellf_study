@@ -2,8 +2,10 @@ package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -106,5 +108,64 @@ class PitchAccentDiagramTest {
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
         composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+    }
+
+    @Test
+    fun `reading row shows every pitch pattern for a reading with more than one, labeled by part of speech`() {
+        composeTestRule.setContent {
+            PitchAccentReadingRow(
+                reading = "いっそう",
+                pitchAccents = listOf(
+                    PitchAccent(reading = "イッソウ", partOfSpeech = "副", pitchNumber = 0),
+                    PitchAccent(reading = "イッソウ", partOfSpeech = "名", pitchNumber = 1)
+                )
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(2)
+        composeTestRule.onNodeWithText("副").assertIsDisplayed()
+        composeTestRule.onNodeWithText("名").assertIsDisplayed()
+        composeTestRule.onNodeWithText("いっそう").assertIsDisplayed()
+    }
+
+    @Test
+    fun `reading row stacks multiple pitch patterns vertically rather than side by side`() {
+        composeTestRule.setContent {
+            PitchAccentReadingRow(
+                reading = "いっそう",
+                pitchAccents = listOf(
+                    PitchAccent(reading = "イッソウ", partOfSpeech = "副", pitchNumber = 0),
+                    PitchAccent(reading = "イッソウ", partOfSpeech = "名", pitchNumber = 1)
+                )
+            )
+        }
+
+        val diagrams = composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM)
+        val firstBounds = diagrams[0].getUnclippedBoundsInRoot()
+        val secondBounds = diagrams[1].getUnclippedBoundsInRoot()
+        assertThat(secondBounds.top.value).isAtLeast(firstBounds.bottom.value)
+    }
+
+    @Test
+    fun `trailing content stays aligned with the reading text no matter how many pitch patterns render below it`() {
+        composeTestRule.setContent {
+            PitchAccentReadingRow(
+                reading = "けっこう",
+                pitchAccents = listOf(
+                    PitchAccent(reading = "ケッコウ", partOfSpeech = "副", pitchNumber = 0),
+                    PitchAccent(reading = "ケッコウ", partOfSpeech = "名", pitchNumber = 1),
+                    PitchAccent(reading = "ケッコウ", partOfSpeech = "名", pitchNumber = 2),
+                    PitchAccent(reading = "ケッコウ", partOfSpeech = "形動", pitchNumber = 4)
+                )
+            ) {
+                Box(modifier = Modifier.size(24.dp).testTag("trailing"))
+            }
+        }
+
+        val textBounds = composeTestRule.onNodeWithText("けっこう").getUnclippedBoundsInRoot()
+        val trailingBounds = composeTestRule.onNodeWithTag("trailing").getUnclippedBoundsInRoot()
+        val textCenterY = (textBounds.top + textBounds.bottom) / 2
+        val trailingCenterY = (trailingBounds.top + trailingBounds.bottom) / 2
+        assertThat((trailingCenterY - textCenterY).value).isLessThan(4f)
     }
 }

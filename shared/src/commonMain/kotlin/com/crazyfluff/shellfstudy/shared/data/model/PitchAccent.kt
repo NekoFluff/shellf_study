@@ -12,10 +12,13 @@ import kotlinx.serialization.Serializable
 data class PitchAccent(val reading: String?, val partOfSpeech: String?, val pitchNumber: Int)
 
 /**
- * Resolves the best [PitchAccent] for a specific (hiragana or katakana) reading: an exact
- * katakana-normalized match first, falling back to a wildcard (null-reading) entry if present.
+ * Resolves every [PitchAccent] for a specific (hiragana or katakana) reading: all entries with an
+ * exact katakana-normalized match, or every wildcard (null-reading) entry if none match. A single
+ * reading can legitimately carry more than one pitch pattern — e.g. 一層(いっそう) is heiban as an
+ * adverb but nakadaka as a noun — so callers must not assume a single result.
  */
-fun List<PitchAccent>.forReading(reading: String): PitchAccent? {
+fun List<PitchAccent>.allForReading(reading: String): List<PitchAccent> {
     val katakana = reading.toKatakana()
-    return firstOrNull { it.reading == katakana } ?: firstOrNull { it.reading == null }
+    val exact = filter { it.reading == katakana }
+    return exact.ifEmpty { filter { it.reading == null } }.distinct()
 }

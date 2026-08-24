@@ -414,14 +414,7 @@ fun VocabReadingRow(
     hasAudio: Boolean,
     onPlayReading: ((String) -> Unit)?
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (showPitchAccent && pitchAccents.isNotEmpty()) {
-            // weight(1f, fill = false): the diagram sizes itself to its content, this just caps
-            // its max width for unusually long readings so the play button can't be pushed off-screen.
-            PitchAccentReadingRow(reading = reading, pitchAccents = pitchAccents, modifier = Modifier.weight(1f, fill = false))
-        } else {
-            Text(reading, style = MaterialTheme.typography.bodyLarge)
-        }
+    PitchAccentReadingRow(reading = reading, pitchAccents = if (showPitchAccent) pitchAccents else emptyList()) {
         if (onPlayReading != null && hasAudio) {
             IconButton(onClick = { onPlayReading(reading) }) {
                 Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Play pronunciation for $reading")
