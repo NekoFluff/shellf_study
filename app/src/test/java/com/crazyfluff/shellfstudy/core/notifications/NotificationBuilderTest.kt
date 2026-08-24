@@ -25,7 +25,7 @@ class NotificationBuilderTest {
         assertThat(spec.channelId).isEqualTo(NotificationChannels.REVIEWS_AVAILABLE)
         assertThat(spec.title).isEqualTo("Reviews are ready for you")
         assertThat(spec.body).isEqualTo(reviewForecastSummary(forecast))
-        assertThat(spec.destination).isEqualTo(NotificationDeepLink.DESTINATION_REVIEW)
+        assertThat(spec.destination).isEqualTo(NotificationDeepLink.DESTINATION_DASHBOARD)
     }
 
     @Test
@@ -37,11 +37,11 @@ class NotificationBuilderTest {
     }
 
     @Test
-    fun `reviewsBacklog targets the backlog channel and destination`() {
+    fun `reviewsBacklog targets the backlog channel and dashboard destination`() {
         val spec = NotificationBuilder.reviewsBacklog(totalDueNow = 75, threshold = 50)
         assertThat(spec.id).isEqualTo(NotificationIds.REVIEWS_BACKLOG)
         assertThat(spec.channelId).isEqualTo(NotificationChannels.REVIEWS_BACKLOG)
-        assertThat(spec.destination).isEqualTo(NotificationDeepLink.DESTINATION_REVIEW)
+        assertThat(spec.destination).isEqualTo(NotificationDeepLink.DESTINATION_DASHBOARD)
         assertThat(spec.body).contains("75")
     }
 
