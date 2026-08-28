@@ -227,6 +227,36 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `does not advertise reviews or lessons as due when the outbox hasn't yet told the server they're done`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Simulates returning to the dashboard right after finishing a review/lesson session:
+            // the local DB already has zero due items (the completed session's optimistic update
+            // already applied), but a submission is still sitting in the outbox — meaning the
+            // /summary response below is known-stale, since the server hasn't seen that submission
+            // yet and still reports items as due.
+            dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+            repositories.outboxDao.insertReviewSubmission(
+                com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity(
+                    assignmentId = 1, subjectId = 1, incorrectMeaningAnswers = 0, incorrectReadingAnswers = 0,
+                    gradedAt = "2026-01-01T00:00:00.000000Z"
+                )
+            )
+            val viewModel = createViewModel()
+            viewModel.onDashboardResumed()
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.isRefreshing || state.pendingSyncCount == 0) state = awaitItem()
+
+                assertThat(state.reviewCount).isEqualTo(0)
+                assertThat(state.lessonCount).isEqualTo(0)
+                assertThat(state.isReviewsCardEnabled).isFalse()
+                assertThat(state.isLessonsCardEnabled).isFalse()
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
     fun `the first dashboard appearance fetches user and summary exactly once, not twice`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         val viewModel = createViewModel()

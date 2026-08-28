@@ -84,9 +84,15 @@ class FakeAssignmentDao(
         }
     }
 
+    override fun observeDueForReviewCount(nowIso: String): Flow<Int> =
+        observeDueForReview(nowIso).map { it.size }
+
     override fun observeDueForLesson(): Flow<List<AssignmentEntity>> = assignments.map { map ->
         map.values.filter { !it.hidden && it.unlockedAt != null && it.startedAt == null }
     }
+
+    override fun observeDueForLessonCount(): Flow<Int> =
+        observeDueForLesson().map { it.size }
 
     override fun observeUpcoming(nowIso: String): Flow<List<AssignmentEntity>> = assignments.map { map ->
         map.values.filter {

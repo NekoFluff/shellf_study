@@ -137,6 +137,11 @@ private data class LevelDependentState(
     val levelProgress: LevelProgress? = null
 )
 
+/** Locally-known due counts, reactive to Room writes — see their use in [DashboardViewModel.uiState]
+ *  for why these reconcile against the WaniKani `/summary`-derived counts rather than replacing
+ *  them outright. */
+private data class LocalDueCounts(val reviewCount: Int, val lessonCount: Int)
+
 class DashboardViewModel(
     private val reviewSessionRepository: ReviewSessionRepository,
     private val lessonSessionRepository: LessonSessionRepository,
@@ -173,6 +178,16 @@ class DashboardViewModel(
         assignmentRepository.observeItemsSeenCount(),
         settingsRepository.settings
     ) { totalItems, itemsSeen, settings -> buildCompletionProjection(totalItems, itemsSeen, settings.dailyLessonGoal) }
+
+    // Reconciled into uiState only while pendingSyncCount > 0 — see its use below. The WaniKani
+    // `/summary` count can briefly lag a session just completed on this device (its outbox
+    // submission hasn't reached the server yet), which otherwise leaves the dashboard's
+    // review/lesson card advertising items that locally are already known to be done, and the very
+    // next visit to that screen finds nothing to do.
+    private val localDueCounts: Flow<LocalDueCounts> = combine(
+        assignmentRepository.observeReviewDueCount(),
+        assignmentRepository.observeLessonDueCount()
+    ) { reviewCount, lessonCount -> LocalDueCounts(reviewCount, lessonCount) }
 
     private val progressStatsState: Flow<ProgressStatsState> = combine(
         assignmentRepository.observeLessonsCompletedToday(),
@@ -211,9 +226,20 @@ class DashboardViewModel(
         .flatMapLatest { (metric, window) -> friendStatsRepository.observeLeaderboard(metric, window) }
 
     val uiState: StateFlow<DashboardUiState> = combine(
-        combine(_dashboardData, sessionSyncState, progressStatsState, levelDependentState)
-        { imperative, sessionSync, progress, levelDependent ->
+        combine(_dashboardData, sessionSyncState, progressStatsState, levelDependentState, localDueCounts)
+        { imperative, sessionSync, progress, levelDependent, localCounts ->
+            // Only clamp to the local count while the outbox still has unsent rows — that's
+            // exactly the window where a just-completed session's submissions haven't reached the
+            // server yet, so /summary's count is known-stale. Once the outbox drains, trust the
+            // freshly-fetched remote count outright again — the local assignments table isn't
+            // guaranteed to be resynced on every dashboard resume, so clamping unconditionally
+            // would let a merely-unsynced local cache mask genuinely due reviews/lessons.
+            val hasUnsentSubmissions = sessionSync.pendingSyncCount > 0
+            fun reconcile(remoteCount: Int, localCount: Int) =
+                if (hasUnsentSubmissions) minOf(remoteCount, localCount) else remoteCount
             imperative.copy(
+                reviewCount = reconcile(imperative.reviewCount, localCounts.reviewCount),
+                lessonCount = reconcile(imperative.lessonCount, localCounts.lessonCount),
                 hasActiveReviewSession = sessionSync.hasActiveReviewSession,
                 hasActiveLessonSession = sessionSync.hasActiveLessonSession,
                 pendingSyncCount = sessionSync.pendingSyncCount,

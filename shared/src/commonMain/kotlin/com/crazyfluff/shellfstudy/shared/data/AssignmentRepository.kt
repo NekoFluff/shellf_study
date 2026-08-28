@@ -221,6 +221,12 @@ class AssignmentRepository(
     private suspend fun srsSystemFor(subjectId: Long): SrsSystemEntity? =
         subjectDao.getById(subjectId)?.srsSystemId?.let { srsSystemById(it) }
 
+    /** Local, immediately-reactive count of reviews due — see [observeReviewQueue] for the full
+     *  items. Used by the dashboard to reconcile against the WaniKani `/summary` count, which can
+     *  briefly lag behind a review just graded on this device (its outbox submission hasn't
+     *  reached the server yet). */
+    fun observeReviewDueCount(): Flow<Int> = assignmentDao.observeDueForReviewCount(Clock.System.now().toString())
+
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeReviewQueue(): Flow<List<ReviewItem>> =
         assignmentDao.observeDueForReview(Clock.System.now().toString()).flatMapLatest { assignments ->
@@ -264,6 +270,10 @@ class AssignmentRepository(
             )
         }
     }
+
+    /** Local, immediately-reactive count of lessons due — see [observeReviewDueCount]'s doc for
+     *  why the dashboard reconciles against this instead of trusting `/summary` alone. */
+    fun observeLessonDueCount(): Flow<Int> = assignmentDao.observeDueForLessonCount()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeLessonQueue(): Flow<List<LessonItem>> =

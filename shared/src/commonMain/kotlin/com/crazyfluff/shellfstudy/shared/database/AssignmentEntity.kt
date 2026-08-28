@@ -65,9 +65,19 @@ interface AssignmentDao {
     @Query("SELECT * FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt <= :nowIso ORDER BY availableAt ASC")
     fun observeDueForReview(nowIso: String): Flow<List<AssignmentEntity>>
 
+    /** Same filter as [observeDueForReview], as a count — for the dashboard badge/enablement,
+     *  which only needs a size and shouldn't pay for the subject join [observeDueForReview]'s
+     *  callers need to build full [com.crazyfluff.shellfstudy.shared.data.model.ReviewItem]s. */
+    @Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt <= :nowIso")
+    fun observeDueForReviewCount(nowIso: String): Flow<Int>
+
     /** Lessons available right now: unlocked but not yet started. */
     @Query("SELECT * FROM assignments WHERE hidden = 0 AND unlockedAt IS NOT NULL AND startedAt IS NULL")
     fun observeDueForLesson(): Flow<List<AssignmentEntity>>
+
+    /** Same filter as [observeDueForLesson], as a count — see [observeDueForReviewCount]. */
+    @Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND unlockedAt IS NOT NULL AND startedAt IS NULL")
+    fun observeDueForLessonCount(): Flow<Int>
 
     /** Reviews that will become available later — the review-forecast source. */
     @Query("SELECT * FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt > :nowIso ORDER BY availableAt ASC")
