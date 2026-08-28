@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -72,6 +73,8 @@ import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDe
 object ReviewScreenTestTags {
     const val LOADING_INDICATOR = "review_loading_indicator"
     const val ERROR_TEXT = "review_error_text"
+    const val NO_REVIEWS_TEXT = "review_no_reviews_text"
+    const val NO_REVIEWS_DONE_BUTTON = "review_no_reviews_done_button"
     const val CHARACTERS = "review_characters"
     const val PROGRESS_COUNT = "review_progress_count"
     const val QUESTION_LABEL = "review_question_label"
@@ -186,7 +189,8 @@ fun ReviewScreen(
     // Distinct from the gated details toggle below — an arbitrary subject looked up mid-review via
     // search has no relationship to the current question, so it's never gated by answer state.
     val searchDetailSheetState = rememberSubjectDetailSheetState()
-    val canManageSession = !uiState.isLoading && !uiState.isSessionComplete && uiState.errorMessage == null
+    val canManageSession = !uiState.isLoading && !uiState.isSessionComplete && !uiState.hasNoReviewsAvailable &&
+        uiState.errorMessage == null
 
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
@@ -276,6 +280,25 @@ fun ReviewScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         OutlinedButton(onClick = onRetry) { Text("Retry") }
+                    }
+                }
+
+                uiState.hasNoReviewsAvailable -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "No reviews available right now.",
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.testTag(ReviewScreenTestTags.NO_REVIEWS_TEXT)
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(
+                            onClick = onDone,
+                            modifier = Modifier.testTag(ReviewScreenTestTags.NO_REVIEWS_DONE_BUTTON)
+                        ) { Text("Back to dashboard") }
                     }
                 }
 

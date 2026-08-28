@@ -533,6 +533,26 @@ class ReviewScreenTest {
     }
 
     @Test
+    fun noReviewsAvailable_showsMessageAndDoneButton() {
+        var done = false
+        setScreen(
+            ReviewUiState(isLoading = false, hasNoReviewsAvailable = true),
+            onDone = { done = true }
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.NO_REVIEWS_TEXT).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.NO_REVIEWS_DONE_BUTTON).performClick()
+        assert(done)
+    }
+
+    @Test
+    fun overflowMenu_isAbsent_whenNoReviewsAvailable() {
+        setScreen(ReviewUiState(isLoading = false, hasNoReviewsAvailable = true))
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.OVERFLOW_MENU).assertCountEquals(0)
+    }
+
+    @Test
     fun sessionComplete_showsDoneButtonAndInvokesCallback() {
         var done = false
         setScreen(

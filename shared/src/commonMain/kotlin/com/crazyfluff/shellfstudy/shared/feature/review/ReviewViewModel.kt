@@ -63,6 +63,7 @@ data class ReviewUiState(
     val rankChange: RankChange? = null,
     val undoCounter: Int = 0,
     val isSessionComplete: Boolean = false,
+    val hasNoReviewsAvailable: Boolean = false,
     val isAbandoned: Boolean = false,
     val isWrappingUp: Boolean = false,
     val isDetailsExpanded: Boolean = false,
@@ -271,7 +272,11 @@ class ReviewViewModel(
         totalQuestions = queue.size
 
         if (queue.isEmpty) {
-            _uiState.update { it.copy(isLoading = false, isSessionComplete = true, totalCount = 0, remainingCount = 0) }
+            // Distinct from isSessionComplete — nothing was ever reviewed this visit, so there's no
+            // summary to show. Mirrors LessonViewModel's hasNoLessonsAvailable, set in the same
+            // fresh-fetch-came-back-empty spot (as opposed to advanceToNextQuestion, where the queue
+            // draining to empty after real progress is a genuine completion).
+            _uiState.update { it.copy(isLoading = false, hasNoReviewsAvailable = true) }
         } else {
             sessionWriteQueue.run { persistCurrentState() }
             advanceToNextQuestion()

@@ -989,7 +989,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `an empty due queue completes the session immediately with nothing to answer`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `an empty due queue is reported as no reviews available, not a completed session`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(emptyCollectionJson()), jsonResponse(emptyCollectionJson()))
 
         val viewModel = createViewModel()
@@ -997,7 +997,8 @@ class ReviewViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.isLoading) state = awaitItem()
-            assertThat(state.isSessionComplete).isTrue()
+            assertThat(state.hasNoReviewsAvailable).isTrue()
+            assertThat(state.isSessionComplete).isFalse()
             assertThat(state.totalCount).isEqualTo(0)
         }
     }
