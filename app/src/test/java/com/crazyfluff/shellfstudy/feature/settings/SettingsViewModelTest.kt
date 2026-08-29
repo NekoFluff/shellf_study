@@ -170,6 +170,18 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `onCloseEnoughAnswersEnabledChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().closeEnoughAnswersEnabled).isTrue()
+
+            viewModel.onCloseEnoughAnswersEnabledChange(false)
+            assertThat(awaitItem().closeEnoughAnswersEnabled).isFalse()
+        }
+    }
+
+    @Test
     fun `uiState reflects opt-in notification defaults`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
         viewModel.uiState.test {

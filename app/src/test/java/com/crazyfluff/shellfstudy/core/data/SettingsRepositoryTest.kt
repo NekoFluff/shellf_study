@@ -37,6 +37,7 @@ class SettingsRepositoryTest {
             assertThat(settings.showSubjectTypeLabel).isFalse()
             assertThat(settings.showTotalTimer).isFalse()
             assertThat(settings.showQuestionTimer).isFalse()
+            assertThat(settings.closeEnoughAnswersEnabled).isTrue()
         }
     }
 
@@ -92,6 +93,17 @@ class SettingsRepositoryTest {
 
         repository.settings.test {
             assertThat(awaitItem().showQuestionTimer).isTrue()
+        }
+    }
+
+    @Test
+    fun `setCloseEnoughAnswersEnabled persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setCloseEnoughAnswersEnabled(false)
+
+        repository.settings.test {
+            assertThat(awaitItem().closeEnoughAnswersEnabled).isFalse()
         }
     }
 

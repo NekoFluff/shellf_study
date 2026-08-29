@@ -6,7 +6,11 @@ object CloseEnoughMatcher {
 
     private val NO_MATCH = MatchResult(isMatch = false, isExact = false)
 
-    fun match(answer: String, candidates: List<String>): MatchResult {
+    /** [allowCloseEnough] gates only the edit-distance leniency below — an exact match (after
+     *  trim/case/whitespace cleanup) always counts as a match either way, since that's basic
+     *  normalization rather than typo tolerance. Callers doing type-mismatch detection (rather than
+     *  judging answer correctness) should leave this at its default. */
+    fun match(answer: String, candidates: List<String>, allowCloseEnough: Boolean = true): MatchResult {
         val cleanedAnswer = clean(answer)
         if (cleanedAnswer.isEmpty() || candidates.isEmpty()) return NO_MATCH
 
@@ -18,6 +22,7 @@ object CloseEnoughMatcher {
             if (cleanedCandidate == cleanedAnswer) {
                 return MatchResult(isMatch = true, isExact = true, matchedCandidate = candidate)
             }
+            if (!allowCloseEnough) continue
             val threshold = thresholdFor(cleanedCandidate.length)
             val distance = optimalStringAlignmentDistance(cleanedAnswer, cleanedCandidate, maxDistance = threshold)
             if (distance <= threshold && distance < bestDistance) {

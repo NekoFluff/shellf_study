@@ -38,6 +38,7 @@ class SettingsScreenTest {
         onShowTotalTimerChange: (Boolean) -> Unit = {},
         onShowQuestionTimerChange: (Boolean) -> Unit = {},
         onUseJapaneseKeyboardChange: (Boolean) -> Unit = {},
+        onCloseEnoughAnswersEnabledChange: (Boolean) -> Unit = {},
         onNotificationsEnabledChange: (Boolean) -> Unit = {},
         onReviewsAvailableEnabledChange: (Boolean) -> Unit = {},
         onReviewsBacklogEnabledChange: (Boolean) -> Unit = {},
@@ -63,6 +64,7 @@ class SettingsScreenTest {
                 onShowQuestionTimerChange = onShowQuestionTimerChange,
                 onShowStrokeOrderChange = {},
                 onUseJapaneseKeyboardChange = onUseJapaneseKeyboardChange,
+                onCloseEnoughAnswersEnabledChange = onCloseEnoughAnswersEnabledChange,
                 onNotificationsEnabledChange = onNotificationsEnabledChange,
                 onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
                 onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
@@ -214,6 +216,18 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.JAPANESE_KEYBOARD_TOGGLE).performScrollTo().performClick()
         assert(useJapaneseKeyboard == true)
+    }
+
+    @Test
+    fun togglingCloseEnoughAnswersSwitch_invokesCallback() {
+        var closeEnoughEnabled: Boolean? = null
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, closeEnoughAnswersEnabled = true),
+            onCloseEnoughAnswersEnabledChange = { closeEnoughEnabled = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE).performScrollTo().performClick()
+        assert(closeEnoughEnabled == false)
     }
 
     @Test

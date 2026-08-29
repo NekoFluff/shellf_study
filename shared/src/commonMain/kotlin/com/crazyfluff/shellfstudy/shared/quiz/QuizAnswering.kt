@@ -32,11 +32,12 @@ fun evaluateAnswer(
     type: QuestionType,
     meanings: List<String>,
     auxiliaryMeanings: List<String>,
-    readings: List<String>
+    readings: List<String>,
+    closeEnoughEnabled: Boolean = true
 ): AnswerOutcome {
     val candidates = candidatesFor(meanings, auxiliaryMeanings, readings, type)
     return if (type == QuestionType.MEANING) {
-        val match = CloseEnoughMatcher.match(rawInput, candidates)
+        val match = CloseEnoughMatcher.match(rawInput, candidates, allowCloseEnough = closeEnoughEnabled)
         val readingCandidates = candidatesFor(meanings, auxiliaryMeanings, readings, QuestionType.READING)
         val looksLikeReading = rawInput.containsKana() ||
             CloseEnoughMatcher.match(convertReadingSafely(rawInput.trim()), readingCandidates).isMatch

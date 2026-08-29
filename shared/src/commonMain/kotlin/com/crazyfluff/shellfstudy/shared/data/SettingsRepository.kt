@@ -24,7 +24,8 @@ data class AppSettings(
     val showTotalTimer: Boolean = false,
     val showQuestionTimer: Boolean = false,
     val showStrokeOrder: Boolean = true,
-    val useJapaneseKeyboard: Boolean = false
+    val useJapaneseKeyboard: Boolean = false,
+    val closeEnoughAnswersEnabled: Boolean = true
 )
 
 data class NotificationSettings(
@@ -52,6 +53,7 @@ class SettingsRepository(
     private val showQuestionTimerKey = booleanPreferencesKey("show_question_timer")
     private val showStrokeOrderKey = booleanPreferencesKey("show_stroke_order")
     private val useJapaneseKeyboardKey = booleanPreferencesKey("use_japanese_keyboard")
+    private val closeEnoughAnswersEnabledKey = booleanPreferencesKey("close_enough_answers_enabled")
 
     private val notificationsEnabledKey = booleanPreferencesKey("notifications_enabled")
     private val reviewsAvailableEnabledKey = booleanPreferencesKey("notif_reviews_available_enabled")
@@ -83,7 +85,8 @@ class SettingsRepository(
             showTotalTimer = prefs[showTotalTimerKey] ?: false,
             showQuestionTimer = prefs[showQuestionTimerKey] ?: false,
             showStrokeOrder = prefs[showStrokeOrderKey] ?: true,
-            useJapaneseKeyboard = prefs[useJapaneseKeyboardKey] ?: false
+            useJapaneseKeyboard = prefs[useJapaneseKeyboardKey] ?: false,
+            closeEnoughAnswersEnabled = prefs[closeEnoughAnswersEnabledKey] ?: true
         )
     }.distinctUntilChanged()
 
@@ -140,6 +143,10 @@ class SettingsRepository(
 
     suspend fun setUseJapaneseKeyboard(enabled: Boolean) {
         dataStore.edit { it[useJapaneseKeyboardKey] = enabled }
+    }
+
+    suspend fun setCloseEnoughAnswersEnabled(enabled: Boolean) {
+        dataStore.edit { it[closeEnoughAnswersEnabledKey] = enabled }
     }
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {

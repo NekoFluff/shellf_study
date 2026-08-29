@@ -859,6 +859,27 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `disabling close-enough answers requires an exact meaning match`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setCloseEnoughAnswersEnabled(false)
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            // "Mouth" (length 5) normally tolerates a single-edit typo close match ("Mouht", the
+            // last two letters transposed) — disabled here, so it must be graded incorrect instead.
+            viewModel.onAnswerInputChange("Mouht")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isFalse()
+        }
+    }
+
+    @Test
     fun `session summary reports missed items, slowest answers capped at five, and non-negative timing`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
 

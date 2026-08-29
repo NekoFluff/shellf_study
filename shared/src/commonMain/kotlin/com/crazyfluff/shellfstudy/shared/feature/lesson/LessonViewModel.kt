@@ -577,7 +577,11 @@ class LessonViewModel(
 
         gradingGuard.launchIfIdle {
             val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-            when (val outcome = evaluateAnswer(state.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings)) {
+            val outcome = evaluateAnswer(
+                state.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
+                closeEnoughEnabled = latestSettings.closeEnoughAnswersEnabled
+            )
+            when (outcome) {
                 AnswerOutcome.TypeMismatch ->
                     _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
                 is AnswerOutcome.Graded ->

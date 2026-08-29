@@ -71,6 +71,7 @@ object SettingsScreenTestTags {
     const val SHOW_QUESTION_TIMER_TOGGLE = "settings_show_question_timer_toggle"
     const val STROKE_ORDER_TOGGLE = "settings_stroke_order_toggle"
     const val JAPANESE_KEYBOARD_TOGGLE = "settings_use_japanese_keyboard_toggle"
+    const val CLOSE_ENOUGH_ANSWERS_TOGGLE = "settings_close_enough_answers_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
     const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
     const val REVIEWS_BACKLOG_TOGGLE = "settings_reviews_backlog_toggle"
@@ -118,6 +119,7 @@ fun SettingsRoute(
         onShowQuestionTimerChange = viewModel::onShowQuestionTimerChange,
         onShowStrokeOrderChange = viewModel::onShowStrokeOrderChange,
         onUseJapaneseKeyboardChange = viewModel::onUseJapaneseKeyboardChange,
+        onCloseEnoughAnswersEnabledChange = viewModel::onCloseEnoughAnswersEnabledChange,
         onNotificationsEnabledChange = { enabled ->
             if (enabled) requestNotificationPermission() else viewModel.onNotificationsEnabledChange(false)
         },
@@ -149,6 +151,7 @@ fun SettingsScreen(
     onShowQuestionTimerChange: (Boolean) -> Unit,
     onShowStrokeOrderChange: (Boolean) -> Unit,
     onUseJapaneseKeyboardChange: (Boolean) -> Unit,
+    onCloseEnoughAnswersEnabledChange: (Boolean) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onReviewsAvailableEnabledChange: (Boolean) -> Unit,
     onReviewsBacklogEnabledChange: (Boolean) -> Unit,
@@ -306,6 +309,13 @@ fun SettingsScreen(
                     checked = uiState.useJapaneseKeyboard,
                     onCheckedChange = onUseJapaneseKeyboardChange,
                     testTag = SettingsScreenTestTags.JAPANESE_KEYBOARD_TOGGLE
+                )
+                ToggleRow(
+                    label = "Accept close-enough answers",
+                    description = "Allows small typos in meaning answers (a couple of letters off from a correct answer still counts). Turn off to require an exact match.",
+                    checked = uiState.closeEnoughAnswersEnabled,
+                    onCheckedChange = onCloseEnoughAnswersEnabledChange,
+                    testTag = SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE
                 )
             }
 

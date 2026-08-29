@@ -79,4 +79,17 @@ class CloseEnoughMatcherTest {
         val result = CloseEnoughMatcher.match("water", emptyList())
         assertThat(result.isMatch).isFalse()
     }
+
+    @Test
+    fun `allowCloseEnough false rejects a typo that would otherwise be within threshold`() {
+        val result = CloseEnoughMatcher.match("guode", listOf("guide"), allowCloseEnough = false)
+        assertThat(result.isMatch).isFalse()
+    }
+
+    @Test
+    fun `allowCloseEnough false still accepts an exact match after case and whitespace cleanup`() {
+        val result = CloseEnoughMatcher.match("  WATER  ", listOf("water"), allowCloseEnough = false)
+        assertThat(result.isMatch).isTrue()
+        assertThat(result.isExact).isTrue()
+    }
 }
