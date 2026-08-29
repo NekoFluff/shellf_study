@@ -99,7 +99,11 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     val questionActiveSegmentStartMs: Long?,
     val sessionActiveElapsedMs: Long,
     val sessionActiveSegmentStartMs: Long?,
-    val useJapaneseKeyboard: Boolean
+    val useJapaneseKeyboard: Boolean,
+    // Review defers submitting a correct answer to WaniKani until Continue is pressed, so it can
+    // still be undone up to that point — Lesson has no such pending-submission window, so it leaves
+    // this at the default and undo stays incorrect-only there.
+    val allowUndoAfterCorrect: Boolean = false
 )
 
 /**
@@ -264,7 +268,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
         )
         Spacer(modifier = Modifier.height(8.dp))
         val feedbackForField = uiState.feedback
-        val canUndo = feedbackForField != null && !feedbackForField.isCorrect
+        val canUndo = feedbackForField != null && (!feedbackForField.isCorrect || uiState.allowUndoAfterCorrect)
         QuizAnswerField(
             value = uiState.answerInput,
             onValueChange = onAnswerInputChange,

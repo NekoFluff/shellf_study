@@ -91,6 +91,17 @@ class QuizQueueTest {
     }
 
     @Test
+    fun pushFront_reinsertsRemovedQuestionAsCurrent() {
+        val queue = QuizQueue<String>()
+        queue.build(listOf("A", "B"), typesFor = { listOf(QuestionType.MEANING) }, shuffle = false)
+        val removed = queue.removeCurrent()!!
+        // B is now current; pushing the removed A back should make it current again, ahead of B.
+        queue.pushFront(removed)
+        assertEquals(removed, queue.current)
+        assertEquals(2, queue.size)
+    }
+
+    @Test
     fun restoreAndToList_roundTripsEntriesInOrder() {
         val queue = QuizQueue<String>()
         val entries = listOf(PendingQuestion("A", QuestionType.MEANING), PendingQuestion("B", QuestionType.READING))

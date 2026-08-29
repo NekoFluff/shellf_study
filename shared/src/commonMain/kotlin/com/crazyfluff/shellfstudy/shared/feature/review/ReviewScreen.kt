@@ -353,7 +353,8 @@ fun ReviewScreen(
                             questionActiveSegmentStartMs = uiState.questionActiveSegmentStartMs,
                             sessionActiveElapsedMs = uiState.sessionActiveElapsedMs,
                             sessionActiveSegmentStartMs = uiState.sessionActiveSegmentStartMs,
-                            useJapaneseKeyboard = uiState.useJapaneseKeyboard
+                            useJapaneseKeyboard = uiState.useJapaneseKeyboard,
+                            allowUndoAfterCorrect = true
                         ),
                         onAnswerInputChange = onAnswerInputChange,
                         onSubmit = onSubmit,

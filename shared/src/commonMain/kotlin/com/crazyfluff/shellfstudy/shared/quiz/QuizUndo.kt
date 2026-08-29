@@ -39,3 +39,36 @@ suspend fun <T : QuizDisplayItem> undoLastIncorrectAnswer(
     persist()
     return true
 }
+
+/**
+ * Reverts the most recent CORRECT answer — the counterpart to [undoLastIncorrectAnswer]. Used by
+ * ReviewViewModel.undoLastAnswer() while a correct answer's grade is still only pending (submission
+ * to WaniKani is deferred until the user presses Continue — see ReviewViewModel.commitPendingSubmission),
+ * so retracting it here is just an in-memory revert with nothing to unwind server-side. The caller
+ * is responsible for clearing its own pending-submission bookkeeping before calling [persist].
+ *
+ * Returns true if there was a progress entry to revert, false if there was nothing to do.
+ */
+suspend fun <T : QuizDisplayItem> undoLastCorrectAnswer(
+    queue: QuizQueue<T>,
+    progressByAssignmentId: Map<Long, QuizItemProgress<T>>,
+    answeredQuestions: MutableList<AnsweredQuestionRecord<T>>,
+    item: T,
+    questionType: QuestionType,
+    persist: suspend () -> Unit
+): Boolean {
+    val itemProgress = progressByAssignmentId[item.assignmentId] ?: return false
+    when (questionType) {
+        QuestionType.MEANING -> itemProgress.meaningDone = false
+        QuestionType.READING -> itemProgress.readingDone = false
+    }
+    // A correct answer removes the question from the queue outright (no requeue) — push it back to
+    // the front so it stays "current", the same invariant moveMatchingToFront restores above.
+    queue.pushFront(PendingQuestion(item, questionType))
+
+    // Undo removes the correct attempt just recorded by gradeAnswer.
+    answeredQuestions.removeLastOrNull()
+
+    persist()
+    return true
+}

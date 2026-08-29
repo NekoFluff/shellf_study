@@ -31,6 +31,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
+import com.crazyfluff.shellfstudy.shared.quiz.undoLastCorrectAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.undoLastIncorrectAnswer
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
@@ -115,6 +116,13 @@ class ReviewViewModel(
     private val queue = QuizQueue<ReviewItem>()
     private val progressByAssignmentId = mutableMapOf<Long, ItemProgress>()
     private var totalQuestions = 0
+
+    // The assignment whose grade is graded-correct-but-not-yet-submitted — set by gradeAnswer when
+    // an item becomes fully done, cleared by commitPendingSubmission (on Continue, or on resuming a
+    // session that carried one across) or by undoLastAnswer (retracting it instead). At most one can
+    // exist at a time: submitAnswer/dontKnowAnswer both refuse to grade while feedback is showing, so
+    // the previous pending submission is always resolved before a new one can be created.
+    private var pendingSubmissionAssignmentId: Long? = null
 
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
@@ -244,6 +252,7 @@ class ReviewViewModel(
             }
         }
         totalQuestions = persisted.totalQuestions
+        pendingSubmissionAssignmentId = persisted.pendingSubmissionAssignmentId
         answeredQuestions.clear()
         answeredQuestions.addAll(
             persisted.answeredQuestions.mapNotNull { p ->
@@ -338,7 +347,7 @@ class ReviewViewModel(
         expandDetails: Boolean,
         wasCloseMatch: Boolean = false
     ) {
-        val (grade, snapshot, queueIsEmpty) = run {
+        val (snapshot, queueIsEmpty) = run {
             val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress(item) }
             val questionElapsedMs = questionTiming.freeze()
             answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, questionElapsedMs))
@@ -364,23 +373,27 @@ class ReviewViewModel(
             // empties, is simpler and safer than writing it and racing a later clear against it.
             val queueIsEmpty = queue.current == null
 
-            // Snapshotted synchronously, right after mutating the queue/progress above, so the
-            // detached durability write below can safely run concurrently with the next question's
-            // own grading/advance — queue/progressByAssignmentId are plain, non-thread-safe
-            // collections, and once feedback is visible the user is free to act immediately.
-            val snapshot = currentPersistSnapshot()
-
             val grade = if (isCorrect && isFullyDone(item, itemProgress)) {
                 ReviewGrade(meaningCorrect = !itemProgress.hadIncorrectMeaning, readingCorrect = !itemProgress.hadIncorrectReading)
             } else {
                 null
             }
+            // Only recorded as pending here — actually submitting to WaniKani (and bumping the local
+            // SRS stage) is deferred to commitPendingSubmission, so the user can still undo a correct
+            // answer before pressing Continue. See pendingSubmissionAssignmentId's doc comment.
+            pendingSubmissionAssignmentId = grade?.let { item.assignmentId }
+
+            // Snapshotted synchronously, right after mutating the queue/progress/pending-submission
+            // state above, so the detached durability write below can safely run concurrently with
+            // the next question's own grading/advance — queue/progressByAssignmentId are plain,
+            // non-thread-safe collections, and once feedback is visible the user is free to act
+            // immediately.
+            val snapshot = currentPersistSnapshot()
+
             // Computed synchronously against AssignmentRepository's in-memory SRS-system cache
             // (warmed once when the queue loaded) — zero DB access on this critical path at all now.
-            // The actual DB write (persisting the new stage) is durability bookkeeping the user never
-            // waits on, so it's launched as its own detached coroutine below instead of awaited inline
-            // — previously this alone was a sequential DB read-then-write standing between tapping
-            // Submit and the rank-change badge appearing, on top of three more writes after it.
+            // This is purely a UI prediction; the actual DB write of the new stage happens later, in
+            // commitPendingSubmission.
             val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
 
             _uiState.update {
@@ -398,7 +411,7 @@ class ReviewViewModel(
                 )
             }
 
-            Triple(grade, snapshot, queueIsEmpty)
+            snapshot to queueIsEmpty
         }
         // Reads the field kept warm by the settings collector in init{} instead of
         // `settingsRepository.settings.first()` — see `latestSettings`'s doc comment for why a
@@ -411,27 +424,42 @@ class ReviewViewModel(
             }
         }
 
-        persistDurabilityWork(grade, item, snapshot, queueIsEmpty)
+        persistDurabilityWork(snapshot, queueIsEmpty)
     }
 
-    /** Reverts the most recent incorrect answer — for a typo, not a genuine miss. The queue/
-     *  progress mutation itself is shared via [undoLastIncorrectAnswer]. */
+    /** Reverts the most recent answer — a typo (incorrect) or a change of mind (correct, and not yet
+     *  submitted to WaniKani — see [pendingSubmissionAssignmentId]). The queue/progress mutation
+     *  itself is shared via [undoLastIncorrectAnswer]/[undoLastCorrectAnswer]. */
     fun undoLastAnswer() {
         val state = _uiState.value
         val item = state.currentItem ?: return
         val type = state.currentQuestionType ?: return
         val feedback = state.feedback ?: return
-        if (feedback.isCorrect) return
 
         viewModelScope.launch {
-            val didUndo = undoLastIncorrectAnswer(
-                queue = queue,
-                progressByAssignmentId = progressByAssignmentId,
-                answeredQuestions = answeredQuestions,
-                item = item,
-                questionType = type,
-                persist = { sessionWriteQueue.run { persistCurrentState() } }
-            )
+            // Cleared before persist() (called at the end of the undo functions below) so the
+            // snapshot it saves doesn't resurrect a submission this undo just retracted.
+            if (feedback.isCorrect) pendingSubmissionAssignmentId = null
+
+            val didUndo = if (feedback.isCorrect) {
+                undoLastCorrectAnswer(
+                    queue = queue,
+                    progressByAssignmentId = progressByAssignmentId,
+                    answeredQuestions = answeredQuestions,
+                    item = item,
+                    questionType = type,
+                    persist = { sessionWriteQueue.run { persistCurrentState() } }
+                )
+            } else {
+                undoLastIncorrectAnswer(
+                    queue = queue,
+                    progressByAssignmentId = progressByAssignmentId,
+                    answeredQuestions = answeredQuestions,
+                    item = item,
+                    questionType = type,
+                    persist = { sessionWriteQueue.run { persistCurrentState() } }
+                )
+            }
             if (!didUndo) return@launch
             // Restarts this question's clock so the retry's timing doesn't inherit time spent
             // before the undo.
@@ -529,6 +557,12 @@ class ReviewViewModel(
     }
 
     private suspend fun advanceToNextQuestion() {
+        // Actually submits a fully-done item's grade to WaniKani — see
+        // pendingSubmissionAssignmentId's doc comment for why this is deferred to here rather than
+        // done at grading time. Also runs when a resumed session carried a pending submission across
+        // (process death, or navigating away and back), treating that the same as an implicit
+        // Continue, since undo only works on the live in-memory session.
+        commitPendingSubmission()
         val next = queue.current
         if (next == null) {
             sessionWriteQueue.run { reviewSessionRepository.clear() }
@@ -591,32 +625,54 @@ class ReviewViewModel(
         sessionActiveElapsedMs = sessionTiming.currentElapsedMs(),
         answeredQuestions = answeredQuestions.map {
             PersistedAnsweredQuestion(it.item.assignmentId, it.type.name, it.isCorrect, it.elapsedMs)
-        }
+        },
+        pendingSubmissionAssignmentId = pendingSubmissionAssignmentId
     )
 
     private suspend fun persistCurrentState() {
         reviewSessionRepository.save(currentPersistSnapshot())
     }
 
-    /** Runs the post-grading durability writes (outbox enqueue, study-streak mark, session
-     *  persistence) — see [SerialDurableWork] for why this needs [applicationScope] rather than
+    /** Runs the post-grading durability writes (session persistence only — see
+     *  [commitPendingSubmission] for the outbox enqueue/SRS bump, deferred separately until
+     *  Continue) — see [SerialDurableWork] for why this needs [applicationScope] rather than
      *  `viewModelScope`. Clears reviewSessionRepository instead of saving [snapshot] when
      *  [queueIsEmpty] — this was the last due question, so [snapshot] is already an empty-queue
      *  shell that advanceToNextQuestion's own clear would just overwrite once the user taps
      *  Continue; not saving it in the first place is simpler than saving it and racing a later
-     *  clear against it. */
-    private suspend fun persistDurabilityWork(grade: ReviewGrade?, item: ReviewItem, snapshot: PersistedReviewSession, queueIsEmpty: Boolean) {
+     *  clear against it. The one exception is a still-pending submission: that grade hasn't reached
+     *  the outbox yet (see [commitPendingSubmission]), so clearing here would lose it outright if the
+     *  process dies before Continue — save the (empty-queue) snapshot instead so resuming can still
+     *  recover and commit it. */
+    private suspend fun persistDurabilityWork(snapshot: PersistedReviewSession, queueIsEmpty: Boolean) {
         sessionWriteQueue.run {
-            if (grade != null) {
-                // The actual DB write of the new SRS stage — already reflected in the UI via the
-                // synchronous computeReviewRankChange prediction above, so this just makes the
-                // local cache catch up. Recomputes from a fresh DB read rather than trusting the
-                // in-memory item, so a concurrent change elsewhere still wins.
-                assignmentRepository.applyOptimisticReviewResult(item.assignmentId, item.srsSystemId, grade)
-                outboxRepository.enqueueReviewSubmission(item.assignmentId, item.subjectId, grade)
-                statsRepository.markStudyActivityToday()
+            if (queueIsEmpty && snapshot.pendingSubmissionAssignmentId == null) {
+                reviewSessionRepository.clear()
+            } else {
+                reviewSessionRepository.save(snapshot)
             }
-            if (queueIsEmpty) reviewSessionRepository.clear() else reviewSessionRepository.save(snapshot)
+        }
+    }
+
+    /** Actually submits a correctly-answered, fully-done item's grade to WaniKani (outbox enqueue +
+     *  local SRS-stage bump) — deferred here from [gradeAnswer] so pressing Continue (via
+     *  [advanceToNextQuestion]) is what commits it, keeping the answer undoable up to that point.
+     *  No-ops if nothing is pending — e.g. the last-graded answer was incorrect, or this was already
+     *  committed. */
+    private suspend fun commitPendingSubmission() {
+        val assignmentId = pendingSubmissionAssignmentId ?: return
+        val progress = progressByAssignmentId[assignmentId] ?: return
+        pendingSubmissionAssignmentId = null
+        val item = progress.item
+        val grade = ReviewGrade(meaningCorrect = !progress.hadIncorrectMeaning, readingCorrect = !progress.hadIncorrectReading)
+        sessionWriteQueue.run {
+            // The actual DB write of the new SRS stage — already reflected in the UI via the
+            // synchronous computeReviewRankChange prediction in gradeAnswer, so this just makes the
+            // local cache catch up. Recomputes from a fresh DB read rather than trusting the
+            // in-memory item, so a concurrent change elsewhere still wins.
+            assignmentRepository.applyOptimisticReviewResult(item.assignmentId, item.srsSystemId, grade)
+            outboxRepository.enqueueReviewSubmission(item.assignmentId, item.subjectId, grade)
+            statsRepository.markStudyActivityToday()
         }
     }
 }

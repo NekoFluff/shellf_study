@@ -18,7 +18,14 @@ data class PersistedReviewSession(
     // Defaults to empty for data persisted before this field existed — a resume against an older
     // snapshot just starts the "slowest answers" summary from the post-resume segment, as it always
     // used to.
-    val answeredQuestions: List<PersistedAnsweredQuestion> = emptyList()
+    val answeredQuestions: List<PersistedAnsweredQuestion> = emptyList(),
+    // Set when the current question was answered correctly but the user hasn't pressed Continue yet
+    // — the WaniKani submission for it is deferred until then (see
+    // ReviewViewModel.commitPendingSubmission) so undo can still retract it. Persisted so a resume
+    // (process death, or navigating away and back) doesn't silently drop that submission — the grade
+    // is committed as soon as the session resumes, treating that the same as an implicit Continue.
+    // Defaults to null for data persisted before this field existed.
+    val pendingSubmissionAssignmentId: Long? = null
 )
 
 /**

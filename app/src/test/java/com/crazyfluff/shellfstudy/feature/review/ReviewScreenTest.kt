@@ -344,16 +344,22 @@ class ReviewScreenTest {
     }
 
     @Test
-    fun undoIcon_disabledWithoutIncorrectFeedback() {
+    fun undoIcon_enabledOnCorrectFeedback_andInvokesCallback() {
+        // Review defers submitting a correct answer to WaniKani until Continue is pressed, so it
+        // can still be undone up to that point (unlike Lesson, which has no such window).
+        var undone = false
         setScreen(
             ReviewUiState(
                 isLoading = false, totalCount = 1, remainingCount = 1,
                 currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
-            )
+            ),
+            onUndo = { undone = true }
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.UNDO_BUTTON).assertIsNotEnabled()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.UNDO_BUTTON).assertIsEnabled()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.UNDO_BUTTON).performClick()
+        assert(undone)
     }
 
     @Test

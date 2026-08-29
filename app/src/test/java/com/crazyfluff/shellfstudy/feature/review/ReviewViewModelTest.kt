@@ -222,6 +222,14 @@ class ReviewViewModelTest {
             viewModel.submitAnswer()
             var settled = awaitItem()
             while (settled.feedback == null) settled = awaitItem()
+
+            // Submission to WaniKani is deferred until Continue is pressed (see
+            // ReviewViewModel.pendingSubmissionAssignmentId) so an undo can still retract it —
+            // nothing should be queued yet.
+            assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
+
+            viewModel.onContinue()
+            awaitItem()
         }
 
         val queued = repositories.outboxDao.allReviewSubmissions()
@@ -235,16 +243,19 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `clearing the ViewModel immediately after grading does not lose the durable write`() = runTest(mainDispatcherRule.dispatcher) {
-        // Regression test for durability writes (outbox enqueue, SRS patch, session snapshot)
-        // being parented to an application-scoped CoroutineScope instead of viewModelScope: a rushed
-        // back-press clears the ViewModel (cancelling viewModelScope) the instant feedback is shown,
-        // and that must not be able to cancel the write. viewModelScope.cancel() here simulates
-        // exactly what ViewModel.clear() does to viewModelScope when the screen is left.
+    fun `clearing the ViewModel immediately after grading does not lose the pending state`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test for durability writes (session snapshot, including any pending
+        // submission) being parented to an application-scoped CoroutineScope instead of
+        // viewModelScope: a rushed back-press clears the ViewModel (cancelling viewModelScope) the
+        // instant feedback is shown, and that must not be able to cancel the write.
+        // viewModelScope.cancel() here simulates exactly what ViewModel.clear() does to
+        // viewModelScope when the screen is left. Submission to WaniKani itself is deferred until
+        // Continue (see ReviewViewModel.pendingSubmissionAssignmentId), so the outbox must stay
+        // empty here regardless — what must survive is the *snapshot* recording that a submission
+        // is pending, so a later resume can still commit it instead of silently dropping it.
         // Uses the two-item queue (rather than the single-item radical fixture) so grading the
-        // first question doesn't complete the whole session — that path clears the session
-        // snapshot outright instead of saving one (see gradeAnswer's queueIsEmpty), which is
-        // covered separately.
+        // first question doesn't complete the whole session — that path clears currentItem/
+        // currentQuestionType, which this test also reads from uiState.
         dispatch(jsonResponse(twoItemAssignmentsJson()), jsonResponse(twoItemSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -271,25 +282,26 @@ class ReviewViewModelTest {
             viewModel.viewModelScope.cancel()
         }
 
-        // The radical (101) is meaning-only, so answering it correctly completes it in one shot
-        // and queues an outbox submission; the kanji (555) needs both meaning and reading, so
-        // answering just one doesn't complete it yet — either way, the session snapshot below is
-        // what's under test.
-        val queued = repositories.outboxDao.allReviewSubmissions()
-        if (gradedItemId == 101L) {
-            assertThat(queued).hasSize(1)
-            assertThat(queued.first().assignmentId).isEqualTo(101L)
-        } else {
-            assertThat(queued).isEmpty()
-        }
+        // Submission is always deferred to Continue now, regardless of which item was graded.
+        assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
+
         // The session snapshot persisted at grading time is durability bookkeeping too, and must
         // equally survive the cancellation — this item's progress must be recorded, not lost.
-        val progress = reviewSessionRepository.load()?.progress?.firstOrNull { it.assignmentId == gradedItemId }
+        val persisted = reviewSessionRepository.load()
+        val progress = persisted?.progress?.firstOrNull { it.assignmentId == gradedItemId }
         assertThat(progress).isNotNull()
         if (gradedType == QuestionType.MEANING) {
             assertThat(progress!!.meaningDone).isTrue()
         } else {
             assertThat(progress!!.readingDone).isTrue()
+        }
+        // The radical (101) is meaning-only, so answering it correctly completes it in one shot,
+        // recording it as a pending submission; the kanji (555) needs both meaning and reading, so
+        // answering just one doesn't complete it yet and leaves nothing pending.
+        if (gradedItemId == 101L) {
+            assertThat(persisted!!.pendingSubmissionAssignmentId).isEqualTo(101L)
+        } else {
+            assertThat(persisted!!.pendingSubmissionAssignmentId).isNull()
         }
     }
 
@@ -708,6 +720,48 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `undo after a correct answer retracts it instead of submitting to WaniKani`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat(correctState.feedback?.isCorrect).isTrue()
+            assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isEqualTo(101L)
+
+            viewModel.undoLastAnswer()
+            val undoneState = awaitItem()
+            assertThat(undoneState.feedback).isNull()
+            assertThat(undoneState.answerInput).isEmpty()
+            // Undo pushes the question back to the front rather than dropping it — still one
+            // question left to answer.
+            assertThat(undoneState.remainingCount).isEqualTo(1)
+            assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isNull()
+            assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
+
+            // Answering it again completes the session normally.
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctAgainState = awaitItem()
+            assertThat(correctAgainState.feedback?.isCorrect).isTrue()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat(finalState.isSessionComplete).isTrue()
+        }
+
+        assertThat(repositories.outboxDao.allReviewSubmissions()).hasSize(1)
+    }
+
+    @Test
     fun `abandonSession clears persisted state and marks the session abandoned`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
@@ -748,6 +802,42 @@ class ReviewViewModelTest {
             assertThat(state.currentItem?.characters).isEqualTo("口")
         }
         assertThat(server.requestCount).isEqualTo(requestCountAfterFirstLoad)
+    }
+
+    @Test
+    fun `resuming a session with a pending submission commits it, as if Continue had been tapped`() = runTest(mainDispatcherRule.dispatcher) {
+        // A correct-but-not-yet-continued answer's WaniKani submission only lives in memory until
+        // Continue is pressed (see ReviewViewModel.pendingSubmissionAssignmentId) — if the process
+        // dies in that window (simulated here by just creating a fresh ViewModel over the same
+        // persisted session, the same way every other resume test does), the persisted snapshot's
+        // pendingSubmissionAssignmentId must still get it submitted rather than silently dropping it.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            firstViewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            firstViewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat(correctState.feedback?.isCorrect).isTrue()
+        }
+        assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
+        assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isEqualTo(101L)
+
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+            assertThat(state.isSessionComplete).isTrue()
+        }
+
+        val queued = repositories.outboxDao.allReviewSubmissions()
+        assertThat(queued).hasSize(1)
+        assertThat(queued.first().assignmentId).isEqualTo(101L)
+        assertThat(reviewSessionRepository.load()).isNull()
     }
 
     @Test
@@ -1144,14 +1234,16 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `grading the last question clears the persisted session immediately, before Continue is tapped`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `grading the last question keeps only a pending-submission snapshot, before Continue is tapped`() = runTest(mainDispatcherRule.dispatcher) {
         // Regression test for a race where grading the last question saved a snapshot of the
         // now-empty queue, and advanceToNextQuestion's completion-time clear (fired later, once the
         // user tapped Continue) raced that save on applicationScope's multi-threaded dispatcher —
         // occasionally the stale save landed after the clear and resurrected the session. gradeAnswer
-        // now clears reviewSessionRepository outright the instant grading empties the queue, so
-        // there's no save left to race — verified here by checking the repository *before*
-        // onContinue() is even called, not after.
+        // now saves a minimal placeholder — empty queue, just the pending submission id — instead of
+        // clearing outright, so a process death in this window doesn't silently drop the not-yet-
+        // submitted grade (see ReviewViewModel.pendingSubmissionAssignmentId); advanceToNextQuestion's
+        // own clear (once Continue is tapped) still can't race a save, since nothing further gets
+        // saved for this item after this point either way.
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -1165,20 +1257,23 @@ class ReviewViewModelTest {
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            // Still on the feedback screen — isSessionComplete only flips once onContinue() runs —
-            // yet the savepoint must already be gone.
+            // Still on the feedback screen — isSessionComplete only flips once onContinue() runs.
             assertThat(feedbackState.isSessionComplete).isFalse()
-            assertThat(reviewSessionRepository.load()).isNull()
+            val persisted = reviewSessionRepository.load()
+            assertThat(persisted).isNotNull()
+            assertThat(persisted!!.queue).isEmpty()
+            assertThat(persisted.pendingSubmissionAssignmentId).isEqualTo(101L)
         }
     }
 
     @Test
-    fun `backgrounding between grading the last question and tapping Continue does not resurrect a resumable session`() = runTest(mainDispatcherRule.dispatcher) {
-        // Companion to the "grading the last question clears..." test above: once gradeAnswer has
-        // cleared the savepoint but before onContinue() has run, isSessionComplete is still false —
-        // the pause handler's guard must key off the queue being empty too, not just
-        // isSessionComplete, or backgrounding in this exact window would re-save a stale snapshot
-        // and undo the clear.
+    fun `backgrounding between grading the last question and tapping Continue does not disturb the pending-submission snapshot`() = runTest(mainDispatcherRule.dispatcher) {
+        // Companion to the "grading the last question..." test above: once gradeAnswer has saved the
+        // pending-submission placeholder but before onContinue() has run, isSessionComplete is still
+        // false — the pause handler's guard must key off the queue being empty too, not just
+        // isSessionComplete, or backgrounding in this exact window would re-save a snapshot built
+        // from state that no longer matches (queue/progress have already moved on for the *next*
+        // question by the time a later pause fires) instead of leaving the placeholder alone.
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
         val viewModel = createViewModel()
@@ -1192,13 +1287,14 @@ class ReviewViewModelTest {
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
             assertThat(feedbackState.isSessionComplete).isFalse()
-            assertThat(reviewSessionRepository.load()).isNull()
+            val persistedBeforePause = reviewSessionRepository.load()
+            assertThat(persistedBeforePause?.pendingSubmissionAssignmentId).isEqualTo(101L)
 
             appForegroundTracker.onStop(FakeLifecycleOwner)
             awaitItem()
         }
 
-        assertThat(reviewSessionRepository.load()).isNull()
+        assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isEqualTo(101L)
     }
 
     @Test

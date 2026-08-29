@@ -26,6 +26,10 @@ class QuizQueue<T> {
 
     fun requeue(question: PendingQuestion<T>) = entries.addLast(question)
 
+    /** Re-inserts a question removed via [removeCurrent] back at the front, so it stays "current" —
+     *  used to undo a correct answer, which (unlike an incorrect one) isn't put back via [requeue]. */
+    fun pushFront(question: PendingQuestion<T>) = entries.addFirst(question)
+
     fun noneMatches(predicate: (PendingQuestion<T>) -> Boolean): Boolean = entries.none(predicate)
 
     fun moveMatchingToFront(predicate: (PendingQuestion<T>) -> Boolean) {
