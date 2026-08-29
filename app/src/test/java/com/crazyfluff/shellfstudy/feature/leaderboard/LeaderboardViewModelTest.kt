@@ -12,6 +12,7 @@ import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.crazyfluff.shellfstudy.shared.data.FriendRepository
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
+import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardViewModel
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
@@ -44,7 +45,7 @@ class LeaderboardViewModelTest {
         friendRepository = FriendRepository(dataStore, json, FakeTokenCipher())
     }
 
-    private fun createViewModel(): LeaderboardViewModel {
+    private fun createViewModel(friendRepository: FriendRepository = this.friendRepository): LeaderboardViewModel {
         val json = Json { ignoreUnknownKeys = true }
         val friendStatsRepository = FriendStatsRepository(
             friendRepository = friendRepository,
@@ -56,6 +57,18 @@ class LeaderboardViewModelTest {
             defaultDispatcher = mainDispatcherRule.dispatcher
         )
         return LeaderboardViewModel(friendRepository, friendStatsRepository, json)
+    }
+
+    /** Throws on decrypt for any token containing "bad" — simulates a Keystore entry that can no
+     *  longer decrypt a previously-stored friend token (e.g. invalidated after a device unlock
+     *  method change). */
+    private class SometimesFailingTokenCipher : TokenCipher {
+        override fun encrypt(plainText: String): String = "enc:$plainText"
+        override fun decrypt(encoded: String): String {
+            val token = encoded.removePrefix("enc:")
+            check(!token.contains("bad")) { "Simulated decrypt failure for $token" }
+            return token
+        }
     }
 
     @Test
@@ -93,4 +106,29 @@ class LeaderboardViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `onRefresh surfaces a failure and still clears isRefreshing when a friend's token can't be decrypted`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val brokenTokenFriendRepository = FriendRepository(
+                dataStore,
+                Json { ignoreUnknownKeys = true },
+                SometimesFailingTokenCipher()
+            )
+            brokenTokenFriendRepository.addFriend("Broken", "bad-token")
+            val viewModel = createViewModel(friendRepository = brokenTokenFriendRepository)
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.friends.isEmpty()) state = awaitItem()
+
+                viewModel.onRefresh()
+                while (!state.isRefreshing) state = awaitItem()
+                while (state.isRefreshing) state = awaitItem()
+
+                assertThat(state.isRefreshing).isFalse()
+                assertThat(state.refreshErrorMessage).isEqualTo("Couldn't refresh 1 friend.")
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

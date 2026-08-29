@@ -38,7 +38,8 @@ data class LeaderboardUiState(
     val addFriendError: String? = null,
     val addFriendSuccess: Boolean = false,
     val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
-    val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK
+    val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK,
+    val refreshErrorMessage: String? = null
 )
 
 class LeaderboardViewModel(
@@ -67,12 +68,22 @@ class LeaderboardViewModel(
 
     fun onRefresh() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isRefreshing = true) }
+            _uiState.update { it.copy(isRefreshing = true, refreshErrorMessage = null) }
             val entries = friendRepository.friendsFlow.first()
-            coroutineScope {
+            val results = coroutineScope {
                 entries.map { entry -> async { friendStatsRepository.refreshFriend(entry) } }.awaitAll()
             }
-            _uiState.update { it.copy(isRefreshing = false) }
+            val failedCount = results.count { succeeded -> !succeeded }
+            _uiState.update {
+                it.copy(
+                    isRefreshing = false,
+                    refreshErrorMessage = if (failedCount > 0) {
+                        "Couldn't refresh $failedCount ${if (failedCount == 1) "friend" else "friends"}."
+                    } else {
+                        null
+                    }
+                )
+            }
         }
     }
 

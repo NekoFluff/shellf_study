@@ -249,11 +249,20 @@ class FriendStatsRepository(
         }
     }
 
-    suspend fun refreshFriend(entry: FriendEntry) {
-        val token = friendRepository.decryptToken(entry)
-        val api = createFriendWaniKaniApi(token, json)
-        val entity = fetchFriendStats(entry.id, api) ?: return
+    /**
+     * @return false if the friend's token failed to decrypt, the API call failed, or the response
+     * couldn't be parsed into stats — callers use this to distinguish "nothing new to fetch" from
+     * a real failure. Never throws: a bad token (e.g. a Keystore entry invalidated after a device
+     * unlock change) must not cancel sibling refreshes running in the same `coroutineScope`.
+     */
+    suspend fun refreshFriend(entry: FriendEntry): Boolean {
+        val entity = runCatching {
+            val token = friendRepository.decryptToken(entry)
+            val api = createFriendWaniKaniApi(token, json)
+            fetchFriendStats(entry.id, api)
+        }.getOrNull() ?: return false
         friendStatsDao.upsert(entity)
+        return true
     }
 
     suspend fun removeFriendCache(id: String) {

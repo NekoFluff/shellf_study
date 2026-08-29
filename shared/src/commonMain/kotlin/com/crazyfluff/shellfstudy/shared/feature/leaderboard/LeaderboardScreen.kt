@@ -146,6 +146,16 @@ fun LeaderboardScreen(
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
                         )
                     }
+                    if (uiState.refreshErrorMessage != null) {
+                        item {
+                            Text(
+                                text = uiState.refreshErrorMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                     itemsIndexed(uiState.friends, key = { _, friend -> friend.id }) { index, friend ->
                         FriendCard(
                             friend = friend,
