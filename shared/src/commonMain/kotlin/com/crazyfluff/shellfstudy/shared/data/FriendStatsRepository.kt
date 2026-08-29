@@ -234,7 +234,7 @@ class FriendStatsRepository(
                 .sorted(by = metric, window = window)
         }.flowOn(defaultDispatcher)
 
-    suspend fun refreshAllIfStale() {
+    suspend fun refreshAllIfStale(force: Boolean = false) {
         val friends = friendRepository.friendsFlow.first()
         coroutineScope {
             friends.map { entry ->
@@ -243,7 +243,7 @@ class FriendStatsRepository(
                     val nowMillis = Clock.System.now().toEpochMilliseconds()
                     val isStale = cached == null ||
                         (nowMillis - cached.fetchedAtMillis) > FRIEND_STATS_TTL.inWholeMilliseconds
-                    if (isStale) refreshFriend(entry)
+                    if (force || isStale) refreshFriend(entry)
                 }
             }.awaitAll()
         }

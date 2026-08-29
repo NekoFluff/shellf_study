@@ -333,7 +333,7 @@ class DashboardViewModel(
         // Non-blocking: friend stats refresh runs in the background and doesn't gate the main UI.
         viewModelScope.launch {
             _leaderboardRefreshing.value = true
-            friendStatsRepository.refreshAllIfStale()
+            friendStatsRepository.refreshAllIfStale(force = true)
             _leaderboardRefreshing.value = false
         }
 
