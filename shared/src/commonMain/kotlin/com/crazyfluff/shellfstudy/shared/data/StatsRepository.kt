@@ -14,6 +14,7 @@ import com.crazyfluff.shellfstudy.shared.network.collectAllPages
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.DateTimeUnit
@@ -114,10 +115,18 @@ class StatsRepository(
         studyActivityDao.markActive(StudyActivityDayEntity(date = today.toString()))
     }
 
+    /**
+     * [studyActivityDao.observeActiveDays] only re-emits on a DB write (i.e. [markStudyActivityToday]),
+     * so combining with [dailyRolloverTicks] is what actually rolls "is today active" and the streak
+     * over at local midnight — otherwise a day with no study session would leave yesterday's streak
+     * state stuck showing "active today" until the next write or an app restart.
+     */
     fun observeStudyStreak(): Flow<StudyStreak> =
-        studyActivityDao.observeActiveDays().map { days ->
+        combine(
+            studyActivityDao.observeActiveDays(),
+            dailyRolloverTicks(TimeZone.currentSystemDefault())
+        ) { days, today ->
             val activeDays = days.map(LocalDate::parse).toSet()
-            val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
             val isActiveToday = today in activeDays
 
             var currentStreak = 0

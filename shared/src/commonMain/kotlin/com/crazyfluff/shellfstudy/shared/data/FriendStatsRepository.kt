@@ -198,12 +198,18 @@ class FriendStatsRepository(
 ) {
     // Pre-built self-stats flow; shared across all observeLeaderboard subscriptions so Room
     // doesn't open duplicate queries when metric/window changes (only the re-sort changes).
+    //
+    // The four DAO flows only re-emit on a DB write, so combining with dailyRolloverTicks is what
+    // actually rolls the "learned/burned today" figures over at local midnight — otherwise, on a
+    // night with no new assignment/review/progression write, buildSelfStats's `nowMillis` would stay
+    // frozen at whatever it was last computed until the next unrelated write (or an app restart).
     private val selfStatsFlow: Flow<FriendStats> = combine(
         selfAssignmentDao.observeAllBurnedTimestamps(),
         selfAssignmentDao.observeAllStartedTimestamps(),
         selfReviewStatisticDao.observeAll(),
-        selfLevelProgressionDao.observeAll()
-    ) { burnedTs, startedTs, statistics, progressions ->
+        selfLevelProgressionDao.observeAll(),
+        dailyRolloverTicks(TimeZone.currentSystemDefault())
+    ) { burnedTs, startedTs, statistics, progressions, _ ->
         buildSelfStats(burnedTs, startedTs, statistics, progressions)
     }.flowOn(defaultDispatcher)
 

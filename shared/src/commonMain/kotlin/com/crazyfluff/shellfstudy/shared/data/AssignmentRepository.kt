@@ -45,7 +45,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.todayIn
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
@@ -476,19 +475,22 @@ class AssignmentRepository(
 
     /**
      * Count of assignments started on the current local calendar date — used for the "lessons done
-     * today" indicator. Recomputed against the actual current date on every emission (same approach
-     * as [FriendStatsRepository]'s "learned today" stat) rather than binding "today" as a fixed SQL
-     * parameter at subscription time, which would freeze the cutoff at whatever midnight the flow
-     * was first collected and never roll over while the app stays open past midnight.
+     * today" indicator. [assignmentDao.observeAllStartedTimestamps] only re-emits on a DB write, so
+     * combining with [dailyRolloverTicks] is what actually rolls the count over at local midnight —
+     * otherwise, on a night with no new assignments, the count would stay frozen at whatever it was
+     * last computed until the next unrelated write (or app restart) happened to recompute it.
      */
-    fun observeLessonsCompletedToday(): Flow<Int> =
-        assignmentDao.observeAllStartedTimestamps().map { timestamps ->
-            val timeZone = TimeZone.currentSystemDefault()
-            val today = Clock.System.todayIn(timeZone)
+    fun observeLessonsCompletedToday(): Flow<Int> {
+        val timeZone = TimeZone.currentSystemDefault()
+        return combine(
+            assignmentDao.observeAllStartedTimestamps(),
+            dailyRolloverTicks(timeZone)
+        ) { timestamps, today ->
             timestamps.count { ts ->
                 runCatching { Instant.parse(ts).toLocalDateTime(timeZone).date == today }.getOrDefault(false)
             }
         }.flowOn(defaultDispatcher)
+    }
 
     /**
      * How many of the current level's kanji are at Guru or higher, out of the total — WaniKani
