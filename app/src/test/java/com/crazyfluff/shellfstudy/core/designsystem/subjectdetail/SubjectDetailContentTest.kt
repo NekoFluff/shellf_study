@@ -1,8 +1,10 @@
 package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
 
+import android.content.Intent
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -12,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
@@ -20,6 +23,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentT
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectStatsTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRowTestTags
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
@@ -37,6 +41,7 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
@@ -44,7 +49,7 @@ import org.robolectric.annotation.Config
 class SubjectDetailContentTest {
 
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     private val detail = SubjectDetail(
         subjectId = 440,
@@ -647,5 +652,36 @@ class SubjectDetailContentTest {
         composeTestRule.onNodeWithTag(SubjectStatsTestTags.SECTION).performScrollTo()
 
         assertThat(reportedOffset).isGreaterThan(0)
+    }
+
+    @Test
+    fun contextSentenceShareButton_opensTheShareSheetWithTheJapaneseSentence() {
+        // Explicit share button (see ContextSentenceRow) instead of relying on long-press text
+        // selection, which has to compete with this screen's own scroll gesture and is fiddly on
+        // unspaced CJK text — this is the always-reliable path to a dictionary app like Akebi.
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            contextSentences = listOf(ContextSentence(japanese = "水を飲みます。", english = "I drink water."))
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.SHARE_BUTTON).performScrollTo().performClick()
+
+        val started = shadowOf(composeTestRule.activity).nextStartedActivity
+        assertThat(started.action).isEqualTo(Intent.ACTION_CHOOSER)
+        val sendIntent = started.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+        assertThat(sendIntent.action).isEqualTo(Intent.ACTION_SEND)
+        assertThat(sendIntent.type).isEqualTo("text/plain")
+        assertThat(sendIntent.getStringExtra(Intent.EXTRA_TEXT)).isEqualTo("水を飲みます。")
     }
 }

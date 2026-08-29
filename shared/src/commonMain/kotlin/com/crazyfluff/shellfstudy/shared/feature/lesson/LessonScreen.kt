@@ -24,6 +24,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
+import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRow
+import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -976,19 +978,13 @@ private fun LessonReadingSection(
 
 @Composable
 private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
+    val shareText = rememberShareText()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionEyebrow("Context sentences")
         AkebiSelectableContainer {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 sentences.forEach { sentence ->
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            text = sentence.english,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    ContextSentenceRow(sentence, onShare = shareText)
                 }
             }
         }

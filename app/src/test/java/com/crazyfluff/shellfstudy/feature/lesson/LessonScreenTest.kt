@@ -5,34 +5,41 @@ import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreen
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenEvent
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenTestTags
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
+import android.content.Intent
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRowTestTags
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
+import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -44,7 +51,7 @@ import org.robolectric.annotation.Config
 class LessonScreenTest {
 
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     private val radicalItem = LessonItem(
         assignmentId = 1,
@@ -412,6 +419,24 @@ class LessonScreenTest {
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.SUBMIT_BUTTON).performClick()
         assert(submitted)
+    }
+
+    @Test
+    fun studyPhase_contextSentenceShareButton_opensTheShareSheetWithTheJapaneseSentence() {
+        // Context sentences are shown on the flashcard study step (before the quiz), see
+        // LessonContextSentencesSection's call site.
+        val vocabItem = radicalItem.copy(
+            subjectType = SubjectType.VOCABULARY,
+            contextSentences = listOf(ContextSentence(japanese = "水を飲みます。", english = "I drink water."))
+        )
+        setScreen(LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(vocabItem), studyIndex = 0))
+
+        composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.SHARE_BUTTON).performScrollTo().performClick()
+
+        val started = shadowOf(composeTestRule.activity).nextStartedActivity
+        assertThat(started.action).isEqualTo(Intent.ACTION_CHOOSER)
+        val sendIntent = started.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+        assertThat(sendIntent.getStringExtra(Intent.EXTRA_TEXT)).isEqualTo("水を飲みます。")
     }
 
     @Test

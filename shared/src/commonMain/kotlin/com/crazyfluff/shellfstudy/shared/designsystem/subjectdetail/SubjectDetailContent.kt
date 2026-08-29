@@ -39,6 +39,8 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
+import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRow
+import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSection
@@ -334,6 +336,7 @@ private fun SubjectReadingZone(
 @Composable
 private fun SubjectContextSentencesSection(detail: SubjectDetail, isVocabulary: Boolean) {
     if (!isVocabulary || detail.contextSentences.isEmpty()) return
+    val shareText = rememberShareText()
     HorizontalDivider()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionEyebrow("Context sentences")
@@ -342,14 +345,7 @@ private fun SubjectContextSentencesSection(detail: SubjectDetail, isVocabulary: 
         AkebiSelectableContainer {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 detail.contextSentences.forEach { sentence ->
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            text = sentence.english,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    ContextSentenceRow(sentence, onShare = shareText)
                 }
             }
         }
