@@ -602,9 +602,11 @@ class LessonViewModel(
         }
     }
 
-    /** Reverts the most recent incorrect answer — for a typo, not a genuine miss. Mirrors
-     *  ReviewViewModel.undoLastAnswer(); the queue/progress mutation itself is shared via
-     *  [undoLastIncorrectAnswer]. */
+    /** Reverts the most recent incorrect answer — for a typo, not a genuine miss. Unlike
+     *  ReviewViewModel.undoLastAnswer(), a correct answer here can't be undone — lesson-start
+     *  submission isn't deferred to Continue the way a review grade is, so by the time feedback is
+     *  showing it's already committed. The queue/progress mutation for the incorrect-answer case
+     *  is shared via [undoLastIncorrectAnswer]. */
     fun undoLastAnswer() {
         val state = _uiState.value
         val item = state.currentQuizItem ?: return

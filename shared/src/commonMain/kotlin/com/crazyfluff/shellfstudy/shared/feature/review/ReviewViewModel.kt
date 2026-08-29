@@ -98,6 +98,12 @@ data class ReviewUiState(
 
 private typealias ItemProgress = QuizItemProgress<ReviewItem>
 
+/** Shared by [ReviewViewModel.gradeAnswer]'s synchronous rank-change prediction and
+ *  [ReviewViewModel.commitPendingSubmission]'s later, authoritative recomputation — keeps the two
+ *  from drifting if the grading formula ever changes. */
+private fun ItemProgress.toReviewGrade(): ReviewGrade =
+    ReviewGrade(meaningCorrect = !hadIncorrectMeaning, readingCorrect = !hadIncorrectReading)
+
 class ReviewViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val outboxRepository: OutboxRepository,
@@ -377,11 +383,7 @@ class ReviewViewModel(
             // empties, is simpler and safer than writing it and racing a later clear against it.
             val queueIsEmpty = queue.current == null
 
-            val grade = if (isCorrect && isFullyDone(item, itemProgress)) {
-                ReviewGrade(meaningCorrect = !itemProgress.hadIncorrectMeaning, readingCorrect = !itemProgress.hadIncorrectReading)
-            } else {
-                null
-            }
+            val grade = if (isCorrect && isFullyDone(item, itemProgress)) itemProgress.toReviewGrade() else null
             // Only recorded as pending here — actually submitting to WaniKani (and bumping the local
             // SRS stage) is deferred to commitPendingSubmission, so the user can still undo a correct
             // answer before pressing Continue. See pendingSubmissionAssignmentId's doc comment.
@@ -510,9 +512,14 @@ class ReviewViewModel(
         }
     }
 
-    /** Discards progress on not-yet-submitted items and exits — a clean slate next time. */
+    /** Discards progress on not-yet-submitted items and exits — a clean slate next time. A
+     *  correct-but-not-yet-continued answer is committed first rather than discarded with the
+     *  rest — the user already saw "Correct!" feedback for it, so it reads as finished to them,
+     *  matching what the abandon confirmation dialog's copy promises ("this won't affect items
+     *  you've already submitted"). */
     fun abandonSession() {
         viewModelScope.launch {
+            commitPendingSubmission()
             sessionWriteQueue.run { reviewSessionRepository.clear() }
             _uiState.update { it.copy(isAbandoned = true) }
         }
@@ -668,7 +675,7 @@ class ReviewViewModel(
         val progress = progressByAssignmentId[assignmentId] ?: return
         pendingSubmissionAssignmentId = null
         val item = progress.item
-        val grade = ReviewGrade(meaningCorrect = !progress.hadIncorrectMeaning, readingCorrect = !progress.hadIncorrectReading)
+        val grade = progress.toReviewGrade()
         sessionWriteQueue.run {
             // The actual DB write of the new SRS stage — already reflected in the UI via the
             // synchronous computeReviewRankChange prediction in gradeAnswer, so this just makes the

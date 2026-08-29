@@ -782,6 +782,38 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `abandonSession still commits a correct answer that hasn't been continued past yet`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test: abandoning discards progress on not-yet-submitted items, but a
+        // correct-but-not-yet-continued answer already read as "finished" to the user (they saw
+        // the "Correct!" feedback) and the abandon confirmation dialog promises submitted items are
+        // safe — abandonSession must commit it rather than silently dropping it with the rest.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isLoading) state = awaitItem()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem()
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isEqualTo(101L)
+
+            viewModel.abandonSession()
+            var abandonedState = awaitItem()
+            while (!abandonedState.isAbandoned) abandonedState = awaitItem()
+        }
+
+        val queued = repositories.outboxDao.allReviewSubmissions()
+        assertThat(queued).hasSize(1)
+        assertThat(queued.first().assignmentId).isEqualTo(101L)
+        assertThat(reviewSessionRepository.load()).isNull()
+    }
+
+    @Test
     fun `a new ViewModel resumes a persisted session instead of refetching from the network`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 

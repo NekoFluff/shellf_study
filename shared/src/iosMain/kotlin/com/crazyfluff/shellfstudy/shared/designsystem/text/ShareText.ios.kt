@@ -15,6 +15,11 @@ actual fun rememberShareText(): (String) -> Unit = remember {
 
 @OptIn(ExperimentalForeignApi::class)
 private fun presentShareSheet(presenter: UIViewController, text: String) {
+    // Guards against a rapid double-tap: presentViewController sets presentedViewController
+    // synchronously (the animation itself is what's async), so a second tap landing before that
+    // first sheet is dismissed would otherwise try to present again on top of it instead of
+    // no-oping.
+    if (presenter.presentedViewController != null) return
     val activityController = UIActivityViewController(activityItems = listOf(text), applicationActivities = null)
     // iPad presents UIActivityViewController as a popover and crashes without an anchor — the
     // presenting view itself is a reasonable default since the trigger button's own position isn't
