@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -22,7 +22,7 @@ object ContextSentenceRowTestTags {
 }
 
 /**
- * One example sentence with a share button that hands the Japanese text off to the OS share sheet
+ * One example sentence with a lookup button that hands the Japanese text off to a dictionary
  * (see [rememberShareText]) — an explicit, always-reliable alternative to long-press-selecting the
  * text, which has to compete with this screen's own scroll/swipe gestures and is fiddly on
  * unspaced CJK text. Shared between the subject-detail and lesson screens.
@@ -32,7 +32,9 @@ fun ContextSentenceRow(sentence: ContextSentence, onShare: (String) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        // Top, not CenterVertically — the button should line up with the Japanese line it acts
+        // on, not float centered between it and the English translation below.
+        verticalAlignment = Alignment.Top
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
             Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
@@ -46,7 +48,7 @@ fun ContextSentenceRow(sentence: ContextSentence, onShare: (String) -> Unit) {
             onClick = { onShare(sentence.japanese) },
             modifier = Modifier.testTag(ContextSentenceRowTestTags.SHARE_BUTTON)
         ) {
-            Icon(Icons.Filled.Share, contentDescription = "Share sentence")
+            Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "Look up sentence")
         }
     }
 }

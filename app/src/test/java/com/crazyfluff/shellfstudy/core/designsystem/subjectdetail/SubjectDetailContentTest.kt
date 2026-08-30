@@ -1,6 +1,9 @@
 package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.pm.ResolveInfo
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -655,10 +658,21 @@ class SubjectDetailContentTest {
     }
 
     @Test
-    fun contextSentenceShareButton_opensTheShareSheetWithTheJapaneseSentence() {
-        // Explicit share button (see ContextSentenceRow) instead of relying on long-press text
+    fun contextSentenceLookupButton_launchesAkebiDirectly_whenInstalled() {
+        // Explicit lookup button (see ContextSentenceRow) instead of relying on long-press text
         // selection, which has to compete with this screen's own scroll gesture and is fiddly on
-        // unspaced CJK text — this is the always-reliable path to a dictionary app like Akebi.
+        // unspaced CJK text — this fires the exact ACTION_PROCESS_TEXT intent Akebi already
+        // registers for, directly, with no chooser and no selection gesture.
+        val resolveInfo = ResolveInfo().apply {
+            activityInfo = ActivityInfo().apply {
+                packageName = "com.craxic.akebifree"
+                name = "com.craxic.akebifree.ProcessTextActivity"
+            }
+        }
+        shadowOf(composeTestRule.activity.packageManager).addResolveInfoForIntent(
+            Intent(Intent.ACTION_PROCESS_TEXT).setType("text/plain").setPackage("com.craxic.akebifree"),
+            resolveInfo
+        )
         val vocabDetail = detail.copy(
             subjectType = SubjectType.VOCABULARY,
             readings = listOf("みず"),
@@ -678,10 +692,49 @@ class SubjectDetailContentTest {
         composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.SHARE_BUTTON).performScrollTo().performClick()
 
         val started = shadowOf(composeTestRule.activity).nextStartedActivity
-        assertThat(started.action).isEqualTo(Intent.ACTION_CHOOSER)
-        val sendIntent = started.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
-        assertThat(sendIntent.action).isEqualTo(Intent.ACTION_SEND)
-        assertThat(sendIntent.type).isEqualTo("text/plain")
-        assertThat(sendIntent.getStringExtra(Intent.EXTRA_TEXT)).isEqualTo("水を飲みます。")
+        assertThat(started.action).isEqualTo(Intent.ACTION_PROCESS_TEXT)
+        assertThat(started.`package`).isEqualTo("com.craxic.akebifree")
+        assertThat(started.type).isEqualTo("text/plain")
+        assertThat(started.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)).isEqualTo("水を飲みます。")
+        assertThat(started.getBooleanExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, false)).isTrue()
+    }
+
+    @Test
+    fun contextSentenceLookupButton_opensPlayStoreListing_whenAkebiNotInstalled() {
+        // No Akebi resolver registered — Robolectric resolves nothing by default, exercising the
+        // "Akebi not installed" fallback path. Register just enough resolvability for the
+        // web-based Play Store fallback (the market:// one is left unresolvable, same as
+        // Robolectric's default) so the fallback chain lands somewhere deterministic to assert on.
+        val playStoreResolveInfo = ResolveInfo().apply {
+            activityInfo = ActivityInfo().apply {
+                packageName = "com.android.browser"
+                name = "com.android.browser.BrowserActivity"
+            }
+        }
+        shadowOf(composeTestRule.activity.packageManager).addResolveInfoForIntent(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.craxic.akebifree")),
+            playStoreResolveInfo
+        )
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            contextSentences = listOf(ContextSentence(japanese = "水を飲みます。", english = "I drink water."))
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.SHARE_BUTTON).performScrollTo().performClick()
+
+        val started = shadowOf(composeTestRule.activity).nextStartedActivity
+        assertThat(started.action).isEqualTo(Intent.ACTION_VIEW)
+        assertThat(started.data.toString()).contains("com.craxic.akebifree")
     }
 }
