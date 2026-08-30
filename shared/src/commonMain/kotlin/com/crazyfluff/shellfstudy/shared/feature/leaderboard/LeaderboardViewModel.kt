@@ -73,7 +73,7 @@ class LeaderboardViewModel(
             val results = coroutineScope {
                 entries.map { entry -> async { friendStatsRepository.refreshFriend(entry) } }.awaitAll()
             }
-            val failedCount = results.count { succeeded -> !succeeded }
+            val failedCount = results.count { it is ApiResult.Error }
             _uiState.update {
                 it.copy(
                     isRefreshing = false,
@@ -121,14 +121,19 @@ class LeaderboardViewModel(
             when (result) {
                 is ApiResult.Success -> {
                     val entry = friendRepository.addFriend(nickname, token)
-                    friendStatsRepository.refreshFriend(entry)
+                    val refreshResult = friendStatsRepository.refreshFriend(entry)
                     _uiState.update {
                         it.copy(
                             addFriendValidating = false,
                             addFriendNickname = "",
                             addFriendToken = "",
                             addFriendError = null,
-                            addFriendSuccess = true
+                            addFriendSuccess = true,
+                            refreshErrorMessage = if (refreshResult is ApiResult.Error) {
+                                "Added $nickname, but couldn't fetch their stats yet."
+                            } else {
+                                it.refreshErrorMessage
+                            }
                         )
                     }
                 }

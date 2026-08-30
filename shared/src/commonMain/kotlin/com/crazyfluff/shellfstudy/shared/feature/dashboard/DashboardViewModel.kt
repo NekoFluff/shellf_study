@@ -324,16 +324,19 @@ class DashboardViewModel(
     }
 
     fun refresh() {
-        viewModelScope.launch { performForcedRefresh() }
+        viewModelScope.launch { performForcedRefresh(forceFriendStatsRefresh = true) }
     }
 
-    private suspend fun performForcedRefresh() {
+    private suspend fun performForcedRefresh(forceFriendStatsRefresh: Boolean = false) {
         _dashboardData.update { it.copy(isRefreshing = true, errorMessage = null, isOffline = false) }
 
         // Non-blocking: friend stats refresh runs in the background and doesn't gate the main UI.
+        // Only pull-to-refresh forces past the TTL — the cold-start call below should still
+        // respect it, or every app launch would refetch every friend's stats regardless of when
+        // they were last fetched.
         viewModelScope.launch {
             _leaderboardRefreshing.value = true
-            friendStatsRepository.refreshAllIfStale(force = true)
+            friendStatsRepository.refreshAllIfStale(force = forceFriendStatsRefresh)
             _leaderboardRefreshing.value = false
         }
 

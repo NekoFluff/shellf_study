@@ -480,17 +480,16 @@ class AssignmentRepository(
      * otherwise, on a night with no new assignments, the count would stay frozen at whatever it was
      * last computed until the next unrelated write (or app restart) happened to recompute it.
      */
-    fun observeLessonsCompletedToday(): Flow<Int> {
-        val timeZone = TimeZone.currentSystemDefault()
-        return combine(
+    fun observeLessonsCompletedToday(): Flow<Int> =
+        combine(
             assignmentDao.observeAllStartedTimestamps(),
-            dailyRolloverTicks(timeZone)
+            dailyRolloverTicks()
         ) { timestamps, today ->
+            val timeZone = TimeZone.currentSystemDefault()
             timestamps.count { ts ->
                 runCatching { Instant.parse(ts).toLocalDateTime(timeZone).date == today }.getOrDefault(false)
             }
         }.flowOn(defaultDispatcher)
-    }
 
     /**
      * How many of the current level's kanji are at Guru or higher, out of the total — WaniKani

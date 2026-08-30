@@ -31,8 +31,12 @@ internal fun durationUntilNextMidnight(now: Instant, zone: TimeZone): Duration {
  * runs without an unrelated write (surfacing as a stuck badge/streak/stat until the next write or an
  * app restart). Combining with this ticker instead makes the day roll over on its own.
  */
-internal fun dailyRolloverTicks(zone: TimeZone): Flow<LocalDate> = flow {
+internal fun dailyRolloverTicks(): Flow<LocalDate> = flow {
     while (true) {
+        // Re-read on every iteration rather than accepting a zone parameter fixed at flow
+        // construction time, so a device timezone change while the app stays running is picked
+        // up on the very next tick instead of being stuck until the process restarts.
+        val zone = TimeZone.currentSystemDefault()
         emit(Clock.System.todayIn(zone))
         delay(durationUntilNextMidnight(Clock.System.now(), zone))
     }

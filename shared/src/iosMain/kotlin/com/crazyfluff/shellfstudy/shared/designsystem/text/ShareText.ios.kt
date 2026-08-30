@@ -10,16 +10,22 @@ import platform.UIKit.popoverPresentationController
 
 @Composable
 actual fun rememberShareText(): (String) -> Unit = remember {
-    { text: String -> topmostViewController(rootViewController)?.let { presenter -> presentShareSheet(presenter, text) } }
+    { text: String ->
+        // Guards against a rapid double-tap: presentViewController sets presentedViewController
+        // synchronously (the animation itself is what's async), so a second tap landing before
+        // that first sheet is dismissed would otherwise try to present again on top of it instead
+        // of no-oping. Checked on rootViewController specifically — it stays non-null for as long
+        // as any descendant in the presented chain is showing, unlike topmostViewController's
+        // resolved result, which by construction always has a nil presentedViewController of its
+        // own.
+        if (rootViewController?.presentedViewController == null) {
+            topmostViewController(rootViewController)?.let { presenter -> presentShareSheet(presenter, text) }
+        }
+    }
 }
 
 @OptIn(ExperimentalForeignApi::class)
 private fun presentShareSheet(presenter: UIViewController, text: String) {
-    // Guards against a rapid double-tap: presentViewController sets presentedViewController
-    // synchronously (the animation itself is what's async), so a second tap landing before that
-    // first sheet is dismissed would otherwise try to present again on top of it instead of
-    // no-oping.
-    if (presenter.presentedViewController != null) return
     val activityController = UIActivityViewController(activityItems = listOf(text), applicationActivities = null)
     // iPad presents UIActivityViewController as a popover and crashes without an anchor — the
     // presenting view itself is a reasonable default since the trigger button's own position isn't

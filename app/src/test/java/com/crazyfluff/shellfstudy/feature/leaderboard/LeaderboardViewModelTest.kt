@@ -12,7 +12,6 @@ import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.crazyfluff.shellfstudy.shared.data.FriendRepository
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
-import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardViewModel
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
@@ -59,18 +58,6 @@ class LeaderboardViewModelTest {
         return LeaderboardViewModel(friendRepository, friendStatsRepository, json)
     }
 
-    /** Throws on decrypt for any token containing "bad" — simulates a Keystore entry that can no
-     *  longer decrypt a previously-stored friend token (e.g. invalidated after a device unlock
-     *  method change). */
-    private class SometimesFailingTokenCipher : TokenCipher {
-        override fun encrypt(plainText: String): String = "enc:$plainText"
-        override fun decrypt(encoded: String): String {
-            val token = encoded.removePrefix("enc:")
-            check(!token.contains("bad")) { "Simulated decrypt failure for $token" }
-            return token
-        }
-    }
-
     @Test
     fun `onEditNickname updates the friend's nickname`() = runTest(mainDispatcherRule.dispatcher) {
         val entry = friendRepository.addFriend("Old Name", "some-token")
@@ -113,7 +100,7 @@ class LeaderboardViewModelTest {
             val brokenTokenFriendRepository = FriendRepository(
                 dataStore,
                 Json { ignoreUnknownKeys = true },
-                SometimesFailingTokenCipher()
+                FakeTokenCipher(failingTokens = setOf("bad-token"))
             )
             brokenTokenFriendRepository.addFriend("Broken", "bad-token")
             val viewModel = createViewModel(friendRepository = brokenTokenFriendRepository)

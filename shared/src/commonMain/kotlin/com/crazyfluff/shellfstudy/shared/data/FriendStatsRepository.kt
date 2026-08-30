@@ -21,6 +21,7 @@ import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsEntity
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.collectAllPages
 import com.crazyfluff.shellfstudy.shared.network.createFriendWaniKaniApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -208,7 +209,7 @@ class FriendStatsRepository(
         selfAssignmentDao.observeAllStartedTimestamps(),
         selfReviewStatisticDao.observeAll(),
         selfLevelProgressionDao.observeAll(),
-        dailyRolloverTicks(TimeZone.currentSystemDefault())
+        dailyRolloverTicks()
     ) { burnedTs, startedTs, statistics, progressions, _ ->
         buildSelfStats(burnedTs, startedTs, statistics, progressions)
     }.flowOn(defaultDispatcher)
@@ -250,19 +251,25 @@ class FriendStatsRepository(
     }
 
     /**
-     * @return false if the friend's token failed to decrypt, the API call failed, or the response
-     * couldn't be parsed into stats — callers use this to distinguish "nothing new to fetch" from
-     * a real failure. Never throws: a bad token (e.g. a Keystore entry invalidated after a device
-     * unlock change) must not cancel sibling refreshes running in the same `coroutineScope`.
+     * @return [ApiResult.Error] if the friend's token failed to decrypt, the API call failed, the
+     * response couldn't be parsed into stats, or the cache write itself failed — callers use this
+     * to distinguish "nothing new to fetch" from a real failure. Never throws (cancellation
+     * excepted): a bad token (e.g. a Keystore entry invalidated after a device unlock change) must
+     * not cancel sibling refreshes running in the same `coroutineScope`.
      */
-    suspend fun refreshFriend(entry: FriendEntry): Boolean {
-        val entity = runCatching {
+    suspend fun refreshFriend(entry: FriendEntry): ApiResult<Unit> {
+        return try {
             val token = friendRepository.decryptToken(entry)
             val api = createFriendWaniKaniApi(token, json)
-            fetchFriendStats(entry.id, api)
-        }.getOrNull() ?: return false
-        friendStatsDao.upsert(entity)
-        return true
+            val entity = fetchFriendStats(entry.id, api)
+                ?: return ApiResult.Error("Couldn't fetch stats for ${entry.nickname}.")
+            friendStatsDao.upsert(entity)
+            ApiResult.Success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ApiResult.Error("Couldn't refresh ${entry.nickname}'s stats.", e)
+        }
     }
 
     suspend fun removeFriendCache(id: String) {

@@ -124,7 +124,7 @@ class StatsRepository(
     fun observeStudyStreak(): Flow<StudyStreak> =
         combine(
             studyActivityDao.observeActiveDays(),
-            dailyRolloverTicks(TimeZone.currentSystemDefault())
+            dailyRolloverTicks()
         ) { days, today ->
             val activeDays = days.map(LocalDate::parse).toSet()
             val isActiveToday = today in activeDays
