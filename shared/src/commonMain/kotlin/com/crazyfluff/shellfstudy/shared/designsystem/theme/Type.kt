@@ -6,6 +6,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.generated.resources.Res
+import com.crazyfluff.shellfstudy.shared.generated.resources.noto_sans_jp
 import com.crazyfluff.shellfstudy.shared.generated.resources.plus_jakarta_sans
 import org.jetbrains.compose.resources.Font
 
@@ -23,6 +24,18 @@ private fun plusJakartaSans(): FontFamily = FontFamily(
     Font(Res.font.plus_jakarta_sans, FontWeight.Medium),
     Font(Res.font.plus_jakarta_sans, FontWeight.SemiBold),
     Font(Res.font.plus_jakarta_sans, FontWeight.Bold)
+)
+
+/**
+ * Noto Sans JP — bundled so kanji/kana render identically on both platforms instead of falling
+ * back to whichever CJK font each OS happens to ship (Noto Sans CJK on Android, Hiragino Sans on
+ * iOS, or an OEM substitute on some Android skins). Only the Regular weight is bundled: every
+ * Japanese-content call site in this app uses a 400-weight type slot, so there's nothing that
+ * needs Bold today. See [LocalJapaneseFontFamily].
+ */
+@Composable
+fun notoSansJp(): FontFamily = FontFamily(
+    Font(Res.font.noto_sans_jp, FontWeight.Normal)
 )
 
 /**

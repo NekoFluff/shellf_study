@@ -37,7 +37,7 @@ fun ContextSentenceRow(sentence: ContextSentence, onShare: (String) -> Unit) {
         verticalAlignment = Alignment.Top
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
-            Text(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
+            JapaneseText(sentence.japanese, style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = sentence.english,
                 style = MaterialTheme.typography.bodySmall,

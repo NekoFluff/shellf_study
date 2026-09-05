@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalJapaneseFontFamily
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
@@ -54,7 +55,7 @@ fun SubjectGlyph(
         characters != null -> Box(modifier = modifier.height(size), contentAlignment = Alignment.Center) {
             Text(
                 text = characters,
-                style = textStyle,
+                style = textStyle.copy(fontFamily = LocalJapaneseFontFamily.current),
                 color = glyphColor,
                 maxLines = 1,
                 softWrap = false,

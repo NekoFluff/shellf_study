@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.SessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.data.model.SessionMissedItemRow
+import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColorDark
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
@@ -181,7 +182,7 @@ fun SessionMissedItemsCard(
                             .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
-                        Text(text = item.label, color = color, style = MaterialTheme.typography.headlineSmall)
+                        JapaneseText(text = item.label, color = color, style = MaterialTheme.typography.headlineSmall)
                     }
                 }
             }

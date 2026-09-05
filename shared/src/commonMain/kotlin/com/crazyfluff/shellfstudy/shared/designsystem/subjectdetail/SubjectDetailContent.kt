@@ -40,6 +40,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSec
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
 import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRow
+import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
@@ -317,7 +318,7 @@ private fun SubjectReadingZone(
             when (readingDisplayStyle(detail.subjectType, hasReadingBreakdown, isVocabulary)) {
                 ReadingDisplayStyle.KANJI_BREAKDOWN -> KanjiReadingBreakdown(detail)
                 ReadingDisplayStyle.VOCABULARY -> VocabularyReadingList(detail, showPitchAccent, onPlayReading)
-                ReadingDisplayStyle.PLAIN -> Text(detail.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
+                ReadingDisplayStyle.PLAIN -> JapaneseText(detail.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
             }
         }
 
@@ -428,7 +429,7 @@ fun ReadingTypeRow(label: String, readings: List<String>) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.width(80.dp)
         )
-        Text(readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
+        JapaneseText(readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
     }
 }
 

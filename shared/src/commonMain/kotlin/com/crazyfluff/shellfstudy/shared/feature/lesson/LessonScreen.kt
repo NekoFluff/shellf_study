@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
 import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRow
+import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -885,11 +886,10 @@ private fun LessonGlyphTile(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (furigana != null) {
-                Text(
+                JapaneseText(
                     text = furigana,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(textAlign = TextAlign.Center),
                     color = contentColor,
-                    textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -959,7 +959,7 @@ private fun LessonReadingSection(
                         )
                     }
                 }
-                else -> Text(item.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
+                else -> JapaneseText(item.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
             }
         }
         val readingMnemonic = item.readingMnemonic

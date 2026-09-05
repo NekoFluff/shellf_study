@@ -21,7 +21,9 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.allForReading
+import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalJapaneseFontFamily
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.PitchAccentColors
 import kotlin.math.hypot
 
@@ -80,7 +82,10 @@ fun PitchAccentDiagram(reading: String, pitchAccent: PitchAccent, modifier: Modi
     val moraCount = morae.size
     val pitchNumber = pitchAccent.pitchNumber
     val color = pitchPatternColor(pitchNumber, moraCount)
-    val textStyle = MaterialTheme.typography.bodyLarge
+    // Matches the font PitchAccentReadingRow actually renders the reading in — otherwise the
+    // per-mora widths measured here (and thus the dots' horizontal spacing) drift from the real
+    // glyph widths above them.
+    val textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = LocalJapaneseFontFamily.current)
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
@@ -156,7 +161,7 @@ fun PitchAccentReadingRow(
     val matches = remember(reading, pitchAccents) { pitchAccents.allForReading(reading) }
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(reading, style = MaterialTheme.typography.bodyLarge)
+            JapaneseText(reading, style = MaterialTheme.typography.bodyLarge)
             trailingContent()
         }
         matches.forEach { match ->

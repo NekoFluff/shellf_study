@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.PlatformBackHandler
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalJapaneseFontFamily
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import kotlinx.coroutines.flow.drop
@@ -342,11 +343,12 @@ private fun SubjectResultRow(subject: SubjectSummary, onClick: (Long) -> Unit) {
             .testTag(SearchOverlayTestTags.RESULT_ROW_PREFIX + subject.subjectId)
     ) {
         val imageGlyphUrl = subject.characterImageUrl.takeIf { subject.characters == null }
+        val japaneseFontFamily = LocalJapaneseFontFamily.current
         Text(
             text = buildAnnotatedString {
                 when {
                     subject.characters != null -> {
-                        withStyle(SpanStyle(color = subjectColor(subject.subjectType))) {
+                        withStyle(SpanStyle(color = subjectColor(subject.subjectType), fontFamily = japaneseFontFamily)) {
                             append(subject.characters)
                         }
                         append(" — ")
@@ -380,8 +382,13 @@ private fun SubjectResultRow(subject: SubjectSummary, onClick: (Long) -> Unit) {
         )
         val reading = subject.readings.firstOrNull()
         Text(
-            text = listOfNotNull(reading, "Level ${subject.level}", subjectTypeLabel(subject.subjectType))
-                .joinToString(" · "),
+            text = buildAnnotatedString {
+                if (reading != null) {
+                    withStyle(SpanStyle(fontFamily = japaneseFontFamily)) { append(reading) }
+                    append(" · ")
+                }
+                append("Level ${subject.level} · ${subjectTypeLabel(subject.subjectType)}")
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,

@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 
 private val DarkColorScheme = darkColorScheme(
@@ -51,6 +52,11 @@ val LocalEinkTheme = staticCompositionLocalOf { false }
  *  Material's color scheme (e.g. [SrsStageColors.Burned]) swap in a legible dark-theme variant. */
 val LocalDarkTheme = staticCompositionLocalOf { false }
 
+/** The font used for Japanese subject content (kanji, kana, readings) — Noto Sans JP, so it
+ *  renders identically on Android and iOS rather than falling back to whatever CJK font each OS
+ *  ships. Defaults to [FontFamily.Default] outside of [ShellfStudyTheme] (e.g. previews/tests). */
+val LocalJapaneseFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
+
 /** Returns [einkValue] under the e-ink theme, [default] otherwise. */
 @Composable
 fun themeAwareColor(default: Color, einkValue: Color): Color =
@@ -69,7 +75,11 @@ fun ShellfStudyTheme(
         else -> LightColorScheme
     }
 
-    CompositionLocalProvider(LocalEinkTheme provides isEink, LocalDarkTheme provides (darkTheme && !isEink)) {
+    CompositionLocalProvider(
+        LocalEinkTheme provides isEink,
+        LocalDarkTheme provides (darkTheme && !isEink),
+        LocalJapaneseFontFamily provides notoSansJp()
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = appTypography(),

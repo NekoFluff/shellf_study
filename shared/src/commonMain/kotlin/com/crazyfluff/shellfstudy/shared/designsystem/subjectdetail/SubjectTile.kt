@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 
 /** A tappable related-subject card: glyph + one meaning + one reading, used in related-subject grids and search results. */
@@ -48,7 +49,7 @@ fun SubjectTile(
                 overflow = TextOverflow.Ellipsis
             )
             if (subject.readings.isNotEmpty()) {
-                Text(
+                JapaneseText(
                     text = subject.readings.first(),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
