@@ -894,13 +894,13 @@ private fun LessonGlyphTile(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Text(
-                text = lessonItem.characters ?: lessonItem.meanings.firstOrNull() ?: "?",
-                style = MaterialTheme.typography.titleLarge,
+            SubjectGlyph(
+                characters = lessonItem.characters,
+                characterImageUrl = lessonItem.characterImageUrl,
+                subjectType = lessonItem.subjectType,
                 color = contentColor,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                fallbackText = lessonItem.meanings.firstOrNull() ?: "?",
+                size = 40.dp
             )
         }
     }

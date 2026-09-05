@@ -16,6 +16,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -77,6 +78,19 @@ class LessonScreenTest {
         meanings = listOf("Ground"),
         readings = emptyList(),
         meaningMnemonic = "A single horizontal line.",
+        readingMnemonic = null
+    )
+
+    private val glyphlessRadicalItem = LessonItem(
+        assignmentId = 3,
+        subjectId = 3,
+        subjectType = SubjectType.RADICAL,
+        characters = null,
+        characterImageUrl = "https://example.com/hill.png",
+        level = 1,
+        meanings = listOf("Hill"),
+        readings = emptyList(),
+        meaningMnemonic = "A small mound of earth.",
         readingMnemonic = null
     )
 
@@ -164,6 +178,25 @@ class LessonScreenTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.lessonCheckboxTag(2L)).performClick()
         assert(toggledId == 2L)
+    }
+
+    @Test
+    fun customizeSelection_rendersImageForGlyphlessRadical_notMeaningText() {
+        // Glyph-less radicals (e.g. "Hill") carry a characterImageUrl and no characters — the tile
+        // should render the image (via SubjectGlyph), not fall back to printing the meaning text.
+        setScreen(
+            LessonUiState(
+                isLoading = false, phase = LessonPhase.SELECT,
+                availableLessons = listOf(glyphlessRadicalItem),
+                selectedAssignmentIds = setOf(3L)
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.lessonCheckboxTag(3L)).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Hill").assertCountEquals(0)
     }
 
     @Test

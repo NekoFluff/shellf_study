@@ -9,7 +9,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
@@ -32,12 +34,15 @@ fun SubjectGlyph(
     characterImageUrl: String?,
     subjectType: SubjectType,
     size: Dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    color: Color? = null,
+    fallbackText: String = "?"
 ) {
     // The ceiling a single short glyph renders at; callers size this from a small 28dp tile chip
     // up to a large detail-sheet headline and get proportionally bigger glyphs.
     val maxFontSize = (size.value * 0.55f).sp
     val textStyle = MaterialTheme.typography.headlineSmall
+    val glyphColor = color ?: subjectColor(subjectType)
 
     when {
         // Only height is constrained here, not width — vocabulary "characters" can be a whole word
@@ -50,7 +55,7 @@ fun SubjectGlyph(
             Text(
                 text = characters,
                 style = textStyle,
-                color = subjectColor(subjectType),
+                color = glyphColor,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
@@ -65,12 +70,19 @@ fun SubjectGlyph(
             AsyncImage(
                 model = characterImageUrl,
                 contentDescription = null,
-                colorFilter = ColorFilter.tint(subjectColor(subjectType)),
+                colorFilter = ColorFilter.tint(glyphColor),
                 modifier = Modifier.size(size)
             )
         }
         else -> Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
-            Text(text = "?", style = textStyle.copy(fontSize = maxFontSize), color = subjectColor(subjectType))
+            Text(
+                text = fallbackText,
+                style = textStyle.copy(fontSize = maxFontSize),
+                color = glyphColor,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

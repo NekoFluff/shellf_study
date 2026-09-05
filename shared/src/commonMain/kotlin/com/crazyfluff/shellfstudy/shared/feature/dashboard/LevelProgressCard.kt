@@ -238,29 +238,14 @@ private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
                 .align(Alignment.Center),
             contentAlignment = Alignment.Center
         ) {
-            val characters = item.characters
-            when {
-                characters != null -> Text(
-                    text = characters,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (item.passed) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1
-                )
-                item.characterImageUrl != null -> SubjectGlyph(
-                    characters = null,
-                    characterImageUrl = item.characterImageUrl,
-                    subjectType = item.subjectType,
-                    size = 28.dp
-                )
-                else -> Text(
-                    text = item.display,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (item.passed) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1
-                )
-            }
+            SubjectGlyph(
+                characters = item.characters,
+                characterImageUrl = item.characterImageUrl,
+                subjectType = item.subjectType,
+                color = if (item.passed) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                fallbackText = item.display,
+                size = 28.dp
+            )
         }
 
         val subStageDots = apprenticeSubStageDots(item.srsStage)
