@@ -503,6 +503,9 @@ class ReviewViewModel(
             updateActive {
                 it.copy(
                     feedback = null,
+                    // Undoing a correct answer retracts the rank change it predicted; an incorrect
+                    // answer never had one, so this is a no-op in that branch.
+                    rankChange = if (feedback.isCorrect) null else it.rankChange,
                     answerInput = "",
                     remainingCount = queue.size,
                     undoCounter = it.undoCounter + 1,

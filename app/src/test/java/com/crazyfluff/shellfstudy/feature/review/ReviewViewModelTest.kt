@@ -739,14 +739,22 @@ class ReviewViewModelTest {
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            val correctState = awaitItem()
+            // The rank change arrives asynchronously — the optimistic patch runs in its own
+            // coroutine, not strictly ordered against the feedback update, so wait until both have
+            // landed rather than assuming a fixed number of emissions.
+            var correctState = awaitItem()
+            while ((correctState.phase as ReviewUiState.Phase.Active).feedback == null || (correctState.phase as ReviewUiState.Phase.Active).rankChange == null) correctState = awaitItem()
             assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).rankChange).isNotNull()
             assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isEqualTo(101L)
 
             viewModel.undoLastAnswer()
             val undoneState = awaitItem()
             assertThat((undoneState.phase as ReviewUiState.Phase.Active).feedback).isNull()
             assertThat((undoneState.phase as ReviewUiState.Phase.Active).answerInput).isEmpty()
+            // The rank-change chip predicted a promotion that this undo just retracted — it must
+            // disappear along with the feedback, not linger stale into the retried attempt.
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).rankChange).isNull()
             // Undo pushes the question back to the front rather than dropping it — still one
             // question left to answer.
             assertThat((undoneState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
