@@ -169,13 +169,14 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
-    fun `switching subjects never exposes the previous subject's detail while the new one loads`() = runTest(mainDispatcherRule.dispatcher) {
-        // Bug regression: the detail pipeline restarts asynchronously when the subject changes,
-        // while the navigation state is published immediately — combine can emit an intermediate
-        // uiState pairing the previous subject's still-loaded detail with the new navigation
-        // state. The sheet renders whatever detail uiState carries, so that intermediate emission
-        // flashes the previous subject's content (sporting the new back arrow) while the tapped
-        // subject is still loading — the "screen flashes between kanji/radicals/vocabulary" bug.
+    fun `switching subjects swaps content in one coherent update with no loading flash`() = runTest(mainDispatcherRule.dispatcher) {
+        // Bug regression: on a subject switch the detail pipeline restarts asynchronously while the
+        // navigation state publishes immediately, so combine can emit an intermediate uiState
+        // pairing the previous subject's still-loaded detail with the new navigation state — a
+        // frame of the wrong subject's content (the "screen flashes between kanji/radicals/vocab"
+        // bug) — and a naive fix turns that frame into a loading/null-detail flash instead. The
+        // sheet must go from subject 1 straight to subject 2: from the moment the navigation
+        // changes, every emission carries subject 2's detail — never subject 1's, never null.
         viewModel.uiState.test {
             awaitNotLoading()
 
@@ -183,12 +184,9 @@ class SubjectDetailViewModelTest {
             awaitSettled(1)
 
             viewModel.navigateToRelated(2)
-            // Drain until subject 2 is fully settled (same condition as awaitSettled), asserting
-            // each intermediate emission: from the moment navigation changed, no non-null detail
-            // may belong to subject 1.
             var state = awaitItem()
             while (state.detail?.subjectId != 2L || state.strokeOrder is StrokeOrderUiState.Loading) {
-                assertThat(state.detail?.subjectId).isAnyOf(null, 2L)
+                assertThat(state.detail?.subjectId).isEqualTo(2L)
                 state = awaitItem()
             }
             assertThat(state.backStack).containsExactly(1L)

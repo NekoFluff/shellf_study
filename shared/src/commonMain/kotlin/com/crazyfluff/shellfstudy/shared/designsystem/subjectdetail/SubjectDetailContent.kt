@@ -48,7 +48,6 @@ import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSec
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
-import kotlinx.coroutines.flow.first
 
 /** Whether the sheet shows everything (browse/study contexts) or hides the currently-tested field (mid-quiz). */
 enum class DetailRevealMode { FULL, HIDE_UNTIL_ANSWERED }
@@ -117,23 +116,17 @@ fun SubjectDetailContent(
     val hasReadings = detail.readings.isNotEmpty()
     val isVocabulary = detail.subjectType == SubjectType.VOCABULARY || detail.subjectType == SubjectType.KANA_VOCABULARY
 
-    // Fresh scroll state per subject — keyed on the subject rather than remembered once, because a
-    // subject switch must never render the new content at the previous subject's scroll offset,
-    // even for a single frame (that frame, showing the new content mid-page at the old offset, is
-    // the flash seen when browsing between kanji/radicals/vocabulary). The jump effect below then
-    // handles the deliberate offsets: 0 when drilling into a related subject (a no-op on a fresh
-    // state) and the recorded offset when navigating back.
-    val scrollState = remember(detail.subjectId) { ScrollState(0) }
-    LaunchedEffect(detail.subjectId) {
-        // A fresh ScrollState's maxValue is still 0 until this subject's content has been laid out,
-        // so a back-navigation restore must wait for that first measurement before jumping — an
-        // immediate scrollTo would clamp against maxValue == 0 and silently lose the restore.
-        // Drill-down's offset-0 needs no jump at all (the fresh state already starts at the top).
-        if (initialScrollOffset > 0) {
-            snapshotFlow { scrollState.maxValue }.first { it > 0 }
-            scrollState.scrollTo(initialScrollOffset)
-        }
-    }
+    // One scroll state per (subject, arrival offset), seeded with that offset. This is what makes
+    // a subject switch atomic on the render side: when the ViewModel publishes the new subject
+    // (see SubjectDetailViewModel's coherence gate), the content remounts with a fresh ScrollState
+    // that already starts at the right position — 0 for a drill-down/open, the recorded offset when
+    // navigating back — so content and scroll position change in the very first frame together,
+    // with no frame at the previous subject's offset and no post-frame jump effect. ScrollState
+    // handles an offset that exceeds the content height on first layout (maxValue starts at
+    // Int.MAX_VALUE and clamps value down once the content is measured). Keying on the offset too
+    // means re-emissions of the same subject at the same arrival offset leave the user's live
+    // scroll position untouched.
+    val scrollState = remember(detail.subjectId, initialScrollOffset) { ScrollState(initialScrollOffset) }
     LaunchedEffect(detail.subjectId) {
         snapshotFlow { scrollState.value }.collect { onScrollPositionChanged(it) }
     }
