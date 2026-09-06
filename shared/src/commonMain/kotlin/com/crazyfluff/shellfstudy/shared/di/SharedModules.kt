@@ -249,6 +249,7 @@ val viewModelModule = module {
             lastSessionSummaryRepository = get(),
             pronunciationAudioPlayer = get(),
             settingsRepository = get(),
+            pitchAccentRepository = get(),
             appForegroundTracker = get(),
             applicationScope = get(APPLICATION_SCOPE)
         )

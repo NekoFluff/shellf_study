@@ -146,6 +146,18 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `onShowAnswerReadingPitchAccentChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().showAnswerReadingPitchAccent).isFalse()
+
+            viewModel.onShowAnswerReadingPitchAccentChange(true)
+            assertThat(awaitItem().showAnswerReadingPitchAccent).isTrue()
+        }
+    }
+
+    @Test
     fun `onShowTotalTimerChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 

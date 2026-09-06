@@ -20,7 +20,9 @@ import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
+import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
@@ -29,8 +31,11 @@ import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiS
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
+import com.crazyfluff.shellfstudy.fakes.FakePitchAccentBundledSource
+import com.crazyfluff.shellfstudy.fakes.FakePitchAccentCacheDao
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
+import com.crazyfluff.shellfstudy.fakes.FakeWeblioApi
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
@@ -168,6 +173,249 @@ class LessonViewModelTest {
             while (state.phase is LessonUiState.Phase.Loading || !state.settings.showTotalTimer || !state.settings.showQuestionTimer) state = awaitItem()
             assertThat(state.settings.showTotalTimer).isTrue()
             assertThat(state.settings.showQuestionTimer).isTrue()
+        }
+    }
+
+    @Test
+    fun `answering a reading question with the setting on surfaces the reading for the hint`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setShowAnswerReadingPitchAccent(true)
+        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            // Queue order is shuffled — answer meaning questions correctly until reading comes up.
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange("Testword")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("けんあ")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat(feedbackState.answerReading).isEqualTo("けんあ")
+            // "件亜" is a fabricated word — guaranteed absent from the real bundled pitch-accent
+            // dictionary, so this also covers the "no match" silent-empty case: the reading still
+            // surfaces, but with no pitch pattern to show alongside it.
+            assertThat(feedbackState.answerPitchAccents).isEmpty()
+        }
+    }
+
+    @Test
+    fun `answering a reading question with the setting off leaves the hint fields empty`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange("Testword")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("けんあ")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat(feedbackState.answerReading).isNull()
+            assertThat(feedbackState.answerPitchAccents).isEmpty()
+        }
+    }
+
+    @Test
+    fun `answering a meaning question never surfaces the reading hint even with the setting on`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setShowAnswerReadingPitchAccent(true)
+        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.MEANING) {
+                viewModel.onAnswerInputChange("けんあ")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("Testword")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat(feedbackState.answerReading).isNull()
+            assertThat(feedbackState.answerPitchAccents).isEmpty()
+        }
+    }
+
+    @Test
+    fun `a kanji reading question never surfaces the hint even with the setting on`() = runTest(mainDispatcherRule.dispatcher) {
+        // Vocabulary-only scoping: pitch accent is a word-level concept, and the bundled/Weblio
+        // source is keyed by whole dictionary headwords, not single kanji.
+        settingsRepository.setShowAnswerReadingPitchAccent(true)
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange("Water")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("みず")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat(feedbackState.answerReading).isNull()
+            assertThat(feedbackState.answerPitchAccents).isEmpty()
+        }
+    }
+
+    @Test
+    fun `undoing a reading answer clears the surfaced reading and pitch accents`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setShowAnswerReadingPitchAccent(true)
+        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange("Testword")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            // A typo, not a genuine miss — undoable.
+            viewModel.onAnswerInputChange("けんい")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(feedbackState.feedback?.isCorrect).isFalse()
+
+            viewModel.undoLastAnswer()
+            val undoneState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(undoneState.feedback).isNull()
+            assertThat(undoneState.answerReading).isNull()
+            assertThat(undoneState.answerPitchAccents).isEmpty()
+        }
+    }
+
+    @Test
+    fun `resuming a persisted quiz session fetches pitch accents so the answer hint still has data`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setShowAnswerReadingPitchAccent(true)
+        // buildTestRepositories' PitchAccentRepository is backed by a FakePitchAccentBundledSource,
+        // not the real (composeResources-loaded) bundled dictionary — this test needs a genuine
+        // match to distinguish "the fetch ran and found data" from "the fetch never ran", so it
+        // seeds one directly rather than relying on the real dictionary's actual contents.
+        pitchAccentRepository = PitchAccentRepository(
+            FakePitchAccentBundledSource(mapOf("水" to listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))),
+            FakePitchAccentCacheDao(),
+            FakeWeblioApi(),
+            WeblioPitchAccentParser()
+        )
+        dispatch(jsonResponse(vocabWithRealPitchAccentAssignmentsJson()), jsonResponse(vocabWithRealPitchAccentSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            firstViewModel.startSelectedLessons()
+            awaitItem()
+
+            firstViewModel.nextStudyCard()
+            awaitItem() // quiz begins, persisted
+        }
+
+        // Simulate leaving and coming back mid-quiz — resumeQuizPhase skips Phase.Study entirely
+        // (which would normally have prefetched pitchAccentsBySubjectId), so it must fetch pitch
+        // accents itself for the hint to have any data to show once a reading is answered.
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
+                secondViewModel.onAnswerInputChange("Water")
+                awaitItem()
+                secondViewModel.submitAnswer()
+                awaitItem()
+                secondViewModel.onContinue()
+                state = awaitItem()
+            }
+
+            secondViewModel.onAnswerInputChange("みず")
+            awaitItem()
+            secondViewModel.submitAnswer()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat(feedbackState.answerReading).isEqualTo("みず")
+            // Only comes back non-empty if resumeQuizPhase's own fetch actually populated
+            // pitchAccentsBySubjectId with the seeded entry above, since this ViewModel instance
+            // never went through Phase.Study.
+            assertThat(feedbackState.answerPitchAccents).isNotEmpty()
+            assertThat(feedbackState.answerPitchAccents.first().pitchNumber).isEqualTo(0)
         }
     }
 
@@ -1692,6 +1940,72 @@ class LessonViewModelTest {
                   "metadata": {"gender": "female", "pronunciation": "みず"}
                 }
               ]
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun vocabAssignmentsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
+          "data": [{
+            "id": 606, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/606",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 8001, "subject_type": "vocabulary",
+              "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+            }
+          }]
+        }
+    """.trimIndent()
+
+    // "件亜" / "けんあ" is a fabricated, non-dictionary word — deliberately not a real vocabulary
+    // item, so tests relying on its pitch-accent data being absent from the bundled dictionary don't
+    // depend on the real (83k-line) bundled dictionary's actual contents.
+    private fun vocabSubjectsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
+          "data": [{
+            "id": 8001, "object": "vocabulary", "url": "https://api.wanikani.com/v2/subjects/8001",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "testword",
+              "characters": "件亜",
+              "meanings": [{"meaning": "Testword", "primary": true, "accepted_meaning": true}],
+              "readings": [{"reading": "けんあ", "primary": true, "accepted_reading": true}]
+            }
+          }]
+        }
+    """.trimIndent()
+
+    // "水" ("みず"/water) is a real bundled-dictionary headword (heiban, pitch number 0) — used
+    // specifically where a test needs a genuine pitch-accent match rather than the fabricated
+    // "件亜" word above.
+    private fun vocabWithRealPitchAccentAssignmentsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
+          "data": [{
+            "id": 707, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/707",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 9002, "subject_type": "vocabulary",
+              "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+            }
+          }]
+        }
+    """.trimIndent()
+
+    private fun vocabWithRealPitchAccentSubjectsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
+          "data": [{
+            "id": 9002, "object": "vocabulary", "url": "https://api.wanikani.com/v2/subjects/9002",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "water",
+              "characters": "水",
+              "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
+              "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}]
             }
           }]
         }

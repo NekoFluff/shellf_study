@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
@@ -70,7 +71,9 @@ class ReviewScreenTest {
         remainingCount: Int = 0,
         isWrappingUp: Boolean = false,
         timing: QuizTimingUiState = QuizTimingUiState(),
-        settings: ReviewUiState.DisplaySettings = ReviewUiState.DisplaySettings()
+        settings: ReviewUiState.DisplaySettings = ReviewUiState.DisplaySettings(),
+        answerReading: String? = null,
+        answerPitchAccents: List<PitchAccent> = emptyList()
     ) = ReviewUiState(
         phase = ReviewUiState.Phase.Active(
             currentItem = item,
@@ -84,7 +87,9 @@ class ReviewScreenTest {
             totalCount = totalCount,
             remainingCount = remainingCount,
             isWrappingUp = isWrappingUp,
-            timing = timing
+            timing = timing,
+            answerReading = answerReading,
+            answerPitchAccents = answerPitchAccents
         ),
         settings = settings
     )
@@ -228,6 +233,52 @@ class ReviewScreenTest {
         )
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SUBJECT_TYPE_LABEL).assertCountEquals(0)
+    }
+
+    @Test
+    fun answerReadingPitchAccentHint_shownForReadingQuestionWhenSettingEnabledAndAnswered() {
+        setScreen(
+            activeState(
+                questionType = QuestionType.READING,
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
+                answerReading = "みず",
+                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+            )
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT).assertIsDisplayed()
+    }
+
+    @Test
+    fun answerReadingPitchAccentHint_absentWhenSettingDisabled() {
+        setScreen(
+            activeState(
+                questionType = QuestionType.READING,
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = false),
+                answerReading = "みず"
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT).assertCountEquals(0)
+    }
+
+    @Test
+    fun answerReadingPitchAccentHint_absentForMeaningQuestionEvenWithSettingEnabled() {
+        setScreen(
+            activeState(
+                questionType = QuestionType.MEANING,
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water"),
+                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true)
+                // answerReading stays null — the ViewModel never populates it for a meaning question.
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT).assertCountEquals(0)
     }
 
     @Test

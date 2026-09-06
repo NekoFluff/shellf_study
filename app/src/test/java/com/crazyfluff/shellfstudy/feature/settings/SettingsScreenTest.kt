@@ -39,6 +39,7 @@ class SettingsScreenTest {
         onShowQuestionTimerChange: (Boolean) -> Unit = {},
         onUseJapaneseKeyboardChange: (Boolean) -> Unit = {},
         onCloseEnoughAnswersEnabledChange: (Boolean) -> Unit = {},
+        onShowAnswerReadingPitchAccentChange: (Boolean) -> Unit = {},
         onNotificationsEnabledChange: (Boolean) -> Unit = {},
         onReviewsAvailableEnabledChange: (Boolean) -> Unit = {},
         onReviewsBacklogEnabledChange: (Boolean) -> Unit = {},
@@ -65,6 +66,7 @@ class SettingsScreenTest {
                 onShowStrokeOrderChange = {},
                 onUseJapaneseKeyboardChange = onUseJapaneseKeyboardChange,
                 onCloseEnoughAnswersEnabledChange = onCloseEnoughAnswersEnabledChange,
+                onShowAnswerReadingPitchAccentChange = onShowAnswerReadingPitchAccentChange,
                 onNotificationsEnabledChange = onNotificationsEnabledChange,
                 onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
                 onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
@@ -228,6 +230,18 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE).performScrollTo().performClick()
         assert(closeEnoughEnabled == false)
+    }
+
+    @Test
+    fun togglingAnswerReadingPitchAccentSwitch_invokesCallback() {
+        var showAnswerReadingPitchAccent: Boolean? = null
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showAnswerReadingPitchAccent = false),
+            onShowAnswerReadingPitchAccentChange = { showAnswerReadingPitchAccent = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.ANSWER_READING_PITCH_ACCENT_TOGGLE).performScrollTo().performClick()
+        assert(showAnswerReadingPitchAccent == true)
     }
 
     @Test

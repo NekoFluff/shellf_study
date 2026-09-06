@@ -151,6 +151,7 @@ object LessonScreenTestTags {
     const val FEEDBACK_TEXT = "lesson_feedback_text"
     const val ANSWER_DETAIL_TEXT = "lesson_answer_detail_text"
     const val QUIZ_SUBJECT_TYPE_LABEL = "lesson_quiz_subject_type_label"
+    const val QUIZ_ANSWER_READING_PITCH_ACCENT = "lesson_quiz_answer_reading_pitch_accent"
     const val QUESTION_LABEL = "lesson_question_label"
     const val UNDO_BUTTON = "lesson_undo_button"
     const val RANK_CHANGE_TEXT = "lesson_rank_change_text"
@@ -463,7 +464,10 @@ fun LessonScreen(
                             questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
                             sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
                             sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
-                            useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard
+                            useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
+                            showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
+                            answerReading = phase.answerReading,
+                            answerPitchAccents = phase.answerPitchAccents
                         ),
                         onAnswerInputChange = onAnswerInputChange,
                         onSubmit = onSubmit,
@@ -485,7 +489,8 @@ fun LessonScreen(
                             undoButton = LessonScreenTestTags.UNDO_BUTTON,
                             feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
                             answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
-                            continueButton = LessonScreenTestTags.CONTINUE_BUTTON
+                            continueButton = LessonScreenTestTags.CONTINUE_BUTTON,
+                            answerReadingPitchAccentHint = LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT
                         )
                     )
                 }

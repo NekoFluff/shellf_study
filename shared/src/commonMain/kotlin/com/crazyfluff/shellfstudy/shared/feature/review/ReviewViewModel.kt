@@ -37,8 +37,10 @@ import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
@@ -65,7 +67,8 @@ data class ReviewUiState(
         val showSubjectTypeLabel: Boolean = false,
         val showTotalTimer: Boolean = false,
         val showQuestionTimer: Boolean = false,
-        val useJapaneseKeyboard: Boolean = false
+        val useJapaneseKeyboard: Boolean = false,
+        val showAnswerReadingPitchAccent: Boolean = false
     )
 
     sealed interface Phase {
@@ -90,7 +93,13 @@ data class ReviewUiState(
             // way, so this doesn't warrant its own Phase (unlike Lesson's Select/Study/Quiz, which
             // really are different rendering modes).
             val isWrappingUp: Boolean = false,
-            val timing: QuizTimingUiState = QuizTimingUiState()
+            val timing: QuizTimingUiState = QuizTimingUiState(),
+            // The reading + pitch-accent patterns for the just-graded reading question, populated
+            // shortly after feedback (see gradeAnswer) rather than atomically with it — kept out of
+            // the same synchronous block that builds feedback/rankChange, whose timing is
+            // deliberately protected (see latestSettings's doc comment above).
+            val answerReading: String? = null,
+            val answerPitchAccents: List<PitchAccent> = emptyList()
         ) : Phase
 
         data class Complete(
@@ -129,6 +138,7 @@ class ReviewViewModel(
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val settingsRepository: SettingsRepository,
+    private val pitchAccentRepository: PitchAccentRepository,
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope
 ) : ViewModel() {
@@ -198,7 +208,8 @@ class ReviewViewModel(
                             showSubjectTypeLabel = settings.showSubjectTypeLabel,
                             showTotalTimer = settings.showTotalTimer,
                             showQuestionTimer = settings.showQuestionTimer,
-                            useJapaneseKeyboard = settings.useJapaneseKeyboard
+                            useJapaneseKeyboard = settings.useJapaneseKeyboard,
+                            showAnswerReadingPitchAccent = settings.showAnswerReadingPitchAccent
                         )
                     )
                 }
@@ -456,6 +467,33 @@ class ReviewViewModel(
             }
         }
 
+        // Deliberately outside the synchronous `run` block above (and its own updateActive call),
+        // for the same reason `latestSettings` exists at all — see its doc comment. A cache/bundled
+        // read here is cheap but still a suspend hop; keeping it off that already-jank-sensitive
+        // path costs one extra recomposition, which AnswerReadingPitchAccentHint's own entrance
+        // animation absorbs gracefully.
+        val characters = item.characters
+        val isVocabularyItem = item.subjectType == SubjectType.VOCABULARY || item.subjectType == SubjectType.KANA_VOCABULARY
+        if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isVocabularyItem && characters != null) {
+            val answerReading = item.readings.firstOrNull()
+            val answerPitchAccents = if (answerReading != null) {
+                pitchAccentRepository.observePitchAccents(characters).first()
+            } else {
+                emptyList()
+            }
+            // Guarded against still-showing-feedback-for-this-same-question, not applied
+            // unconditionally — by the time this suspend fetch resolves, the user may have already
+            // undone this answer (feedback == null again) or advanced past it (a different item/
+            // type), and this arriving late must not resurrect stale hint data over either.
+            updateActive {
+                if (it.currentItem.assignmentId == item.assignmentId && it.currentQuestionType == type && it.feedback != null) {
+                    it.copy(answerReading = answerReading, answerPitchAccents = answerPitchAccents)
+                } else {
+                    it
+                }
+            }
+        }
+
         commitGradeDurably(snapshot, queueIsEmpty)
     }
 
@@ -506,6 +544,8 @@ class ReviewViewModel(
                     // Undoing a correct answer retracts the rank change it predicted; an incorrect
                     // answer never had one, so this is a no-op in that branch.
                     rankChange = if (feedback.isCorrect) null else it.rankChange,
+                    answerReading = null,
+                    answerPitchAccents = emptyList(),
                     answerInput = "",
                     remainingCount = queue.size,
                     undoCounter = it.undoCounter + 1,

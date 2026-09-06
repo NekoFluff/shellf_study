@@ -33,12 +33,14 @@ object SrsStageColors {
 val CorrectAnswerColor = SubjectTypeColors.Radical
 val CorrectAnswerColorDark = Color(0xFF2E2E2E)
 
-/** Smouldering Durtles' pitch-accent-pattern color convention, kept for a familiar look. */
+/** Pitch-accent-pattern colors — Heiban/Nakadaka/Odaka rotated from Smouldering Durtles' original
+ *  pink/blue/green assignment so Heiban reads as blue and Nakadaka as green (Atamadaka's orange is
+ *  unchanged); the same three hues just swap patterns, keeping all four still fully distinct. */
 object PitchAccentColors {
-    val Heiban = Color(0xFFD20CA3)
+    val Heiban = Color(0xFF27A2FF)
     val Atamadaka = Color(0xFFEA9316)
-    val Nakadaka = Color(0xFF27A2FF)
-    val Odaka = Color(0xFF0CD24D)
+    val Nakadaka = Color(0xFF0CD24D)
+    val Odaka = Color(0xFFD20CA3)
 }
 
 /**

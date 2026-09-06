@@ -81,7 +81,8 @@ data class LessonUiState(
         val showSubjectTypeLabel: Boolean = false,
         val showTotalTimer: Boolean = false,
         val showQuestionTimer: Boolean = false,
-        val useJapaneseKeyboard: Boolean = false
+        val useJapaneseKeyboard: Boolean = false,
+        val showAnswerReadingPitchAccent: Boolean = false
     )
 
     sealed interface Phase {
@@ -116,7 +117,9 @@ data class LessonUiState(
             val answerTypeMismatchCount: Int = 0,
             val totalQuizCount: Int = 0,
             val remainingQuizCount: Int = 0,
-            val timing: QuizTimingUiState = QuizTimingUiState()
+            val timing: QuizTimingUiState = QuizTimingUiState(),
+            val answerReading: String? = null,
+            val answerPitchAccents: List<PitchAccent> = emptyList()
         ) : Phase
 
         data class Complete(
@@ -166,6 +169,11 @@ class LessonViewModel(
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
     private val progressByAssignmentId = mutableMapOf<Long, LessonItemProgress>()
+    // Warmed by Study phase's own pitch-accent prefetch (or, on a mid-quiz resume that skips Study
+    // entirely, by resumeQuizPhase's own fetch) — kept alive here rather than scoped to Phase.Study
+    // so Quiz-phase grading can look a subject's pitch accents up for free (a plain map read, no
+    // suspend call) instead of re-fetching per answer the way Review has to.
+    private var pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap()
     // Individual per-answer records, used for the "slowest answers" summary — persisted and
     // restored across a resume just like progressByAssignmentId (see resumeQuizPhase), so the
     // summary reflects the whole quiz, not just the segment since the most recent resume.
@@ -223,7 +231,8 @@ class LessonViewModel(
                             showSubjectTypeLabel = settings.showSubjectTypeLabel,
                             showTotalTimer = settings.showTotalTimer,
                             showQuestionTimer = settings.showQuestionTimer,
-                            useJapaneseKeyboard = settings.useJapaneseKeyboard
+                            useJapaneseKeyboard = settings.useJapaneseKeyboard,
+                            showAnswerReadingPitchAccent = settings.showAnswerReadingPitchAccent
                         )
                     )
                 }
@@ -307,6 +316,7 @@ class LessonViewModel(
             val strokeOrdersDeferred = async { fetchStrokeOrders(items) }
             Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
         }
+        pitchAccentsBySubjectId = pitchAccents
         sessionController.begin()
         _uiState.update {
             it.copy(
@@ -337,6 +347,11 @@ class LessonViewModel(
             fetchFreshQueue()
             return
         }
+
+        // resumeQuizPhase skips Phase.Study entirely (a mid-quiz resume), so pitchAccentsBySubjectId
+        // was never warmed by resumeStudyPhase/startSelectedLessons the way it normally would be —
+        // fetch it here instead, once, before the quiz screen renders.
+        pitchAccentsBySubjectId = fetchPitchAccents(itemsById.values.toList())
 
         quizQueue.restore(
             persisted.quizQueue.map { entry ->
@@ -461,6 +476,7 @@ class LessonViewModel(
                 val strokeOrdersDeferred = async { fetchStrokeOrders(selected) }
                 Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
             }
+            pitchAccentsBySubjectId = pitchAccents
             sessionController.begin()
             _uiState.update {
                 it.copy(
@@ -670,6 +686,8 @@ class LessonViewModel(
             updateQuiz {
                 it.copy(
                     feedback = null,
+                    answerReading = null,
+                    answerPitchAccents = emptyList(),
                     answerInput = "",
                     remainingQuizCount = quizQueue.size,
                     undoCounter = it.undoCounter + 1,
@@ -737,6 +755,25 @@ class LessonViewModel(
         // actually correct — it only fires once, the first time the item's lesson is fully done.
         val newRankChange = if (isNewlyStarted) assignmentRepository.computeLessonStartRankChange(item.srsSystemId) else null
 
+        // Reads the field kept warm by the settings collector in init{} instead of
+        // `settingsRepository.settings.first()` — see `latestSettings`'s doc comment.
+        val settings = latestSettings
+        // A plain map lookup against pitchAccentsBySubjectId (already fetched, in-memory) rather
+        // than a fresh repository call — unlike Review, which has no equivalent prefetch phase and
+        // must defer this outside its own synchronous grading block, this is cheap enough to fold
+        // in atomically with feedback/rankChange here. Vocabulary-only scoping (matching
+        // fetchPitchAccents's own filter) is enforced explicitly here too — a kanji/radical item's
+        // map entry would simply be absent, but answerReading itself has no such natural gate, so
+        // without this check it would still surface the reading (with no pitch accent alongside it)
+        // for a kanji reading question, which vocabulary-only scoping says it shouldn't.
+        val isVocabularyItem = item.subjectType == SubjectType.VOCABULARY || item.subjectType == SubjectType.KANA_VOCABULARY
+        val answerReading = if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isVocabularyItem) {
+            item.readings.firstOrNull()
+        } else {
+            null
+        }
+        val answerPitchAccents = if (answerReading != null) pitchAccentsBySubjectId[item.subjectId].orEmpty() else emptyList()
+
         updateQuiz {
             it.copy(
                 feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
@@ -746,13 +783,12 @@ class LessonViewModel(
                 // than letting it keep ticking while the feedback/Continue screen is up — matches
                 // the elapsedMs recorded for the slowest-answers summary above, stamped at this
                 // same moment.
-                timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null)
+                timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null),
+                answerReading = answerReading,
+                answerPitchAccents = answerPitchAccents
             )
         }
 
-        // Reads the field kept warm by the settings collector in init{} instead of
-        // `settingsRepository.settings.first()` — see `latestSettings`'s doc comment.
-        val settings = latestSettings
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
             candidates.firstOrNull()?.let { reading ->
                 selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
@@ -885,6 +921,8 @@ class LessonViewModel(
                 answerInput = "",
                 feedback = null,
                 rankChange = null,
+                answerReading = null,
+                answerPitchAccents = emptyList(),
                 isDetailsExpanded = false,
                 remainingQuizCount = quizQueue.size,
                 timing = it.timing.copy(

@@ -107,6 +107,7 @@ object ReviewScreenTestTags {
     const val SUBJECT_TYPE_LABEL = "review_subject_type_label"
     const val TOTAL_TIMER_TEXT = "review_total_timer_text"
     const val QUESTION_TIMER_TEXT = "review_question_timer_text"
+    const val ANSWER_READING_PITCH_ACCENT = "review_answer_reading_pitch_accent"
 }
 
 sealed interface ReviewScreenEvent {
@@ -351,7 +352,10 @@ fun ReviewScreen(
                             sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
                             sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
                             useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
-                            allowUndoAfterCorrect = true
+                            allowUndoAfterCorrect = true,
+                            showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
+                            answerReading = phase.answerReading,
+                            answerPitchAccents = phase.answerPitchAccents
                         ),
                         onAnswerInputChange = onAnswerInputChange,
                         onSubmit = onSubmit,
@@ -373,7 +377,8 @@ fun ReviewScreen(
                             undoButton = ReviewScreenTestTags.UNDO_BUTTON,
                             feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
                             answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
-                            continueButton = ReviewScreenTestTags.CONTINUE_BUTTON
+                            continueButton = ReviewScreenTestTags.CONTINUE_BUTTON,
+                            answerReadingPitchAccentHint = ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT
                         )
                     )
                 }

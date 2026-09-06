@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
@@ -76,7 +77,8 @@ data class QuizQuestionTestTags(
     val undoButton: String,
     val feedbackText: String,
     val answerDetailText: String,
-    val continueButton: String
+    val continueButton: String,
+    val answerReadingPitchAccentHint: String
 )
 
 /** Everything [QuizQuestionContent] needs to render one quiz question — a read-only projection
@@ -103,7 +105,12 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     // Review defers submitting a correct answer to WaniKani until Continue is pressed, so it can
     // still be undone up to that point — Lesson has no such pending-submission window, so it leaves
     // this at the default and undo stays incorrect-only there.
-    val allowUndoAfterCorrect: Boolean = false
+    val allowUndoAfterCorrect: Boolean = false,
+    // Live setting gate, plus the reading/pitch-accent data for the just-graded reading question —
+    // null/empty unless that setting is on, the question type is READING, and feedback exists.
+    val showAnswerReadingPitchAccent: Boolean = false,
+    val answerReading: String? = null,
+    val answerPitchAccents: List<PitchAccent> = emptyList()
 )
 
 /**
@@ -191,6 +198,37 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
         modifier = Modifier.weight(1f, fill = false).fillMaxWidth().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        val answerReading = uiState.answerReading
+        val showAnswerHint = uiState.showAnswerReadingPitchAccent &&
+            questionType == QuestionType.READING &&
+            answerReading != null
+        AnimatedVisibility(
+            visible = showAnswerHint,
+            // Slides down from above (unlike RankChangeChip's slide-up-from-below below the glyph)
+            // — a deliberate visual distinction between "new info revealed here" and "your queue
+            // status down there".
+            enter = fadeIn(animationSpec = tween(durationMillis = RankChangeChipEnterDurationMs)) +
+                slideInVertically(
+                    initialOffsetY = { -it / 2 },
+                    animationSpec = tween(durationMillis = RankChangeChipEnterDurationMs, easing = FastOutSlowInEasing)
+                ),
+            exit = fadeOut(animationSpec = tween(durationMillis = 150)) +
+                slideOutVertically(
+                    targetOffsetY = { -it / 2 },
+                    animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
+                )
+        ) {
+            if (answerReading != null) {
+                Column {
+                    AnswerReadingPitchAccentHint(
+                        reading = answerReading,
+                        pitchAccents = uiState.answerPitchAccents,
+                        modifier = Modifier.testTag(testTags.answerReadingPitchAccentHint)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                }
+            }
+        }
         SubjectGlyph(
             characters = item.characters,
             characterImageUrl = item.characterImageUrl,

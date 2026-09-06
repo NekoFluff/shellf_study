@@ -27,6 +27,7 @@ data class SettingsUiState(
     val showStrokeOrder: Boolean = true,
     val useJapaneseKeyboard: Boolean = false,
     val closeEnoughAnswersEnabled: Boolean = true,
+    val showAnswerReadingPitchAccent: Boolean = false,
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
@@ -67,6 +68,7 @@ class SettingsViewModel(
             showStrokeOrder = app.showStrokeOrder,
             useJapaneseKeyboard = app.useJapaneseKeyboard,
             closeEnoughAnswersEnabled = app.closeEnoughAnswersEnabled,
+            showAnswerReadingPitchAccent = app.showAnswerReadingPitchAccent,
             notificationsEnabled = notif.notificationsEnabled,
             reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
             reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
@@ -123,6 +125,10 @@ class SettingsViewModel(
 
     fun onCloseEnoughAnswersEnabledChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setCloseEnoughAnswersEnabled(enabled) }
+    }
+
+    fun onShowAnswerReadingPitchAccentChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowAnswerReadingPitchAccent(enabled) }
     }
 
     /**

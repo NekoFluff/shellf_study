@@ -72,6 +72,7 @@ object SettingsScreenTestTags {
     const val STROKE_ORDER_TOGGLE = "settings_stroke_order_toggle"
     const val JAPANESE_KEYBOARD_TOGGLE = "settings_use_japanese_keyboard_toggle"
     const val CLOSE_ENOUGH_ANSWERS_TOGGLE = "settings_close_enough_answers_toggle"
+    const val ANSWER_READING_PITCH_ACCENT_TOGGLE = "settings_answer_reading_pitch_accent_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
     const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
     const val REVIEWS_BACKLOG_TOGGLE = "settings_reviews_backlog_toggle"
@@ -120,6 +121,7 @@ fun SettingsRoute(
         onShowStrokeOrderChange = viewModel::onShowStrokeOrderChange,
         onUseJapaneseKeyboardChange = viewModel::onUseJapaneseKeyboardChange,
         onCloseEnoughAnswersEnabledChange = viewModel::onCloseEnoughAnswersEnabledChange,
+        onShowAnswerReadingPitchAccentChange = viewModel::onShowAnswerReadingPitchAccentChange,
         onNotificationsEnabledChange = { enabled ->
             if (enabled) requestNotificationPermission() else viewModel.onNotificationsEnabledChange(false)
         },
@@ -152,6 +154,7 @@ fun SettingsScreen(
     onShowStrokeOrderChange: (Boolean) -> Unit,
     onUseJapaneseKeyboardChange: (Boolean) -> Unit,
     onCloseEnoughAnswersEnabledChange: (Boolean) -> Unit,
+    onShowAnswerReadingPitchAccentChange: (Boolean) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onReviewsAvailableEnabledChange: (Boolean) -> Unit,
     onReviewsBacklogEnabledChange: (Boolean) -> Unit,
@@ -316,6 +319,13 @@ fun SettingsScreen(
                     checked = uiState.closeEnoughAnswersEnabled,
                     onCheckedChange = onCloseEnoughAnswersEnabledChange,
                     testTag = SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE
+                )
+                ToggleRow(
+                    label = "Show reading & pitch accent on answer",
+                    description = "After answering a reading question during lessons and reviews, shows the word's reading and its pitch-accent pattern above the character.",
+                    checked = uiState.showAnswerReadingPitchAccent,
+                    onCheckedChange = onShowAnswerReadingPitchAccentChange,
+                    testTag = SettingsScreenTestTags.ANSWER_READING_PITCH_ACCENT_TOGGLE
                 )
             }
 

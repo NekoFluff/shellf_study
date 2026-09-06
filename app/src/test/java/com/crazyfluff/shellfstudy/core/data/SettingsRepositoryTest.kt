@@ -38,6 +38,7 @@ class SettingsRepositoryTest {
             assertThat(settings.showTotalTimer).isFalse()
             assertThat(settings.showQuestionTimer).isFalse()
             assertThat(settings.closeEnoughAnswersEnabled).isTrue()
+            assertThat(settings.showAnswerReadingPitchAccent).isFalse()
         }
     }
 
@@ -104,6 +105,17 @@ class SettingsRepositoryTest {
 
         repository.settings.test {
             assertThat(awaitItem().closeEnoughAnswersEnabled).isFalse()
+        }
+    }
+
+    @Test
+    fun `setShowAnswerReadingPitchAccent persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setShowAnswerReadingPitchAccent(true)
+
+        repository.settings.test {
+            assertThat(awaitItem().showAnswerReadingPitchAccent).isTrue()
         }
     }
 

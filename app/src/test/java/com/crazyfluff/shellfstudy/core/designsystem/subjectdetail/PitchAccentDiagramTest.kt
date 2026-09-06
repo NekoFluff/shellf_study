@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
@@ -85,6 +87,81 @@ class PitchAccentDiagramTest {
 
         val bounds = composeTestRule.onNodeWithTag(PitchAccentTestTags.DIAGRAM).getUnclippedBoundsInRoot()
         assertThat((bounds.right - bounds.left).value).isLessThan(150f)
+    }
+
+    @Test
+    fun `omitting textStyle reproduces today's bodyLarge sizing`() {
+        composeTestRule.setContent {
+            Box(modifier = Modifier.width(400.dp)) {
+                Column {
+                    Box(modifier = Modifier.testTag("default")) {
+                        PitchAccentDiagram(
+                            reading = "みずうみ",
+                            pitchAccent = PitchAccent(reading = "ミズウミ", partOfSpeech = null, pitchNumber = 0)
+                        )
+                    }
+                    Box(modifier = Modifier.testTag("explicitBodyLarge")) {
+                        PitchAccentDiagram(
+                            reading = "みずうみ",
+                            pitchAccent = PitchAccent(reading = "ミズウミ", partOfSpeech = null, pitchNumber = 0),
+                            textStyle = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        }
+
+        val defaultWidth = composeTestRule.onNodeWithTag("default").getUnclippedBoundsInRoot().let { it.right - it.left }
+        val explicitBodyLargeWidth = composeTestRule.onNodeWithTag("explicitBodyLarge").getUnclippedBoundsInRoot().let { it.right - it.left }
+        assertThat(defaultWidth.value).isEqualTo(explicitBodyLargeWidth.value)
+    }
+
+    @Test
+    fun `a custom textStyle renders without crashing`() {
+        // Robolectric's text measurement doesn't vary by declared font size in this harness (both
+        // a bodyLarge- and a labelSmall-styled diagram measure identically here), so this can't
+        // assert the resulting width actually narrows the way it does on a real device/simulator —
+        // that's covered by manual verification instead. This just guards the signature change
+        // itself: a non-default textStyle must not crash or fail to render.
+        composeTestRule.setContent {
+            PitchAccentDiagram(
+                reading = "みずうみ",
+                pitchAccent = PitchAccent(reading = "ミズウミ", partOfSpeech = null, pitchNumber = 0),
+                textStyle = MaterialTheme.typography.labelSmall
+            )
+        }
+
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.DIAGRAM).assertIsDisplayed()
+    }
+
+    @Test
+    fun `showReadingBelow renders one Text per mora underneath the diagram`() {
+        composeTestRule.setContent {
+            PitchAccentDiagram(
+                reading = "みずうみ",
+                pitchAccent = PitchAccent(reading = "ミズウミ", partOfSpeech = null, pitchNumber = 0),
+                showReadingBelow = true
+            )
+        }
+
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.DIAGRAM).assertIsDisplayed()
+        // "みずうみ" repeats a mora ("み" appears twice), so this checks each distinct mora has at
+        // least one match rather than assuming a single unique node per mora.
+        splitIntoMorae("みずうみ").distinct().forEach { mora ->
+            composeTestRule.onAllNodesWithText(mora)[0].assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun `omitting showReadingBelow renders no mora text`() {
+        composeTestRule.setContent {
+            PitchAccentDiagram(
+                reading = "みずうみ",
+                pitchAccent = PitchAccent(reading = "ミズウミ", partOfSpeech = null, pitchNumber = 0)
+            )
+        }
+
+        splitIntoMorae("みずうみ").forEach { mora -> composeTestRule.onAllNodesWithText(mora).assertCountEquals(0) }
     }
 
     @Test

@@ -27,6 +27,7 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
@@ -131,7 +132,9 @@ class LessonScreenTest {
         totalQuizCount: Int = 0,
         remainingQuizCount: Int = 0,
         timing: QuizTimingUiState = QuizTimingUiState(),
-        settings: LessonUiState.DisplaySettings = LessonUiState.DisplaySettings()
+        settings: LessonUiState.DisplaySettings = LessonUiState.DisplaySettings(),
+        answerReading: String? = null,
+        answerPitchAccents: List<PitchAccent> = emptyList()
     ) = LessonUiState(
         phase = LessonUiState.Phase.Quiz(
             currentItem = currentItem,
@@ -141,7 +144,9 @@ class LessonScreenTest {
             answerTypeMismatchCount = answerTypeMismatchCount,
             totalQuizCount = totalQuizCount,
             remainingQuizCount = remainingQuizCount,
-            timing = timing
+            timing = timing,
+            answerReading = answerReading,
+            answerPitchAccents = answerPitchAccents
         ),
         settings = settings
     )
@@ -752,6 +757,52 @@ class LessonScreenTest {
         composeTestRule.onNodeWithTag(LessonScreenTestTags.FEEDBACK_TEXT).assertIsDisplayed()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).performClick()
         assert(continued)
+    }
+
+    @Test
+    fun quizPhase_answerReadingPitchAccentHint_shownForReadingQuestionWhenSettingEnabledAndAnswered() {
+        setScreen(
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.READING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
+                answerReading = "みず",
+                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT).assertIsDisplayed()
+    }
+
+    @Test
+    fun quizPhase_answerReadingPitchAccentHint_absentWhenSettingDisabled() {
+        setScreen(
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.READING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = false),
+                answerReading = "みず"
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT).assertCountEquals(0)
+    }
+
+    @Test
+    fun quizPhase_answerReadingPitchAccentHint_absentForMeaningQuestionEvenWithSettingEnabled() {
+        setScreen(
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth"),
+                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true)
+                // answerReading stays null — the ViewModel never populates it for a meaning question.
+            )
+        )
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT).assertCountEquals(0)
     }
 
     @Test
