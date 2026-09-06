@@ -80,12 +80,7 @@ fun PitchAccentDiagram(
     reading: String,
     pitchAccent: PitchAccent,
     modifier: Modifier = Modifier,
-    textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
-    // When true, each mora's character renders directly below its dot, left-aligned to match the
-    // canvas exactly (both are laid out from the same per-mora widths, so a mora's Text is always
-    // exactly as wide as the dot slot above it) — used by the quiz answer-reveal hint, which shows
-    // the reading below the diagram rather than PitchAccentReadingRow's separate line above it.
-    showReadingBelow: Boolean = false
+    textStyle: TextStyle = MaterialTheme.typography.bodyLarge
 ) {
     val morae = remember(reading) { splitIntoMorae(reading) }
     if (morae.isEmpty()) return
@@ -96,7 +91,7 @@ fun PitchAccentDiagram(
     // Matches the font the caller actually renders the reading in (bodyLarge for
     // PitchAccentReadingRow, smaller for a furigana-scale caller) — otherwise the per-mora widths
     // measured here (and thus the dots' horizontal spacing) drift from the real glyph widths above
-    // them.
+    // them, and from MoraReadingText's own per-mora widths below them.
     val measuredTextStyle = textStyle.copy(fontFamily = LocalJapaneseFontFamily.current)
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -118,51 +113,57 @@ fun PitchAccentDiagram(
     val contentWidthDp = with(density) {
         (moraWidths.sum() + particleWidth + dotRadiusPx).toDp()
     }
-    Column(modifier = modifier, horizontalAlignment = Alignment.Start) {
-        Canvas(
-            modifier = Modifier
-                .width(contentWidthDp)
-                .height(diagramHeightDp)
-                .testTag(PitchAccentTestTags.DIAGRAM)
-        ) {
-            val highY = size.height * 0.2f
-            val lowY = size.height * 0.8f
-            val dotRadius = dotRadiusPx
-            val strokeWidth = with(density) { 1.5.dp.toPx() }
+    Canvas(
+        modifier = modifier
+            .width(contentWidthDp)
+            .height(diagramHeightDp)
+            .testTag(PitchAccentTestTags.DIAGRAM)
+    ) {
+        val highY = size.height * 0.2f
+        val lowY = size.height * 0.8f
+        val dotRadius = dotRadiusPx
+        val strokeWidth = with(density) { 1.5.dp.toPx() }
 
-            var x = 0f
-            val points = moraWidths.mapIndexed { index, width ->
-                val point = Offset(x + width / 2f, if (isHighMora(index, pitchNumber, moraCount)) highY else lowY)
-                x += width
-                point
-            }
-            // isHighMora naturally extends to moraIndex == moraCount — the mora "slot" just past the
-            // last one — giving the correct pitch (high for heiban, low for every other pattern) for
-            // the particle that follows the word.
-            val particleY = if (isHighMora(moraCount, pitchNumber, moraCount)) highY else lowY
-            val particleCenter = Offset(x + particleWidth / 2f, particleY)
+        var x = 0f
+        val points = moraWidths.mapIndexed { index, width ->
+            val point = Offset(x + width / 2f, if (isHighMora(index, pitchNumber, moraCount)) highY else lowY)
+            x += width
+            point
+        }
+        // isHighMora naturally extends to moraIndex == moraCount — the mora "slot" just past the
+        // last one — giving the correct pitch (high for heiban, low for every other pattern) for
+        // the particle that follows the word.
+        val particleY = if (isHighMora(moraCount, pitchNumber, moraCount)) highY else lowY
+        val particleCenter = Offset(x + particleWidth / 2f, particleY)
 
-            for (i in 0 until points.lastIndex) {
-                drawLine(color = color, start = points[i], end = points[i + 1], strokeWidth = strokeWidth)
-            }
-            // Stop the line at the particle dot's edge rather than its center — the dot is hollow, so
-            // a line running all the way to the center would poke visibly through the middle of the
-            // ring.
-            val toParticle = particleCenter - points.last()
-            val toParticleDistance = hypot(toParticle.x, toParticle.y)
-            val particleEdge = particleCenter - toParticle * (dotRadius / toParticleDistance)
-            drawLine(color = color, start = points.last(), end = particleEdge, strokeWidth = strokeWidth)
-            points.forEach { point -> drawCircle(color = color, radius = dotRadius, center = point) }
-            drawCircle(color = color, radius = dotRadius, center = particleCenter, style = Stroke(width = strokeWidth))
+        for (i in 0 until points.lastIndex) {
+            drawLine(color = color, start = points[i], end = points[i + 1], strokeWidth = strokeWidth)
         }
-        if (showReadingBelow) {
-            // No spacing/padding between mora Texts — each is exactly as wide as the mora width
-            // measured above, so laid out consecutively from the same left edge as the canvas, every
-            // character lands directly under its own dot with no extra alignment math needed.
-            Row {
-                morae.forEach { mora -> JapaneseText(mora, style = textStyle) }
-            }
-        }
+        // Stop the line at the particle dot's edge rather than its center — the dot is hollow, so a
+        // line running all the way to the center would poke visibly through the middle of the ring.
+        val toParticle = particleCenter - points.last()
+        val toParticleDistance = hypot(toParticle.x, toParticle.y)
+        val particleEdge = particleCenter - toParticle * (dotRadius / toParticleDistance)
+        drawLine(color = color, start = points.last(), end = particleEdge, strokeWidth = strokeWidth)
+        points.forEach { point -> drawCircle(color = color, radius = dotRadius, center = point) }
+        drawCircle(color = color, radius = dotRadius, center = particleCenter, style = Stroke(width = strokeWidth))
+    }
+}
+
+/**
+ * A reading's characters, one [JapaneseText] per mora with no inter-item spacing — each mora is
+ * exactly as wide as [PitchAccentDiagram] measures it to be (both use the same [textStyle]), so a
+ * row of these lands flush under the dots of any [PitchAccentDiagram] drawn above it for the same
+ * [reading], with no extra alignment math needed. Deliberately separate from [PitchAccentDiagram]
+ * itself: when a reading has more than one accepted pitch pattern, every diagram shares the exact
+ * same per-mora widths (only the dots' high/low positions differ), so one of these below the whole
+ * stack aligns with all of them — there's no need to (and no good reason to) repeat it per diagram.
+ */
+@Composable
+fun MoraReadingText(reading: String, modifier: Modifier = Modifier, textStyle: TextStyle = MaterialTheme.typography.bodyLarge) {
+    val morae = remember(reading) { splitIntoMorae(reading) }
+    Row(modifier = modifier) {
+        morae.forEach { mora -> JapaneseText(mora, style = textStyle) }
     }
 }
 

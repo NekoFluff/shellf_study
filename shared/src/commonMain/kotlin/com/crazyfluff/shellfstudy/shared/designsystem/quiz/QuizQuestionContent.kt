@@ -110,7 +110,8 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     // null/empty unless that setting is on, the question type is READING, and feedback exists.
     val showAnswerReadingPitchAccent: Boolean = false,
     val answerReading: String? = null,
-    val answerPitchAccents: List<PitchAccent> = emptyList()
+    val answerPitchAccents: List<PitchAccent> = emptyList(),
+    val answerReadingHasAudio: Boolean = false
 )
 
 /**
@@ -127,6 +128,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
     onDontKnow: () -> Unit,
     onContinue: () -> Unit,
     onUndo: () -> Unit,
+    onPlayAnswerReading: () -> Unit,
     testTags: QuizQuestionTestTags
 ) {
     val item = uiState.item
@@ -223,7 +225,9 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
                     AnswerReadingPitchAccentHint(
                         reading = answerReading,
                         pitchAccents = uiState.answerPitchAccents,
-                        modifier = Modifier.testTag(testTags.answerReadingPitchAccentHint)
+                        modifier = Modifier.testTag(testTags.answerReadingPitchAccentHint),
+                        hasAudio = uiState.answerReadingHasAudio,
+                        onPlayReading = onPlayAnswerReading
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                 }

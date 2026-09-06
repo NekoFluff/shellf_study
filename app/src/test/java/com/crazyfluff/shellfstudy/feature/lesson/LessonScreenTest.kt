@@ -14,9 +14,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -28,6 +30,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
@@ -183,6 +186,7 @@ class LessonScreenTest {
         onSubmit: () -> Unit = {},
         onDontKnow: () -> Unit = {},
         onUndo: () -> Unit = {},
+        onPlayReading: (LessonItem, String) -> Unit = { _, _ -> },
         onContinue: () -> Unit = {},
         onRetry: () -> Unit = {},
         onAbandon: () -> Unit = {},
@@ -206,7 +210,7 @@ class LessonScreenTest {
                         LessonScreenEvent.Submit -> onSubmit()
                         LessonScreenEvent.DontKnow -> onDontKnow()
                         LessonScreenEvent.Undo -> onUndo()
-                        is LessonScreenEvent.PlayReading -> {}
+                        is LessonScreenEvent.PlayReading -> onPlayReading(event.item, event.reading)
                         LessonScreenEvent.Continue -> onContinue()
                         LessonScreenEvent.ToggleDetails -> {}
                         LessonScreenEvent.CloseDetails -> {}
@@ -803,6 +807,56 @@ class LessonScreenTest {
         )
 
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT).assertCountEquals(0)
+    }
+
+    @Test
+    fun quizPhase_answerReadingPitchAccentHint_playButton_invokesOnPlayReadingWithCurrentItemAndAnswerReading() {
+        val itemWithAudio = radicalItem.copy(
+            pronunciationAudios = listOf(
+                PronunciationAudio(
+                    url = "https://api.wanikani.com/audio/mizu.mp3",
+                    contentType = "audio/mpeg",
+                    pronunciation = "みず",
+                    gender = null,
+                    voiceActorId = null,
+                    voiceActorName = null,
+                    voiceDescription = null
+                )
+            )
+        )
+        var playedItem: LessonItem? = null
+        var playedReading: String? = null
+        setScreen(
+            quizState(
+                currentItem = itemWithAudio, currentQuestionType = QuestionType.READING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
+                answerReading = "みず",
+                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+            ),
+            onPlayReading = { item, reading -> playedItem = item; playedReading = reading }
+        )
+
+        composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
+        assert(playedItem == itemWithAudio)
+        assert(playedReading == "みず")
+    }
+
+    @Test
+    fun quizPhase_answerReadingPitchAccentHint_playButton_absentWhenItemHasNoAudio() {
+        setScreen(
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.READING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
+                answerReading = "みず",
+                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+            )
+        )
+
+        composeTestRule.onAllNodesWithContentDescription("Play pronunciation for みず").assertCountEquals(0)
     }
 
     @Test

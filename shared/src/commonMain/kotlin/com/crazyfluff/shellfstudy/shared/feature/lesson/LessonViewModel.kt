@@ -3,7 +3,7 @@ package com.crazyfluff.shellfstudy.shared.feature.lesson
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
+import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
@@ -27,7 +27,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
-import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord
 import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
@@ -42,6 +41,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
+import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
@@ -497,7 +497,7 @@ class LessonViewModel(
      * items doesn't serialize dozens of individual pitch-accent lookups one after another. */
     private suspend fun fetchPitchAccents(items: List<LessonItem>): Map<Long, List<PitchAccent>> = coroutineScope {
         items
-            .filter { (it.subjectType == SubjectType.VOCABULARY || it.subjectType == SubjectType.KANA_VOCABULARY) && it.characters != null }
+            .filter { isPitchAccentEligible(it.subjectType) && it.characters != null }
             .map { item -> item.subjectId to async { pitchAccentRepository.observePitchAccents(item.characters!!).first() } }
             .associate { (subjectId, deferred) -> subjectId to deferred.await() }
     }
@@ -761,13 +761,12 @@ class LessonViewModel(
         // A plain map lookup against pitchAccentsBySubjectId (already fetched, in-memory) rather
         // than a fresh repository call — unlike Review, which has no equivalent prefetch phase and
         // must defer this outside its own synchronous grading block, this is cheap enough to fold
-        // in atomically with feedback/rankChange here. Vocabulary-only scoping (matching
+        // in atomically with feedback/rankChange here. isPitchAccentEligible (matching
         // fetchPitchAccents's own filter) is enforced explicitly here too — a kanji/radical item's
         // map entry would simply be absent, but answerReading itself has no such natural gate, so
         // without this check it would still surface the reading (with no pitch accent alongside it)
-        // for a kanji reading question, which vocabulary-only scoping says it shouldn't.
-        val isVocabularyItem = item.subjectType == SubjectType.VOCABULARY || item.subjectType == SubjectType.KANA_VOCABULARY
-        val answerReading = if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isVocabularyItem) {
+        // for a kanji reading question, which the shared vocabulary-only scoping rule says it shouldn't.
+        val answerReading = if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType)) {
             item.readings.firstOrNull()
         } else {
             null
@@ -791,19 +790,18 @@ class LessonViewModel(
 
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
             candidates.firstOrNull()?.let { reading ->
-                selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
-                    ?.let(pronunciationAudioPlayer::play)
+                pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
             }
         }
 
         commitGradeDurably(isNewlyStarted, item, snapshot, queueIsEmpty)
     }
 
-    /** Manual play from the study card's reading row — mirrors SubjectDetailViewModel.playReading. */
+    /** Manual play from the study card's reading row, or the quiz answer-reveal hint's play
+     *  button — mirrors SubjectDetailViewModel.playReading. */
     fun playReading(item: LessonItem, reading: String) {
         viewModelScope.launch {
-            selectAudioFor(item.pronunciationAudios, reading, mp3Only = latestSettings.restrictAudioToMp3)
-                ?.let(pronunciationAudioPlayer::play)
+            pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = latestSettings.restrictAudioToMp3)
         }
     }
 

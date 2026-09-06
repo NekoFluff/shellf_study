@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
+import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
@@ -210,8 +210,7 @@ class SubjectDetailViewModel(
     fun playReading(reading: String) {
         val state = _uiState.value
         val detail = state.detail ?: return
-        selectAudioFor(detail.pronunciationAudios, reading, mp3Only = state.restrictAudioToMp3)
-            ?.let(audioPlayer::play)
+        audioPlayer.playMatchingReading(detail.pronunciationAudios, reading, mp3Only = state.restrictAudioToMp3)
     }
 
     fun stopPlayback() {

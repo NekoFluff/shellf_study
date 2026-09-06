@@ -17,6 +17,7 @@ import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
@@ -689,6 +690,34 @@ class ReviewViewModelTest {
         }
 
         assertThat(pronunciationAudioPlayer.playedAudios).isEmpty()
+    }
+
+    @Test
+    fun `playReading manually plays the selected pronunciation audio`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+        var currentItem: ReviewItem? = null
+
+        pronunciationAudioPlayer.state.test {
+            assertThat(awaitItem()).isEqualTo(PlaybackState.IDLE)
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+                currentItem = (state.phase as ReviewUiState.Phase.Active).currentItem
+            }
+
+            // A manual play doesn't require an answered question — unlike autoplay (gated on
+            // grading a reading question correctly), the reveal hint's play button works any time
+            // its reading/pitch-accent data is showing.
+            viewModel.playReading(requireNotNull(currentItem), "みず")
+
+            assertThat(awaitItem()).isEqualTo(PlaybackState.PLAYING)
+        }
+
+        assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
+        assertThat(pronunciationAudioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
     }
 
     @Test

@@ -12,6 +12,14 @@ fun questionTypesFor(subjectType: SubjectType): List<QuestionType> =
         listOf(QuestionType.MEANING, QuestionType.READING)
     }
 
+/** True for the two subject types pitch-accent data is meaningfully keyed by — pitch accent is a
+ *  word-level concept, and the bundled/Weblio source is keyed by whole dictionary headwords, not
+ *  single kanji, so a kanji/radical reading question never has anything to look up. Shared by
+ *  Lesson's pitch-accent prefetch and both Lesson/Review's answer-reveal hint gating, so the
+ *  scoping rule lives in exactly one place. */
+fun isPitchAccentEligible(subjectType: SubjectType): Boolean =
+    subjectType == SubjectType.VOCABULARY || subjectType == SubjectType.KANA_VOCABULARY
+
 fun candidatesFor(meanings: List<String>, auxiliaryMeanings: List<String>, readings: List<String>, type: QuestionType): List<String> =
     if (type == QuestionType.MEANING) meanings + auxiliaryMeanings else readings
 

@@ -116,6 +116,7 @@ sealed interface ReviewScreenEvent {
     data object DontKnow : ReviewScreenEvent
     data object Continue : ReviewScreenEvent
     data object Undo : ReviewScreenEvent
+    data class PlayReading(val item: ReviewItem, val reading: String) : ReviewScreenEvent
     data object ToggleDetails : ReviewScreenEvent
     data object CloseDetails : ReviewScreenEvent
     data object Retry : ReviewScreenEvent
@@ -149,6 +150,7 @@ fun ReviewRoute(
                 ReviewScreenEvent.DontKnow -> viewModel.dontKnowAnswer()
                 ReviewScreenEvent.Continue -> viewModel.onContinue()
                 ReviewScreenEvent.Undo -> viewModel.undoLastAnswer()
+                is ReviewScreenEvent.PlayReading -> viewModel.playReading(event.item, event.reading)
                 ReviewScreenEvent.ToggleDetails -> viewModel.toggleDetails()
                 ReviewScreenEvent.CloseDetails -> viewModel.closeDetails()
                 ReviewScreenEvent.Retry -> viewModel.loadOrResume()
@@ -175,6 +177,7 @@ fun ReviewScreen(
     val onDontKnow = { onEvent(ReviewScreenEvent.DontKnow) }
     val onContinue = { onEvent(ReviewScreenEvent.Continue) }
     val onUndo = { onEvent(ReviewScreenEvent.Undo) }
+    val onPlayReading: (ReviewItem, String) -> Unit = { item, reading -> onEvent(ReviewScreenEvent.PlayReading(item, reading)) }
     val onToggleDetails = { onEvent(ReviewScreenEvent.ToggleDetails) }
     val onCloseDetails = { onEvent(ReviewScreenEvent.CloseDetails) }
     val onRetry = { onEvent(ReviewScreenEvent.Retry) }
@@ -355,13 +358,17 @@ fun ReviewScreen(
                             allowUndoAfterCorrect = true,
                             showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
                             answerReading = phase.answerReading,
-                            answerPitchAccents = phase.answerPitchAccents
+                            answerPitchAccents = phase.answerPitchAccents,
+                            answerReadingHasAudio = phase.currentItem.pronunciationAudios.isNotEmpty()
                         ),
                         onAnswerInputChange = onAnswerInputChange,
                         onSubmit = onSubmit,
                         onDontKnow = onDontKnow,
                         onContinue = onContinue,
                         onUndo = onUndo,
+                        onPlayAnswerReading = {
+                            phase.answerReading?.let { reading -> onPlayReading(phase.currentItem, reading) }
+                        },
                         testTags = QuizQuestionTestTags(
                             progressCount = ReviewScreenTestTags.PROGRESS_COUNT,
                             questionTimerText = ReviewScreenTestTags.QUESTION_TIMER_TEXT,

@@ -11,13 +11,16 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
@@ -120,6 +123,7 @@ class ReviewScreenTest {
         onDontKnow: () -> Unit = {},
         onContinue: () -> Unit = {},
         onUndo: () -> Unit = {},
+        onPlayReading: (ReviewItem, String) -> Unit = { _, _ -> },
         onToggleDetails: () -> Unit = {},
         onCloseDetails: () -> Unit = {},
         onRetry: () -> Unit = {},
@@ -138,6 +142,7 @@ class ReviewScreenTest {
                         ReviewScreenEvent.DontKnow -> onDontKnow()
                         ReviewScreenEvent.Continue -> onContinue()
                         ReviewScreenEvent.Undo -> onUndo()
+                        is ReviewScreenEvent.PlayReading -> onPlayReading(event.item, event.reading)
                         ReviewScreenEvent.ToggleDetails -> onToggleDetails()
                         ReviewScreenEvent.CloseDetails -> onCloseDetails()
                         ReviewScreenEvent.Retry -> onRetry()
@@ -264,6 +269,57 @@ class ReviewScreenTest {
         )
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT).assertCountEquals(0)
+    }
+
+    @Test
+    fun answerReadingPitchAccentHint_playButton_invokesOnPlayReadingWithCurrentItemAndAnswerReading() {
+        val itemWithAudio = sampleItem.copy(
+            pronunciationAudios = listOf(
+                PronunciationAudio(
+                    url = "https://api.wanikani.com/audio/mizu.mp3",
+                    contentType = "audio/mpeg",
+                    pronunciation = "みず",
+                    gender = null,
+                    voiceActorId = null,
+                    voiceActorName = null,
+                    voiceDescription = null
+                )
+            )
+        )
+        var playedItem: ReviewItem? = null
+        var playedReading: String? = null
+        setScreen(
+            activeState(
+                item = itemWithAudio,
+                questionType = QuestionType.READING,
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
+                answerReading = "みず",
+                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+            ),
+            onPlayReading = { item, reading -> playedItem = item; playedReading = reading }
+        )
+
+        composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
+        assert(playedItem == itemWithAudio)
+        assert(playedReading == "みず")
+    }
+
+    @Test
+    fun answerReadingPitchAccentHint_playButton_absentWhenItemHasNoAudio() {
+        setScreen(
+            activeState(
+                questionType = QuestionType.READING,
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
+                answerReading = "みず",
+                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+            )
+        )
+
+        composeTestRule.onAllNodesWithContentDescription("Play pronunciation for みず").assertCountEquals(0)
     }
 
     @Test

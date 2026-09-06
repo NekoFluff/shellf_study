@@ -467,13 +467,17 @@ fun LessonScreen(
                             useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
                             showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
                             answerReading = phase.answerReading,
-                            answerPitchAccents = phase.answerPitchAccents
+                            answerPitchAccents = phase.answerPitchAccents,
+                            answerReadingHasAudio = phase.currentItem.pronunciationAudios.isNotEmpty()
                         ),
                         onAnswerInputChange = onAnswerInputChange,
                         onSubmit = onSubmit,
                         onDontKnow = onDontKnow,
                         onContinue = onContinue,
                         onUndo = onUndo,
+                        onPlayAnswerReading = {
+                            phase.answerReading?.let { reading -> onPlayReading(phase.currentItem, reading) }
+                        },
                         testTags = QuizQuestionTestTags(
                             progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
                             questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,

@@ -18,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.MoraReadingText
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentDiagram
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentReadingRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
@@ -135,16 +136,11 @@ class PitchAccentDiagramTest {
     }
 
     @Test
-    fun `showReadingBelow renders one Text per mora underneath the diagram`() {
+    fun `MoraReadingText renders one Text per mora`() {
         composeTestRule.setContent {
-            PitchAccentDiagram(
-                reading = "みずうみ",
-                pitchAccent = PitchAccent(reading = "ミズウミ", partOfSpeech = null, pitchNumber = 0),
-                showReadingBelow = true
-            )
+            MoraReadingText(reading = "みずうみ")
         }
 
-        composeTestRule.onNodeWithTag(PitchAccentTestTags.DIAGRAM).assertIsDisplayed()
         // "みずうみ" repeats a mora ("み" appears twice), so this checks each distinct mora has at
         // least one match rather than assuming a single unique node per mora.
         splitIntoMorae("みずうみ").distinct().forEach { mora ->
@@ -153,7 +149,7 @@ class PitchAccentDiagramTest {
     }
 
     @Test
-    fun `omitting showReadingBelow renders no mora text`() {
+    fun `MoraReadingText and PitchAccentDiagram render independently, not tied to one another`() {
         composeTestRule.setContent {
             PitchAccentDiagram(
                 reading = "みずうみ",
@@ -161,6 +157,7 @@ class PitchAccentDiagramTest {
             )
         }
 
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.DIAGRAM).assertIsDisplayed()
         splitIntoMorae("みずうみ").forEach { mora -> composeTestRule.onAllNodesWithText(mora).assertCountEquals(0) }
     }
 

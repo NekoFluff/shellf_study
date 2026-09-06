@@ -3,7 +3,7 @@ package com.crazyfluff.shellfstudy.shared.feature.review
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
+import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
 import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
@@ -27,6 +27,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
+import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
@@ -374,6 +375,14 @@ class ReviewViewModel(
         }
     }
 
+    /** Manual play from the answer-reveal reading/pitch-accent hint — mirrors
+     *  LessonViewModel.playReading/SubjectDetailViewModel.playReading. */
+    fun playReading(item: ReviewItem, reading: String) {
+        viewModelScope.launch {
+            pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = latestSettings.restrictAudioToMp3)
+        }
+    }
+
     /** Gives up on the current question — grades it as a miss without requiring a typed guess. */
     fun dontKnowAnswer() {
         val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
@@ -462,8 +471,7 @@ class ReviewViewModel(
         val settings = latestSettings
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
             candidates.firstOrNull()?.let { reading ->
-                selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
-                    ?.let(pronunciationAudioPlayer::play)
+                pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
             }
         }
 
@@ -473,8 +481,7 @@ class ReviewViewModel(
         // path costs one extra recomposition, which AnswerReadingPitchAccentHint's own entrance
         // animation absorbs gracefully.
         val characters = item.characters
-        val isVocabularyItem = item.subjectType == SubjectType.VOCABULARY || item.subjectType == SubjectType.KANA_VOCABULARY
-        if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isVocabularyItem && characters != null) {
+        if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType) && characters != null) {
             val answerReading = item.readings.firstOrNull()
             val answerPitchAccents = if (answerReading != null) {
                 pitchAccentRepository.observePitchAccents(characters).first()
