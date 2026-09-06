@@ -313,6 +313,35 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `a later resume force-refreshes assignments even while still inside the staleness window`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            viewModel.onDashboardResumed() // cold start: forces a full sync, including assignments
+            while (state.isRefreshing) state = awaitItem()
+            val coldStartSyncedAt = state.lastSyncedAtMillis
+
+            // Drain the cold-start requests (including its own /assignments call) so only the
+            // second resume's requests are counted below.
+            generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
+
+            // dashboardSyncCoordinator.sync(force = false) alone would skip assignments here — the
+            // cold-start sync above just set its lastSyncSuccessAt to "now", well inside
+            // ASSIGNMENTS_STALENESS (1 hour). onDashboardResumed() runs syncAssignments(force =
+            // true) before fetchUserAndSummary(), so waiting for lastSyncedAtMillis to advance
+            // again proves that force-refresh already completed by the time we drain requests.
+            viewModel.onDashboardResumed()
+            while (state.lastSyncedAtMillis == coldStartSyncedAt) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val requests = generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
+        assertThat(requests.count { it.path.orEmpty().startsWith("/assignments") }).isAtLeast(1)
+    }
+
+    @Test
     fun `seeds cached username and counts before the network refresh resolves, then updates them once it does`() = runTest(mainDispatcherRule.dispatcher) {
         dashboardCacheRepository.save(
             username = "cached_user", level = 1, lessonCount = 9, reviewCount = 9, syncedAtMillis = 1_000L

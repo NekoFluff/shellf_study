@@ -394,6 +394,14 @@ class DashboardViewModel(
 
             dashboardSyncCoordinator.sync(force = false)
 
+            // fetchUserAndSummary below refetches the banner counts unconditionally on every
+            // resume, but syncAll(force = false) above only refetches assignments once
+            // ASSIGNMENTS_STALENESS has elapsed — leaving the forecast/item-spread/level-progress
+            // cards (all derived from the local assignments table) trailing the banner by up to an
+            // hour. Force this one resource specifically; it still reuses its saved `updated_after`
+            // cursor, so this stays an incremental fetch rather than a full resync.
+            assignmentRepository.syncAssignments(force = true)
+
             val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()
 
             if (userResult is ApiResult.Error && userResult.isAuthError) {
