@@ -20,7 +20,7 @@ import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
-import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
+import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
@@ -101,7 +101,7 @@ class LessonViewModelTest {
 
     private fun TestScope.createViewModel() = LessonViewModel(
         assignmentRepository, repositories.statsRepository, outboxRepository,
-        QuizSessionController(backgroundScope, lessonSessionRepository),
+        LessonSessionController(backgroundScope, lessonSessionRepository),
         lastSessionSummaryRepository, pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository,
         pronunciationAudioPlayer, appForegroundTracker, backgroundScope
     )

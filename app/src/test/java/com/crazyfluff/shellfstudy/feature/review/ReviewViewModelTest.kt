@@ -21,7 +21,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
-import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
+import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
@@ -93,7 +93,7 @@ class ReviewViewModelTest {
 
     private fun TestScope.createViewModel() = ReviewViewModel(
         assignmentRepository, outboxRepository, statsRepository,
-        QuizSessionController(backgroundScope, reviewSessionRepository), lastSessionSummaryRepository,
+        ReviewSessionController(backgroundScope, reviewSessionRepository), lastSessionSummaryRepository,
         pronunciationAudioPlayer, settingsRepository, appForegroundTracker, backgroundScope
     )
 

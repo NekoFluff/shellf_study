@@ -43,7 +43,8 @@ import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.crazyfluff.shellfstudy.shared.data.FriendRepository
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
-import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
+import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
+import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -73,8 +74,8 @@ class DashboardViewModelTest {
     private lateinit var repositories: TestRepositories
     private lateinit var reviewSessionRepository: ReviewSessionRepository
     private lateinit var lessonSessionRepository: LessonSessionRepository
-    private lateinit var reviewSessionController: QuizSessionController<PersistedReviewSession>
-    private lateinit var lessonSessionController: QuizSessionController<PersistedLessonSession>
+    private lateinit var reviewSessionController: ReviewSessionController
+    private lateinit var lessonSessionController: LessonSessionController
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var dashboardCacheRepository: DashboardCacheRepository
     private lateinit var outboxRepository: OutboxRepository
@@ -97,8 +98,8 @@ class DashboardViewModelTest {
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
-        reviewSessionController = QuizSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), reviewSessionRepository)
-        lessonSessionController = QuizSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), lessonSessionRepository)
+        reviewSessionController = ReviewSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), reviewSessionRepository)
+        lessonSessionController = LessonSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), lessonSessionRepository)
         settingsRepository = SettingsRepository(dataStore)
         dashboardCacheRepository = DashboardCacheRepository(dataStore)
         syncScheduler = FakeSyncScheduler()

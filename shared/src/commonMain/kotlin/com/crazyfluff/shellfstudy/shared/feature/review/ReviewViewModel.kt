@@ -43,7 +43,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
+import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -125,7 +125,7 @@ class ReviewViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val outboxRepository: OutboxRepository,
     private val statsRepository: StatsRepository,
-    private val sessionController: QuizSessionController<PersistedReviewSession>,
+    private val sessionController: ReviewSessionController,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val settingsRepository: SettingsRepository,

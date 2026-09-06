@@ -10,13 +10,12 @@ import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
-import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
-import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
-import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
+import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
+import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
@@ -144,8 +143,8 @@ private data class LevelDependentState(
 private data class LocalDueCounts(val reviewCount: Int, val lessonCount: Int)
 
 class DashboardViewModel(
-    private val reviewSessionController: QuizSessionController<PersistedReviewSession>,
-    private val lessonSessionController: QuizSessionController<PersistedLessonSession>,
+    private val reviewSessionController: ReviewSessionController,
+    private val lessonSessionController: LessonSessionController,
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
     private val assignmentRepository: AssignmentRepository,

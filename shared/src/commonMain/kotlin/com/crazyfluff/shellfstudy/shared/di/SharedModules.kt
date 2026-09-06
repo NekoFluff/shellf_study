@@ -11,8 +11,6 @@ import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
-import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
-import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
@@ -41,7 +39,8 @@ import com.crazyfluff.shellfstudy.shared.network.waniKaniJson
 import com.crazyfluff.shellfstudy.shared.network.weblio.KtorWeblioApi
 import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi
 import com.crazyfluff.shellfstudy.shared.network.weblio.createWeblioHttpClient
-import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
+import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
+import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -146,15 +145,19 @@ val repositoryModule = module {
 
     // One controller per feature, shared by that feature's ViewModel and any out-of-band caller
     // (Dashboard abandon, account logout) — see QuizSessionController's doc comment for why this is
-    // a process-wide singleton rather than scoped to the owning ViewModel.
+    // a process-wide singleton rather than scoped to the owning ViewModel. Registered as the
+    // concrete LessonSessionController/ReviewSessionController subclasses, NOT as two
+    // QuizSessionController<T> generics: Koin indexes definitions by the erased class only, so two
+    // generic registrations collide on one key and the later silently overrides the earlier (the
+    // lesson singleton would resolve to the review store and crash on the first lesson persist).
     single {
-        QuizSessionController<PersistedLessonSession>(
+        LessonSessionController(
             scope = get(APPLICATION_SCOPE),
             store = get<LessonSessionRepository>()
         )
     }
     single {
-        QuizSessionController<PersistedReviewSession>(
+        ReviewSessionController(
             scope = get(APPLICATION_SCOPE),
             store = get<ReviewSessionRepository>()
         )

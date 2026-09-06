@@ -1,6 +1,8 @@
 package com.crazyfluff.shellfstudy.shared.session
 
 import com.crazyfluff.shellfstudy.shared.coroutines.SerialDurableWork
+import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
+import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,8 +31,12 @@ interface PersistedSessionStore<T> {
  * queued right after the last question was graded) still finds the session IDLE and no-ops — the
  * ordering guarantee [SerialDurableWork] provides is not what's being relied on here; the state
  * check running before a write is even enqueued is.
+ *
+ * Open for the per-feature [LessonSessionController]/[ReviewSessionController] subclasses — those
+ * exist because Koin indexes definitions by the erased class only, so two generic
+ * `QuizSessionController<T>` registrations would collide; see [LessonSessionController].
  */
-class QuizSessionController<T : Any>(
+open class QuizSessionController<T : Any>(
     scope: CoroutineScope,
     private val store: PersistedSessionStore<T>
 ) {
@@ -73,3 +79,27 @@ class QuizSessionController<T : Any>(
      *  account logout) rather than by its own owning ViewModel reaching a natural completion. */
     suspend fun abandon() = complete()
 }
+
+/**
+ * The lesson feature's concrete [QuizSessionController], fixed to its own persisted-session store —
+ * the type Koin is given when wiring the lesson singleton.
+ *
+ * These two subclasses exist because Koin cannot tell two `QuizSessionController<T>` definitions
+ * apart: it indexes definitions by the *erased* class only, so two `single { QuizSessionController<
+ * ...>(...) }` registrations collide on one key and the later one silently overrides the earlier.
+ * That is exactly what happened to the original generic definitions — the review registration
+ * replaced the lesson one, so the lesson screen's first persist reached
+ * ReviewSessionRepository.save() with a lesson payload and crashed with a ClassCastException (and
+ * the dashboard's "abandon lesson" action would have cleared the review session instead). Give
+ * each feature its own subclass and Koin has two distinct keys, with every consumer compile-checked.
+ */
+class LessonSessionController(
+    scope: CoroutineScope,
+    store: PersistedSessionStore<PersistedLessonSession>
+) : QuizSessionController<PersistedLessonSession>(scope, store)
+
+/** The review feature's concrete [QuizSessionController] — see [LessonSessionController]. */
+class ReviewSessionController(
+    scope: CoroutineScope,
+    store: PersistedSessionStore<PersistedReviewSession>
+) : QuizSessionController<PersistedReviewSession>(scope, store)

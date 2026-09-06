@@ -47,7 +47,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.quiz.undoLastIncorrectAnswer
-import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
+import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -145,7 +145,7 @@ class LessonViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
     private val outboxRepository: OutboxRepository,
-    private val sessionController: QuizSessionController<PersistedLessonSession>,
+    private val sessionController: LessonSessionController,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
     private val pitchAccentRepository: PitchAccentRepository,
     private val settingsRepository: SettingsRepository,

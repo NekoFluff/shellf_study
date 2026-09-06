@@ -30,7 +30,8 @@ import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingLessonStartEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDayEntity
-import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
+import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
+import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -66,8 +67,8 @@ class AccountDataCleanerTest {
     private lateinit var lastSessionSummaryRepository: LastSessionSummaryRepository
     private lateinit var reviewSessionRepository: ReviewSessionRepository
     private lateinit var lessonSessionRepository: LessonSessionRepository
-    private lateinit var reviewSessionController: QuizSessionController<PersistedReviewSession>
-    private lateinit var lessonSessionController: QuizSessionController<PersistedLessonSession>
+    private lateinit var reviewSessionController: ReviewSessionController
+    private lateinit var lessonSessionController: LessonSessionController
 
     private fun setUp() {
         dataStore = PreferenceDataStoreFactory.create(
@@ -85,8 +86,8 @@ class AccountDataCleanerTest {
         lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json)
         reviewSessionRepository = ReviewSessionRepository(dataStore, json)
         lessonSessionRepository = LessonSessionRepository(dataStore, json)
-        reviewSessionController = QuizSessionController(CoroutineScope(SupervisorJob()), reviewSessionRepository)
-        lessonSessionController = QuizSessionController(CoroutineScope(SupervisorJob()), lessonSessionRepository)
+        reviewSessionController = ReviewSessionController(CoroutineScope(SupervisorJob()), reviewSessionRepository)
+        lessonSessionController = LessonSessionController(CoroutineScope(SupervisorJob()), lessonSessionRepository)
     }
 
     private fun buildCleaner(assignmentDao: AssignmentDao = this.assignmentDao) = AccountDataCleaner(

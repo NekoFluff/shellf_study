@@ -69,11 +69,15 @@ class AppModulesVerificationTest {
                 // Ktor's HttpClient constructor takes HttpClientEngine internally; the actual engine
                 // (OkHttp) is supplied at construction time by createWaniKaniHttpClient(), not via Koin.
                 HttpClientEngine::class,
-                // QuizSessionController<T>'s constructor takes the generic PersistedSessionStore<T>
-                // interface, but the verifier's reflection only sees the erased raw interface — the
-                // real dependency is supplied by the explicitly-typed get<LessonSessionRepository>()/
-                // get<ReviewSessionRepository>() calls in each QuizSessionController registration in
-                // repositoryModule, which the verifier can't see since it doesn't evaluate lambda bodies.
+                // LessonSessionController's/ReviewSessionController's constructor takes the generic
+                // PersistedSessionStore<T> interface, but the verifier's reflection only sees the
+                // erased raw interface — the real dependency is supplied by the explicitly-typed
+                // get<LessonSessionRepository>()/get<ReviewSessionRepository>() calls in each
+                // controller registration in repositoryModule, which the verifier can't see since it
+                // doesn't evaluate lambda bodies. Each feature is its own concrete controller
+                // subclass (never two QuizSessionController<T> generics — Koin indexes by the erased
+                // class, so those would collide), and that resolution is exercised end-to-end in
+                // SessionControllerDiTest.
                 PersistedSessionStore::class,
             )
         )

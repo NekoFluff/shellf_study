@@ -36,7 +36,8 @@ import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.shared.network.SrsStageData
-import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
+import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
+import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -95,8 +96,8 @@ class LogoutCoordinatorTest {
         outboxRepository = OutboxRepository(outboxDao, FakeOutboxSyncScheduler(), dataStore)
         reviewSessionRepository = ReviewSessionRepository(dataStore, json)
         lessonSessionRepository = LessonSessionRepository(dataStore, json)
-        val reviewSessionController = QuizSessionController(CoroutineScope(SupervisorJob()), reviewSessionRepository)
-        val lessonSessionController = QuizSessionController(CoroutineScope(SupervisorJob()), lessonSessionRepository)
+        val reviewSessionController = ReviewSessionController(CoroutineScope(SupervisorJob()), reviewSessionRepository)
+        val lessonSessionController = LessonSessionController(CoroutineScope(SupervisorJob()), lessonSessionRepository)
 
         subjectDao = FakeSubjectDao()
         srsSystemDao = FakeSrsSystemDao()
