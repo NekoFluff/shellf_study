@@ -6,6 +6,7 @@ import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDao
+import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
 
 /**
  * Wipes every store that's scoped to the logged-in WaniKani account, so a new login can't be
@@ -27,8 +28,8 @@ class AccountDataCleaner(
     private val outboxRepository: OutboxRepository,
     private val dashboardCacheRepository: DashboardCacheRepository,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
-    private val reviewSessionRepository: ReviewSessionRepository,
-    private val lessonSessionRepository: LessonSessionRepository
+    private val reviewSessionController: QuizSessionController<PersistedReviewSession>,
+    private val lessonSessionController: QuizSessionController<PersistedLessonSession>
 ) {
     suspend fun clearAll() {
         runCatching { assignmentDao.clearAll() }
@@ -40,8 +41,8 @@ class AccountDataCleaner(
         runCatching { studyActivityDao.clearAll() }
         runCatching { outboxRepository.resetAuthBlock() }
         runCatching { dashboardCacheRepository.clear() }
-        runCatching { lastSessionSummaryRepository.clear() }
-        runCatching { reviewSessionRepository.clear() }
-        runCatching { lessonSessionRepository.clear() }
+        runCatching { lastSessionSummaryRepository.clearAll() }
+        runCatching { reviewSessionController.abandon() }
+        runCatching { lessonSessionController.abandon() }
     }
 }

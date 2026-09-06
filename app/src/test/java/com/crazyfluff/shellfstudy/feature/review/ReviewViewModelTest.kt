@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.feature.review
 
+import com.crazyfluff.shellfstudy.shared.feature.review.ReviewUiState
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewViewModel
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -20,6 +21,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
@@ -90,7 +92,8 @@ class ReviewViewModelTest {
     }
 
     private fun TestScope.createViewModel() = ReviewViewModel(
-        assignmentRepository, outboxRepository, statsRepository, reviewSessionRepository, lastSessionSummaryRepository,
+        assignmentRepository, outboxRepository, statsRepository,
+        QuizSessionController(backgroundScope, reviewSessionRepository), lastSessionSummaryRepository,
         pronunciationAudioPlayer, settingsRepository, appForegroundTracker, backgroundScope
     )
 
@@ -117,22 +120,22 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
-            assertThat(state.totalCount).isEqualTo(1)
-            assertThat(state.currentQuestionType).isEqualTo(QuestionType.MEANING)
+            assertThat((state.phase as ReviewUiState.Phase.Active).totalCount).isEqualTo(1)
+            assertThat((state.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)
 
             viewModel.onAnswerInputChange("Rain")
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
 
             viewModel.onContinue()
             val finalState = awaitItem()
             // If the kana_vocabulary fix is absent, isFullyDone would return false here
             // (requiresReading was true) and the session would not complete.
-            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat((finalState.phase is ReviewUiState.Phase.Complete)).isTrue()
         }
     }
 
@@ -144,32 +147,33 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
-            assertThat(state.totalCount).isEqualTo(1)
-            assertThat(state.currentQuestionType).isEqualTo(QuestionType.MEANING)
+            assertThat((state.phase as ReviewUiState.Phase.Active).totalCount).isEqualTo(1)
+            assertThat((state.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
-            // Answered correctly first try, and the stale feedback from the last question must not
-            // leak into the completed state (it would otherwise keep the swipe-up handle visible).
-            assertThat(finalState.feedback).isNull()
-            assertThat(finalState.sessionItemsReviewed).isEqualTo(1)
-            assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(1)
+            // Answered correctly first try, and the stale feedback from the last question can't leak
+            // into the completed state (it would otherwise keep the swipe-up handle visible) — that's
+            // now a structural guarantee rather than something to assert at runtime, since
+            // Phase.Complete has no feedback field to leak into in the first place.
+            val complete = finalState.phase as ReviewUiState.Phase.Complete
+            assertThat(complete.sessionItemsReviewed).isEqualTo(1)
+            assertThat(complete.sessionItemsCorrectFirstTry).isEqualTo(1)
         }
         // Session completion should flush the outbox immediately rather than waiting out the
         // per-answer debounce, so the dashboard's pending-sync count doesn't look stale.
         assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isEqualTo(1)
 
         // Completing a session snapshots its summary so it can be revisited later from the dashboard.
-        val savedSummary = lastSessionSummaryRepository.load()
+        val savedSummary = lastSessionSummaryRepository.loadReview()
         assertThat(savedSummary).isNotNull()
         assertThat(savedSummary!!.kind).isEqualTo(LastSessionKind.REVIEW)
         assertThat(savedSummary.itemsCount).isEqualTo(1)
@@ -184,8 +188,8 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.rankChange).isNull()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).rankChange).isNull()
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
@@ -194,16 +198,18 @@ class ReviewViewModelTest {
             // coroutine, not strictly ordered against the feedback update, so wait until both have
             // landed rather than assuming a fixed number of emissions.
             var settled = awaitItem()
-            while (settled.feedback == null || settled.rankChange == null) settled = awaitItem()
-            assertThat(settled.feedback?.isCorrect).isTrue()
+            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null || (settled.phase as ReviewUiState.Phase.Active).rankChange == null) settled = awaitItem()
+            assertThat((settled.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
             // radicalAssignmentsJson fixes the cached assignment at srs_stage 1 (Apprentice I); the
             // optimistic local prediction is one stage up on a correct answer.
-            assertThat(settled.rankChange).isEqualTo(RankChange(SrsStage.APPRENTICE_1, SrsStage.APPRENTICE_2))
+            assertThat((settled.phase as ReviewUiState.Phase.Active).rankChange).isEqualTo(RankChange(SrsStage.APPRENTICE_1, SrsStage.APPRENTICE_2))
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
-            assertThat(finalState.rankChange).isNull()
+            // The rank change (an Active-only concept) can't survive into the completed state —
+            // that's a structural guarantee now, since Phase.Complete has no rankChange field at all,
+            // rather than something to assert by reading a field back as null.
+            assertThat(finalState.phase).isInstanceOf(ReviewUiState.Phase.Complete::class.java)
         }
     }
 
@@ -215,13 +221,13 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             var settled = awaitItem()
-            while (settled.feedback == null) settled = awaitItem()
+            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
 
             // Submission to WaniKani is deferred until Continue is pressed (see
             // ReviewViewModel.pendingSubmissionAssignmentId) so an undo can still retract it —
@@ -264,10 +270,11 @@ class ReviewViewModelTest {
         var gradedType = QuestionType.MEANING
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
-            gradedItemId = state.currentItem!!.assignmentId
-            gradedType = state.currentQuestionType!!
+            val active = state.phase as ReviewUiState.Phase.Active
+            gradedItemId = active.currentItem.assignmentId
+            gradedType = active.currentQuestionType
             val answer = when {
                 gradedItemId == 101L -> "Mouth"
                 gradedType == QuestionType.MEANING -> "Water"
@@ -277,7 +284,7 @@ class ReviewViewModelTest {
             awaitItem()
             viewModel.submitAnswer()
             var settled = awaitItem()
-            while (settled.feedback == null) settled = awaitItem()
+            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
 
             viewModel.viewModelScope.cancel()
         }
@@ -313,34 +320,34 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.onAnswerInputChange("wrong answer")
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.feedback?.isCorrect).isFalse()
-            assertThat(feedbackState.remainingCount).isEqualTo(1)
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
 
             viewModel.onContinue()
             val requeuedState = awaitItem()
-            assertThat(requeuedState.isSessionComplete).isFalse()
-            assertThat(requeuedState.currentQuestionType).isEqualTo(QuestionType.MEANING)
-            assertThat(requeuedState.feedback).isNull()
+            assertThat((requeuedState.phase is ReviewUiState.Phase.Complete)).isFalse()
+            assertThat((requeuedState.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)
+            assertThat((requeuedState.phase as ReviewUiState.Phase.Active).feedback).isNull()
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             val correctState = awaitItem()
-            assertThat(correctState.feedback?.isCorrect).isTrue()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat((finalState.phase is ReviewUiState.Phase.Complete)).isTrue()
             // Needed a retry, so it doesn't count as correct-on-first-try even though it was
             // eventually answered correctly.
-            assertThat(finalState.sessionItemsReviewed).isEqualTo(1)
-            assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(0)
+            assertThat((finalState.phase as ReviewUiState.Phase.Complete).sessionItemsReviewed).isEqualTo(1)
+            assertThat((finalState.phase as ReviewUiState.Phase.Complete).sessionItemsCorrectFirstTry).isEqualTo(0)
         }
     }
 
@@ -352,24 +359,24 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.currentQuestionType).isEqualTo(QuestionType.MEANING)
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)
 
             viewModel.onAnswerInputChange("くち")
             awaitItem()
             viewModel.submitAnswer()
             val mismatchState = awaitItem()
-            assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
+            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).answerTypeMismatchCount).isEqualTo(1)
             // Rejected outright, not graded as a miss — feedback stays null and the question isn't
             // consumed (remainingCount unchanged, no requeue).
-            assertThat(mismatchState.feedback).isNull()
-            assertThat(mismatchState.remainingCount).isEqualTo(1)
+            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).feedback).isNull()
+            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             val correctState = awaitItem()
-            assertThat(correctState.feedback?.isCorrect).isTrue()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
         }
     }
 
@@ -381,9 +388,9 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
             // Queue order is shuffled — answer reading questions correctly until meaning comes up.
-            while (state.currentQuestionType != QuestionType.MEANING) {
+            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.MEANING) {
                 viewModel.onAnswerInputChange("mizu")
                 awaitItem()
                 viewModel.submitAnswer()
@@ -391,23 +398,23 @@ class ReviewViewModelTest {
                 viewModel.onContinue()
                 state = awaitItem()
             }
-            val remainingBeforeMismatch = state.remainingCount
+            val remainingBeforeMismatch = (state.phase as ReviewUiState.Phase.Active).remainingCount
 
             viewModel.onAnswerInputChange("mizu")
             awaitItem()
             viewModel.submitAnswer()
             val mismatchState = awaitItem()
-            assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
+            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).answerTypeMismatchCount).isEqualTo(1)
             // Rejected outright, not graded as a miss — feedback stays null and the question isn't
             // consumed (remainingCount unchanged, no requeue).
-            assertThat(mismatchState.feedback).isNull()
-            assertThat(mismatchState.remainingCount).isEqualTo(remainingBeforeMismatch)
+            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).feedback).isNull()
+            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(remainingBeforeMismatch)
 
             viewModel.onAnswerInputChange("Water")
             awaitItem()
             viewModel.submitAnswer()
             val correctState = awaitItem()
-            assertThat(correctState.feedback?.isCorrect).isTrue()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
         }
     }
 
@@ -419,9 +426,9 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
             // Queue order is shuffled — answer meaning questions correctly until reading comes up.
-            while (state.currentQuestionType != QuestionType.READING) {
+            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
                 viewModel.onAnswerInputChange("Water")
                 awaitItem()
                 viewModel.submitAnswer()
@@ -431,22 +438,22 @@ class ReviewViewModelTest {
             }
             // Captured before the mismatch submission — if the reading question happened to be
             // drawn first, the meaning question is still outstanding, so this is 2, not 1.
-            val remainingBeforeMismatch = state.remainingCount
+            val remainingBeforeMismatch = (state.phase as ReviewUiState.Phase.Active).remainingCount
 
             viewModel.onAnswerInputChange("Water")
             awaitItem()
             viewModel.submitAnswer()
             val mismatchState = awaitItem()
-            assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
-            assertThat(mismatchState.feedback).isNull()
+            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).answerTypeMismatchCount).isEqualTo(1)
+            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).feedback).isNull()
             // Rejected outright, not graded as a miss — the queue is untouched.
-            assertThat(mismatchState.remainingCount).isEqualTo(remainingBeforeMismatch)
+            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(remainingBeforeMismatch)
 
             viewModel.onAnswerInputChange("mizu")
             awaitItem()
             viewModel.submitAnswer()
             val correctState = awaitItem()
-            assertThat(correctState.feedback?.isCorrect).isTrue()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
         }
     }
 
@@ -458,31 +465,31 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.isDetailsExpanded).isFalse()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).isDetailsExpanded).isFalse()
 
             viewModel.dontKnowAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.feedback?.isCorrect).isFalse()
-            assertThat(feedbackState.feedback?.correctAnswer).isEqualTo("Mouth")
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback?.correctAnswer).isEqualTo("Mouth")
             // "I don't know" shouldn't force the detail sheet open — same as a regular wrong answer.
-            assertThat(feedbackState.isDetailsExpanded).isFalse()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).isDetailsExpanded).isFalse()
             // Requeued, not dropped — remaining count is unchanged, still one question to answer.
-            assertThat(feedbackState.remainingCount).isEqualTo(1)
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
 
             viewModel.onContinue()
             val requeuedState = awaitItem()
-            assertThat(requeuedState.isSessionComplete).isFalse()
+            assertThat((requeuedState.phase is ReviewUiState.Phase.Complete)).isFalse()
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             val correctState = awaitItem()
-            assertThat(correctState.feedback?.isCorrect).isTrue()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat((finalState.phase is ReviewUiState.Phase.Complete)).isTrue()
         }
     }
 
@@ -497,14 +504,14 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.isDetailsExpanded).isFalse()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).isDetailsExpanded).isFalse()
 
             viewModel.toggleDetails()
-            assertThat(awaitItem().isDetailsExpanded).isTrue()
+            assertThat((awaitItem().phase as ReviewUiState.Phase.Active).isDetailsExpanded).isTrue()
 
             viewModel.toggleDetails()
-            assertThat(awaitItem().isDetailsExpanded).isFalse()
+            assertThat((awaitItem().phase as ReviewUiState.Phase.Active).isDetailsExpanded).isFalse()
 
             viewModel.closeDetails()
             // Already false — closeDetails is idempotent, not a toggle, so this must not flip it
@@ -521,11 +528,11 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.dontKnowAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.feedback).isNotNull()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback).isNotNull()
 
             // A second dontKnowAnswer() while feedback is already showing must be a no-op —
             // otherwise it would silently double-count the miss against the same question.
@@ -542,8 +549,8 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.totalCount).isEqualTo(2)
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).totalCount).isEqualTo(2)
 
             var isComplete = false
             var safetyCounter = 0
@@ -552,14 +559,14 @@ class ReviewViewModelTest {
                 val current = state
                 // Reading answers are typed as romaji, same as the real reading field — this
                 // exercises RomajiConverter grading, not just literal hiragana comparison.
-                val answer = if (current.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+                val answer = if ((current.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
                 viewModel.onAnswerInputChange(answer)
                 awaitItem()
                 viewModel.submitAnswer()
                 awaitItem() // feedback
                 viewModel.onContinue()
                 state = awaitItem()
-                isComplete = state.isSessionComplete
+                isComplete = (state.phase is ReviewUiState.Phase.Complete)
             }
 
             assertThat(isComplete).isTrue()
@@ -581,9 +588,9 @@ class ReviewViewModelTest {
 
             viewModel.uiState.test {
                 var state = awaitItem()
-                while (state.isLoading) state = awaitItem()
-                while (state.currentQuestionType != QuestionType.READING) {
-                    viewModel.onAnswerInputChange(if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+                while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
+                    viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
                     awaitItem()
                     viewModel.submitAnswer()
                     awaitItem()
@@ -616,8 +623,8 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.currentQuestionType).isEqualTo(QuestionType.MEANING)
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
@@ -637,9 +644,9 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            while (state.currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange(if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
                 awaitItem()
                 viewModel.submitAnswer()
                 awaitItem()
@@ -665,9 +672,9 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            while (state.currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange(if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
                 awaitItem()
                 viewModel.submitAnswer()
                 awaitItem()
@@ -692,30 +699,30 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.onAnswerInputChange("typo")
             awaitItem()
             viewModel.submitAnswer()
             val incorrectState = awaitItem()
-            assertThat(incorrectState.feedback?.isCorrect).isFalse()
+            assertThat((incorrectState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
 
             viewModel.undoLastAnswer()
             val undoneState = awaitItem()
-            assertThat(undoneState.feedback).isNull()
-            assertThat(undoneState.answerInput).isEmpty()
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).feedback).isNull()
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).answerInput).isEmpty()
             // Undo doesn't requeue a duplicate — remaining count is back to exactly one question.
-            assertThat(undoneState.remainingCount).isEqualTo(1)
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             val correctState = awaitItem()
-            assertThat(correctState.feedback?.isCorrect).isTrue()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat((finalState.phase is ReviewUiState.Phase.Complete)).isTrue()
         }
     }
 
@@ -727,22 +734,22 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             val correctState = awaitItem()
-            assertThat(correctState.feedback?.isCorrect).isTrue()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
             assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isEqualTo(101L)
 
             viewModel.undoLastAnswer()
             val undoneState = awaitItem()
-            assertThat(undoneState.feedback).isNull()
-            assertThat(undoneState.answerInput).isEmpty()
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).feedback).isNull()
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).answerInput).isEmpty()
             // Undo pushes the question back to the front rather than dropping it — still one
             // question left to answer.
-            assertThat(undoneState.remainingCount).isEqualTo(1)
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
             assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isNull()
             assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
 
@@ -751,11 +758,11 @@ class ReviewViewModelTest {
             awaitItem()
             viewModel.submitAnswer()
             val correctAgainState = awaitItem()
-            assertThat(correctAgainState.feedback?.isCorrect).isTrue()
+            assertThat((correctAgainState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat((finalState.phase is ReviewUiState.Phase.Complete)).isTrue()
         }
 
         assertThat(repositories.outboxDao.allReviewSubmissions()).hasSize(1)
@@ -769,7 +776,7 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
             assertThat(reviewSessionRepository.load()).isNotNull()
 
             viewModel.abandonSession()
@@ -793,13 +800,13 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
             assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isEqualTo(101L)
 
             viewModel.abandonSession()
@@ -820,7 +827,7 @@ class ReviewViewModelTest {
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
         }
         val requestCountAfterFirstLoad = server.requestCount
 
@@ -829,9 +836,9 @@ class ReviewViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.totalCount).isEqualTo(1)
-            assertThat(state.currentItem?.characters).isEqualTo("口")
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).totalCount).isEqualTo(1)
+            assertThat((state.phase as ReviewUiState.Phase.Active).currentItem.characters).isEqualTo("口")
         }
         assertThat(server.requestCount).isEqualTo(requestCountAfterFirstLoad)
     }
@@ -848,13 +855,13 @@ class ReviewViewModelTest {
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             firstViewModel.onAnswerInputChange("Mouth")
             awaitItem()
             firstViewModel.submitAnswer()
             val correctState = awaitItem()
-            assertThat(correctState.feedback?.isCorrect).isTrue()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
         }
         assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
         assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isEqualTo(101L)
@@ -862,8 +869,8 @@ class ReviewViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.isSessionComplete).isTrue()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase is ReviewUiState.Phase.Complete)).isTrue()
         }
 
         val queued = repositories.outboxDao.allReviewSubmissions()
@@ -883,10 +890,10 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading || !state.showSubjectTypeLabel || !state.showTotalTimer || !state.showQuestionTimer) state = awaitItem()
-            assertThat(state.showSubjectTypeLabel).isTrue()
-            assertThat(state.showTotalTimer).isTrue()
-            assertThat(state.showQuestionTimer).isTrue()
+            while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showSubjectTypeLabel || !state.settings.showTotalTimer || !state.settings.showQuestionTimer) state = awaitItem()
+            assertThat(state.settings.showSubjectTypeLabel).isTrue()
+            assertThat(state.settings.showTotalTimer).isTrue()
+            assertThat(state.settings.showQuestionTimer).isTrue()
         }
     }
 
@@ -899,7 +906,7 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             // "Mouth" (length 5) normally tolerates a single-edit typo close match ("Mouht", the
             // last two letters transposed) — disabled here, so it must be graded incorrect instead.
@@ -907,7 +914,7 @@ class ReviewViewModelTest {
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.feedback?.isCorrect).isFalse()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
         }
     }
 
@@ -919,9 +926,9 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.sessionActiveSegmentStartMs).isNotNull()
-            assertThat(state.questionActiveSegmentStartMs).isNotNull()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).timing.sessionActiveSegmentStartMs).isNotNull()
+            assertThat((state.phase as ReviewUiState.Phase.Active).timing.questionActiveSegmentStartMs).isNotNull()
 
             // Miss the first question drawn (whichever type it is), then work through both question
             // types until the session completes.
@@ -929,7 +936,7 @@ class ReviewViewModelTest {
             awaitItem()
             viewModel.submitAnswer()
             val missedState = awaitItem()
-            assertThat(missedState.feedback?.isCorrect).isFalse()
+            assertThat((missedState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
 
             viewModel.onContinue()
             state = awaitItem()
@@ -938,25 +945,25 @@ class ReviewViewModelTest {
             var safetyCounter = 0
             while (!isComplete && safetyCounter < 10) {
                 safetyCounter++
-                val answer = if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+                val answer = if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
                 viewModel.onAnswerInputChange(answer)
                 awaitItem()
                 viewModel.submitAnswer()
                 awaitItem()
                 viewModel.onContinue()
                 state = awaitItem()
-                isComplete = state.isSessionComplete
+                isComplete = (state.phase is ReviewUiState.Phase.Complete)
             }
 
-            assertThat(state.isSessionComplete).isTrue()
-            assertThat(state.sessionMissedItems).hasSize(1)
-            assertThat(state.sessionMissedItems.first().characters).isEqualTo("水")
-            assertThat(state.sessionSlowestAnswers).isNotEmpty()
-            assertThat(state.sessionSlowestAnswers.size).isAtMost(5)
-            val elapsedTimes = state.sessionSlowestAnswers.map { it.elapsedMs }
+            assertThat((state.phase is ReviewUiState.Phase.Complete)).isTrue()
+            assertThat((state.phase as ReviewUiState.Phase.Complete).sessionMissedItems).hasSize(1)
+            assertThat((state.phase as ReviewUiState.Phase.Complete).sessionMissedItems.first().characters).isEqualTo("水")
+            assertThat((state.phase as ReviewUiState.Phase.Complete).sessionSlowestAnswers).isNotEmpty()
+            assertThat((state.phase as ReviewUiState.Phase.Complete).sessionSlowestAnswers.size).isAtMost(5)
+            val elapsedTimes = (state.phase as ReviewUiState.Phase.Complete).sessionSlowestAnswers.map { it.elapsedMs }
             assertThat(elapsedTimes).isEqualTo(elapsedTimes.sortedDescending())
-            assertThat(state.sessionTotalElapsedMs).isAtLeast(0L)
-            assertThat(state.sessionAverageTimePerItemMs).isAtLeast(0L)
+            assertThat((state.phase as ReviewUiState.Phase.Complete).sessionTotalElapsedMs).isAtLeast(0L)
+            assertThat((state.phase as ReviewUiState.Phase.Complete).sessionAverageTimePerItemMs).isAtLeast(0L)
         }
     }
 
@@ -968,19 +975,19 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.questionElapsedMs).isNull()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).timing.questionElapsedMs).isNull()
 
-            val answer = if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+            val answer = if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
             viewModel.onAnswerInputChange(answer)
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.questionElapsedMs).isNotNull()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).timing.questionElapsedMs).isNotNull()
 
             viewModel.onContinue()
             val nextState = awaitItem()
-            assertThat(nextState.questionElapsedMs).isNull()
+            assertThat((nextState.phase as ReviewUiState.Phase.Active).timing.questionElapsedMs).isNull()
         }
     }
 
@@ -992,17 +999,17 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.onAnswerInputChange("typo")
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.questionElapsedMs).isNotNull()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).timing.questionElapsedMs).isNotNull()
 
             viewModel.undoLastAnswer()
             val undoneState = awaitItem()
-            assertThat(undoneState.questionElapsedMs).isNull()
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).timing.questionElapsedMs).isNull()
         }
     }
 
@@ -1014,7 +1021,7 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.onAnswerInputChange("typo")
             awaitItem()
@@ -1031,12 +1038,12 @@ class ReviewViewModelTest {
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
+            val complete = finalState.phase as ReviewUiState.Phase.Complete
             // The undone incorrect attempt shouldn't be double-counted — first-try accuracy is
             // unaffected and only one item was ever reviewed.
-            assertThat(finalState.sessionItemsReviewed).isEqualTo(1)
-            assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(1)
-            assertThat(finalState.sessionMissedItems).isEmpty()
+            assertThat(complete.sessionItemsReviewed).isEqualTo(1)
+            assertThat(complete.sessionItemsCorrectFirstTry).isEqualTo(1)
+            assertThat(complete.sessionMissedItems).isEmpty()
         }
     }
 
@@ -1056,7 +1063,7 @@ class ReviewViewModelTest {
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             // The queue's draw order is shuffled, so don't stop as soon as the radical happens to
             // complete — keep going until the kanji has also been missed at least once, whichever
@@ -1068,7 +1075,7 @@ class ReviewViewModelTest {
             var safetyCounter = 0
             while (!(radicalCompleted && kanjiMissed) && safetyCounter < 10) {
                 safetyCounter++
-                if (state.currentItem?.assignmentId == 101L) {
+                if ((state.phase as ReviewUiState.Phase.Active).currentItem.assignmentId == 101L) {
                     // The radical — a single meaning question; answering it correctly completes it.
                     firstViewModel.onAnswerInputChange("Mouth")
                     awaitItem()
@@ -1088,7 +1095,7 @@ class ReviewViewModelTest {
 
             assertThat(radicalCompleted).isTrue()
             assertThat(kanjiMissed).isTrue()
-            assertThat(state.isSessionComplete).isFalse()
+            assertThat((state.phase is ReviewUiState.Phase.Complete)).isFalse()
         }
 
         // Simulate leaving and coming back: a fresh ViewModel must resume the original session —
@@ -1098,19 +1105,19 @@ class ReviewViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.errorMessage).isNull()
-            assertThat(state.isSessionComplete).isFalse()
-            assertThat(state.currentItem?.assignmentId).isEqualTo(555L)
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as? ReviewUiState.Phase.Error)?.message).isNull()
+            assertThat((state.phase is ReviewUiState.Phase.Complete)).isFalse()
+            assertThat((state.phase as ReviewUiState.Phase.Active).currentItem.assignmentId).isEqualTo(555L)
             // The real assertion: totalCount must still reflect the original 3-question session
             // (1 radical + 2 kanji), not a recomputed 2 (only the kanji still due) — which is what
             // a silent fetchFreshQueue() fallback would produce.
-            assertThat(state.totalCount).isEqualTo(3)
+            assertThat((state.phase as ReviewUiState.Phase.Active).totalCount).isEqualTo(3)
 
             // Finish the session and confirm the graduated radical (101), answered before the
             // pause, still contributes to the final tally instead of silently vanishing from it.
-            while (!state.isSessionComplete) {
-                val answer = if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+            while (!(state.phase is ReviewUiState.Phase.Complete)) {
+                val answer = if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
                 secondViewModel.onAnswerInputChange(answer)
                 awaitItem()
                 secondViewModel.submitAnswer()
@@ -1119,13 +1126,13 @@ class ReviewViewModelTest {
                 state = awaitItem()
             }
 
-            assertThat(state.sessionItemsReviewed).isEqualTo(2)
-            assertThat(state.sessionItemsCorrectFirstTry).isEqualTo(1)
-            assertThat(state.sessionMissedItems.map { it.subjectId }).containsExactly(440L)
+            assertThat((state.phase as ReviewUiState.Phase.Complete).sessionItemsReviewed).isEqualTo(2)
+            assertThat((state.phase as ReviewUiState.Phase.Complete).sessionItemsCorrectFirstTry).isEqualTo(1)
+            assertThat((state.phase as ReviewUiState.Phase.Complete).sessionMissedItems.map { it.subjectId }).containsExactly(440L)
             // The radical's answer, graded before the pause, must still show up in the "slowest
             // answers" summary — answeredQuestions is restored from the persisted session just like
             // progressByAssignmentId, not reset to only the post-resume segment.
-            assertThat(state.sessionSlowestAnswers.map { it.item.assignmentId }).contains(101L)
+            assertThat((state.phase as ReviewUiState.Phase.Complete).sessionSlowestAnswers.map { it.item.assignmentId }).contains(101L)
         }
         // No fresh sync should have been needed either — the persisted queue was reused as-is.
         assertThat(server.requestCount).isEqualTo(requestCountBeforeResume)
@@ -1139,10 +1146,10 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.hasNoReviewsAvailable).isTrue()
-            assertThat(state.isSessionComplete).isFalse()
-            assertThat(state.totalCount).isEqualTo(0)
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            // NoReviewsAvailable carries no totalCount/question fields at all now — there's
+            // structurally nothing to review, rather than an Active phase reporting a count of zero.
+            assertThat(state.phase).isInstanceOf(ReviewUiState.Phase.NoReviewsAvailable::class.java)
         }
     }
 
@@ -1159,7 +1166,7 @@ class ReviewViewModelTest {
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
         }
 
         val fakeAccumulatedElapsedMs = 1_000_000L
@@ -1169,9 +1176,9 @@ class ReviewViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)
-            assertThat(state.sessionActiveSegmentStartMs).isNotNull()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).timing.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)
+            assertThat((state.phase as ReviewUiState.Phase.Active).timing.sessionActiveSegmentStartMs).isNotNull()
 
             // Forces a fresh persisted snapshot so the resumed accumulated time can be inspected.
             secondViewModel.onAnswerInputChange("wrong")
@@ -1195,20 +1202,20 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.sessionActiveSegmentStartMs).isNotNull()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).timing.sessionActiveSegmentStartMs).isNotNull()
 
             appForegroundTracker.onStop(FakeLifecycleOwner)
             val pausedState = awaitItem()
-            assertThat(pausedState.sessionActiveSegmentStartMs).isNull()
-            val elapsedWhilePaused = pausedState.sessionActiveElapsedMs
+            assertThat((pausedState.phase as ReviewUiState.Phase.Active).timing.sessionActiveSegmentStartMs).isNull()
+            val elapsedWhilePaused = (pausedState.phase as ReviewUiState.Phase.Active).timing.sessionActiveElapsedMs
 
             appForegroundTracker.onStart(FakeLifecycleOwner)
             val resumedState = awaitItem()
-            assertThat(resumedState.sessionActiveSegmentStartMs).isNotNull()
+            assertThat((resumedState.phase as ReviewUiState.Phase.Active).timing.sessionActiveSegmentStartMs).isNotNull()
             // Resumes right where it left off — the time spent "away" (backgrounded) must not have
             // been folded in as if it were active review time.
-            assertThat(resumedState.sessionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+            assertThat((resumedState.phase as ReviewUiState.Phase.Active).timing.sessionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
         }
     }
 
@@ -1226,20 +1233,20 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.questionActiveSegmentStartMs).isNotNull()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).timing.questionActiveSegmentStartMs).isNotNull()
 
             appForegroundTracker.onStop(FakeLifecycleOwner)
             val pausedState = awaitItem()
-            assertThat(pausedState.questionActiveSegmentStartMs).isNull()
-            val elapsedWhilePaused = pausedState.questionActiveElapsedMs
+            assertThat((pausedState.phase as ReviewUiState.Phase.Active).timing.questionActiveSegmentStartMs).isNull()
+            val elapsedWhilePaused = (pausedState.phase as ReviewUiState.Phase.Active).timing.questionActiveElapsedMs
 
             appForegroundTracker.onStart(FakeLifecycleOwner)
             val resumedState = awaitItem()
-            assertThat(resumedState.questionActiveSegmentStartMs).isNotNull()
+            assertThat((resumedState.phase as ReviewUiState.Phase.Active).timing.questionActiveSegmentStartMs).isNotNull()
             // Resumes right where it left off — the time spent "away" (backgrounded) must not have
             // been folded in as if it were active question time.
-            assertThat(resumedState.questionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+            assertThat((resumedState.phase as ReviewUiState.Phase.Active).timing.questionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
 
             // Grading now must record an elapsedMs built on that same paused-and-resumed total, not
             // a fresh wall-clock read from when the question first appeared.
@@ -1247,7 +1254,7 @@ class ReviewViewModelTest {
             awaitItem()
             viewModel.submitAnswer()
             val gradedState = awaitItem()
-            assertThat(gradedState.questionElapsedMs).isAtLeast(elapsedWhilePaused)
+            assertThat((gradedState.phase as ReviewUiState.Phase.Active).timing.questionElapsedMs).isAtLeast(elapsedWhilePaused)
         }
     }
 
@@ -1265,23 +1272,29 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat((finalState.phase is ReviewUiState.Phase.Complete)).isTrue()
             assertThat(reviewSessionRepository.load()).isNull()
 
+            // Backgrounding from the Complete screen. Review's pause path always launches its
+            // flush, but the completed session's controller is IDLE, so persist() no-ops — and
+            // with phase Complete there are no timing fields to update, so no state update is
+            // emitted to await (the old flat-state pause used to publish one). Drain the
+            // scheduler so the tracker event and the flush actually run, then verify the
+            // cleared session stayed cleared.
             appForegroundTracker.onStop(FakeLifecycleOwner)
-            val pausedState = awaitItem()
-            assertThat(pausedState.isSessionComplete).isTrue()
         }
+
+        testScheduler.advanceUntilIdle()
 
         assertThat(reviewSessionRepository.load()).isNull()
     }
@@ -1303,15 +1316,15 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
             // Still on the feedback screen — isSessionComplete only flips once onContinue() runs.
-            assertThat(feedbackState.isSessionComplete).isFalse()
+            assertThat((feedbackState.phase is ReviewUiState.Phase.Complete)).isFalse()
             val persisted = reviewSessionRepository.load()
             assertThat(persisted).isNotNull()
             assertThat(persisted!!.queue).isEmpty()
@@ -1333,13 +1346,13 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem()
-            assertThat(feedbackState.isSessionComplete).isFalse()
+            assertThat((feedbackState.phase is ReviewUiState.Phase.Complete)).isFalse()
             val persistedBeforePause = reviewSessionRepository.load()
             assertThat(persistedBeforePause?.pendingSubmissionAssignmentId).isEqualTo(101L)
 
@@ -1363,10 +1376,10 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
 
             // Fully complete one item before wrapping up.
-            viewModel.onAnswerInputChange(state.currentItem!!.meanings.first())
+            viewModel.onAnswerInputChange((state.phase as ReviewUiState.Phase.Active).currentItem.meanings.first())
             awaitItem()
             viewModel.submitAnswer()
             awaitItem()
@@ -1377,23 +1390,59 @@ class ReviewViewModelTest {
             // now "current" and drops the other outright.
             viewModel.wrapUp()
             val wrappedState = awaitItem()
-            assertThat(wrappedState.totalCount).isEqualTo(2)
-            assertThat(wrappedState.remainingCount).isEqualTo(1)
+            assertThat((wrappedState.phase as ReviewUiState.Phase.Active).totalCount).isEqualTo(2)
+            assertThat((wrappedState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
 
             // Finish the one retained item.
-            viewModel.onAnswerInputChange(wrappedState.currentItem!!.meanings.first())
+            viewModel.onAnswerInputChange((wrappedState.phase as ReviewUiState.Phase.Active).currentItem.meanings.first())
             awaitItem()
             viewModel.submitAnswer()
             awaitItem()
             viewModel.onContinue()
             val finalState = awaitItem()
 
-            assertThat(finalState.isSessionComplete).isTrue()
+            val complete = finalState.phase as ReviewUiState.Phase.Complete
             // Exactly the two items actually answered — not the third, dropped-while-untouched one.
-            assertThat(finalState.sessionItemsReviewed).isEqualTo(2)
-            assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(2)
-            assertThat(finalState.sessionMissedItems).isEmpty()
+            assertThat(complete.sessionItemsReviewed).isEqualTo(2)
+            assertThat(complete.sessionItemsCorrectFirstTry).isEqualTo(2)
+            assertThat(complete.sessionMissedItems).isEmpty()
         }
+    }
+
+    @Test
+    fun `wrapUp after the session has already completed does not resurrect the cleared session`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression test for the bug this whole session-persistence redesign is centered on:
+        // wrapUp() used to persist unconditionally, with no completion guard, so a stale "Wrap up"
+        // tap that lands after the session already completed (e.g. queued right as the overflow menu
+        // is dismissed, or a double-tap) could resurrect an already-cleared, logically-finished
+        // session in DataStore. QuizSessionController now makes this impossible structurally: once
+        // complete() has run, persist() is a no-op regardless of what a stale caller does with it.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat((finalState.phase is ReviewUiState.Phase.Complete)).isTrue()
+            assertThat(reviewSessionRepository.load()).isNull()
+
+            // A stale wrapUp() call arriving after the session is already done and dusted must be a
+            // no-op — updateActive's guard clause can't produce a new emission once the phase is
+            // Complete (Phase.Complete doesn't even have an isWrappingUp field to set), so there's
+            // structurally nothing left for a stale wrapUp() to resurrect.
+            viewModel.wrapUp()
+            expectNoEvents()
+        }
+
+        assertThat(reviewSessionRepository.load()).isNull()
     }
 
     @Test
@@ -1409,9 +1458,9 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.errorMessage).isNotNull()
-            assertThat(state.isLoading).isFalse()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as? ReviewUiState.Phase.Error)?.message).isNotNull()
+            assertThat((state.phase is ReviewUiState.Phase.Loading)).isFalse()
         }
     }
 
@@ -1426,8 +1475,8 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.errorMessage).isNotNull()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as? ReviewUiState.Phase.Error)?.message).isNotNull()
 
             // Fix the server and retry.
             dispatch(
@@ -1437,9 +1486,9 @@ class ReviewViewModelTest {
             viewModel.loadOrResume()
 
             state = awaitItem()
-            while (state.isLoading || state.errorMessage != null) state = awaitItem()
-            assertThat(state.errorMessage).isNull()
-            assertThat(state.totalCount).isAtLeast(1)
+            while ((state.phase is ReviewUiState.Phase.Loading) || (state.phase as? ReviewUiState.Phase.Error)?.message != null) state = awaitItem()
+            assertThat((state.phase as? ReviewUiState.Phase.Error)?.message).isNull()
+            assertThat((state.phase as ReviewUiState.Phase.Active).totalCount).isAtLeast(1)
         }
     }
 

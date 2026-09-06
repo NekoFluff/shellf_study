@@ -11,6 +11,8 @@ import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
+import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
+import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
@@ -39,6 +41,7 @@ import com.crazyfluff.shellfstudy.shared.network.waniKaniJson
 import com.crazyfluff.shellfstudy.shared.network.weblio.KtorWeblioApi
 import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi
 import com.crazyfluff.shellfstudy.shared.network.weblio.createWeblioHttpClient
+import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -123,8 +126,8 @@ val repositoryModule = module {
             outboxRepository = get(),
             dashboardCacheRepository = get(),
             lastSessionSummaryRepository = get(),
-            reviewSessionRepository = get(),
-            lessonSessionRepository = get()
+            reviewSessionController = get(),
+            lessonSessionController = get()
         )
     }
     single {
@@ -140,6 +143,22 @@ val repositoryModule = module {
     single { LessonSessionRepository(dataStore = get(), json = get()) }
     single { ReviewSessionRepository(dataStore = get(), json = get()) }
     single { LastSessionSummaryRepository(dataStore = get(), json = get()) }
+
+    // One controller per feature, shared by that feature's ViewModel and any out-of-band caller
+    // (Dashboard abandon, account logout) — see QuizSessionController's doc comment for why this is
+    // a process-wide singleton rather than scoped to the owning ViewModel.
+    single {
+        QuizSessionController<PersistedLessonSession>(
+            scope = get(APPLICATION_SCOPE),
+            store = get<LessonSessionRepository>()
+        )
+    }
+    single {
+        QuizSessionController<PersistedReviewSession>(
+            scope = get(APPLICATION_SCOPE),
+            store = get<ReviewSessionRepository>()
+        )
+    }
     single { FriendRepository(dataStore = get(), json = get(), tokenCipher = get()) }
     single {
         FriendStatsRepository(
@@ -185,8 +204,8 @@ val viewModelModule = module {
 
     viewModel {
         DashboardViewModel(
-            reviewSessionRepository = get(),
-            lessonSessionRepository = get(),
+            reviewSessionController = get(),
+            lessonSessionController = get(),
             settingsRepository = get(),
             subjectRepository = get(),
             assignmentRepository = get(),
@@ -206,7 +225,7 @@ val viewModelModule = module {
             assignmentRepository = get(),
             statsRepository = get(),
             outboxRepository = get(),
-            lessonSessionRepository = get(),
+            sessionController = get(),
             lastSessionSummaryRepository = get(),
             pitchAccentRepository = get(),
             settingsRepository = get(),
@@ -223,7 +242,7 @@ val viewModelModule = module {
             assignmentRepository = get(),
             outboxRepository = get(),
             statsRepository = get(),
-            reviewSessionRepository = get(),
+            sessionController = get(),
             lastSessionSummaryRepository = get(),
             pronunciationAudioPlayer = get(),
             settingsRepository = get(),

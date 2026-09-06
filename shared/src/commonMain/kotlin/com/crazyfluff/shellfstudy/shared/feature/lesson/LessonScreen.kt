@@ -276,8 +276,10 @@ fun LessonScreen(
     // A session only exists to abandon once the user has committed to a lesson batch — the SELECT
     // phase hasn't persisted anything yet (see LessonSessionRepository), so there's nothing there
     // for the dashboard's "Abandon lesson session" entry, or this screen's own copy of it, to act on.
-    val canManageSession = !uiState.isLoading && uiState.phase != LessonPhase.SELECT &&
-        !uiState.isSessionComplete && uiState.errorMessage == null
+    val canManageSession = when (uiState.phase) {
+        is LessonUiState.Phase.Study, is LessonUiState.Phase.Quiz -> true
+        else -> false
+    }
 
     // Wrapping Scaffold and SubjectDetailSheetHost in a shared Box — rather than leaving them as
     // top-level siblings — is what lets the detail sheet's handle overlay the true bottom of the
@@ -344,21 +346,21 @@ fun LessonScreen(
         }
 
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            when {
-                uiState.isLoading -> {
+            when (val phase = uiState.phase) {
+                LessonUiState.Phase.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(modifier = Modifier.testTag(LessonScreenTestTags.LOADING_INDICATOR))
                     }
                 }
 
-                uiState.errorMessage != null -> {
+                is LessonUiState.Phase.Error -> {
                     Column(
                         modifier = Modifier.fillMaxSize().padding(24.dp),
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = uiState.errorMessage,
+                            text = phase.message,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.testTag(LessonScreenTestTags.ERROR_TEXT)
                         )
@@ -370,7 +372,7 @@ fun LessonScreen(
                     }
                 }
 
-                uiState.hasNoLessonsAvailable -> {
+                LessonUiState.Phase.NoLessonsAvailable -> {
                     Column(
                         modifier = Modifier.fillMaxSize().padding(24.dp),
                         verticalArrangement = Arrangement.Center,
@@ -389,18 +391,18 @@ fun LessonScreen(
                     }
                 }
 
-                uiState.isSessionComplete -> {
+                is LessonUiState.Phase.Complete -> {
                     SessionCompleteContent(
                         title = "Lesson complete!",
                         subtitle = "Great work. These items will start showing up in your reviews.",
                         itemsLabel = "Items learned",
                         averageLabel = "Avg. time per item learned",
-                        itemsCount = uiState.sessionItemsLearned,
-                        correctFirstTry = uiState.sessionItemsCorrectFirstTry,
-                        totalElapsedMs = uiState.sessionTotalElapsedMs,
-                        averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
-                        slowestAnswers = uiState.sessionSlowestAnswers.map { it.toSessionAnswerRow() },
-                        missedItems = uiState.sessionMissedItems.map { it.toSessionMissedItemRow() },
+                        itemsCount = phase.sessionItemsLearned,
+                        correctFirstTry = phase.sessionItemsCorrectFirstTry,
+                        totalElapsedMs = phase.sessionTotalElapsedMs,
+                        averageTimePerItemMs = phase.sessionAverageTimePerItemMs,
+                        slowestAnswers = phase.sessionSlowestAnswers.map { it.toSessionAnswerRow() },
+                        missedItems = phase.sessionMissedItems.map { it.toSessionMissedItemRow() },
                         onDone = onDone,
                         onSubjectClick = { detailSheetState.show(it) },
                         testTags = SessionCompleteTestTags(
@@ -418,9 +420,9 @@ fun LessonScreen(
                     )
                 }
 
-                uiState.phase == LessonPhase.SELECT -> {
+                is LessonUiState.Phase.Select -> {
                     LessonSelectionContent(
-                        uiState = uiState,
+                        select = phase,
                         onToggle = onToggleLessonSelection,
                         onSelectFirst = onSelectFirst,
                         onSelectAll = onSelectAll,
@@ -429,9 +431,10 @@ fun LessonScreen(
                     )
                 }
 
-                uiState.phase == LessonPhase.STUDY -> {
+                is LessonUiState.Phase.Study -> {
                     LessonStudyContent(
-                        uiState = uiState,
+                        study = phase,
+                        settings = uiState.settings,
                         onNext = onNextStudyCard,
                         onPrevious = onPreviousStudyCard,
                         onSwiped = onStudyCardSwiped,
@@ -440,55 +443,51 @@ fun LessonScreen(
                     )
                 }
 
-                uiState.phase == LessonPhase.QUIZ -> {
-                    val item = uiState.currentQuizItem
-                    val questionType = uiState.currentQuestionType
-                    if (item != null && questionType != null) {
-                        QuizQuestionContent(
-                            uiState = QuizQuestionUiState(
-                                item = item,
-                                questionType = questionType,
-                                totalCount = uiState.totalQuizCount,
-                                remainingCount = uiState.remainingQuizCount,
-                                answerInput = uiState.answerInput,
-                                feedback = uiState.feedback,
-                                rankChange = uiState.rankChange,
-                                undoCounter = uiState.undoCounter,
-                                answerTypeMismatchCount = uiState.answerTypeMismatchCount,
-                                showSubjectTypeLabel = uiState.showSubjectTypeLabel,
-                                showQuestionTimer = uiState.showQuestionTimer,
-                                showTotalTimer = uiState.showTotalTimer,
-                                questionElapsedMs = uiState.questionElapsedMs,
-                                questionActiveElapsedMs = uiState.questionActiveElapsedMs,
-                                questionActiveSegmentStartMs = uiState.questionActiveSegmentStartMs,
-                                sessionActiveElapsedMs = uiState.sessionActiveElapsedMs,
-                                sessionActiveSegmentStartMs = uiState.sessionActiveSegmentStartMs,
-                                useJapaneseKeyboard = uiState.useJapaneseKeyboard
-                            ),
-                            onAnswerInputChange = onAnswerInputChange,
-                            onSubmit = onSubmit,
-                            onDontKnow = onDontKnow,
-                            onContinue = onContinue,
-                            onUndo = onUndo,
-                            testTags = QuizQuestionTestTags(
-                                progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
-                                questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,
-                                totalTimerText = LessonScreenTestTags.TOTAL_TIMER_TEXT,
-                                characters = LessonScreenTestTags.QUIZ_CHARACTERS,
-                                subjectTypeLabel = LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL,
-                                rankChangeText = LessonScreenTestTags.RANK_CHANGE_TEXT,
-                                questionLabel = LessonScreenTestTags.QUESTION_LABEL,
-                                answerField = LessonScreenTestTags.ANSWER_FIELD,
-                                typeMismatchText = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
-                                dontKnowButton = LessonScreenTestTags.DONT_KNOW_BUTTON,
-                                submitButton = LessonScreenTestTags.SUBMIT_BUTTON,
-                                undoButton = LessonScreenTestTags.UNDO_BUTTON,
-                                feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
-                                answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
-                                continueButton = LessonScreenTestTags.CONTINUE_BUTTON
-                            )
+                is LessonUiState.Phase.Quiz -> {
+                    QuizQuestionContent(
+                        uiState = QuizQuestionUiState(
+                            item = phase.currentItem,
+                            questionType = phase.currentQuestionType,
+                            totalCount = phase.totalQuizCount,
+                            remainingCount = phase.remainingQuizCount,
+                            answerInput = phase.answerInput,
+                            feedback = phase.feedback,
+                            rankChange = phase.rankChange,
+                            undoCounter = phase.undoCounter,
+                            answerTypeMismatchCount = phase.answerTypeMismatchCount,
+                            showSubjectTypeLabel = uiState.settings.showSubjectTypeLabel,
+                            showQuestionTimer = uiState.settings.showQuestionTimer,
+                            showTotalTimer = uiState.settings.showTotalTimer,
+                            questionElapsedMs = phase.timing.questionElapsedMs,
+                            questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
+                            questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
+                            sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
+                            sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
+                            useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard
+                        ),
+                        onAnswerInputChange = onAnswerInputChange,
+                        onSubmit = onSubmit,
+                        onDontKnow = onDontKnow,
+                        onContinue = onContinue,
+                        onUndo = onUndo,
+                        testTags = QuizQuestionTestTags(
+                            progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
+                            questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,
+                            totalTimerText = LessonScreenTestTags.TOTAL_TIMER_TEXT,
+                            characters = LessonScreenTestTags.QUIZ_CHARACTERS,
+                            subjectTypeLabel = LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL,
+                            rankChangeText = LessonScreenTestTags.RANK_CHANGE_TEXT,
+                            questionLabel = LessonScreenTestTags.QUESTION_LABEL,
+                            answerField = LessonScreenTestTags.ANSWER_FIELD,
+                            typeMismatchText = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
+                            dontKnowButton = LessonScreenTestTags.DONT_KNOW_BUTTON,
+                            submitButton = LessonScreenTestTags.SUBMIT_BUTTON,
+                            undoButton = LessonScreenTestTags.UNDO_BUTTON,
+                            feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
+                            answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
+                            continueButton = LessonScreenTestTags.CONTINUE_BUTTON
                         )
-                    }
+                    )
                 }
             }
         }
@@ -505,18 +504,19 @@ fun LessonScreen(
 
     SubjectDetailSheetHost(detailSheetState)
 
-    if (uiState.phase == LessonPhase.QUIZ) {
+    val quizPhase = uiState.phase as? LessonUiState.Phase.Quiz
+    if (quizPhase != null) {
         var lastDetailSubjectId by remember { mutableStateOf<Long?>(null) }
         var lastDetailQuestionType by remember { mutableStateOf<QuestionType?>(null) }
-        uiState.currentQuizItem?.let { lastDetailSubjectId = it.subjectId }
-        uiState.currentQuestionType?.let { lastDetailQuestionType = it }
+        lastDetailSubjectId = quizPhase.currentItem.subjectId
+        lastDetailQuestionType = quizPhase.currentQuestionType
 
         lastDetailSubjectId?.let { subjectId ->
             lastDetailQuestionType?.let { questionType ->
                 SubjectDetailSheet(
                     subjectId = subjectId,
-                    active = !isSearchActive && uiState.feedback != null,
-                    expanded = uiState.isDetailsExpanded,
+                    active = !isSearchActive && quizPhase.feedback != null,
+                    expanded = quizPhase.isDetailsExpanded,
                     onToggle = onToggleDetails,
                     onDismiss = onCloseDetails,
                     revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
@@ -532,22 +532,23 @@ fun LessonScreen(
 
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
-    uiState: LessonUiState,
+    study: LessonUiState.Phase.Study,
+    settings: LessonUiState.DisplaySettings,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSwiped: (Int) -> Unit,
     onSubjectClick: (Long) -> Unit,
     onPlayReading: (LessonItem, String) -> Unit
 ) {
-    val currentItem = uiState.studyItems.getOrNull(uiState.studyIndex) ?: return
-    val isLastCard = uiState.studyIndex == uiState.studyItems.lastIndex
+    val currentItem = study.studyItems.getOrNull(study.studyIndex) ?: return
+    val isLastCard = study.studyIndex == study.studyItems.lastIndex
     val accentColor = subjectColor(currentItem.subjectType)
 
-    val pagerState = rememberPagerState(initialPage = uiState.studyIndex) { uiState.studyItems.size }
+    val pagerState = rememberPagerState(initialPage = study.studyIndex) { study.studyItems.size }
 
-    LaunchedEffect(uiState.studyIndex) {
-        if (pagerState.currentPage != uiState.studyIndex) {
-            pagerState.animateScrollToPage(uiState.studyIndex)
+    LaunchedEffect(study.studyIndex) {
+        if (pagerState.currentPage != study.studyIndex) {
+            pagerState.animateScrollToPage(study.studyIndex)
         }
     }
     LaunchedEffect(pagerState) {
@@ -556,14 +557,14 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     }
 
     Text(
-        text = "${uiState.studyIndex + 1} / ${uiState.studyItems.size}",
+        text = "${study.studyIndex + 1} / ${study.studyItems.size}",
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
             .testTag(LessonScreenTestTags.STUDY_PROGRESS_COUNT)
     )
     LinearProgressIndicator(
-        progress = { (uiState.studyIndex + 1).toFloat() / uiState.studyItems.size },
+        progress = { (study.studyIndex + 1).toFloat() / study.studyItems.size },
         modifier = Modifier.fillMaxWidth(),
         color = accentColor,
         drawStopIndicator = {}
@@ -576,7 +577,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
             .fillMaxWidth()
             .testTag(LessonScreenTestTags.STUDY_PAGER)
     ) { page ->
-        val item = uiState.studyItems[page]
+        val item = study.studyItems[page]
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -609,13 +610,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 }
             }
 
-            val strokeOrder = uiState.strokeOrderBySubjectId[item.subjectId] ?: StrokeOrderUiState.Unavailable
+            val strokeOrder = study.strokeOrderBySubjectId[item.subjectId] ?: StrokeOrderUiState.Unavailable
             StrokeOrderSection(strokeOrder)
             WritingPracticeSection(strokeOrder = strokeOrder, resetKey = item.subjectId)
 
             RelatedSubjectsSection(
                 title = componentsLabel(item.subjectType),
-                subjects = item.componentSubjectIds.mapNotNull { uiState.relatedSubjectsById[it] },
+                subjects = item.componentSubjectIds.mapNotNull { study.relatedSubjectsById[it] },
                 onSubjectClick = onSubjectClick
             )
 
@@ -627,8 +628,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                     item = item,
                     isVocabulary = isVocabulary,
                     hasReadingBreakdown = hasReadingBreakdown,
-                    pitchAccents = uiState.pitchAccentsBySubjectId[item.subjectId].orEmpty(),
-                    showPitchAccent = uiState.showPitchAccent,
+                    pitchAccents = study.pitchAccentsBySubjectId[item.subjectId].orEmpty(),
+                    showPitchAccent = settings.showPitchAccent,
                     onPlayReading = { reading -> onPlayReading(item, reading) }
                 )
             }
@@ -639,13 +640,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
             if (item.subjectType == SubjectType.KANJI) {
                 RelatedSubjectsSection(
                     title = "Visually similar",
-                    subjects = item.visuallySimilarSubjectIds.mapNotNull { uiState.relatedSubjectsById[it] },
+                    subjects = item.visuallySimilarSubjectIds.mapNotNull { study.relatedSubjectsById[it] },
                     onSubjectClick = onSubjectClick
                 )
             }
             RelatedSubjectsSection(
                 title = "Used in",
-                subjects = item.amalgamationSubjectIds.mapNotNull { uiState.relatedSubjectsById[it] },
+                subjects = item.amalgamationSubjectIds.mapNotNull { study.relatedSubjectsById[it] },
                 onSubjectClick = onSubjectClick
             )
         }
@@ -657,7 +658,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     ) {
         OutlinedButton(
             onClick = onPrevious,
-            enabled = uiState.studyIndex > 0,
+            enabled = study.studyIndex > 0,
             modifier = Modifier.weight(1f).testTag(LessonScreenTestTags.STUDY_PREVIOUS_BUTTON)
         ) { Text("Back") }
         Button(
@@ -672,19 +673,19 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionContent(
-    uiState: LessonUiState,
+    select: LessonUiState.Phase.Select,
     onToggle: (Long) -> Unit,
     onSelectFirst: (Int) -> Unit,
     onSelectAll: () -> Unit,
     onSelectNone: () -> Unit,
     onStart: () -> Unit
 ) {
-    val selectedCount = uiState.selectedAssignmentIds.size
-    val total = uiState.availableLessons.size
+    val selectedCount = select.selectedAssignmentIds.size
+    val total = select.availableLessons.size
     var customizeExpanded by rememberSaveable { mutableStateOf(false) }
     var expandedLevels by rememberSaveable {
-        val levelsWithSelection = uiState.availableLessons
-            .filter { it.assignmentId in uiState.selectedAssignmentIds }
+        val levelsWithSelection = select.availableLessons
+            .filter { it.assignmentId in select.selectedAssignmentIds }
             .map { it.level }
             .toSet()
         mutableStateOf(levelsWithSelection)
@@ -790,11 +791,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
     }
 
     if (customizeExpanded) {
-        val lessonsByLevel = remember(uiState.availableLessons) { uiState.availableLessons.groupBy { it.level } }
+        val lessonsByLevel = remember(select.availableLessons) { select.availableLessons.groupBy { it.level } }
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             lessonsByLevel.forEach { (level, itemsForLevel) ->
                 val levelExpanded = level in expandedLevels
-                val selectedInLevel = itemsForLevel.count { it.assignmentId in uiState.selectedAssignmentIds }
+                val selectedInLevel = itemsForLevel.count { it.assignmentId in select.selectedAssignmentIds }
                 item {
                     Row(
                         modifier = Modifier
@@ -827,7 +828,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             itemsForLevel.forEach { lessonItem ->
-                                val checked = lessonItem.assignmentId in uiState.selectedAssignmentIds
+                                val checked = lessonItem.assignmentId in select.selectedAssignmentIds
                                 LessonGlyphTile(
                                     lessonItem = lessonItem,
                                     selected = checked,

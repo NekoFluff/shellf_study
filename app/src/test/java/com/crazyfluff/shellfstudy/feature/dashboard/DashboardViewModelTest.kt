@@ -43,6 +43,7 @@ import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.crazyfluff.shellfstudy.shared.data.FriendRepository
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
+import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -72,6 +73,8 @@ class DashboardViewModelTest {
     private lateinit var repositories: TestRepositories
     private lateinit var reviewSessionRepository: ReviewSessionRepository
     private lateinit var lessonSessionRepository: LessonSessionRepository
+    private lateinit var reviewSessionController: QuizSessionController<PersistedReviewSession>
+    private lateinit var lessonSessionController: QuizSessionController<PersistedLessonSession>
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var dashboardCacheRepository: DashboardCacheRepository
     private lateinit var outboxRepository: OutboxRepository
@@ -94,6 +97,8 @@ class DashboardViewModelTest {
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
         lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+        reviewSessionController = QuizSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), reviewSessionRepository)
+        lessonSessionController = QuizSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), lessonSessionRepository)
         settingsRepository = SettingsRepository(dataStore)
         dashboardCacheRepository = DashboardCacheRepository(dataStore)
         syncScheduler = FakeSyncScheduler()
@@ -144,8 +149,8 @@ class DashboardViewModelTest {
             outboxRepository = outboxRepository,
             dashboardCacheRepository = dashboardCacheRepository,
             lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),
-            reviewSessionRepository = reviewSessionRepository,
-            lessonSessionRepository = lessonSessionRepository
+            reviewSessionController = reviewSessionController,
+            lessonSessionController = lessonSessionController
         )
         val logoutCoordinator = LogoutCoordinator(
             tokenRepository = tokenRepository,
@@ -162,8 +167,8 @@ class DashboardViewModelTest {
         val factory = viewModelFactory {
             initializer {
                 DashboardViewModel(
-                    reviewSessionRepository = reviewSessionRepository,
-                    lessonSessionRepository = lessonSessionRepository,
+                    reviewSessionController = reviewSessionController,
+                    lessonSessionController = lessonSessionController,
                     settingsRepository = settingsRepository,
                     subjectRepository = repositories.subjectRepository,
                     assignmentRepository = repositories.assignmentRepository,

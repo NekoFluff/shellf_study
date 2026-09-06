@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.di
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.shared.session.PersistedSessionStore
 import io.ktor.client.engine.HttpClientEngine
 import com.crazyfluff.shellfstudy.shared.di.appForegroundTrackerModule
 import com.crazyfluff.shellfstudy.shared.di.coroutineScopeModule
@@ -68,6 +69,12 @@ class AppModulesVerificationTest {
                 // Ktor's HttpClient constructor takes HttpClientEngine internally; the actual engine
                 // (OkHttp) is supplied at construction time by createWaniKaniHttpClient(), not via Koin.
                 HttpClientEngine::class,
+                // QuizSessionController<T>'s constructor takes the generic PersistedSessionStore<T>
+                // interface, but the verifier's reflection only sees the erased raw interface — the
+                // real dependency is supplied by the explicitly-typed get<LessonSessionRepository>()/
+                // get<ReviewSessionRepository>() calls in each QuizSessionController registration in
+                // repositoryModule, which the verifier can't see since it doesn't evaluate lambda bodies.
+                PersistedSessionStore::class,
             )
         )
     }

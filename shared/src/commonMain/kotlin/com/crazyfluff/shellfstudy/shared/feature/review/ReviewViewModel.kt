@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
-import com.crazyfluff.shellfstudy.shared.coroutines.SerialDurableWork
+import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
@@ -12,7 +12,6 @@ import com.crazyfluff.shellfstudy.shared.data.PersistedAnsweredQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
-import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord
 import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
@@ -24,6 +23,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
+import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
@@ -43,6 +43,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,47 +54,63 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class ReviewUiState(
-    val isLoading: Boolean = true,
-    val errorMessage: String? = null,
-    val totalCount: Int = 0,
-    val remainingCount: Int = 0,
-    val currentItem: ReviewItem? = null,
-    val currentQuestionType: QuestionType? = null,
-    val answerInput: String = "",
-    val feedback: AnswerFeedback? = null,
-    val rankChange: RankChange? = null,
-    val undoCounter: Int = 0,
-    val isSessionComplete: Boolean = false,
-    val hasNoReviewsAvailable: Boolean = false,
-    val isAbandoned: Boolean = false,
-    val isWrappingUp: Boolean = false,
-    val isDetailsExpanded: Boolean = false,
-    val sessionItemsReviewed: Int = 0,
-    val sessionItemsCorrectFirstTry: Int = 0,
-    val answerTypeMismatchCount: Int = 0,
-    val showSubjectTypeLabel: Boolean = false,
-    val showTotalTimer: Boolean = false,
-    val showQuestionTimer: Boolean = false,
-    val useJapaneseKeyboard: Boolean = false,
-    // Active time accumulated before the current viewing segment, and (while non-null) when that
-    // segment began — see PausableElapsedTimeText and ReviewViewModel's activeElapsedMs /
-    // activeSegmentStartMs, which these mirror exactly. Segment goes null while the session isn't
-    // actively being viewed (app backgrounded, or navigated off-screen), freezing the total timer
-    // instead of letting it count straight through that gap.
-    val sessionActiveElapsedMs: Long = 0L,
-    val sessionActiveSegmentStartMs: Long? = null,
-    // Same pause-aware shape as sessionActiveElapsedMs/sessionActiveSegmentStartMs above, but for
-    // the current question rather than the whole session — see ReviewViewModel's questionTiming.
-    val questionActiveElapsedMs: Long = 0L,
-    val questionActiveSegmentStartMs: Long? = null,
-    // Non-null once the current question has been answered — freezes the "time on this question"
-    // display at this value instead of letting it keep ticking through the feedback screen. Reset
-    // to null whenever a fresh, unanswered question is shown (see advanceToNextQuestion, undo).
-    val questionElapsedMs: Long? = null,
-    val sessionMissedItems: List<ReviewItem> = emptyList(),
-    val sessionTotalElapsedMs: Long = 0L,
-    val sessionAverageTimePerItemMs: Long = 0L,
-    val sessionSlowestAnswers: List<SlowAnswer<ReviewItem>> = emptyList()
+    val phase: Phase = Phase.Loading,
+    val settings: DisplaySettings = DisplaySettings(),
+    // Deliberately not folded into Phase — see LessonUiState.isAbandoned's doc comment for why.
+    val isAbandoned: Boolean = false
+) {
+    /** Settings-derived display flags — hoisted here rather than duplicated into every [Phase]
+     *  variant, since they apply uniformly regardless of phase. */
+    data class DisplaySettings(
+        val showSubjectTypeLabel: Boolean = false,
+        val showTotalTimer: Boolean = false,
+        val showQuestionTimer: Boolean = false,
+        val useJapaneseKeyboard: Boolean = false
+    )
+
+    sealed interface Phase {
+        data object Loading : Phase
+        data class Error(val message: String) : Phase
+        data object NoReviewsAvailable : Phase
+
+        data class Active(
+            // Non-nullable by construction — see LessonUiState.Phase.Quiz's doc comment for why.
+            val currentItem: ReviewItem,
+            val currentQuestionType: QuestionType,
+            val answerInput: String = "",
+            val feedback: AnswerFeedback? = null,
+            val rankChange: RankChange? = null,
+            val undoCounter: Int = 0,
+            val isDetailsExpanded: Boolean = false,
+            val answerTypeMismatchCount: Int = 0,
+            val totalCount: Int = 0,
+            val remainingCount: Int = 0,
+            // A modifier within the active variant, not a separate mode — wrapUp() changes what
+            // happens to the queue, but the screen still renders exactly the same question UI either
+            // way, so this doesn't warrant its own Phase (unlike Lesson's Select/Study/Quiz, which
+            // really are different rendering modes).
+            val isWrappingUp: Boolean = false,
+            val timing: QuizTimingUiState = QuizTimingUiState()
+        ) : Phase
+
+        data class Complete(
+            val sessionItemsReviewed: Int = 0,
+            val sessionItemsCorrectFirstTry: Int = 0,
+            val sessionMissedItems: List<ReviewItem> = emptyList(),
+            val sessionTotalElapsedMs: Long = 0L,
+            val sessionAverageTimePerItemMs: Long = 0L,
+            val sessionSlowestAnswers: List<SlowAnswer<ReviewItem>> = emptyList()
+        ) : Phase
+    }
+}
+
+private fun QuizSessionSummary<ReviewItem>.toCompletePhase() = ReviewUiState.Phase.Complete(
+    sessionItemsReviewed = itemsCount,
+    sessionItemsCorrectFirstTry = correctFirstTry,
+    sessionMissedItems = missedItems,
+    sessionTotalElapsedMs = totalElapsedMs,
+    sessionAverageTimePerItemMs = averageTimePerItemMs,
+    sessionSlowestAnswers = slowestAnswers
 )
 
 private typealias ItemProgress = QuizItemProgress<ReviewItem>
@@ -108,7 +125,7 @@ class ReviewViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val outboxRepository: OutboxRepository,
     private val statsRepository: StatsRepository,
-    private val reviewSessionRepository: ReviewSessionRepository,
+    private val sessionController: QuizSessionController<PersistedReviewSession>,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val settingsRepository: SettingsRepository,
@@ -132,29 +149,22 @@ class ReviewViewModel(
 
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
-    // Every write to reviewSessionRepository (save or clear) is routed through this queue so
-    // writes apply in the order they were issued, even though each one actually runs on
-    // applicationScope's multi-threaded dispatcher — otherwise grading the last question's save
-    // (which does extra outbox/stats work first) can land after the completion-time clear that
-    // logically followed it, resurrecting a savepoint the app just erased.
-    private val sessionWriteQueue = SerialDurableWork(applicationScope)
-
     // Individual per-answer records, used for the "slowest answers" summary — persisted and
     // restored across a resume just like progressByAssignmentId (see resumeFromPersisted), so the
     // summary reflects the whole session, not just the segment since the most recent resume.
     private val answeredQuestions = mutableListOf<AnsweredQuestionRecord<ReviewItem>>()
 
-    // Tracks only the time the session was actively being viewed — see QuizSessionTiming. Pause
-    // always re-persists unless the session has already completed, OR the queue has already
-    // emptied but isSessionComplete hasn't caught up yet (gradeAnswer clears reviewSessionRepository
-    // the instant the last question is graded, before the user taps Continue — re-persisting here
-    // in that window would resurrect the stale, empty-queue session it just cleared).
+    // Tracks only the time the session was actively being viewed — see QuizSessionTiming. A
+    // completed/abandoned/empty-queue session is handled structurally by sessionController.persist()
+    // itself (a no-op once the session isn't ACTIVE), not by a flag check here — see
+    // QuizSessionController. Runs on applicationScope rather than viewModelScope so this flush
+    // actually executes when triggered from onCleared() (viewModelScope is cancelled just before
+    // onCleared() runs, so a viewModelScope.launch here would silently never execute).
     private val sessionTiming = QuizSessionTiming(
-        onResume = { now -> _uiState.update { it.copy(sessionActiveSegmentStartMs = now) } },
-        onPause = pause@{ newElapsed ->
-            _uiState.update { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
-            if (_uiState.value.isSessionComplete || queue.current == null) return@pause
-            viewModelScope.launch { sessionWriteQueue.run { persistCurrentState() } }
+        onResume = { now -> updateActiveTiming { it.copy(sessionActiveSegmentStartMs = now) } },
+        onPause = { newElapsed ->
+            updateActiveTiming { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
+            applicationScope.launch { persistCurrentState() }
         }
     )
 
@@ -163,8 +173,8 @@ class ReviewViewModel(
     // freeze(), used when a new question is shown / the current one is graded, versus resume()/
     // pause(), used only by wireForegroundTracking below for background/foreground transitions).
     private val questionTiming = QuizSessionTiming(
-        onResume = { now -> _uiState.update { it.copy(questionActiveSegmentStartMs = now) } },
-        onPause = { newElapsed -> _uiState.update { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }
+        onResume = { now -> updateActiveTiming { it.copy(questionActiveSegmentStartMs = now) } },
+        onPause = { newElapsed -> updateActiveTiming { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }
     )
 
     // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
@@ -184,10 +194,12 @@ class ReviewViewModel(
                 latestSettings = settings
                 _uiState.update {
                     it.copy(
-                        showSubjectTypeLabel = settings.showSubjectTypeLabel,
-                        showTotalTimer = settings.showTotalTimer,
-                        showQuestionTimer = settings.showQuestionTimer,
-                        useJapaneseKeyboard = settings.useJapaneseKeyboard
+                        settings = it.settings.copy(
+                            showSubjectTypeLabel = settings.showSubjectTypeLabel,
+                            showTotalTimer = settings.showTotalTimer,
+                            showQuestionTimer = settings.showQuestionTimer,
+                            useJapaneseKeyboard = settings.useJapaneseKeyboard
+                        )
                     )
                 }
             }
@@ -198,15 +210,28 @@ class ReviewViewModel(
         questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
     }
 
+    /** Guard-clause helper for updates that only apply while in the Active phase — a safe cast plus
+     *  a no-op fallback, not `!!`/unchecked cast. */
+    private inline fun updateActive(transform: (ReviewUiState.Phase.Active) -> ReviewUiState.Phase.Active) {
+        _uiState.update { state ->
+            val active = state.phase as? ReviewUiState.Phase.Active ?: return@update state
+            state.copy(phase = transform(active))
+        }
+    }
+
+    private inline fun updateActiveTiming(transform: (QuizTimingUiState) -> QuizTimingUiState) {
+        updateActive { it.copy(timing = transform(it.timing)) }
+    }
+
     /** Resumes a persisted in-progress session if one exists, otherwise fetches a fresh queue. */
     fun loadOrResume() {
         viewModelScope.launch {
-            _uiState.update { ReviewUiState(isLoading = true) }
+            _uiState.update { ReviewUiState() }
             // Warmed once here, during the loading spinner, so every answer graded during this
             // session can compute its rank change synchronously — see
             // AssignmentRepository.computeReviewRankChange.
             assignmentRepository.warmSrsSystemCache()
-            val persisted = reviewSessionRepository.load()
+            val persisted = sessionController.load()
             if (persisted != null) {
                 resumeFromPersisted(persisted)
             } else {
@@ -217,7 +242,7 @@ class ReviewViewModel(
 
     private suspend fun fetchFreshQueue() {
         when (val result = assignmentRepository.refreshReviewQueue()) {
-            is ApiResult.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
+            is ApiResult.Error -> _uiState.update { it.copy(phase = ReviewUiState.Phase.Error(result.message)) }
             is ApiResult.Success -> buildQueue(assignmentRepository.observeReviewQueue().first())
         }
     }
@@ -235,7 +260,7 @@ class ReviewViewModel(
         // cleared) is genuinely unrecoverable — rebuilding its PendingQuestion needs the full
         // ReviewItem. Fall back to a fresh fetch rather than crash on that.
         if (persisted.queue.any { it.assignmentId !in itemsById }) {
-            reviewSessionRepository.clear()
+            sessionController.complete()
             fetchFreshQueue()
             return
         }
@@ -272,6 +297,7 @@ class ReviewViewModel(
         // viewing segment on top of that restored base, so the clock resumes right where it left off.
         sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
         sessionTiming.resume()
+        sessionController.begin()
         advanceToNextQuestion()
     }
 
@@ -287,23 +313,24 @@ class ReviewViewModel(
         totalQuestions = queue.size
 
         if (queue.isEmpty) {
-            // Distinct from isSessionComplete — nothing was ever reviewed this visit, so there's no
-            // summary to show. Mirrors LessonViewModel's hasNoLessonsAvailable, set in the same
+            // Distinct from Phase.Complete — nothing was ever reviewed this visit, so there's no
+            // summary to show. Mirrors LessonViewModel's NoLessonsAvailable, set in the same
             // fresh-fetch-came-back-empty spot (as opposed to advanceToNextQuestion, where the queue
             // draining to empty after real progress is a genuine completion).
-            _uiState.update { it.copy(isLoading = false, hasNoReviewsAvailable = true) }
+            _uiState.update { it.copy(phase = ReviewUiState.Phase.NoReviewsAvailable) }
         } else {
-            sessionWriteQueue.run { persistCurrentState() }
+            sessionController.begin()
+            persistCurrentState()
             advanceToNextQuestion()
         }
     }
 
     fun onAnswerInputChange(value: String) {
-        _uiState.update { it.copy(answerInput = value) }
+        updateActive { it.copy(answerInput = value) }
     }
 
     fun toggleDetails() {
-        _uiState.update { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
+        updateActive { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
     }
 
     /** Unlike [toggleDetails] (a real flip, driven by the swipe handle/gesture-settle sync), this is
@@ -311,25 +338,25 @@ class ReviewViewModel(
      *  handler — those always mean "close", never "toggle", so they must not risk re-opening the
      *  sheet if called while it's already collapsed. */
     fun closeDetails() {
-        _uiState.update { it.copy(isDetailsExpanded = false) }
+        updateActive { it.copy(isDetailsExpanded = false) }
     }
 
     fun submitAnswer() {
-        val state = _uiState.value
-        if (state.feedback != null) return
-        val item = state.currentItem ?: return
-        val type = state.currentQuestionType ?: return
-        if (state.answerInput.isBlank()) return
+        val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
+        if (active.feedback != null) return
+        val item = active.currentItem
+        val type = active.currentQuestionType
+        if (active.answerInput.isBlank()) return
 
         gradingGuard.launchIfIdle {
             val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
             val outcome = evaluateAnswer(
-                state.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
+                active.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
                 closeEnoughEnabled = latestSettings.closeEnoughAnswersEnabled
             )
             when (outcome) {
                 AnswerOutcome.TypeMismatch ->
-                    _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
+                    updateActive { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
                 is AnswerOutcome.Graded ->
                     gradeAnswer(item, type, outcome.isCorrect, candidates, expandDetails = false, wasCloseMatch = outcome.wasCloseMatch)
             }
@@ -338,10 +365,10 @@ class ReviewViewModel(
 
     /** Gives up on the current question — grades it as a miss without requiring a typed guess. */
     fun dontKnowAnswer() {
-        val state = _uiState.value
-        if (state.feedback != null) return
-        val item = state.currentItem ?: return
-        val type = state.currentQuestionType ?: return
+        val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
+        if (active.feedback != null) return
+        val item = active.currentItem
+        val type = active.currentQuestionType
 
         gradingGuard.launchIfIdle {
             val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
@@ -376,11 +403,11 @@ class ReviewViewModel(
                 queue.requeue(PendingQuestion(item, type))
             }
 
-            // Whether this answer was the very last one due — if so, persistDurabilityWork clears
-            // reviewSessionRepository outright instead of saving a snapshot of the now-empty queue.
-            // That snapshot would only ever get overwritten by advanceToNextQuestion's own clear once
-            // the user taps Continue anyway; not writing it in the first place, right when the queue
-            // empties, is simpler and safer than writing it and racing a later clear against it.
+            // Whether this answer was the very last one due — if so, commitGradeDurably completes
+            // the session outright instead of saving a snapshot of the now-empty queue. That snapshot
+            // would only ever get overwritten by advanceToNextQuestion's own completion once the user
+            // taps Continue anyway; not writing it in the first place, right when the queue empties,
+            // is simpler and safer than writing it and relying on a later completion to overwrite it.
             val queueIsEmpty = queue.current == null
 
             val grade = if (isCorrect && isFullyDone(item, itemProgress)) itemProgress.toReviewGrade() else null
@@ -402,7 +429,7 @@ class ReviewViewModel(
             // commitPendingSubmission.
             val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
 
-            _uiState.update {
+            updateActive {
                 it.copy(
                     feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
                     remainingCount = queue.size,
@@ -412,8 +439,7 @@ class ReviewViewModel(
                     // rather than letting it keep ticking while the feedback/Continue screen is up
                     // — matches the elapsedMs recorded for the slowest-answers summary above, which
                     // is stamped at this same moment.
-                    questionElapsedMs = questionElapsedMs,
-                    questionActiveSegmentStartMs = null
+                    timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null)
                 )
             }
 
@@ -430,17 +456,17 @@ class ReviewViewModel(
             }
         }
 
-        persistDurabilityWork(snapshot, queueIsEmpty)
+        commitGradeDurably(snapshot, queueIsEmpty)
     }
 
     /** Reverts the most recent answer — a typo (incorrect) or a change of mind (correct, and not yet
      *  submitted to WaniKani — see [pendingSubmissionAssignmentId]). The queue/progress mutation
      *  itself is shared via [undoLastIncorrectAnswer]/[undoLastCorrectAnswer]. */
     fun undoLastAnswer() {
-        val state = _uiState.value
-        val item = state.currentItem ?: return
-        val type = state.currentQuestionType ?: return
-        val feedback = state.feedback ?: return
+        val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
+        val item = active.currentItem
+        val type = active.currentQuestionType
+        val feedback = active.feedback ?: return
 
         viewModelScope.launch {
             // Cleared before persist() (called at the end of the undo functions below) so the
@@ -454,7 +480,7 @@ class ReviewViewModel(
                     answeredQuestions = answeredQuestions,
                     item = item,
                     questionType = type,
-                    persist = { sessionWriteQueue.run { persistCurrentState() } }
+                    persist = { persistCurrentState() }
                 )
             } else {
                 undoLastIncorrectAnswer(
@@ -463,7 +489,7 @@ class ReviewViewModel(
                     answeredQuestions = answeredQuestions,
                     item = item,
                     questionType = type,
-                    persist = { sessionWriteQueue.run { persistCurrentState() } }
+                    persist = { persistCurrentState() }
                 )
             }
             if (!didUndo) return@launch
@@ -474,15 +500,17 @@ class ReviewViewModel(
             // undoCounter changes even though currentItem/currentQuestionType don't — this is what
             // the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't change
             // either of those but still needs to refocus the field the user just tapped away from.
-            _uiState.update {
+            updateActive {
                 it.copy(
                     feedback = null,
                     answerInput = "",
                     remainingCount = queue.size,
                     undoCounter = it.undoCounter + 1,
-                    questionActiveElapsedMs = 0L,
-                    questionActiveSegmentStartMs = questionStartedAt,
-                    questionElapsedMs = null
+                    timing = it.timing.copy(
+                        questionActiveElapsedMs = 0L,
+                        questionActiveSegmentStartMs = questionStartedAt,
+                        questionElapsedMs = null
+                    )
                 )
             }
         }
@@ -497,7 +525,9 @@ class ReviewViewModel(
         viewModelScope.launch { advanceToNextQuestion() }
     }
 
-    /** Stops introducing brand-new items; only the current item and ones already attempted remain. */
+    /** Stops introducing brand-new items; only the current item and ones already attempted remain.
+     *  persistCurrentState()'s save is a no-op if the session already completed between the last
+     *  question being graded and this menu action running — see QuizSessionController.persist(). */
     fun wrapUp() {
         viewModelScope.launch {
             val currentAssignmentId = queue.current?.item?.assignmentId
@@ -507,8 +537,8 @@ class ReviewViewModel(
             }
             totalQuestions = queue.size + completedQuestionCount()
 
-            sessionWriteQueue.run { persistCurrentState() }
-            _uiState.update { it.copy(isWrappingUp = true, totalCount = totalQuestions, remainingCount = queue.size) }
+            persistCurrentState()
+            updateActive { it.copy(isWrappingUp = true, totalCount = totalQuestions, remainingCount = queue.size) }
         }
     }
 
@@ -520,7 +550,7 @@ class ReviewViewModel(
     fun abandonSession() {
         viewModelScope.launch {
             commitPendingSubmission()
-            sessionWriteQueue.run { reviewSessionRepository.clear() }
+            sessionController.abandon()
             _uiState.update { it.copy(isAbandoned = true) }
         }
     }
@@ -576,54 +606,34 @@ class ReviewViewModel(
         commitPendingSubmission()
         val next = queue.current
         if (next == null) {
-            sessionWriteQueue.run { reviewSessionRepository.clear() }
+            sessionController.complete()
             outboxRepository.requestSyncNow()
             val summary = sessionSummary()
             persistLastSessionSummary(summary)
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    isSessionComplete = true,
-                    currentItem = null,
-                    currentQuestionType = null,
-                    remainingCount = 0,
-                    feedback = null,
-                    rankChange = null,
-                    isDetailsExpanded = false,
-                    sessionItemsReviewed = summary.itemsCount,
-                    sessionItemsCorrectFirstTry = summary.correctFirstTry,
-                    sessionMissedItems = summary.missedItems,
-                    sessionTotalElapsedMs = summary.totalElapsedMs,
-                    sessionAverageTimePerItemMs = summary.averageTimePerItemMs,
-                    sessionSlowestAnswers = summary.slowestAnswers
-                )
-            }
+            _uiState.update { it.copy(phase = summary.toCompletePhase()) }
             return
         }
         val questionStartedAt = questionTiming.restart()
         _uiState.update {
             it.copy(
-                isLoading = false,
-                currentItem = next.item,
-                currentQuestionType = next.type,
-                answerInput = "",
-                feedback = null,
-                rankChange = null,
-                isDetailsExpanded = false,
-                totalCount = totalQuestions,
-                remainingCount = queue.size,
-                sessionActiveElapsedMs = sessionTiming.elapsedMs,
-                sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                questionActiveElapsedMs = 0L,
-                questionActiveSegmentStartMs = questionStartedAt,
-                questionElapsedMs = null
+                phase = ReviewUiState.Phase.Active(
+                    currentItem = next.item,
+                    currentQuestionType = next.type,
+                    totalCount = totalQuestions,
+                    remainingCount = queue.size,
+                    timing = QuizTimingUiState(
+                        sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                        sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
+                        questionActiveSegmentStartMs = questionStartedAt
+                    )
+                )
             )
         }
     }
 
     /** Captures the current queue/progress as an immutable, ready-to-persist value — safe to hold
      *  across a suspension point even if the live queue/progressByAssignmentId are mutated by
-     *  something else afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). Folds
+     *  something else afterward (see [gradeAnswer]'s deferred [commitGradeDurably] call). Folds
      *  in the currently-running viewing segment (if any) rather than the possibly-stale
      *  [activeElapsedMs] alone, so an abrupt process death loses at most the time since this
      *  snapshot, not the whole segment since the last pause. */
@@ -641,27 +651,25 @@ class ReviewViewModel(
     )
 
     private suspend fun persistCurrentState() {
-        reviewSessionRepository.save(currentPersistSnapshot())
+        sessionController.persist(currentPersistSnapshot())
     }
 
-    /** Runs the post-grading durability writes (session persistence only — see
+    /** Runs the post-grading durability write (session persistence only — see
      *  [commitPendingSubmission] for the outbox enqueue/SRS bump, deferred separately until
-     *  Continue) — see [SerialDurableWork] for why this needs [applicationScope] rather than
-     *  `viewModelScope`. Clears reviewSessionRepository instead of saving [snapshot] when
-     *  [queueIsEmpty] — this was the last due question, so [snapshot] is already an empty-queue
-     *  shell that advanceToNextQuestion's own clear would just overwrite once the user taps
-     *  Continue; not saving it in the first place is simpler than saving it and racing a later
-     *  clear against it. The one exception is a still-pending submission: that grade hasn't reached
-     *  the outbox yet (see [commitPendingSubmission]), so clearing here would lose it outright if the
-     *  process dies before Continue — save the (empty-queue) snapshot instead so resuming can still
-     *  recover and commit it. */
-    private suspend fun persistDurabilityWork(snapshot: PersistedReviewSession, queueIsEmpty: Boolean) {
-        sessionWriteQueue.run {
-            if (queueIsEmpty && snapshot.pendingSubmissionAssignmentId == null) {
-                reviewSessionRepository.clear()
-            } else {
-                reviewSessionRepository.save(snapshot)
-            }
+     *  Continue). Completes the session instead of saving [snapshot] when [queueIsEmpty] — this was
+     *  the last due question, so [snapshot] is already an empty-queue shell that
+     *  advanceToNextQuestion's own completion would just overwrite once the user taps Continue; not
+     *  saving it in the first place is simpler than saving it and relying on a later completion to
+     *  overwrite it. The one exception is a still-pending submission: that grade hasn't reached the
+     *  outbox yet (see [commitPendingSubmission]), so completing here would lose it outright if the
+     *  process dies before Continue — persist the (empty-queue) snapshot instead so resuming can
+     *  still recover and commit it (see [ReviewSessionRepository.load]'s matching resumability
+     *  check for this same exception on the read side). */
+    private suspend fun commitGradeDurably(snapshot: PersistedReviewSession, queueIsEmpty: Boolean) {
+        if (queueIsEmpty && snapshot.pendingSubmissionAssignmentId == null) {
+            sessionController.complete()
+        } else {
+            sessionController.persist(snapshot)
         }
     }
 
@@ -676,7 +684,11 @@ class ReviewViewModel(
         pendingSubmissionAssignmentId = null
         val item = progress.item
         val grade = progress.toReviewGrade()
-        sessionWriteQueue.run {
+        // Durable against this ViewModel being cleared mid-write, via applicationScope rather than
+        // viewModelScope — doesn't need session-write ordering (it never touches the session
+        // repository), only survival past teardown, so it uses runDurably rather than going through
+        // sessionController.
+        applicationScope.runDurably {
             // The actual DB write of the new SRS stage — already reflected in the UI via the
             // synchronous computeReviewRankChange prediction in gradeAnswer, so this just makes the
             // local cache catch up. Recomputes from a fresh DB read rather than trusting the

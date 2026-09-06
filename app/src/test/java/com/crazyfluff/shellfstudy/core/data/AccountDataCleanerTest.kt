@@ -30,7 +30,10 @@ import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingLessonStartEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDayEntity
+import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Rule
@@ -63,6 +66,8 @@ class AccountDataCleanerTest {
     private lateinit var lastSessionSummaryRepository: LastSessionSummaryRepository
     private lateinit var reviewSessionRepository: ReviewSessionRepository
     private lateinit var lessonSessionRepository: LessonSessionRepository
+    private lateinit var reviewSessionController: QuizSessionController<PersistedReviewSession>
+    private lateinit var lessonSessionController: QuizSessionController<PersistedLessonSession>
 
     private fun setUp() {
         dataStore = PreferenceDataStoreFactory.create(
@@ -80,6 +85,8 @@ class AccountDataCleanerTest {
         lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json)
         reviewSessionRepository = ReviewSessionRepository(dataStore, json)
         lessonSessionRepository = LessonSessionRepository(dataStore, json)
+        reviewSessionController = QuizSessionController(CoroutineScope(SupervisorJob()), reviewSessionRepository)
+        lessonSessionController = QuizSessionController(CoroutineScope(SupervisorJob()), lessonSessionRepository)
     }
 
     private fun buildCleaner(assignmentDao: AssignmentDao = this.assignmentDao) = AccountDataCleaner(
@@ -92,8 +99,8 @@ class AccountDataCleanerTest {
         outboxRepository = outboxRepository,
         dashboardCacheRepository = dashboardCacheRepository,
         lastSessionSummaryRepository = lastSessionSummaryRepository,
-        reviewSessionRepository = reviewSessionRepository,
-        lessonSessionRepository = lessonSessionRepository
+        reviewSessionController = reviewSessionController,
+        lessonSessionController = lessonSessionController
     )
 
     private suspend fun seedEverything() {
@@ -156,7 +163,7 @@ class AccountDataCleanerTest {
         studyActivityDao.observeActiveDays().test { assertThat(awaitItem()).isEmpty() }
         outboxRepository.blockedOnAuth.test { assertThat(awaitItem()).isFalse() }
         dashboardCacheRepository.cachedSummary.test { assertThat(awaitItem()).isNull() }
-        assertThat(lastSessionSummaryRepository.load()).isNull()
+        assertThat(lastSessionSummaryRepository.loadReview()).isNull()
         assertThat(reviewSessionRepository.load()).isNull()
         assertThat(lessonSessionRepository.load()).isNull()
     }
@@ -176,7 +183,7 @@ class AccountDataCleanerTest {
         assertThat(outboxDao.allReviewSubmissions()).isEmpty()
         assertThat(outboxDao.allLessonStarts()).isEmpty()
         studyActivityDao.observeActiveDays().test { assertThat(awaitItem()).isEmpty() }
-        assertThat(lastSessionSummaryRepository.load()).isNull()
+        assertThat(lastSessionSummaryRepository.loadReview()).isNull()
         assertThat(reviewSessionRepository.load()).isNull()
         assertThat(lessonSessionRepository.load()).isNull()
     }

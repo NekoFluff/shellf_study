@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import com.crazyfluff.shellfstudy.shared.session.PersistedSessionStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -36,16 +37,29 @@ data class PersistedReviewSession(
 class ReviewSessionRepository(
     dataStore: DataStore<Preferences>,
     json: Json
-) {
+) : PersistedSessionStore<PersistedReviewSession> {
     private val store = JsonPreferenceStore(
         dataStore, json, "persisted_review_session", PersistedReviewSession.serializer()
     )
 
-    val hasActiveSession: Flow<Boolean> = store.exists
+    override val hasActiveSession: Flow<Boolean> = store.exists
 
-    suspend fun save(session: PersistedReviewSession) = store.save(session)
+    override suspend fun save(session: PersistedReviewSession) = store.save(session)
 
-    suspend fun load(): PersistedReviewSession? = store.load()
+    /** A snapshot with an empty queue and no pending submission is a corrupted leftover, not a
+     *  resumable session — see [PersistedReviewSession]'s doc comment on why this can happen (a save
+     *  racing a completion-time clear). An empty queue *with* a pending submission is legitimate —
+     *  it means the session reached its last question but the user hadn't tapped Continue yet, so
+     *  resuming must still commit that submission — see [PersistedReviewSession.pendingSubmissionAssignmentId].
+     *  Self-heals the corrupted case by clearing storage so it doesn't keep reappearing. */
+    override suspend fun load(): PersistedReviewSession? {
+        val loaded = store.load() ?: return null
+        if (loaded.queue.isEmpty() && loaded.pendingSubmissionAssignmentId == null) {
+            store.clear()
+            return null
+        }
+        return loaded
+    }
 
-    suspend fun clear() = store.clear()
+    override suspend fun clear() = store.clear()
 }

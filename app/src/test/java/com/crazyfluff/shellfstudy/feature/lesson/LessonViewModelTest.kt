@@ -2,7 +2,7 @@ package com.crazyfluff.shellfstudy.feature.lesson
 
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonPhase
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
-import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPhase
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -20,6 +20,7 @@ import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
+import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
@@ -99,7 +100,8 @@ class LessonViewModelTest {
     }
 
     private fun TestScope.createViewModel() = LessonViewModel(
-        assignmentRepository, repositories.statsRepository, outboxRepository, lessonSessionRepository,
+        assignmentRepository, repositories.statsRepository, outboxRepository,
+        QuizSessionController(backgroundScope, lessonSessionRepository),
         lastSessionSummaryRepository, pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository,
         pronunciationAudioPlayer, appForegroundTracker, backgroundScope
     )
@@ -131,11 +133,11 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
-            assertThat(state.phase).isEqualTo(LessonPhase.SELECT)
-            assertThat(state.availableLessons).hasSize(1)
-            assertThat(state.selectedAssignmentIds).containsExactly(101L)
+            val select = state.phase as LessonUiState.Phase.Select
+            assertThat(select.availableLessons).hasSize(1)
+            assertThat(select.selectedAssignmentIds).containsExactly(101L)
         }
     }
 
@@ -148,8 +150,8 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading || !state.showSubjectTypeLabel) state = awaitItem()
-            assertThat(state.showSubjectTypeLabel).isTrue()
+            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showSubjectTypeLabel) state = awaitItem()
+            assertThat(state.settings.showSubjectTypeLabel).isTrue()
         }
     }
 
@@ -163,9 +165,9 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading || !state.showTotalTimer || !state.showQuestionTimer) state = awaitItem()
-            assertThat(state.showTotalTimer).isTrue()
-            assertThat(state.showQuestionTimer).isTrue()
+            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showTotalTimer || !state.settings.showQuestionTimer) state = awaitItem()
+            assertThat(state.settings.showTotalTimer).isTrue()
+            assertThat(state.settings.showQuestionTimer).isTrue()
         }
     }
 
@@ -177,15 +179,16 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
             viewModel.nextStudyCard()
             val quizState = awaitItem()
 
-            assertThat(quizState.sessionActiveSegmentStartMs).isNotNull()
-            assertThat(quizState.questionActiveSegmentStartMs).isNotNull()
+            val quiz = quizState.phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.timing.sessionActiveSegmentStartMs).isNotNull()
+            assertThat(quiz.timing.questionActiveSegmentStartMs).isNotNull()
         }
     }
 
@@ -197,8 +200,8 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.hasNoLessonsAvailable).isTrue()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat(state.phase).isEqualTo(LessonUiState.Phase.NoLessonsAvailable)
         }
     }
 
@@ -210,14 +213,14 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.selectedAssignmentIds).containsExactly(101L, 102L)
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat((state.phase as LessonUiState.Phase.Select).selectedAssignmentIds).containsExactly(101L, 102L)
 
             viewModel.toggleLessonSelection(101L)
-            assertThat(awaitItem().selectedAssignmentIds).containsExactly(102L)
+            assertThat((awaitItem().phase as LessonUiState.Phase.Select).selectedAssignmentIds).containsExactly(102L)
 
             viewModel.toggleLessonSelection(101L)
-            assertThat(awaitItem().selectedAssignmentIds).containsExactly(101L, 102L)
+            assertThat((awaitItem().phase as LessonUiState.Phase.Select).selectedAssignmentIds).containsExactly(101L, 102L)
         }
     }
 
@@ -229,13 +232,13 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.selectNone()
-            assertThat(awaitItem().selectedAssignmentIds).isEmpty()
+            assertThat((awaitItem().phase as LessonUiState.Phase.Select).selectedAssignmentIds).isEmpty()
 
             viewModel.selectAll()
-            assertThat(awaitItem().selectedAssignmentIds).containsExactly(101L, 102L)
+            assertThat((awaitItem().phase as LessonUiState.Phase.Select).selectedAssignmentIds).containsExactly(101L, 102L)
         }
     }
 
@@ -247,16 +250,15 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.toggleLessonSelection(102L)
             awaitItem()
 
             viewModel.startSelectedLessons()
-            val studyState = awaitItem()
-            assertThat(studyState.phase).isEqualTo(LessonPhase.STUDY)
-            assertThat(studyState.studyItems).hasSize(1)
-            assertThat(studyState.studyItems.first().assignmentId).isEqualTo(101L)
+            val study = awaitItem().phase as LessonUiState.Phase.Study
+            assertThat(study.studyItems).hasSize(1)
+            assertThat(study.studyItems.first().assignmentId).isEqualTo(101L)
         }
     }
 
@@ -271,13 +273,13 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
-            val studyState = awaitItem()
+            val study = awaitItem().phase as LessonUiState.Phase.Study
 
-            assertThat(studyState.strokeOrderBySubjectId[1L]).isInstanceOf(StrokeOrderUiState.Available::class.java)
-            assertThat(studyState.strokeOrderBySubjectId[2L]).isEqualTo(StrokeOrderUiState.Unavailable)
+            assertThat(study.strokeOrderBySubjectId[1L]).isInstanceOf(StrokeOrderUiState.Available::class.java)
+            assertThat(study.strokeOrderBySubjectId[2L]).isEqualTo(StrokeOrderUiState.Unavailable)
         }
     }
 
@@ -289,17 +291,16 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
-            val studyState = awaitItem()
-            assertThat(studyState.studyIndex).isEqualTo(0)
+            val study = awaitItem().phase as LessonUiState.Phase.Study
+            assertThat(study.studyIndex).isEqualTo(0)
 
             viewModel.nextStudyCard()
-            val quizState = awaitItem()
-            assertThat(quizState.phase).isEqualTo(LessonPhase.QUIZ)
-            assertThat(quizState.currentQuestionType).isEqualTo(QuestionType.MEANING)
-            assertThat(quizState.totalQuizCount).isEqualTo(1)
+            val quiz = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.currentQuestionType).isEqualTo(QuestionType.MEANING)
+            assertThat(quiz.totalQuizCount).isEqualTo(1)
         }
     }
 
@@ -311,17 +312,17 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
 
             viewModel.nextStudyCard()
-            val secondCard = awaitItem()
+            val secondCard = awaitItem().phase as LessonUiState.Phase.Study
             assertThat(secondCard.studyIndex).isEqualTo(1)
 
             viewModel.previousStudyCard()
-            val backToFirst = awaitItem()
+            val backToFirst = awaitItem().phase as LessonUiState.Phase.Study
             assertThat(backToFirst.studyIndex).isEqualTo(0)
 
             viewModel.previousStudyCard()
@@ -337,13 +338,13 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
 
             viewModel.onStudyCardSwiped(1)
-            assertThat(awaitItem().studyIndex).isEqualTo(1)
+            assertThat((awaitItem().phase as LessonUiState.Phase.Study).studyIndex).isEqualTo(1)
         }
     }
 
@@ -355,7 +356,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -366,12 +367,12 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            val feedbackState = awaitItem()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat(finalState.phase).isInstanceOf(LessonUiState.Phase.Complete::class.java)
         }
 
         // Local-write-first: no network call happens from the ViewModel path at all — the lesson
@@ -385,7 +386,7 @@ class LessonViewModelTest {
         assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isEqualTo(1)
 
         // Completing a session snapshots its summary so it can be revisited later from the dashboard.
-        val savedSummary = lastSessionSummaryRepository.load()
+        val savedSummary = lastSessionSummaryRepository.loadLesson()
         assertThat(savedSummary).isNotNull()
         assertThat(savedSummary!!.kind).isEqualTo(LastSessionKind.LESSON)
         assertThat(savedSummary.itemsCount).isEqualTo(1)
@@ -399,8 +400,9 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.rankChange).isNull()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            // No rank change can be showing yet outside the Quiz phase — Phase.Select structurally
+            // has no rankChange field at all.
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -411,7 +413,7 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            val feedbackState = awaitItem()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
             // radicalAssignmentsJson fixes the cached assignment at srs_stage 0 (Locked) — every
             // lesson item starts the same way, straight to the SRS system's starting stage.
@@ -419,8 +421,9 @@ class LessonViewModelTest {
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
-            assertThat(finalState.rankChange).isNull()
+            // Complete no longer carries a rankChange field at all — leaving the Quiz phase behind
+            // is itself the "cleared" state.
+            assertThat(finalState.phase).isInstanceOf(LessonUiState.Phase.Complete::class.java)
         }
     }
 
@@ -432,7 +435,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -443,28 +446,28 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("wrong")
             awaitItem()
             viewModel.submitAnswer()
-            val feedbackState = awaitItem()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isFalse()
 
             viewModel.undoLastAnswer()
-            val undoneState = awaitItem()
+            val undoneState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(undoneState.feedback).isNull()
             assertThat(undoneState.answerInput).isEqualTo("")
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            val retriedState = awaitItem()
+            val retriedState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(retriedState.feedback?.isCorrect).isTrue()
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat(finalState.phase).isInstanceOf(LessonUiState.Phase.Complete::class.java)
         }
 
         // The undone wrong answer must not count toward the session's missed-item tally — the
         // only item in this session should show as correct-on-first-try.
-        val savedSummary = lastSessionSummaryRepository.load()
+        val savedSummary = lastSessionSummaryRepository.loadLesson()
         assertThat(savedSummary?.itemsCount).isEqualTo(1)
         assertThat(savedSummary?.correctFirstTry).isEqualTo(1)
     }
@@ -482,7 +485,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -493,7 +496,7 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            val feedbackState = awaitItem()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
 
             viewModel.viewModelScope.cancel()
@@ -512,7 +515,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -523,13 +526,12 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("wrong")
             awaitItem()
             viewModel.submitAnswer()
-            val feedbackState = awaitItem()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isFalse()
             assertThat(feedbackState.remainingQuizCount).isEqualTo(1)
 
             viewModel.onContinue()
-            val requeuedState = awaitItem()
-            assertThat(requeuedState.isSessionComplete).isFalse()
+            val requeuedState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(requeuedState.currentQuestionType).isEqualTo(QuestionType.MEANING)
         }
     }
@@ -545,27 +547,26 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
             viewModel.nextStudyCard()
             awaitItem() // studyIndex 1
             viewModel.nextStudyCard()
-            val quizState = awaitItem() // quiz begins
-            assertThat(quizState.questionElapsedMs).isNull()
+            val quizState = awaitItem().phase as LessonUiState.Phase.Quiz // quiz begins
+            assertThat(quizState.timing.questionElapsedMs).isNull()
 
-            val item = quizState.currentQuizItem!!
+            val item = quizState.currentItem
             viewModel.onAnswerInputChange(item.meanings.first())
             awaitItem()
             viewModel.submitAnswer()
-            val feedbackState = awaitItem()
-            assertThat(feedbackState.questionElapsedMs).isNotNull()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(feedbackState.timing.questionElapsedMs).isNotNull()
 
             viewModel.onContinue()
-            val nextState = awaitItem()
-            assertThat(nextState.isSessionComplete).isFalse()
-            assertThat(nextState.questionElapsedMs).isNull()
+            val nextState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(nextState.timing.questionElapsedMs).isNull()
         }
     }
 
@@ -577,7 +578,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -586,7 +587,7 @@ class LessonViewModelTest {
             awaitItem() // quiz begins
 
             viewModel.dontKnowAnswer()
-            val feedbackState = awaitItem()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isFalse()
             assertThat(feedbackState.remainingQuizCount).isEqualTo(1)
         }
@@ -599,13 +600,13 @@ class LessonViewModelTest {
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             firstViewModel.startSelectedLessons()
             awaitItem()
 
             firstViewModel.nextStudyCard()
-            val secondCard = awaitItem()
+            val secondCard = awaitItem().phase as LessonUiState.Phase.Study
             assertThat(secondCard.studyIndex).isEqualTo(1)
         }
         val requestCountAfterFirstLoad = server.requestCount
@@ -616,10 +617,10 @@ class LessonViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.phase).isEqualTo(LessonPhase.STUDY)
-            assertThat(state.studyIndex).isEqualTo(1)
-            assertThat(state.studyItems.map { it.assignmentId }).containsExactly(101L, 102L).inOrder()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            val study = state.phase as LessonUiState.Phase.Study
+            assertThat(study.studyIndex).isEqualTo(1)
+            assertThat(study.studyItems.map { it.assignmentId }).containsExactly(101L, 102L).inOrder()
         }
         assertThat(server.requestCount).isEqualTo(requestCountAfterFirstLoad)
     }
@@ -631,14 +632,14 @@ class LessonViewModelTest {
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             firstViewModel.startSelectedLessons()
             awaitItem()
 
             firstViewModel.nextStudyCard()
             val quizState = awaitItem()
-            assertThat(quizState.phase).isEqualTo(LessonPhase.QUIZ)
+            assertThat(quizState.phase).isInstanceOf(LessonUiState.Phase.Quiz::class.java)
         }
         val requestCountAfterFirstLoad = server.requestCount
 
@@ -647,10 +648,10 @@ class LessonViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.phase).isEqualTo(LessonPhase.QUIZ)
-            assertThat(state.totalQuizCount).isEqualTo(1)
-            assertThat(state.currentQuizItem?.assignmentId).isEqualTo(101L)
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            val quiz = state.phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.totalQuizCount).isEqualTo(1)
+            assertThat(quiz.currentItem.assignmentId).isEqualTo(101L)
         }
         assertThat(server.requestCount).isEqualTo(requestCountAfterFirstLoad)
     }
@@ -662,7 +663,7 @@ class LessonViewModelTest {
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             firstViewModel.startSelectedLessons()
             awaitItem()
@@ -680,9 +681,8 @@ class LessonViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.errorMessage).isNull()
-            assertThat(state.hasNoLessonsAvailable).isTrue()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat(state.phase).isEqualTo(LessonUiState.Phase.NoLessonsAvailable)
         }
         assertThat(lessonSessionRepository.load()).isNull()
     }
@@ -695,7 +695,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -711,7 +711,7 @@ class LessonViewModelTest {
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat(finalState.phase).isInstanceOf(LessonUiState.Phase.Complete::class.java)
         }
 
         assertThat(lessonSessionRepository.load()).isNull()
@@ -725,7 +725,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -747,7 +747,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -759,7 +759,7 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("wrong")
             awaitItem()
             viewModel.submitAnswer()
-            val missedState = awaitItem()
+            val missedState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(missedState.feedback?.isCorrect).isFalse()
 
             viewModel.onContinue()
@@ -771,9 +771,8 @@ class LessonViewModelTest {
             awaitItem()
 
             viewModel.onContinue()
-            val finalState = awaitItem()
+            val finalState = awaitItem().phase as LessonUiState.Phase.Complete
 
-            assertThat(finalState.isSessionComplete).isTrue()
             assertThat(finalState.sessionItemsLearned).isEqualTo(1)
             assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(0)
             assertThat(finalState.sessionMissedItems).hasSize(1)
@@ -793,7 +792,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -806,20 +805,20 @@ class LessonViewModelTest {
             var safetyCounter = 0
             while (!isComplete && safetyCounter < 10) {
                 safetyCounter++
-                val item = state.currentQuizItem!!
+                val item = (state.phase as LessonUiState.Phase.Quiz).currentItem
                 viewModel.onAnswerInputChange(item.meanings.first())
                 awaitItem()
                 viewModel.submitAnswer()
                 awaitItem()
                 viewModel.onContinue()
                 state = awaitItem()
-                isComplete = state.isSessionComplete
+                isComplete = state.phase is LessonUiState.Phase.Complete
             }
 
-            assertThat(state.isSessionComplete).isTrue()
-            assertThat(state.sessionItemsLearned).isEqualTo(2)
-            assertThat(state.sessionItemsCorrectFirstTry).isEqualTo(2)
-            assertThat(state.sessionMissedItems).isEmpty()
+            val complete = state.phase as LessonUiState.Phase.Complete
+            assertThat(complete.sessionItemsLearned).isEqualTo(2)
+            assertThat(complete.sessionItemsCorrectFirstTry).isEqualTo(2)
+            assertThat(complete.sessionMissedItems).isEmpty()
         }
     }
 
@@ -830,7 +829,7 @@ class LessonViewModelTest {
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             firstViewModel.startSelectedLessons()
             awaitItem()
@@ -855,25 +854,25 @@ class LessonViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             var isComplete = false
             var safetyCounter = 0
             while (!isComplete && safetyCounter < 10) {
                 safetyCounter++
-                val item = state.currentQuizItem!!
+                val item = (state.phase as LessonUiState.Phase.Quiz).currentItem
                 secondViewModel.onAnswerInputChange(item.meanings.first())
                 awaitItem()
                 secondViewModel.submitAnswer()
                 awaitItem()
                 secondViewModel.onContinue()
                 state = awaitItem()
-                isComplete = state.isSessionComplete
+                isComplete = state.phase is LessonUiState.Phase.Complete
             }
 
-            assertThat(state.isSessionComplete).isTrue()
-            assertThat(state.sessionItemsLearned).isEqualTo(2)
-            assertThat(state.sessionMissedItems).hasSize(1)
+            val complete = state.phase as LessonUiState.Phase.Complete
+            assertThat(complete.sessionItemsLearned).isEqualTo(2)
+            assertThat(complete.sessionMissedItems).hasSize(1)
         }
     }
 
@@ -888,7 +887,7 @@ class LessonViewModelTest {
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             firstViewModel.startSelectedLessons()
             awaitItem()
@@ -901,7 +900,7 @@ class LessonViewModelTest {
             var safetyCounter = 0
             while (!oneCompleted && safetyCounter < 10) {
                 safetyCounter++
-                val item = state.currentQuizItem!!
+                val item = (state.phase as LessonUiState.Phase.Quiz).currentItem
                 if (item.assignmentId == 101L) {
                     firstViewModel.onAnswerInputChange("Mouth")
                     awaitItem()
@@ -921,7 +920,7 @@ class LessonViewModelTest {
             }
 
             assertThat(oneCompleted).isTrue()
-            assertThat(state.isSessionComplete).isFalse()
+            assertThat(state.phase).isNotInstanceOf(LessonUiState.Phase.Complete::class.java)
         }
 
         // Simulate leaving and coming back: assignment 101 is no longer due for a lesson (it's
@@ -929,31 +928,31 @@ class LessonViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.isSessionComplete).isFalse()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat(state.phase).isNotInstanceOf(LessonUiState.Phase.Complete::class.java)
 
             var isComplete = false
             var safetyCounter = 0
             while (!isComplete && safetyCounter < 10) {
                 safetyCounter++
-                val item = state.currentQuizItem!!
+                val item = (state.phase as LessonUiState.Phase.Quiz).currentItem
                 secondViewModel.onAnswerInputChange(item.meanings.first())
                 awaitItem()
                 secondViewModel.submitAnswer()
                 awaitItem()
                 secondViewModel.onContinue()
                 state = awaitItem()
-                isComplete = state.isSessionComplete
+                isComplete = state.phase is LessonUiState.Phase.Complete
             }
 
-            assertThat(state.isSessionComplete).isTrue()
+            val complete = state.phase as LessonUiState.Phase.Complete
             // The real assertion: both items count toward the final tally, not just the one
             // answered after resume — a dropped progress entry for item 101 would report 1 here.
-            assertThat(state.sessionItemsLearned).isEqualTo(2)
+            assertThat(complete.sessionItemsLearned).isEqualTo(2)
             // Item 101's answer, graded before the pause, must still show up in the "slowest
             // answers" summary — answeredQuestions is restored from the persisted session just like
             // progressByAssignmentId, not reset to only the post-resume segment.
-            assertThat(state.sessionSlowestAnswers.map { it.item.assignmentId }).contains(101L)
+            assertThat(complete.sessionSlowestAnswers.map { it.item.assignmentId }).contains(101L)
         }
     }
 
@@ -974,7 +973,7 @@ class LessonViewModelTest {
         val firstViewModel = createViewModel()
         firstViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             firstViewModel.startSelectedLessons()
             awaitItem()
@@ -989,14 +988,14 @@ class LessonViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.phase).isEqualTo(LessonPhase.QUIZ)
-            assertThat(state.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)
-            assertThat(state.sessionActiveSegmentStartMs).isNotNull()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            val quiz = state.phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.timing.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)
+            assertThat(quiz.timing.sessionActiveSegmentStartMs).isNotNull()
 
             // Forces a fresh persisted snapshot so the resumed accumulated time can be inspected —
             // answering just one of the kanji's two questions leaves the quiz still in progress.
-            val answer = if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+            val answer = if (quiz.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
             secondViewModel.onAnswerInputChange(answer)
             awaitItem()
             secondViewModel.submitAnswer()
@@ -1018,25 +1017,25 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
             viewModel.nextStudyCard()
-            val quizState = awaitItem() // quiz begins
-            assertThat(quizState.sessionActiveSegmentStartMs).isNotNull()
+            val quizState = awaitItem().phase as LessonUiState.Phase.Quiz // quiz begins
+            assertThat(quizState.timing.sessionActiveSegmentStartMs).isNotNull()
 
             appForegroundTracker.onStop(FakeLifecycleOwner)
-            val pausedState = awaitItem()
-            assertThat(pausedState.sessionActiveSegmentStartMs).isNull()
-            val elapsedWhilePaused = pausedState.sessionActiveElapsedMs
+            val pausedState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(pausedState.timing.sessionActiveSegmentStartMs).isNull()
+            val elapsedWhilePaused = pausedState.timing.sessionActiveElapsedMs
 
             appForegroundTracker.onStart(FakeLifecycleOwner)
-            val resumedState = awaitItem()
-            assertThat(resumedState.sessionActiveSegmentStartMs).isNotNull()
+            val resumedState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(resumedState.timing.sessionActiveSegmentStartMs).isNotNull()
             // Resumes right where it left off — the time spent "away" (backgrounded) must not have
             // been folded in as if it were active quiz time.
-            assertThat(resumedState.sessionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+            assertThat(resumedState.timing.sessionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
         }
     }
 
@@ -1054,33 +1053,33 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
             viewModel.nextStudyCard()
-            val quizState = awaitItem() // quiz begins
-            assertThat(quizState.questionActiveSegmentStartMs).isNotNull()
+            val quizState = awaitItem().phase as LessonUiState.Phase.Quiz // quiz begins
+            assertThat(quizState.timing.questionActiveSegmentStartMs).isNotNull()
 
             appForegroundTracker.onStop(FakeLifecycleOwner)
-            val pausedState = awaitItem()
-            assertThat(pausedState.questionActiveSegmentStartMs).isNull()
-            val elapsedWhilePaused = pausedState.questionActiveElapsedMs
+            val pausedState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(pausedState.timing.questionActiveSegmentStartMs).isNull()
+            val elapsedWhilePaused = pausedState.timing.questionActiveElapsedMs
 
             appForegroundTracker.onStart(FakeLifecycleOwner)
-            val resumedState = awaitItem()
-            assertThat(resumedState.questionActiveSegmentStartMs).isNotNull()
+            val resumedState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(resumedState.timing.questionActiveSegmentStartMs).isNotNull()
             // Resumes right where it left off — the time spent "away" (backgrounded) must not have
             // been folded in as if it were active question time.
-            assertThat(resumedState.questionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+            assertThat(resumedState.timing.questionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
 
             // Grading now must record an elapsedMs built on that same paused-and-resumed total, not
             // a fresh wall-clock read from when the question first appeared.
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            val gradedState = awaitItem()
-            assertThat(gradedState.questionElapsedMs).isAtLeast(elapsedWhilePaused)
+            val gradedState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(gradedState.timing.questionElapsedMs).isAtLeast(elapsedWhilePaused)
         }
     }
 
@@ -1098,7 +1097,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -1112,13 +1111,18 @@ class LessonViewModelTest {
 
             viewModel.onContinue()
             val finalState = awaitItem()
-            assertThat(finalState.isSessionComplete).isTrue()
+            assertThat(finalState.phase).isInstanceOf(LessonUiState.Phase.Complete::class.java)
             assertThat(lessonSessionRepository.load()).isNull()
 
+            // Backgrounding from the Complete screen: the pause path has no timing fields to
+            // update (they only exist on the Quiz variant) and no snapshot to persist, so no
+            // state update is emitted here — the old flat-state pause used to publish one. The
+            // guarantee under test is that nothing gets resurrected, checked below once the
+            // tracker event has been drained.
             appForegroundTracker.onStop(FakeLifecycleOwner)
-            val pausedState = awaitItem()
-            assertThat(pausedState.isSessionComplete).isTrue()
         }
+
+        testScheduler.advanceUntilIdle()
 
         assertThat(lessonSessionRepository.load()).isNull()
     }
@@ -1138,7 +1142,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -1148,10 +1152,10 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            val feedbackState = awaitItem()
-            // Still on the feedback screen — isSessionComplete only flips once onContinue() runs —
-            // yet the savepoint must already be gone.
-            assertThat(feedbackState.isSessionComplete).isFalse()
+            // Still on the feedback screen (Quiz phase — the cast alone proves the phase hasn't
+            // flipped to Complete yet, which only happens once onContinue() runs) — yet the
+            // savepoint must already be gone.
+            awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(lessonSessionRepository.load()).isNull()
         }
     }
@@ -1169,7 +1173,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -1179,8 +1183,7 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            val feedbackState = awaitItem()
-            assertThat(feedbackState.isSessionComplete).isFalse()
+            awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(lessonSessionRepository.load()).isNull()
 
             appForegroundTracker.onStop(FakeLifecycleOwner)
@@ -1198,18 +1201,18 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
             viewModel.nextStudyCard()
-            val quizState = awaitItem() // quiz begins
+            val quizState = awaitItem().phase as LessonUiState.Phase.Quiz // quiz begins
             assertThat(quizState.currentQuestionType).isEqualTo(QuestionType.MEANING)
 
             viewModel.onAnswerInputChange("くち")
             awaitItem()
             viewModel.submitAnswer()
-            val mismatchState = awaitItem()
+            val mismatchState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
             // Rejected outright, not graded as a miss — feedback stays null and the question isn't
             // consumed (remainingQuizCount unchanged, no requeue).
@@ -1219,7 +1222,7 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            val correctState = awaitItem()
+            val correctState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(correctState.feedback?.isCorrect).isTrue()
         }
     }
@@ -1232,7 +1235,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -1240,7 +1243,7 @@ class LessonViewModelTest {
             state = awaitItem() // quiz begins
 
             // Queue order is shuffled — answer reading questions correctly until meaning comes up.
-            while (state.currentQuestionType != QuestionType.MEANING) {
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.MEANING) {
                 viewModel.onAnswerInputChange("mizu")
                 awaitItem()
                 viewModel.submitAnswer()
@@ -1248,12 +1251,12 @@ class LessonViewModelTest {
                 viewModel.onContinue()
                 state = awaitItem()
             }
-            val remainingBeforeMismatch = state.remainingQuizCount
+            val remainingBeforeMismatch = (state.phase as LessonUiState.Phase.Quiz).remainingQuizCount
 
             viewModel.onAnswerInputChange("mizu")
             awaitItem()
             viewModel.submitAnswer()
-            val mismatchState = awaitItem()
+            val mismatchState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
             // Rejected outright, not graded as a miss — feedback stays null and the question isn't
             // consumed (remainingQuizCount unchanged, no requeue).
@@ -1263,7 +1266,7 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("Water")
             awaitItem()
             viewModel.submitAnswer()
-            val correctState = awaitItem()
+            val correctState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(correctState.feedback?.isCorrect).isTrue()
         }
     }
@@ -1276,7 +1279,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -1284,7 +1287,7 @@ class LessonViewModelTest {
             state = awaitItem() // quiz begins
 
             // Queue order is shuffled — answer meaning questions correctly until reading comes up.
-            while (state.currentQuestionType != QuestionType.READING) {
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
                 viewModel.onAnswerInputChange("Water")
                 awaitItem()
                 viewModel.submitAnswer()
@@ -1294,12 +1297,12 @@ class LessonViewModelTest {
             }
             // Captured before the mismatch submission — if the reading question happened to be
             // drawn first, the meaning question is still outstanding, so this is 2, not 1.
-            val remainingBeforeMismatch = state.remainingQuizCount
+            val remainingBeforeMismatch = (state.phase as LessonUiState.Phase.Quiz).remainingQuizCount
 
             viewModel.onAnswerInputChange("Water")
             awaitItem()
             viewModel.submitAnswer()
-            val mismatchState = awaitItem()
+            val mismatchState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(mismatchState.answerTypeMismatchCount).isEqualTo(1)
             assertThat(mismatchState.feedback).isNull()
             // Rejected outright, not graded as a miss — the queue is untouched.
@@ -1308,7 +1311,7 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("mizu")
             awaitItem()
             viewModel.submitAnswer()
-            val correctState = awaitItem()
+            val correctState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(correctState.feedback?.isCorrect).isTrue()
         }
     }
@@ -1326,27 +1329,26 @@ class LessonViewModelTest {
         val viewModel = createViewModel()
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             val studyState = awaitItem()
-            assertThat(studyState.phase).isEqualTo(LessonPhase.STUDY)
+            assertThat(studyState.phase).isInstanceOf(LessonUiState.Phase.Study::class.java)
 
-            // Home button: no segment running yet in STUDY phase — pauseActiveSegment returns early
-            // with no state update. yield() lets the dispatcher run the foreground-tracker collector
-            // (which processes false) before the start event fires; without the yield the two are
-            // conflated and the collector only sees the net value (true → false → true = no change),
-            // so resumeActiveSegment is never called and there is nothing to test.
+            // Home button then return: the tracker fires pause()/resume() on each transition.
+            // In STUDY phase both are now structural no-ops — quiz timing fields only exist once
+            // the Quiz phase begins, so neither event emits a state update, and neither
+            // re-persists (persistStudySnapshot already keeps the STUDY record current on every
+            // card change). This foreground/background cycle is the one that used to corrupt the
+            // session by calling persistCurrentState() with an empty-queue QUIZ snapshot —
+            // yield() after each event lets the foreground-tracker collector process it before
+            // the next one fires.
             appForegroundTracker.onStop(FakeLifecycleOwner)
             yield()
-            // Return: foreground tracker fires resumeActiveSegment() — starts a segment even
-            // though we're still in STUDY phase.
             appForegroundTracker.onStart(FakeLifecycleOwner)
-            awaitItem() // sessionActiveSegmentStartMs set
-            // Home button (or onCleared from Back) with a now-running segment: this is the
-            // path that used to corrupt the session by calling persistCurrentState().
+            yield()
             appForegroundTracker.onStop(FakeLifecycleOwner)
-            awaitItem() // sessionActiveSegmentStartMs cleared
+            yield()
         }
 
         val persisted = lessonSessionRepository.load()
@@ -1355,34 +1357,31 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `resuming a stale empty-queue QUIZ snapshot clears it so the next visit starts fresh`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a stale empty-queue QUIZ snapshot never surfaces as a session to resume`() = runTest(mainDispatcherRule.dispatcher) {
         // Regression: resumeQuizPhase() used to set isSessionComplete=true without clearing the
-        // persisted session when it found an empty quizQueue. The stale record stayed in DataStore,
-        // so every subsequent visit to the lesson screen also showed "Lesson complete!" — an
-        // infinite loop the user couldn't escape. A stale empty-queue QUIZ record is produced by
-        // (e.g.) the STUDY-phase corruption above, or by answering the last quiz question correctly
-        // and navigating away before tapping Continue.
+        // persisted session when it found an empty quizQueue — the stale record stayed in DataStore,
+        // so every subsequent visit to the lesson screen also showed "Lesson complete!", an infinite
+        // loop the user couldn't escape. A stale empty-queue QUIZ record is produced by (e.g.) the
+        // STUDY-phase corruption above, or by answering the last quiz question correctly and
+        // navigating away before tapping Continue.
+        //
+        // This is now caught structurally, on the read side: LessonSessionRepository.load() treats
+        // an empty-queue QUIZ snapshot as unresumable and self-heals by clearing it before ever
+        // returning it — so LessonViewModel never even reaches "lesson complete" for it; the very
+        // first visit already falls through to a fresh lesson load, with no lingering DataStore
+        // record and no intermediate "complete" flash for either this or any later visit.
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
         lessonSessionRepository.save(PersistedLessonSession(phase = PersistedLessonPhase.QUIZ))
 
-        // First visit: the stale session produces a (spurious) "lesson complete" screen once.
-        val firstViewModel = createViewModel()
-        firstViewModel.uiState.test {
+        val viewModel = createViewModel()
+        viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.isSessionComplete).isTrue()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            // Falling through to the SELECT phase (rather than staying stuck on Complete) already
+            // proves the stale record didn't surface as a resumable "lesson complete" session.
+            assertThat(state.phase).isInstanceOf(LessonUiState.Phase.Select::class.java)
         }
-        // Session must be cleared so the next visit doesn't also show "lesson complete".
         assertThat(lessonSessionRepository.load()).isNull()
-
-        // Second visit: gets a fresh lesson load rather than another infinite "lesson complete".
-        val secondViewModel = createViewModel()
-        secondViewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.isSessionComplete).isFalse()
-            assertThat(state.phase).isEqualTo(LessonPhase.SELECT)
-        }
     }
 
     @Test
@@ -1398,9 +1397,10 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.errorMessage).isNotNull()
-            assertThat(state.isLoading).isFalse()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            // Casting to Error already proves loading has cleared — Loading and Error are disjoint
+            // variants of the same sealed Phase.
+            assertThat((state.phase as LessonUiState.Phase.Error).message).isNotEmpty()
         }
     }
 
@@ -1415,8 +1415,8 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.errorMessage).isNotNull()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat(state.phase).isInstanceOf(LessonUiState.Phase.Error::class.java)
 
             // Fix the server and retry via the public retry entry point.
             dispatch(
@@ -1426,9 +1426,8 @@ class LessonViewModelTest {
             viewModel.load()
 
             state = awaitItem()
-            while (state.isLoading || state.errorMessage != null) state = awaitItem()
-            assertThat(state.errorMessage).isNull()
-            assertThat(state.phase).isEqualTo(LessonPhase.SELECT)
+            while (state.phase is LessonUiState.Phase.Loading || state.phase is LessonUiState.Phase.Error) state = awaitItem()
+            assertThat(state.phase).isInstanceOf(LessonUiState.Phase.Select::class.java)
         }
     }
 
@@ -1440,7 +1439,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.selectNone()
             awaitItem() // state with empty selection
@@ -1448,7 +1447,7 @@ class LessonViewModelTest {
 
             // Must be a no-op — no phase transition, no crash.
             expectNoEvents()
-            assertThat(viewModel.uiState.value.phase).isEqualTo(LessonPhase.SELECT)
+            assertThat(viewModel.uiState.value.phase).isInstanceOf(LessonUiState.Phase.Select::class.java)
         }
     }
 
@@ -1461,7 +1460,7 @@ class LessonViewModelTest {
         val viewModel = createViewModel()
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
             viewModel.startSelectedLessons()
             awaitItem() // STUDY phase — persistStudySnapshot wrote the session to DataStore
             viewModel.nextStudyCard()
@@ -1488,7 +1487,7 @@ class LessonViewModelTest {
         val viewModel = createViewModel()
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
             viewModel.startSelectedLessons()
             awaitItem() // STUDY phase
             viewModel.nextStudyCard()
@@ -1516,12 +1515,12 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
             // Default pre-selects all 2 (batch size >= available count)
-            assertThat(state.selectedAssignmentIds).hasSize(2)
+            assertThat((state.phase as LessonUiState.Phase.Select).selectedAssignmentIds).hasSize(2)
 
             viewModel.selectFirst(1)
-            val afterSelectFirst = awaitItem()
+            val afterSelectFirst = awaitItem().phase as LessonUiState.Phase.Select
             assertThat(afterSelectFirst.selectedAssignmentIds).containsExactly(101L)
         }
     }
@@ -1534,16 +1533,16 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
-            val studyState = awaitItem()
+            val studyState = awaitItem().phase as LessonUiState.Phase.Study
             assertThat(studyState.studyIndex).isEqualTo(0)
             assertThat(studyState.studyItems).hasSize(1)
 
             viewModel.onStudyCardSwiped(5) // out of range for a 1-item list
             expectNoEvents()
-            assertThat(viewModel.uiState.value.studyIndex).isEqualTo(0)
+            assertThat((viewModel.uiState.value.phase as LessonUiState.Phase.Study).studyIndex).isEqualTo(0)
         }
     }
 
@@ -1555,7 +1554,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -1565,8 +1564,9 @@ class LessonViewModelTest {
             // Empty input — submitAnswer must not grade or produce feedback
             viewModel.submitAnswer()
             expectNoEvents()
-            assertThat(viewModel.uiState.value.feedback).isNull()
-            assertThat(viewModel.uiState.value.remainingQuizCount).isEqualTo(1)
+            val quiz = viewModel.uiState.value.phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.feedback).isNull()
+            assertThat(quiz.remainingQuizCount).isEqualTo(1)
         }
     }
 
@@ -1578,7 +1578,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -1588,14 +1588,15 @@ class LessonViewModelTest {
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()
             viewModel.submitAnswer()
-            val feedbackState = awaitItem()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback).isNotNull()
             val remainingAfterFirstSubmit = feedbackState.remainingQuizCount
 
             // Second submit while feedback is visible — must be a no-op
             viewModel.submitAnswer()
             expectNoEvents()
-            assertThat(viewModel.uiState.value.remainingQuizCount).isEqualTo(remainingAfterFirstSubmit)
+            val quiz = viewModel.uiState.value.phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.remainingQuizCount).isEqualTo(remainingAfterFirstSubmit)
         }
     }
 
@@ -1614,15 +1615,15 @@ class LessonViewModelTest {
 
             viewModel.uiState.test {
                 var state = awaitItem()
-                while (state.isLoading) state = awaitItem()
+                while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
                 viewModel.startSelectedLessons()
                 awaitItem()
                 viewModel.nextStudyCard()
                 state = awaitItem() // quiz begins
 
-                while (state.currentQuestionType != QuestionType.READING) {
-                    viewModel.onAnswerInputChange(if (state.currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
+                    viewModel.onAnswerInputChange(if ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
                     awaitItem()
                     viewModel.submitAnswer()
                     awaitItem()

@@ -1,6 +1,5 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
-import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPhase
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreen
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenEvent
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenTestTags
@@ -38,6 +37,7 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -92,6 +92,76 @@ class LessonScreenTest {
         readings = emptyList(),
         meaningMnemonic = "A small mound of earth.",
         readingMnemonic = null
+    )
+
+    // --- LessonUiState fixture helpers -------------------------------------------------------
+    // LessonUiState.Phase is a sealed hierarchy now (Select/Study/Quiz/Complete/etc.) instead of a
+    // flat data class with a `phase: LessonPhase` enum plus a pile of independent nullable fields.
+    // These collapse the repetitive `LessonUiState(phase = LessonUiState.Phase.Xxx(...))` shape down
+    // to just the fields each test actually varies.
+
+    private fun selectState(
+        availableLessons: List<LessonItem> = emptyList(),
+        selectedAssignmentIds: Set<Long> = emptySet()
+    ) = LessonUiState(
+        phase = LessonUiState.Phase.Select(
+            availableLessons = availableLessons,
+            selectedAssignmentIds = selectedAssignmentIds
+        )
+    )
+
+    private fun studyState(
+        studyItems: List<LessonItem>,
+        studyIndex: Int = 0,
+        strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
+    ) = LessonUiState(
+        phase = LessonUiState.Phase.Study(
+            studyItems = studyItems,
+            studyIndex = studyIndex,
+            strokeOrderBySubjectId = strokeOrderBySubjectId
+        )
+    )
+
+    private fun quizState(
+        currentItem: LessonItem,
+        currentQuestionType: QuestionType,
+        answerInput: String = "",
+        feedback: AnswerFeedback? = null,
+        answerTypeMismatchCount: Int = 0,
+        totalQuizCount: Int = 0,
+        remainingQuizCount: Int = 0,
+        timing: QuizTimingUiState = QuizTimingUiState(),
+        settings: LessonUiState.DisplaySettings = LessonUiState.DisplaySettings()
+    ) = LessonUiState(
+        phase = LessonUiState.Phase.Quiz(
+            currentItem = currentItem,
+            currentQuestionType = currentQuestionType,
+            answerInput = answerInput,
+            feedback = feedback,
+            answerTypeMismatchCount = answerTypeMismatchCount,
+            totalQuizCount = totalQuizCount,
+            remainingQuizCount = remainingQuizCount,
+            timing = timing
+        ),
+        settings = settings
+    )
+
+    private fun completeState(
+        sessionItemsLearned: Int = 0,
+        sessionItemsCorrectFirstTry: Int = 0,
+        sessionMissedItems: List<LessonItem> = emptyList(),
+        sessionTotalElapsedMs: Long = 0L,
+        sessionAverageTimePerItemMs: Long = 0L,
+        sessionSlowestAnswers: List<SlowAnswer<LessonItem>> = emptyList()
+    ) = LessonUiState(
+        phase = LessonUiState.Phase.Complete(
+            sessionItemsLearned = sessionItemsLearned,
+            sessionItemsCorrectFirstTry = sessionItemsCorrectFirstTry,
+            sessionMissedItems = sessionMissedItems,
+            sessionTotalElapsedMs = sessionTotalElapsedMs,
+            sessionAverageTimePerItemMs = sessionAverageTimePerItemMs,
+            sessionSlowestAnswers = sessionSlowestAnswers
+        )
     )
 
     private fun setScreen(
@@ -149,8 +219,7 @@ class LessonScreenTest {
     @Test
     fun searchButton_opensInlineSearchOverlay() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(radicalItem, secondRadicalItem),
                 selectedAssignmentIds = setOf(1L)
             )
@@ -164,8 +233,7 @@ class LessonScreenTest {
     fun selectPhase_showsSelectedCountAndTogglesOnCheckboxRowClick() {
         var toggledId: Long? = null
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(radicalItem, secondRadicalItem),
                 selectedAssignmentIds = setOf(1L)
             ),
@@ -185,8 +253,7 @@ class LessonScreenTest {
         // Glyph-less radicals (e.g. "Hill") carry a characterImageUrl and no characters — the tile
         // should render the image (via SubjectGlyph), not fall back to printing the meaning text.
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(glyphlessRadicalItem),
                 selectedAssignmentIds = setOf(3L)
             )
@@ -204,8 +271,7 @@ class LessonScreenTest {
         var selectedAll = false
         var selectedNone = false
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(radicalItem, secondRadicalItem),
                 selectedAssignmentIds = setOf(1L)
             ),
@@ -225,8 +291,7 @@ class LessonScreenTest {
     fun selectPhase_stepperButtons_invokeOnSelectFirstWithClampedCount() {
         var selectedN: Int? = null
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(radicalItem, secondRadicalItem),
                 selectedAssignmentIds = setOf(1L)
             ),
@@ -243,8 +308,7 @@ class LessonScreenTest {
     @Test
     fun selectPhase_stepperDecrement_disabledAtZero() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(radicalItem),
                 selectedAssignmentIds = emptySet()
             )
@@ -256,8 +320,7 @@ class LessonScreenTest {
     @Test
     fun selectPhase_stepperIncrement_disabledAtTotal() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(radicalItem),
                 selectedAssignmentIds = setOf(1L)
             )
@@ -269,8 +332,7 @@ class LessonScreenTest {
     @Test
     fun selectPhase_customizeToggle_showsAndHidesChecklist() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(radicalItem, secondRadicalItem),
                 selectedAssignmentIds = setOf(1L)
             )
@@ -291,8 +353,7 @@ class LessonScreenTest {
     fun selectPhase_levelGroupToggle_showsAndHidesTilesForUnselectedLevel() {
         var toggledId: Long? = null
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(radicalItem),
                 selectedAssignmentIds = emptySet()
             ),
@@ -318,8 +379,7 @@ class LessonScreenTest {
     @Test
     fun selectPhase_startButton_disabledWhenNothingSelected_enabledOtherwise() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(radicalItem),
                 selectedAssignmentIds = emptySet()
             )
@@ -332,8 +392,7 @@ class LessonScreenTest {
     fun selectPhase_startButton_invokesCallback_whenSelectionNonEmpty() {
         var started = false
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
+            selectState(
                 availableLessons = listOf(radicalItem),
                 selectedAssignmentIds = setOf(1L)
             ),
@@ -348,10 +407,7 @@ class LessonScreenTest {
     fun studyPhase_swipingPager_invokesOnStudyCardSwiped() {
         var swipedToIndex: Int? = null
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.STUDY,
-                studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 0
-            ),
+            studyState(studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 0),
             onStudyCardSwiped = { swipedToIndex = it }
         )
 
@@ -362,9 +418,7 @@ class LessonScreenTest {
 
     @Test
     fun studyPhase_showsCharacterAndMnemonic() {
-        setScreen(
-            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(radicalItem), studyIndex = 0)
-        )
+        setScreen(studyState(studyItems = listOf(radicalItem), studyIndex = 0))
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_CHARACTERS).assertIsDisplayed()
     }
@@ -372,9 +426,7 @@ class LessonScreenTest {
     @Test
     fun studyPhase_auxiliaryMeaningsUnderCap_showAllWithoutTruncation() {
         val item = radicalItem.copy(auxiliaryMeanings = listOf("Aqua", "H2O"))
-        setScreen(
-            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(item), studyIndex = 0)
-        )
+        setScreen(studyState(studyItems = listOf(item), studyIndex = 0))
 
         composeTestRule.onNodeWithText("Aqua, H2O").assertIsDisplayed()
     }
@@ -382,9 +434,7 @@ class LessonScreenTest {
     @Test
     fun studyPhase_auxiliaryMeaningsOverCap_tapExpandsThenCollapses() {
         val item = radicalItem.copy(auxiliaryMeanings = listOf("A", "B", "C", "D", "E"))
-        setScreen(
-            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(item), studyIndex = 0)
-        )
+        setScreen(studyState(studyItems = listOf(item), studyIndex = 0))
 
         composeTestRule.onNodeWithText("A, B, C +2 more").assertIsDisplayed()
 
@@ -399,9 +449,9 @@ class LessonScreenTest {
     fun studyPhase_showsStrokeOrderSection_whenAvailableForCurrentItem() {
         val strokes = listOf(StrokeOrderStroke(pathData = "M10,10L90,10", labelX = 5f, labelY = 5f))
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.STUDY,
-                studyItems = listOf(radicalItem), studyIndex = 0,
+            studyState(
+                studyItems = listOf(radicalItem),
+                studyIndex = 0,
                 strokeOrderBySubjectId = mapOf(radicalItem.subjectId to StrokeOrderUiState.Available(strokes))
             )
         )
@@ -412,18 +462,14 @@ class LessonScreenTest {
 
     @Test
     fun studyPhase_hidesStrokeOrderSection_whenUnavailableForCurrentItem() {
-        setScreen(
-            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(radicalItem), studyIndex = 0)
-        )
+        setScreen(studyState(studyItems = listOf(radicalItem), studyIndex = 0))
 
         composeTestRule.onAllNodesWithTag(StrokeOrderTestTags.SECTION).assertCountEquals(0)
     }
 
     @Test
     fun studyPhase_previousDisabledOnFirstCard_nextLabelledStartQuizOnLastCard() {
-        setScreen(
-            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(radicalItem), studyIndex = 0)
-        )
+        setScreen(studyState(studyItems = listOf(radicalItem), studyIndex = 0))
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_PREVIOUS_BUTTON).assertIsNotEnabled()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.START_QUIZ_BUTTON).assertIsDisplayed()
@@ -433,7 +479,7 @@ class LessonScreenTest {
     fun studyPhase_nextButton_invokesCallback() {
         var advanced = false
         setScreen(
-            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(radicalItem), studyIndex = 0),
+            studyState(studyItems = listOf(radicalItem), studyIndex = 0),
             onNextStudyCard = { advanced = true }
         )
 
@@ -445,10 +491,9 @@ class LessonScreenTest {
     fun quizPhase_submittingAnswer_invokesOnSubmit() {
         var submitted = false
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                answerInput = "Mouth"
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1, answerInput = "Mouth"
             ),
             onSubmit = { submitted = true }
         )
@@ -476,7 +521,7 @@ class LessonScreenTest {
             subjectType = SubjectType.VOCABULARY,
             contextSentences = listOf(ContextSentence(japanese = "水を飲みます。", english = "I drink water."))
         )
-        setScreen(LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(vocabItem), studyIndex = 0))
+        setScreen(studyState(studyItems = listOf(vocabItem), studyIndex = 0))
 
         composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.SHARE_BUTTON).performScrollTo().performClick()
 
@@ -502,7 +547,7 @@ class LessonScreenTest {
             subjectType = SubjectType.VOCABULARY,
             contextSentences = listOf(ContextSentence(japanese = "水を飲みます。", english = "I drink water."))
         )
-        setScreen(LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(vocabItem), studyIndex = 0))
+        setScreen(studyState(studyItems = listOf(vocabItem), studyIndex = 0))
 
         composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.SHARE_BUTTON).performScrollTo().performClick()
 
@@ -515,9 +560,9 @@ class LessonScreenTest {
     fun quizPhase_typingAnswer_invokesCallback() {
         var typed = ""
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1
             ),
             onAnswerInputChange = { typed = it }
         )
@@ -532,10 +577,9 @@ class LessonScreenTest {
     @Test
     fun typeMismatchWarning_showsExpectingMeaning_forMeaningQuestion() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                answerTypeMismatchCount = 1
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1, answerTypeMismatchCount = 1
             )
         )
 
@@ -549,10 +593,9 @@ class LessonScreenTest {
     @Test
     fun typeMismatchWarning_showsExpectingReading_forReadingQuestion() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.READING,
-                answerTypeMismatchCount = 1
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.READING,
+                totalQuizCount = 1, remainingQuizCount = 1, answerTypeMismatchCount = 1
             )
         )
 
@@ -563,9 +606,9 @@ class LessonScreenTest {
     @Test
     fun typeMismatchWarning_absentBeforeAnyMismatch() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1
             )
         )
 
@@ -575,10 +618,9 @@ class LessonScreenTest {
     @Test
     fun typeMismatchWarning_clearsOnceUserEditsTheAnswer() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                answerTypeMismatchCount = 1
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1, answerTypeMismatchCount = 1
             )
         )
 
@@ -590,10 +632,11 @@ class LessonScreenTest {
     @Test
     fun quizPhase_totalTimer_shownWhenSettingEnabledAndSessionInProgress() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showTotalTimer = true, sessionActiveSegmentStartMs = System.currentTimeMillis()
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                timing = QuizTimingUiState(sessionActiveSegmentStartMs = System.currentTimeMillis()),
+                settings = LessonUiState.DisplaySettings(showTotalTimer = true)
             )
         )
 
@@ -603,10 +646,11 @@ class LessonScreenTest {
     @Test
     fun quizPhase_totalTimer_absentWhenSettingDisabled() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showTotalTimer = false, sessionActiveSegmentStartMs = System.currentTimeMillis()
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                timing = QuizTimingUiState(sessionActiveSegmentStartMs = System.currentTimeMillis()),
+                settings = LessonUiState.DisplaySettings(showTotalTimer = false)
             )
         )
 
@@ -618,10 +662,11 @@ class LessonScreenTest {
         // sessionActiveSegmentStartMs is null (as if the app were backgrounded, or navigated away
         // and back) — the timer must show the frozen base, not restart from "0:00".
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showTotalTimer = true, sessionActiveElapsedMs = 65_000L, sessionActiveSegmentStartMs = null
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                timing = QuizTimingUiState(sessionActiveElapsedMs = 65_000L, sessionActiveSegmentStartMs = null),
+                settings = LessonUiState.DisplaySettings(showTotalTimer = true)
             )
         )
 
@@ -631,10 +676,11 @@ class LessonScreenTest {
     @Test
     fun quizPhase_questionTimer_shownWhenSettingEnabledAndSessionInProgress() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showQuestionTimer = true, questionActiveSegmentStartMs = System.currentTimeMillis()
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                timing = QuizTimingUiState(questionActiveSegmentStartMs = System.currentTimeMillis()),
+                settings = LessonUiState.DisplaySettings(showQuestionTimer = true)
             )
         )
 
@@ -644,10 +690,11 @@ class LessonScreenTest {
     @Test
     fun quizPhase_questionTimer_absentWhenSettingDisabled() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showQuestionTimer = false, questionActiveSegmentStartMs = System.currentTimeMillis()
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                timing = QuizTimingUiState(questionActiveSegmentStartMs = System.currentTimeMillis()),
+                settings = LessonUiState.DisplaySettings(showQuestionTimer = false)
             )
         )
 
@@ -659,12 +706,14 @@ class LessonScreenTest {
         // questionActiveSegmentStartMs is a full minute in the past — if the timer were still
         // live-ticking from it, it would show "1:00". The frozen questionElapsedMs must win instead.
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showQuestionTimer = true,
-                questionActiveSegmentStartMs = System.currentTimeMillis() - 60_000,
-                questionElapsedMs = 5_000L,
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                timing = QuizTimingUiState(
+                    questionActiveSegmentStartMs = System.currentTimeMillis() - 60_000,
+                    questionElapsedMs = 5_000L
+                ),
+                settings = LessonUiState.DisplaySettings(showQuestionTimer = true),
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
             )
         )
@@ -677,10 +726,11 @@ class LessonScreenTest {
         // questionActiveSegmentStartMs is null (as if the app were backgrounded mid-question) — the
         // timer must show the frozen base, not restart from "0:00" or keep ticking through the gap.
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showQuestionTimer = true, questionActiveElapsedMs = 5_000L, questionActiveSegmentStartMs = null
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                timing = QuizTimingUiState(questionActiveElapsedMs = 5_000L, questionActiveSegmentStartMs = null),
+                settings = LessonUiState.DisplaySettings(showQuestionTimer = true)
             )
         )
 
@@ -691,9 +741,9 @@ class LessonScreenTest {
     fun quizPhase_feedback_showsContinueButton() {
         var continued = false
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
             ),
             onContinue = { continued = true }
@@ -707,10 +757,10 @@ class LessonScreenTest {
     @Test
     fun quizPhase_subjectTypeLabel_shownWhenSettingEnabled() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showSubjectTypeLabel = true
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                settings = LessonUiState.DisplaySettings(showSubjectTypeLabel = true)
             )
         )
 
@@ -721,10 +771,10 @@ class LessonScreenTest {
     @Test
     fun quizPhase_subjectTypeLabel_absentWhenSettingDisabled() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
-                showSubjectTypeLabel = false
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                settings = LessonUiState.DisplaySettings(showSubjectTypeLabel = false)
             )
         )
 
@@ -735,9 +785,9 @@ class LessonScreenTest {
     fun quizPhase_continueButton_disabledBrieflyAfterIncorrectAnswer_thenEnables() {
         composeTestRule.mainClock.autoAdvance = false
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
                 feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Mouth")
             )
         )
@@ -752,9 +802,9 @@ class LessonScreenTest {
     @Test
     fun quizPhase_continueButton_enabledImmediately_afterCorrectAnswer() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ, totalQuizCount = 1, remainingQuizCount = 1,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
             )
         )
@@ -766,7 +816,7 @@ class LessonScreenTest {
     fun noLessonsAvailable_showsMessageAndDoneButton() {
         var done = false
         setScreen(
-            LessonUiState(isLoading = false, hasNoLessonsAvailable = true),
+            LessonUiState(phase = LessonUiState.Phase.NoLessonsAvailable),
             onDone = { done = true }
         )
 
@@ -779,7 +829,7 @@ class LessonScreenTest {
     fun sessionComplete_showsDoneButtonAndInvokesCallback() {
         var done = false
         setScreen(
-            LessonUiState(isLoading = false, isSessionComplete = true),
+            completeState(),
             onDone = { done = true }
         )
 
@@ -790,12 +840,7 @@ class LessonScreenTest {
 
     @Test
     fun sessionComplete_showsOverviewCardWithCounts() {
-        setScreen(
-            LessonUiState(
-                isLoading = false, isSessionComplete = true,
-                sessionItemsLearned = 5, sessionItemsCorrectFirstTry = 3
-            )
-        )
+        setScreen(completeState(sessionItemsLearned = 5, sessionItemsCorrectFirstTry = 3))
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.SESSION_OVERVIEW_CARD).assertIsDisplayed()
         composeTestRule.onNodeWithText("Items learned: 5").assertIsDisplayed()
@@ -804,7 +849,7 @@ class LessonScreenTest {
 
     @Test
     fun sessionComplete_hidesCardsWhenNothingWasLearned() {
-        setScreen(LessonUiState(isLoading = false, isSessionComplete = true, sessionItemsLearned = 0))
+        setScreen(completeState(sessionItemsLearned = 0))
 
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.SESSION_OVERVIEW_CARD).assertCountEquals(0)
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.SESSION_TIMING_CARD).assertCountEquals(0)
@@ -813,8 +858,7 @@ class LessonScreenTest {
     @Test
     fun sessionComplete_showsTimingCard() {
         setScreen(
-            LessonUiState(
-                isLoading = false, isSessionComplete = true,
+            completeState(
                 sessionItemsLearned = 3, sessionItemsCorrectFirstTry = 3,
                 sessionTotalElapsedMs = 125_000L, sessionAverageTimePerItemMs = 4_500L
             )
@@ -828,8 +872,7 @@ class LessonScreenTest {
     @Test
     fun sessionComplete_showsSlowestAnswersCard_whenPresent() {
         setScreen(
-            LessonUiState(
-                isLoading = false, isSessionComplete = true,
+            completeState(
                 sessionItemsLearned = 1, sessionItemsCorrectFirstTry = 1,
                 sessionSlowestAnswers = listOf(
                     SlowAnswer(radicalItem, QuestionType.MEANING, 12_000L, isCorrect = true)
@@ -843,8 +886,7 @@ class LessonScreenTest {
     @Test
     fun sessionComplete_hidesSlowestAnswersCard_whenEmpty() {
         setScreen(
-            LessonUiState(
-                isLoading = false, isSessionComplete = true,
+            completeState(
                 sessionItemsLearned = 1, sessionItemsCorrectFirstTry = 1,
                 sessionSlowestAnswers = emptyList()
             )
@@ -856,8 +898,7 @@ class LessonScreenTest {
     @Test
     fun sessionComplete_showsMissedItemsCard_whenPresent() {
         setScreen(
-            LessonUiState(
-                isLoading = false, isSessionComplete = true,
+            completeState(
                 sessionItemsLearned = 2, sessionItemsCorrectFirstTry = 1,
                 sessionMissedItems = listOf(radicalItem)
             )
@@ -870,8 +911,7 @@ class LessonScreenTest {
     @Test
     fun sessionComplete_hidesMissedItemsCard_whenEmpty() {
         setScreen(
-            LessonUiState(
-                isLoading = false, isSessionComplete = true,
+            completeState(
                 sessionItemsLearned = 1, sessionItemsCorrectFirstTry = 1,
                 sessionMissedItems = emptyList()
             )
@@ -884,7 +924,7 @@ class LessonScreenTest {
     fun errorState_showsErrorTextAndRetry() {
         var retried = false
         setScreen(
-            LessonUiState(isLoading = false, errorMessage = "Network error"),
+            LessonUiState(phase = LessonUiState.Phase.Error(message = "Network error")),
             onRetry = { retried = true }
         )
 
@@ -897,7 +937,7 @@ class LessonScreenTest {
     fun backButton_invokesCallback() {
         var wentBack = false
         setScreen(
-            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(radicalItem)),
+            studyState(studyItems = listOf(radicalItem)),
             onBack = { wentBack = true }
         )
 
@@ -908,10 +948,7 @@ class LessonScreenTest {
     @Test
     fun overflowMenu_isAbsent_duringSelectPhase() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.SELECT,
-                availableLessons = listOf(radicalItem), selectedAssignmentIds = setOf(1L)
-            )
+            selectState(availableLessons = listOf(radicalItem), selectedAssignmentIds = setOf(1L))
         )
 
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.OVERFLOW_MENU).assertCountEquals(0)
@@ -921,7 +958,7 @@ class LessonScreenTest {
     fun overflowMenu_abandonConfirmed_invokesCallback_duringStudyPhase() {
         var abandoned = false
         setScreen(
-            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(radicalItem)),
+            studyState(studyItems = listOf(radicalItem)),
             onAbandon = { abandoned = true }
         )
 
@@ -935,9 +972,8 @@ class LessonScreenTest {
     fun overflowMenu_abandonConfirmed_invokesCallback_duringQuizPhase() {
         var abandoned = false
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1
             ),
             onAbandon = { abandoned = true }
@@ -953,7 +989,7 @@ class LessonScreenTest {
     fun overflowMenu_abandonCancelled_doesNotInvokeCallback() {
         var abandoned = false
         setScreen(
-            LessonUiState(isLoading = false, phase = LessonPhase.STUDY, studyItems = listOf(radicalItem)),
+            studyState(studyItems = listOf(radicalItem)),
             onAbandon = { abandoned = true }
         )
 
@@ -970,7 +1006,7 @@ class LessonScreenTest {
 
     @Test
     fun loadingState_showsLoadingIndicator() {
-        setScreen(LessonUiState(isLoading = true))
+        setScreen(LessonUiState(phase = LessonUiState.Phase.Loading))
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.LOADING_INDICATOR).assertIsDisplayed()
     }
@@ -979,10 +1015,7 @@ class LessonScreenTest {
     fun studyPhase_nextButton_invokesNextStudyCard() {
         var advancedNext = false
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.STUDY,
-                studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 0
-            ),
+            studyState(studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 0),
             onNextStudyCard = { advancedNext = true }
         )
 
@@ -994,10 +1027,7 @@ class LessonScreenTest {
     fun studyPhase_previousButton_invokesCallback() {
         var wentBack = false
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.STUDY,
-                studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 1
-            ),
+            studyState(studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 1),
             onPreviousStudyCard = { wentBack = true }
         )
 
@@ -1008,9 +1038,8 @@ class LessonScreenTest {
     @Test
     fun quizPhase_showsCharactersAndAnswerField() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1
             )
         )
@@ -1022,9 +1051,8 @@ class LessonScreenTest {
     @Test
     fun quizPhase_submitButton_disabledWhenAnswerBlank() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1, answerInput = ""
             )
         )
@@ -1035,9 +1063,8 @@ class LessonScreenTest {
     @Test
     fun quizPhase_submitButton_enabledWhenAnswerNonBlank() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1, answerInput = "Mouth"
             )
         )
@@ -1049,9 +1076,8 @@ class LessonScreenTest {
     fun quizPhase_dontKnowButton_displayedBeforeAnswering_andInvokesCallback() {
         var dontKnow = false
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1
             ),
             onDontKnow = { dontKnow = true }
@@ -1065,9 +1091,8 @@ class LessonScreenTest {
     @Test
     fun quizPhase_dontKnowButton_hiddenAfterFeedbackIsShown() {
         setScreen(
-            LessonUiState(
-                isLoading = false, phase = LessonPhase.QUIZ,
-                currentQuizItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Mouth")
             )

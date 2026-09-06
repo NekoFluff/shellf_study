@@ -4,14 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
-import com.crazyfluff.shellfstudy.shared.coroutines.SerialDurableWork
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
-import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PersistedAnsweredQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
@@ -40,6 +38,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
+import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
@@ -48,6 +47,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.quiz.undoLastIncorrectAnswer
+import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -63,58 +63,80 @@ import kotlinx.coroutines.launch
 /** Default number of lessons pre-selected on the picker, matching WaniKani's own default batch size. */
 private const val DEFAULT_LESSON_SELECTION_SIZE = 5
 
-enum class LessonPhase { SELECT, STUDY, QUIZ }
-
 data class LessonUiState(
-    val isLoading: Boolean = true,
-    val errorMessage: String? = null,
-    val hasNoLessonsAvailable: Boolean = false,
-    val phase: LessonPhase = LessonPhase.SELECT,
-    val availableLessons: List<LessonItem> = emptyList(),
-    val selectedAssignmentIds: Set<Long> = emptySet(),
-    val studyItems: List<LessonItem> = emptyList(),
-    val studyIndex: Int = 0,
-    val currentQuizItem: LessonItem? = null,
-    val currentQuestionType: QuestionType? = null,
-    val answerInput: String = "",
-    val feedback: AnswerFeedback? = null,
-    val rankChange: RankChange? = null,
-    val undoCounter: Int = 0,
-    val isDetailsExpanded: Boolean = false,
-    val answerTypeMismatchCount: Int = 0,
-    val totalQuizCount: Int = 0,
-    val remainingQuizCount: Int = 0,
-    val isSessionComplete: Boolean = false,
-    val isAbandoned: Boolean = false,
-    val showPitchAccent: Boolean = true,
-    val showSubjectTypeLabel: Boolean = false,
-    val showTotalTimer: Boolean = false,
-    val showQuestionTimer: Boolean = false,
-    val useJapaneseKeyboard: Boolean = false,
-    // Active time accumulated before the current viewing segment, and (while non-null) when that
-    // segment began — see PausableElapsedTimeText and LessonViewModel's activeElapsedMs /
-    // activeSegmentStartMs, which these mirror exactly. Segment goes null while the session isn't
-    // actively being viewed (app backgrounded, or navigated off-screen), freezing the total timer
-    // instead of letting it count straight through that gap.
-    val sessionActiveElapsedMs: Long = 0L,
-    val sessionActiveSegmentStartMs: Long? = null,
-    // Same pause-aware shape as sessionActiveElapsedMs/sessionActiveSegmentStartMs above, but for
-    // the current question rather than the whole quiz — see LessonViewModel's questionTiming.
-    val questionActiveElapsedMs: Long = 0L,
-    val questionActiveSegmentStartMs: Long? = null,
-    // Non-null once the current question has been answered — freezes the "time on this question"
-    // display at this value instead of letting it keep ticking through the feedback screen. Reset
-    // to null whenever a fresh, unanswered question is shown (see beginQuiz, advanceQuiz).
-    val questionElapsedMs: Long? = null,
-    val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
-    val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
-    val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap(),
-    val sessionItemsLearned: Int = 0,
-    val sessionItemsCorrectFirstTry: Int = 0,
-    val sessionMissedItems: List<LessonItem> = emptyList(),
-    val sessionTotalElapsedMs: Long = 0L,
-    val sessionAverageTimePerItemMs: Long = 0L,
-    val sessionSlowestAnswers: List<SlowAnswer<LessonItem>> = emptyList()
+    val phase: Phase = Phase.Loading,
+    val settings: DisplaySettings = DisplaySettings(),
+    // Deliberately not folded into Phase — abandoning is a one-shot navigation signal, not a
+    // rendering mode. The screen keeps rendering whatever phase was showing for one more frame
+    // while a LaunchedEffect(isAbandoned) fires the actual back-navigation; the abandon menu item
+    // that triggers this is already only shown while canManageSession is true (never once
+    // phase is Complete), so this can't combine with Complete in practice.
+    val isAbandoned: Boolean = false
+) {
+    /** Settings-derived display flags — hoisted here rather than duplicated into every [Phase]
+     *  variant, since they apply uniformly regardless of phase (never null/absent in one phase and
+     *  required in another) and are only ever read, never used to decide which phase to render. */
+    data class DisplaySettings(
+        val showPitchAccent: Boolean = true,
+        val showSubjectTypeLabel: Boolean = false,
+        val showTotalTimer: Boolean = false,
+        val showQuestionTimer: Boolean = false,
+        val useJapaneseKeyboard: Boolean = false
+    )
+
+    sealed interface Phase {
+        data object Loading : Phase
+        data class Error(val message: String) : Phase
+        data object NoLessonsAvailable : Phase
+
+        data class Select(
+            val availableLessons: List<LessonItem> = emptyList(),
+            val selectedAssignmentIds: Set<Long> = emptySet()
+        ) : Phase
+
+        data class Study(
+            val studyItems: List<LessonItem> = emptyList(),
+            val studyIndex: Int = 0,
+            val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
+            val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
+            val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
+        ) : Phase
+
+        data class Quiz(
+            // Non-nullable by construction — a next-question-or-complete decision always branches
+            // into either a Quiz with a real item, or straight into Complete; there's no way to
+            // construct a Quiz value with nothing to show.
+            val currentItem: LessonItem,
+            val currentQuestionType: QuestionType,
+            val answerInput: String = "",
+            val feedback: AnswerFeedback? = null,
+            val rankChange: RankChange? = null,
+            val undoCounter: Int = 0,
+            val isDetailsExpanded: Boolean = false,
+            val answerTypeMismatchCount: Int = 0,
+            val totalQuizCount: Int = 0,
+            val remainingQuizCount: Int = 0,
+            val timing: QuizTimingUiState = QuizTimingUiState()
+        ) : Phase
+
+        data class Complete(
+            val sessionItemsLearned: Int = 0,
+            val sessionItemsCorrectFirstTry: Int = 0,
+            val sessionMissedItems: List<LessonItem> = emptyList(),
+            val sessionTotalElapsedMs: Long = 0L,
+            val sessionAverageTimePerItemMs: Long = 0L,
+            val sessionSlowestAnswers: List<SlowAnswer<LessonItem>> = emptyList()
+        ) : Phase
+    }
+}
+
+private fun QuizSessionSummary<LessonItem>.toCompletePhase() = LessonUiState.Phase.Complete(
+    sessionItemsLearned = itemsCount,
+    sessionItemsCorrectFirstTry = correctFirstTry,
+    sessionMissedItems = missedItems,
+    sessionTotalElapsedMs = totalElapsedMs,
+    sessionAverageTimePerItemMs = averageTimePerItemMs,
+    sessionSlowestAnswers = slowestAnswers
 )
 
 private typealias LessonItemProgress = QuizItemProgress<LessonItem>
@@ -123,7 +145,7 @@ class LessonViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
     private val outboxRepository: OutboxRepository,
-    private val lessonSessionRepository: LessonSessionRepository,
+    private val sessionController: QuizSessionController<PersistedLessonSession>,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
     private val pitchAccentRepository: PitchAccentRepository,
     private val settingsRepository: SettingsRepository,
@@ -143,13 +165,6 @@ class LessonViewModel(
 
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
-    // Every write to lessonSessionRepository (save or clear, STUDY or QUIZ phase alike) is routed
-    // through this queue so writes apply in the order they were issued, even though each one
-    // actually runs on applicationScope's multi-threaded dispatcher — otherwise grading the last
-    // question's save (which does extra outbox work first) can land after the completion-time
-    // clear that logically followed it, resurrecting a savepoint the app just erased.
-    private val sessionWriteQueue = SerialDurableWork(applicationScope)
-
     private val progressByAssignmentId = mutableMapOf<Long, LessonItemProgress>()
     // Individual per-answer records, used for the "slowest answers" summary — persisted and
     // restored across a resume just like progressByAssignmentId (see resumeQuizPhase), so the
@@ -157,23 +172,25 @@ class LessonViewModel(
     private val answeredQuestions = mutableListOf<AnsweredQuestionRecord<LessonItem>>()
 
     // Tracks only the time the quiz was actively being viewed — see QuizSessionTiming. Pause skips
-    // re-persisting once the session is complete or abandoned, OR the quiz queue has already
-    // emptied but isSessionComplete hasn't caught up yet (gradeAnswer clears lessonSessionRepository
-    // the instant the last question is graded, before the user taps Continue — re-persisting here
-    // in that window would resurrect the stale, empty-queue session it just cleared). Also skips it
-    // outside the QUIZ phase — currentPersistSnapshot() always writes phase = QUIZ, and in STUDY
-    // phase the correct snapshot is already kept current by persistStudySnapshot on every card
-    // change; overwriting it here with an empty-queue QUIZ record would make resumeQuizPhase()
-    // misread it as "session complete". The foreground tracker calls resume() unconditionally on
-    // app-foreground, so a segment can be running even while in STUDY phase — without this guard, a
-    // Home press in STUDY phase would write the corrupt snapshot.
+    // re-persisting outside the QUIZ phase — currentPersistSnapshot() always writes phase = QUIZ,
+    // and in STUDY phase the correct snapshot is already kept current by persistStudySnapshot on
+    // every card change; overwriting it here with an empty-queue QUIZ record would make
+    // resumeQuizPhase() misread it as "session complete". The foreground tracker calls resume()
+    // unconditionally on app-foreground, so a segment can be running even while in STUDY phase —
+    // without this guard, a Home press in STUDY phase would write the corrupt snapshot. Writing the
+    // timing fields onto a non-Quiz phase is additionally impossible by construction now —
+    // updateQuizTiming() silently no-ops when phase isn't Quiz, since Phase.Study has no such
+    // properties to write into. A completed/abandoned/empty-queue session is handled structurally
+    // by sessionController.persist() itself (a no-op once the session isn't ACTIVE), not by a flag
+    // check here — see QuizSessionController. Runs on applicationScope rather than viewModelScope so
+    // this flush actually executes when triggered from onCleared() (viewModelScope is cancelled just
+    // before onCleared() runs, so a viewModelScope.launch here would silently never execute).
     private val sessionTiming = QuizSessionTiming(
-        onResume = { now -> _uiState.update { it.copy(sessionActiveSegmentStartMs = now) } },
+        onResume = { now -> updateQuizTiming { it.copy(sessionActiveSegmentStartMs = now) } },
         onPause = pause@{ newElapsed ->
-            _uiState.update { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
-            if (_uiState.value.isSessionComplete || _uiState.value.isAbandoned || quizQueue.current == null) return@pause
-            if (_uiState.value.phase != LessonPhase.QUIZ) return@pause
-            viewModelScope.launch { sessionWriteQueue.run { persistCurrentState() } }
+            updateQuizTiming { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
+            if (_uiState.value.phase !is LessonUiState.Phase.Quiz) return@pause
+            applicationScope.launch { persistCurrentState() }
         }
     )
 
@@ -182,8 +199,8 @@ class LessonViewModel(
     // freeze(), used when a new question is shown / the current one is graded, versus resume()/
     // pause(), used only by wireForegroundTracking below for background/foreground transitions).
     private val questionTiming = QuizSessionTiming(
-        onResume = { now -> _uiState.update { it.copy(questionActiveSegmentStartMs = now) } },
-        onPause = { newElapsed -> _uiState.update { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }
+        onResume = { now -> updateQuizTiming { it.copy(questionActiveSegmentStartMs = now) } },
+        onPause = { newElapsed -> updateQuizTiming { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }
     )
 
     // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
@@ -201,11 +218,13 @@ class LessonViewModel(
                 latestSettings = settings
                 _uiState.update {
                     it.copy(
-                        showPitchAccent = settings.showPitchAccent,
-                        showSubjectTypeLabel = settings.showSubjectTypeLabel,
-                        showTotalTimer = settings.showTotalTimer,
-                        showQuestionTimer = settings.showQuestionTimer,
-                        useJapaneseKeyboard = settings.useJapaneseKeyboard
+                        settings = it.settings.copy(
+                            showPitchAccent = settings.showPitchAccent,
+                            showSubjectTypeLabel = settings.showSubjectTypeLabel,
+                            showTotalTimer = settings.showTotalTimer,
+                            showQuestionTimer = settings.showQuestionTimer,
+                            useJapaneseKeyboard = settings.useJapaneseKeyboard
+                        )
                     )
                 }
             }
@@ -216,13 +235,28 @@ class LessonViewModel(
         questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
     }
 
+    /** Guard-clause helper for updates that only apply while in the Quiz phase — a safe cast plus a
+     *  no-op fallback, not `!!`/unchecked cast. Also what makes writing session-timing fields onto a
+     *  Study value structurally impossible (see [sessionTiming]'s doc comment): there's no such
+     *  property on [LessonUiState.Phase.Study] to write into, so this simply no-ops instead. */
+    private inline fun updateQuiz(transform: (LessonUiState.Phase.Quiz) -> LessonUiState.Phase.Quiz) {
+        _uiState.update { state ->
+            val quiz = state.phase as? LessonUiState.Phase.Quiz ?: return@update state
+            state.copy(phase = transform(quiz))
+        }
+    }
+
+    private inline fun updateQuizTiming(transform: (QuizTimingUiState) -> QuizTimingUiState) {
+        updateQuiz { it.copy(timing = transform(it.timing)) }
+    }
+
     /** Explicit fresh fetch — bound to the error screen's retry action, so it always discards any
      *  persisted quiz-in-progress rather than resuming a session that may be what's broken. */
     fun load() {
         viewModelScope.launch {
-            _uiState.update { LessonUiState(isLoading = true) }
+            _uiState.update { LessonUiState() }
             assignmentRepository.warmSrsSystemCache()
-            lessonSessionRepository.clear()
+            sessionController.complete()
             fetchFreshQueue()
         }
     }
@@ -230,12 +264,12 @@ class LessonViewModel(
     /** Resumes a persisted in-progress quiz if one exists, otherwise fetches a fresh queue. */
     private fun loadOrResume() {
         viewModelScope.launch {
-            _uiState.update { LessonUiState(isLoading = true) }
+            _uiState.update { LessonUiState() }
             // Warmed once here, during the loading spinner, so applyOptimisticLessonStart can
             // resolve the SRS system for each item started during this session with zero DB
             // round trips.
             assignmentRepository.warmSrsSystemCache()
-            val persisted = lessonSessionRepository.load()
+            val persisted = sessionController.load()
             if (persisted != null) {
                 resumeFromPersisted(persisted)
             } else {
@@ -261,7 +295,7 @@ class LessonViewModel(
         // The cache backing this persisted session is gone, or somehow nothing was actually
         // selected — fall back to a fresh fetch rather than show a broken study session.
         if (persisted.studyAssignmentIds.isEmpty() || persisted.studyAssignmentIds.any { it !in itemsById }) {
-            lessonSessionRepository.clear()
+            sessionController.complete()
             fetchFreshQueue()
             return
         }
@@ -273,15 +307,16 @@ class LessonViewModel(
             val strokeOrdersDeferred = async { fetchStrokeOrders(items) }
             Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
         }
+        sessionController.begin()
         _uiState.update {
             it.copy(
-                isLoading = false,
-                phase = LessonPhase.STUDY,
-                studyItems = items,
-                studyIndex = persisted.studyIndex.coerceIn(0, items.lastIndex),
-                pitchAccentsBySubjectId = pitchAccents,
-                relatedSubjectsById = relatedSubjects,
-                strokeOrderBySubjectId = strokeOrders
+                phase = LessonUiState.Phase.Study(
+                    studyItems = items,
+                    studyIndex = persisted.studyIndex.coerceIn(0, items.lastIndex),
+                    pitchAccentsBySubjectId = pitchAccents,
+                    relatedSubjectsById = relatedSubjects,
+                    strokeOrderBySubjectId = strokeOrders
+                )
             )
         }
     }
@@ -298,7 +333,7 @@ class LessonViewModel(
         // The cache backing this persisted session is gone (e.g. app storage was cleared) — fall
         // back to a fresh fetch rather than show a broken quiz.
         if (persisted.quizQueue.any { it.assignmentId !in itemsById }) {
-            lessonSessionRepository.clear()
+            sessionController.complete()
             fetchFreshQueue()
             return
         }
@@ -336,38 +371,24 @@ class LessonViewModel(
         sessionTiming.resume()
         val questionStartedAt = questionTiming.restart()
         totalQuizCount = persisted.totalQuizCount
-        val next = quizQueue.current
-        // next == null when an empty-queue QUIZ snapshot landed in DataStore — e.g. a phase
-        // mismatch in persistCurrentState (STUDY phase + Home + Back), or the last correct answer
-        // was snapshotted before the user tapped Continue. Clear the stale session so the next
-        // visit starts fresh rather than looping on "lesson complete" indefinitely.
-        val summary = if (next == null) sessionSummary() else null
-        if (next == null) {
-            sessionWriteQueue.run { lessonSessionRepository.clear() }
-            summary?.let(::persistLastSessionSummary)
-        }
+        // LessonSessionRepository.load() — reached here via sessionController.load() — guarantees
+        // a non-empty quizQueue for a QUIZ-phase snapshot (see its resumability check), so
+        // quizQueue.current is never null after restore() above.
+        val next = requireNotNull(quizQueue.current) { "resumeQuizPhase: persisted QUIZ session had an empty queue despite the repository's resumability check" }
+        sessionController.begin()
         _uiState.update {
             it.copy(
-                isLoading = false,
-                phase = LessonPhase.QUIZ,
-                totalQuizCount = totalQuizCount,
-                remainingQuizCount = quizQueue.size,
-                currentQuizItem = next?.item,
-                currentQuestionType = next?.type,
-                isSessionComplete = next == null,
-                feedback = null,
-                isDetailsExpanded = false,
-                sessionActiveElapsedMs = sessionTiming.elapsedMs,
-                sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                questionActiveElapsedMs = 0L,
-                questionActiveSegmentStartMs = questionStartedAt,
-                questionElapsedMs = null,
-                sessionItemsLearned = summary?.itemsCount ?: it.sessionItemsLearned,
-                sessionItemsCorrectFirstTry = summary?.correctFirstTry ?: it.sessionItemsCorrectFirstTry,
-                sessionMissedItems = summary?.missedItems ?: it.sessionMissedItems,
-                sessionTotalElapsedMs = summary?.totalElapsedMs ?: it.sessionTotalElapsedMs,
-                sessionAverageTimePerItemMs = summary?.averageTimePerItemMs ?: it.sessionAverageTimePerItemMs,
-                sessionSlowestAnswers = summary?.slowestAnswers ?: it.sessionSlowestAnswers
+                phase = LessonUiState.Phase.Quiz(
+                    currentItem = next.item,
+                    currentQuestionType = next.type,
+                    totalQuizCount = totalQuizCount,
+                    remainingQuizCount = quizQueue.size,
+                    timing = QuizTimingUiState(
+                        sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                        sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
+                        questionActiveSegmentStartMs = questionStartedAt
+                    )
+                )
             )
         }
     }
@@ -377,7 +398,7 @@ class LessonViewModel(
         startedAssignmentIds.clear()
 
         when (val result = assignmentRepository.refreshLessonQueue()) {
-            is ApiResult.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
+            is ApiResult.Error -> _uiState.update { it.copy(phase = LessonUiState.Phase.Error(result.message)) }
             is ApiResult.Success -> {
                 val currentLevel = statsRepository.observeCurrentLevel().first() ?: 0
                 val levelUpProgress = assignmentRepository.observeLevelUpProgress(currentLevel).first()
@@ -389,51 +410,49 @@ class LessonViewModel(
                     isStrained = lessonsToday >= dailyGoal
                 )
                 if (items.isEmpty()) {
-                    _uiState.update { it.copy(isLoading = false, hasNoLessonsAvailable = true) }
+                    _uiState.update { it.copy(phase = LessonUiState.Phase.NoLessonsAvailable) }
                 } else {
                     val defaultSelection = items.take(DEFAULT_LESSON_SELECTION_SIZE)
                         .map { it.assignmentId }
                         .toSet()
                     _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            phase = LessonPhase.SELECT,
-                            availableLessons = items,
-                            selectedAssignmentIds = defaultSelection
-                        )
+                        it.copy(phase = LessonUiState.Phase.Select(availableLessons = items, selectedAssignmentIds = defaultSelection))
                     }
                 }
             }
         }
     }
 
-    fun toggleLessonSelection(assignmentId: Long) {
+    private inline fun updateSelect(transform: (LessonUiState.Phase.Select) -> LessonUiState.Phase.Select) {
         _uiState.update { state ->
-            val selected = state.selectedAssignmentIds.toMutableSet()
+            val select = state.phase as? LessonUiState.Phase.Select ?: return@update state
+            state.copy(phase = transform(select))
+        }
+    }
+
+    fun toggleLessonSelection(assignmentId: Long) {
+        updateSelect { select ->
+            val selected = select.selectedAssignmentIds.toMutableSet()
             if (!selected.add(assignmentId)) selected.remove(assignmentId)
-            state.copy(selectedAssignmentIds = selected)
+            select.copy(selectedAssignmentIds = selected)
         }
     }
 
     fun selectFirst(n: Int) {
-        _uiState.update { state ->
-            state.copy(selectedAssignmentIds = state.availableLessons.take(n).map { it.assignmentId }.toSet())
-        }
+        updateSelect { select -> select.copy(selectedAssignmentIds = select.availableLessons.take(n).map { it.assignmentId }.toSet()) }
     }
 
     fun selectAll() {
-        _uiState.update { state ->
-            state.copy(selectedAssignmentIds = state.availableLessons.map { it.assignmentId }.toSet())
-        }
+        updateSelect { select -> select.copy(selectedAssignmentIds = select.availableLessons.map { it.assignmentId }.toSet()) }
     }
 
     fun selectNone() {
-        _uiState.update { it.copy(selectedAssignmentIds = emptySet()) }
+        updateSelect { select -> select.copy(selectedAssignmentIds = emptySet()) }
     }
 
     fun startSelectedLessons() {
-        val state = _uiState.value
-        val selected = state.availableLessons.filter { it.assignmentId in state.selectedAssignmentIds }
+        val select = _uiState.value.phase as? LessonUiState.Phase.Select ?: return
+        val selected = select.availableLessons.filter { it.assignmentId in select.selectedAssignmentIds }
         if (selected.isEmpty()) return
         viewModelScope.launch {
             val (pitchAccents, relatedSubjects, strokeOrders) = coroutineScope {
@@ -442,17 +461,19 @@ class LessonViewModel(
                 val strokeOrdersDeferred = async { fetchStrokeOrders(selected) }
                 Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
             }
+            sessionController.begin()
             _uiState.update {
                 it.copy(
-                    phase = LessonPhase.STUDY,
-                    studyItems = selected,
-                    studyIndex = 0,
-                    pitchAccentsBySubjectId = pitchAccents,
-                    relatedSubjectsById = relatedSubjects,
-                    strokeOrderBySubjectId = strokeOrders
+                    phase = LessonUiState.Phase.Study(
+                        studyItems = selected,
+                        studyIndex = 0,
+                        pitchAccentsBySubjectId = pitchAccents,
+                        relatedSubjectsById = relatedSubjects,
+                        strokeOrderBySubjectId = strokeOrders
+                    )
                 )
             }
-            sessionWriteQueue.run { persistStudySnapshot(selected, 0) }
+            persistStudySnapshot(selected, 0)
         }
     }
 
@@ -492,38 +513,44 @@ class LessonViewModel(
             .associate { (subjectId, deferred) -> subjectId to deferred.await() }
     }
 
+    private inline fun updateStudy(transform: (LessonUiState.Phase.Study) -> LessonUiState.Phase.Study) {
+        _uiState.update { state ->
+            val study = state.phase as? LessonUiState.Phase.Study ?: return@update state
+            state.copy(phase = transform(study))
+        }
+    }
+
     fun onStudyCardSwiped(index: Int) {
-        val state = _uiState.value
-        if (state.phase != LessonPhase.STUDY || index !in state.studyItems.indices) return
-        _uiState.update { it.copy(studyIndex = index) }
-        viewModelScope.launch { sessionWriteQueue.run { persistStudySnapshot(state.studyItems, index) } }
+        val study = _uiState.value.phase as? LessonUiState.Phase.Study ?: return
+        if (index !in study.studyItems.indices) return
+        updateStudy { it.copy(studyIndex = index) }
+        viewModelScope.launch { persistStudySnapshot(study.studyItems, index) }
     }
 
     fun nextStudyCard() {
-        val state = _uiState.value
-        if (state.phase != LessonPhase.STUDY) return
-        val nextIndex = state.studyIndex + 1
-        if (nextIndex >= state.studyItems.size) {
-            viewModelScope.launch { beginQuiz(state.studyItems) }
+        val study = _uiState.value.phase as? LessonUiState.Phase.Study ?: return
+        val nextIndex = study.studyIndex + 1
+        if (nextIndex >= study.studyItems.size) {
+            viewModelScope.launch { beginQuiz(study.studyItems) }
         } else {
-            _uiState.update { it.copy(studyIndex = nextIndex) }
-            viewModelScope.launch { sessionWriteQueue.run { persistStudySnapshot(state.studyItems, nextIndex) } }
+            updateStudy { it.copy(studyIndex = nextIndex) }
+            viewModelScope.launch { persistStudySnapshot(study.studyItems, nextIndex) }
         }
     }
 
     fun previousStudyCard() {
-        val state = _uiState.value
-        if (state.phase != LessonPhase.STUDY || state.studyIndex == 0) return
-        val previousIndex = state.studyIndex - 1
-        _uiState.update { it.copy(studyIndex = previousIndex) }
-        viewModelScope.launch { sessionWriteQueue.run { persistStudySnapshot(state.studyItems, previousIndex) } }
+        val study = _uiState.value.phase as? LessonUiState.Phase.Study ?: return
+        if (study.studyIndex == 0) return
+        val previousIndex = study.studyIndex - 1
+        updateStudy { it.copy(studyIndex = previousIndex) }
+        viewModelScope.launch { persistStudySnapshot(study.studyItems, previousIndex) }
     }
 
     /** Persists just enough to resume mid-flashcard-study: which items are in the batch (in order)
      *  and which card the user is on — see [resumeStudyPhase]. Called on every card change rather
      *  than only at study's start, so a resume lands on the exact card left off on, not card one. */
     private suspend fun persistStudySnapshot(items: List<LessonItem>, index: Int) {
-        lessonSessionRepository.save(
+        sessionController.persist(
             PersistedLessonSession(
                 phase = PersistedLessonPhase.STUDY,
                 studyAssignmentIds = items.map { it.assignmentId },
@@ -533,6 +560,7 @@ class LessonViewModel(
     }
 
     private suspend fun beginQuiz(items: List<LessonItem>) {
+        sessionController.begin()
         quizQueue.build(items, typesFor = { item -> questionTypesFor(item.subjectType) })
         totalQuizCount = quizQueue.size
 
@@ -544,46 +572,53 @@ class LessonViewModel(
         val questionStartedAt = questionTiming.restart()
 
         val next = quizQueue.current
+        if (next == null) {
+            // Every item in this batch was already fully learned before quizzing began — go
+            // straight to Complete instead of ever constructing a Quiz phase with no question.
+            sessionController.complete()
+            val summary = sessionSummary()
+            persistLastSessionSummary(summary)
+            _uiState.update { it.copy(phase = summary.toCompletePhase()) }
+            return
+        }
         _uiState.update {
             it.copy(
-                phase = LessonPhase.QUIZ,
-                totalQuizCount = totalQuizCount,
-                remainingQuizCount = totalQuizCount,
-                currentQuizItem = next?.item,
-                currentQuestionType = next?.type,
-                answerInput = "",
-                feedback = null,
-                isSessionComplete = next == null,
-                sessionActiveElapsedMs = sessionTiming.elapsedMs,
-                sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                questionActiveElapsedMs = 0L,
-                questionActiveSegmentStartMs = questionStartedAt,
-                questionElapsedMs = null
+                phase = LessonUiState.Phase.Quiz(
+                    currentItem = next.item,
+                    currentQuestionType = next.type,
+                    totalQuizCount = totalQuizCount,
+                    remainingQuizCount = totalQuizCount,
+                    timing = QuizTimingUiState(
+                        sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                        sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
+                        questionActiveSegmentStartMs = questionStartedAt
+                    )
+                )
             )
         }
-        sessionWriteQueue.run { persistCurrentState() }
+        persistCurrentState()
     }
 
     fun onAnswerInputChange(value: String) {
-        _uiState.update { it.copy(answerInput = value) }
+        updateQuiz { it.copy(answerInput = value) }
     }
 
     fun submitAnswer() {
-        val state = _uiState.value
-        if (state.feedback != null) return
-        val item = state.currentQuizItem ?: return
-        val type = state.currentQuestionType ?: return
-        if (state.answerInput.isBlank()) return
+        val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
+        if (quiz.feedback != null) return
+        val item = quiz.currentItem
+        val type = quiz.currentQuestionType
+        if (quiz.answerInput.isBlank()) return
 
         gradingGuard.launchIfIdle {
             val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
             val outcome = evaluateAnswer(
-                state.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
+                quiz.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
                 closeEnoughEnabled = latestSettings.closeEnoughAnswersEnabled
             )
             when (outcome) {
                 AnswerOutcome.TypeMismatch ->
-                    _uiState.update { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
+                    updateQuiz { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
                 is AnswerOutcome.Graded ->
                     gradeAnswer(item, type, outcome.isCorrect, candidates, wasCloseMatch = outcome.wasCloseMatch)
             }
@@ -592,10 +627,10 @@ class LessonViewModel(
 
     /** Gives up on the current question — treated the same as a wrong answer, requeued for another pass. */
     fun dontKnowAnswer() {
-        val state = _uiState.value
-        if (state.feedback != null) return
-        val item = state.currentQuizItem ?: return
-        val type = state.currentQuestionType ?: return
+        val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
+        if (quiz.feedback != null) return
+        val item = quiz.currentItem
+        val type = quiz.currentQuestionType
         val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
         gradingGuard.launchIfIdle {
             gradeAnswer(item, type, isCorrect = false, candidates)
@@ -608,10 +643,10 @@ class LessonViewModel(
      *  showing it's already committed. The queue/progress mutation for the incorrect-answer case
      *  is shared via [undoLastIncorrectAnswer]. */
     fun undoLastAnswer() {
-        val state = _uiState.value
-        val item = state.currentQuizItem ?: return
-        val type = state.currentQuestionType ?: return
-        val feedback = state.feedback ?: return
+        val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
+        val item = quiz.currentItem
+        val type = quiz.currentQuestionType
+        val feedback = quiz.feedback ?: return
         if (feedback.isCorrect) return
 
         viewModelScope.launch {
@@ -621,26 +656,28 @@ class LessonViewModel(
                 answeredQuestions = answeredQuestions,
                 item = item,
                 questionType = type,
-                persist = { sessionWriteQueue.run { persistCurrentState() } }
+                persist = { persistCurrentState() }
             )
             if (!didUndo) return@launch
             // Restarts this question's clock so the retry's timing doesn't inherit time spent
             // before the undo.
             val questionStartedAt = questionTiming.restart()
 
-            // undoCounter changes even though currentQuizItem/currentQuestionType don't — this is
+            // undoCounter changes even though currentItem/currentQuestionType don't — this is
             // what the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't
             // change either of those but still needs to refocus the field the user just tapped away
             // from.
-            _uiState.update {
+            updateQuiz {
                 it.copy(
                     feedback = null,
                     answerInput = "",
                     remainingQuizCount = quizQueue.size,
                     undoCounter = it.undoCounter + 1,
-                    questionActiveElapsedMs = 0L,
-                    questionActiveSegmentStartMs = questionStartedAt,
-                    questionElapsedMs = null
+                    timing = it.timing.copy(
+                        questionActiveElapsedMs = 0L,
+                        questionActiveSegmentStartMs = questionStartedAt,
+                        questionElapsedMs = null
+                    )
                 )
             }
         }
@@ -675,11 +712,11 @@ class LessonViewModel(
             quizQueue.noneMatches { it.item.assignmentId == item.assignmentId }
         }
 
-        // Whether this answer was the very last one due — if so, persistDurabilityWork clears
-        // lessonSessionRepository outright instead of saving a snapshot of the now-empty queue.
-        // That snapshot would only ever get overwritten by advanceQuiz's own clear once the user
-        // taps Continue anyway; not writing it in the first place, right when the queue empties, is
-        // simpler and safer than writing it and racing a later clear against it.
+        // Whether this answer was the very last one due — if so, commitGradeDurably completes the
+        // session outright instead of saving a snapshot of the now-empty queue. That snapshot would
+        // only ever get overwritten by advanceQuiz's own completion once the user taps Continue
+        // anyway; not writing it in the first place, right when the queue empties, is simpler and
+        // safer than writing it and relying on a later completion to overwrite it.
         val queueIsEmpty = quizQueue.current == null
 
         // Snapshotted synchronously, right after mutating quizQueue above, so the detached
@@ -700,7 +737,7 @@ class LessonViewModel(
         // actually correct — it only fires once, the first time the item's lesson is fully done.
         val newRankChange = if (isNewlyStarted) assignmentRepository.computeLessonStartRankChange(item.srsSystemId) else null
 
-        _uiState.update {
+        updateQuiz {
             it.copy(
                 feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
                 remainingQuizCount = quizQueue.size,
@@ -709,8 +746,7 @@ class LessonViewModel(
                 // than letting it keep ticking while the feedback/Continue screen is up — matches
                 // the elapsedMs recorded for the slowest-answers summary above, stamped at this
                 // same moment.
-                questionElapsedMs = questionElapsedMs,
-                questionActiveSegmentStartMs = null
+                timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null)
             )
         }
 
@@ -724,7 +760,7 @@ class LessonViewModel(
             }
         }
 
-        persistDurabilityWork(isNewlyStarted, item, snapshot, queueIsEmpty)
+        commitGradeDurably(isNewlyStarted, item, snapshot, queueIsEmpty)
     }
 
     /** Manual play from the study card's reading row — mirrors SubjectDetailViewModel.playReading. */
@@ -737,7 +773,7 @@ class LessonViewModel(
 
     /** Captures the current quiz queue as an immutable, ready-to-persist value — safe to hold
      *  across a suspension point even if the live quizQueue is mutated by something else
-     *  afterward (see [gradeAnswer]'s deferred [persistDurabilityWork] call). */
+     *  afterward (see [gradeAnswer]'s deferred [commitGradeDurably] call). */
     private fun currentPersistSnapshot(): PersistedLessonSession = PersistedLessonSession(
         phase = PersistedLessonPhase.QUIZ,
         quizQueue = quizQueue.toList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
@@ -752,22 +788,29 @@ class LessonViewModel(
     )
 
     private suspend fun persistCurrentState() {
-        lessonSessionRepository.save(currentPersistSnapshot())
+        sessionController.persist(currentPersistSnapshot())
     }
 
-    /** Runs the post-grading durability writes (outbox enqueue, session persistence) — see
-     *  [SerialDurableWork] for why this needs [applicationScope] rather than `viewModelScope`.
-     *  Clears lessonSessionRepository instead of saving [snapshot] when [queueIsEmpty] — this was
-     *  the last due question, so [snapshot] is already an empty-queue shell that advanceQuiz's own
-     *  clear would just overwrite once the user taps Continue; not saving it in the first place is
-     *  simpler than saving it and racing a later clear against it. */
-    private suspend fun persistDurabilityWork(isNewlyStarted: Boolean, item: LessonItem, snapshot: PersistedLessonSession, queueIsEmpty: Boolean) {
-        sessionWriteQueue.run {
+    /** Runs the post-grading durability writes (outbox enqueue, session persistence), as one queued
+     *  unit via [sessionController]'s `alongside` parameter — not as a separately-awaited suspension
+     *  before it, which would let a concurrent reader (e.g. a test asserting against
+     *  [sessionController] right after the next emitted uiState) observe the outbox enqueue as done
+     *  but the session write as not yet applied. Completes the session instead of saving [snapshot]
+     *  when [queueIsEmpty] — this was the last due question, so [snapshot] is already an empty-queue
+     *  shell that advanceQuiz's own completion would just overwrite once the user taps Continue; not
+     *  saving it in the first place is simpler than saving it and relying on a later completion to
+     *  overwrite it. */
+    private suspend fun commitGradeDurably(isNewlyStarted: Boolean, item: LessonItem, snapshot: PersistedLessonSession, queueIsEmpty: Boolean) {
+        val outboxWork: suspend () -> Unit = {
             if (isNewlyStarted) {
                 assignmentRepository.applyOptimisticLessonStart(item.assignmentId, item.srsSystemId)
                 outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
             }
-            if (queueIsEmpty) lessonSessionRepository.clear() else lessonSessionRepository.save(snapshot)
+        }
+        if (queueIsEmpty) {
+            sessionController.complete(alongside = outboxWork)
+        } else {
+            sessionController.persist(snapshot, alongside = outboxWork)
         }
     }
 
@@ -776,18 +819,18 @@ class LessonViewModel(
     }
 
     fun toggleDetails() {
-        _uiState.update { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
+        updateQuiz { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
     }
 
     fun closeDetails() {
-        _uiState.update { it.copy(isDetailsExpanded = false) }
+        updateQuiz { it.copy(isDetailsExpanded = false) }
     }
 
     /** Discards a persisted in-progress lesson session (study or quiz) and exits — a clean slate
      *  next time. Mirrors ReviewViewModel.abandonSession. */
     fun abandonSession() {
         viewModelScope.launch {
-            sessionWriteQueue.run { lessonSessionRepository.clear() }
+            sessionController.abandon()
             _uiState.update { it.copy(isAbandoned = true) }
         }
     }
@@ -827,41 +870,28 @@ class LessonViewModel(
     private suspend fun advanceQuiz() {
         val next = quizQueue.current
         if (next == null) {
-            sessionWriteQueue.run { lessonSessionRepository.clear() }
+            sessionController.complete()
             outboxRepository.requestSyncNow()
             val summary = sessionSummary()
             persistLastSessionSummary(summary)
-            _uiState.update {
-                it.copy(
-                    isSessionComplete = true,
-                    currentQuizItem = null,
-                    currentQuestionType = null,
-                    feedback = null,
-                    rankChange = null,
-                    isDetailsExpanded = false,
-                    sessionItemsLearned = summary.itemsCount,
-                    sessionItemsCorrectFirstTry = summary.correctFirstTry,
-                    sessionMissedItems = summary.missedItems,
-                    sessionTotalElapsedMs = summary.totalElapsedMs,
-                    sessionAverageTimePerItemMs = summary.averageTimePerItemMs,
-                    sessionSlowestAnswers = summary.slowestAnswers
-                )
-            }
+            _uiState.update { it.copy(phase = summary.toCompletePhase()) }
             return
         }
         val questionStartedAt = questionTiming.restart()
-        _uiState.update {
+        updateQuiz {
             it.copy(
-                currentQuizItem = next.item,
+                currentItem = next.item,
                 currentQuestionType = next.type,
                 answerInput = "",
                 feedback = null,
                 rankChange = null,
                 isDetailsExpanded = false,
                 remainingQuizCount = quizQueue.size,
-                questionActiveElapsedMs = 0L,
-                questionActiveSegmentStartMs = questionStartedAt,
-                questionElapsedMs = null
+                timing = it.timing.copy(
+                    questionActiveElapsedMs = 0L,
+                    questionActiveSegmentStartMs = questionStartedAt,
+                    questionElapsedMs = null
+                )
             )
         }
     }

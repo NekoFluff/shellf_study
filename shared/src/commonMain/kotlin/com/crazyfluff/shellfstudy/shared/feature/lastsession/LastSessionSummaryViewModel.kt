@@ -27,7 +27,13 @@ class LastSessionSummaryViewModel(
 
     init {
         viewModelScope.launch {
-            val summary = lastSessionSummaryRepository.load()
+            // Two independent stores, one per kind (see LastSessionSummaryRepository's doc comment)
+            // — shows whichever was completed more recently, matching this screen's single dashboard
+            // entry point ("revisit the session you just finished").
+            val summary = listOfNotNull(
+                lastSessionSummaryRepository.loadLesson(),
+                lastSessionSummaryRepository.loadReview()
+            ).maxByOrNull { it.completedAtMillis }
             _uiState.update { it.copy(isLoading = false, summary = summary) }
         }
     }

@@ -17,11 +17,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
@@ -51,6 +53,59 @@ class ReviewScreenTest {
         srsStage = 3,
         meanings = listOf("Water"),
         readings = listOf("みず")
+    )
+
+    /** Builds a [ReviewUiState] in the [ReviewUiState.Phase.Active] phase — the dominant fixture
+     *  shape in this file, since most screen behavior is exercised while a question is on screen. */
+    private fun activeState(
+        item: ReviewItem = sampleItem,
+        questionType: QuestionType = QuestionType.MEANING,
+        answerInput: String = "",
+        feedback: AnswerFeedback? = null,
+        rankChange: RankChange? = null,
+        undoCounter: Int = 0,
+        isDetailsExpanded: Boolean = false,
+        answerTypeMismatchCount: Int = 0,
+        totalCount: Int = 0,
+        remainingCount: Int = 0,
+        isWrappingUp: Boolean = false,
+        timing: QuizTimingUiState = QuizTimingUiState(),
+        settings: ReviewUiState.DisplaySettings = ReviewUiState.DisplaySettings()
+    ) = ReviewUiState(
+        phase = ReviewUiState.Phase.Active(
+            currentItem = item,
+            currentQuestionType = questionType,
+            answerInput = answerInput,
+            feedback = feedback,
+            rankChange = rankChange,
+            undoCounter = undoCounter,
+            isDetailsExpanded = isDetailsExpanded,
+            answerTypeMismatchCount = answerTypeMismatchCount,
+            totalCount = totalCount,
+            remainingCount = remainingCount,
+            isWrappingUp = isWrappingUp,
+            timing = timing
+        ),
+        settings = settings
+    )
+
+    /** Builds a [ReviewUiState] in the [ReviewUiState.Phase.Complete] phase. */
+    private fun completeState(
+        sessionItemsReviewed: Int = 0,
+        sessionItemsCorrectFirstTry: Int = 0,
+        sessionMissedItems: List<ReviewItem> = emptyList(),
+        sessionTotalElapsedMs: Long = 0L,
+        sessionAverageTimePerItemMs: Long = 0L,
+        sessionSlowestAnswers: List<SlowAnswer<ReviewItem>> = emptyList()
+    ) = ReviewUiState(
+        phase = ReviewUiState.Phase.Complete(
+            sessionItemsReviewed = sessionItemsReviewed,
+            sessionItemsCorrectFirstTry = sessionItemsCorrectFirstTry,
+            sessionMissedItems = sessionMissedItems,
+            sessionTotalElapsedMs = sessionTotalElapsedMs,
+            sessionAverageTimePerItemMs = sessionAverageTimePerItemMs,
+            sessionSlowestAnswers = sessionSlowestAnswers
+        )
     )
 
     private fun setScreen(
@@ -94,12 +149,7 @@ class ReviewScreenTest {
 
     @Test
     fun showsCharacterAndQuestionLabel_forMeaningQuestion() {
-        setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 2, remainingCount = 2,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING
-            )
-        )
+        setScreen(activeState(totalCount = 2, remainingCount = 2))
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.CHARACTERS).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).assertIsDisplayed()
@@ -107,12 +157,7 @@ class ReviewScreenTest {
 
     @Test
     fun submitButton_disabledWhenAnswerBlank() {
-        setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING, answerInput = ""
-            )
-        )
+        setScreen(activeState(totalCount = 1, remainingCount = 1, answerInput = ""))
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.SUBMIT_BUTTON).assertIsNotEnabled()
     }
@@ -121,10 +166,7 @@ class ReviewScreenTest {
     fun typingAnswer_invokesCallback() {
         var typed = ""
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING
-            ),
+            activeState(totalCount = 1, remainingCount = 1),
             onAnswerInputChange = { typed = it }
         )
 
@@ -139,10 +181,7 @@ class ReviewScreenTest {
     fun submittingAnswer_invokesOnSubmit() {
         var submitted = false
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING, answerInput = "Water"
-            ),
+            activeState(totalCount = 1, remainingCount = 1, answerInput = "Water"),
             onSubmit = { submitted = true }
         )
 
@@ -154,9 +193,8 @@ class ReviewScreenTest {
     fun feedback_showsCorrectAnswerText_andContinueAdvances() {
         var continued = false
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+            activeState(
+                totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Water")
             ),
             onContinue = { continued = true }
@@ -170,10 +208,9 @@ class ReviewScreenTest {
     @Test
     fun subjectTypeLabel_shownWhenSettingEnabled() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showSubjectTypeLabel = true
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                settings = ReviewUiState.DisplaySettings(showSubjectTypeLabel = true)
             )
         )
 
@@ -184,10 +221,9 @@ class ReviewScreenTest {
     @Test
     fun subjectTypeLabel_absentWhenSettingDisabled() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showSubjectTypeLabel = false
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                settings = ReviewUiState.DisplaySettings(showSubjectTypeLabel = false)
             )
         )
 
@@ -197,10 +233,10 @@ class ReviewScreenTest {
     @Test
     fun totalTimer_shownWhenSettingEnabledAndSessionInProgress() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showTotalTimer = true, sessionActiveSegmentStartMs = System.currentTimeMillis()
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                settings = ReviewUiState.DisplaySettings(showTotalTimer = true),
+                timing = QuizTimingUiState(sessionActiveSegmentStartMs = System.currentTimeMillis())
             )
         )
 
@@ -210,10 +246,10 @@ class ReviewScreenTest {
     @Test
     fun totalTimer_absentWhenSettingDisabled() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showTotalTimer = false, sessionActiveSegmentStartMs = System.currentTimeMillis()
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                settings = ReviewUiState.DisplaySettings(showTotalTimer = false),
+                timing = QuizTimingUiState(sessionActiveSegmentStartMs = System.currentTimeMillis())
             )
         )
 
@@ -225,10 +261,10 @@ class ReviewScreenTest {
         // sessionActiveSegmentStartMs is null (as if the app were backgrounded, or navigated away
         // and back) — the timer must show the frozen base, not restart from "0:00".
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showTotalTimer = true, sessionActiveElapsedMs = 65_000L, sessionActiveSegmentStartMs = null
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                settings = ReviewUiState.DisplaySettings(showTotalTimer = true),
+                timing = QuizTimingUiState(sessionActiveElapsedMs = 65_000L, sessionActiveSegmentStartMs = null)
             )
         )
 
@@ -238,10 +274,10 @@ class ReviewScreenTest {
     @Test
     fun questionTimer_shownWhenSettingEnabledAndSessionInProgress() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showQuestionTimer = true, questionActiveSegmentStartMs = System.currentTimeMillis()
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                settings = ReviewUiState.DisplaySettings(showQuestionTimer = true),
+                timing = QuizTimingUiState(questionActiveSegmentStartMs = System.currentTimeMillis())
             )
         )
 
@@ -251,10 +287,10 @@ class ReviewScreenTest {
     @Test
     fun questionTimer_absentWhenSettingDisabled() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showQuestionTimer = false, questionActiveSegmentStartMs = System.currentTimeMillis()
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                settings = ReviewUiState.DisplaySettings(showQuestionTimer = false),
+                timing = QuizTimingUiState(questionActiveSegmentStartMs = System.currentTimeMillis())
             )
         )
 
@@ -266,12 +302,13 @@ class ReviewScreenTest {
         // questionActiveSegmentStartMs is a full minute in the past — if the timer were still
         // live-ticking from it, it would show "1:00". The frozen questionElapsedMs must win instead.
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showQuestionTimer = true,
-                questionActiveSegmentStartMs = System.currentTimeMillis() - 60_000,
-                questionElapsedMs = 5_000L,
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                settings = ReviewUiState.DisplaySettings(showQuestionTimer = true),
+                timing = QuizTimingUiState(
+                    questionActiveSegmentStartMs = System.currentTimeMillis() - 60_000,
+                    questionElapsedMs = 5_000L
+                ),
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
             )
         )
@@ -284,10 +321,10 @@ class ReviewScreenTest {
         // questionActiveSegmentStartMs is null (as if the app were backgrounded mid-question) — the
         // timer must show the frozen base, not restart from "0:00" or keep ticking through the gap.
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                showQuestionTimer = true, questionActiveElapsedMs = 5_000L, questionActiveSegmentStartMs = null
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                settings = ReviewUiState.DisplaySettings(showQuestionTimer = true),
+                timing = QuizTimingUiState(questionActiveElapsedMs = 5_000L, questionActiveSegmentStartMs = null)
             )
         )
 
@@ -298,9 +335,8 @@ class ReviewScreenTest {
     fun continueButton_disabledBrieflyAfterIncorrectAnswer_thenEnables() {
         composeTestRule.mainClock.autoAdvance = false
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+            activeState(
+                totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Water")
             )
         )
@@ -315,9 +351,8 @@ class ReviewScreenTest {
     @Test
     fun continueButton_enabledImmediately_afterCorrectAnswer() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+            activeState(
+                totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
             )
         )
@@ -329,9 +364,8 @@ class ReviewScreenTest {
     fun undoIcon_enabledOnIncorrectFeedback_andInvokesCallback() {
         var undone = false
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+            activeState(
+                totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Water")
             ),
             onUndo = { undone = true }
@@ -349,9 +383,8 @@ class ReviewScreenTest {
         // can still be undone up to that point (unlike Lesson, which has no such window).
         var undone = false
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+            activeState(
+                totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
             ),
             onUndo = { undone = true }
@@ -364,25 +397,14 @@ class ReviewScreenTest {
 
     @Test
     fun undoIcon_absentBeforeAnswering() {
-        setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING, feedback = null
-            )
-        )
+        setScreen(activeState(totalCount = 1, remainingCount = 1, feedback = null))
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.UNDO_BUTTON).assertCountEquals(0)
     }
 
     @Test
     fun typeMismatchWarning_showsExpectingMeaning_forMeaningQuestion() {
-        setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                answerTypeMismatchCount = 1
-            )
-        )
+        setScreen(activeState(totalCount = 1, remainingCount = 1, answerTypeMismatchCount = 1))
 
         // OutlinedTextField sets MergeDescendants on its root node, so the supportingText's own tag
         // collapses into it in the default merged tree — needs the unmerged tree to be individually
@@ -394,10 +416,9 @@ class ReviewScreenTest {
     @Test
     fun typeMismatchWarning_showsExpectingReading_forReadingQuestion() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.READING,
-                answerTypeMismatchCount = 1
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                questionType = QuestionType.READING, answerTypeMismatchCount = 1
             )
         )
 
@@ -407,25 +428,14 @@ class ReviewScreenTest {
 
     @Test
     fun typeMismatchWarning_absentBeforeAnyMismatch() {
-        setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING
-            )
-        )
+        setScreen(activeState(totalCount = 1, remainingCount = 1))
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test
     fun typeMismatchWarning_clearsOnceUserEditsTheAnswer() {
-        setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
-                answerTypeMismatchCount = 1
-            )
-        )
+        setScreen(activeState(totalCount = 1, remainingCount = 1, answerTypeMismatchCount = 1))
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).performTextInput("W")
@@ -436,9 +446,9 @@ class ReviewScreenTest {
     fun detailsToggle_absentBeforeTheQuestionIsAnswered() {
         // Nothing to toggle yet — the handle isn't just disabled, it isn't composed at all.
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.READING, feedback = null
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                questionType = QuestionType.READING, feedback = null
             )
         )
 
@@ -449,9 +459,9 @@ class ReviewScreenTest {
     fun detailsToggle_enabledAndInvokesCallback_onceAnswered() {
         var toggled = false
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.READING,
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                questionType = QuestionType.READING,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず")
             ),
             onToggleDetails = { toggled = true }
@@ -465,10 +475,7 @@ class ReviewScreenTest {
     fun dontKnowButton_isDisplayedBeforeAnswering_andInvokesCallback() {
         var dontKnow = false
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING
-            ),
+            activeState(totalCount = 1, remainingCount = 1),
             onDontKnow = { dontKnow = true }
         )
 
@@ -480,9 +487,8 @@ class ReviewScreenTest {
     @Test
     fun dontKnowButton_hiddenAfterFeedbackIsShown() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING,
+            activeState(
+                totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Water")
             )
         )
@@ -497,12 +503,7 @@ class ReviewScreenTest {
 
     @Test
     fun progressCount_reflectsAnsweredVsTotal() {
-        setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 5, remainingCount = 3,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING
-            )
-        )
+        setScreen(activeState(totalCount = 5, remainingCount = 3))
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.PROGRESS_COUNT).assertIsDisplayed()
         composeTestRule.onNodeWithText("2 / 5").assertIsDisplayed()
@@ -510,12 +511,7 @@ class ReviewScreenTest {
 
     @Test
     fun searchButton_opensInlineSearchOverlay() {
-        setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING
-            )
-        )
+        setScreen(activeState(totalCount = 1, remainingCount = 1))
 
         composeTestRule.onAllNodesWithTag(SearchOverlayTestTags.QUERY_FIELD).assertCountEquals(0)
 
@@ -527,10 +523,7 @@ class ReviewScreenTest {
     fun backButton_invokesCallback() {
         var wentBack = false
         setScreen(
-            ReviewUiState(
-                isLoading = false, totalCount = 1, remainingCount = 1,
-                currentItem = sampleItem, currentQuestionType = QuestionType.MEANING
-            ),
+            activeState(totalCount = 1, remainingCount = 1),
             onBack = { wentBack = true }
         )
 
@@ -542,7 +535,7 @@ class ReviewScreenTest {
     fun noReviewsAvailable_showsMessageAndDoneButton() {
         var done = false
         setScreen(
-            ReviewUiState(isLoading = false, hasNoReviewsAvailable = true),
+            ReviewUiState(phase = ReviewUiState.Phase.NoReviewsAvailable),
             onDone = { done = true }
         )
 
@@ -553,7 +546,7 @@ class ReviewScreenTest {
 
     @Test
     fun overflowMenu_isAbsent_whenNoReviewsAvailable() {
-        setScreen(ReviewUiState(isLoading = false, hasNoReviewsAvailable = true))
+        setScreen(ReviewUiState(phase = ReviewUiState.Phase.NoReviewsAvailable))
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.OVERFLOW_MENU).assertCountEquals(0)
     }
@@ -561,10 +554,7 @@ class ReviewScreenTest {
     @Test
     fun sessionComplete_showsDoneButtonAndInvokesCallback() {
         var done = false
-        setScreen(
-            ReviewUiState(isLoading = false, isSessionComplete = true),
-            onDone = { done = true }
-        )
+        setScreen(completeState(), onDone = { done = true })
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_COMPLETE).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.DONE_BUTTON).performClick()
@@ -573,12 +563,7 @@ class ReviewScreenTest {
 
     @Test
     fun sessionComplete_showsOverviewCardWithCounts() {
-        setScreen(
-            ReviewUiState(
-                isLoading = false, isSessionComplete = true,
-                sessionItemsReviewed = 5, sessionItemsCorrectFirstTry = 3
-            )
-        )
+        setScreen(completeState(sessionItemsReviewed = 5, sessionItemsCorrectFirstTry = 3))
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_OVERVIEW_CARD).assertIsDisplayed()
         composeTestRule.onNodeWithText("Items reviewed: 5").assertIsDisplayed()
@@ -587,7 +572,7 @@ class ReviewScreenTest {
 
     @Test
     fun sessionComplete_hidesCardsWhenNothingWasReviewed() {
-        setScreen(ReviewUiState(isLoading = false, isSessionComplete = true, sessionItemsReviewed = 0))
+        setScreen(completeState(sessionItemsReviewed = 0))
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SESSION_OVERVIEW_CARD).assertCountEquals(0)
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SESSION_TIMING_CARD).assertCountEquals(0)
@@ -596,8 +581,7 @@ class ReviewScreenTest {
     @Test
     fun sessionComplete_showsTimingCard() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, isSessionComplete = true,
+            completeState(
                 sessionItemsReviewed = 3, sessionItemsCorrectFirstTry = 3,
                 sessionTotalElapsedMs = 125_000L, sessionAverageTimePerItemMs = 4_500L
             )
@@ -611,8 +595,7 @@ class ReviewScreenTest {
     @Test
     fun sessionComplete_showsSlowestAnswersCard_whenPresent() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, isSessionComplete = true,
+            completeState(
                 sessionItemsReviewed = 1, sessionItemsCorrectFirstTry = 1,
                 sessionSlowestAnswers = listOf(
                     SlowAnswer(sampleItem, QuestionType.MEANING, 12_000L, isCorrect = true)
@@ -626,8 +609,7 @@ class ReviewScreenTest {
     @Test
     fun sessionComplete_hidesSlowestAnswersCard_whenEmpty() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, isSessionComplete = true,
+            completeState(
                 sessionItemsReviewed = 1, sessionItemsCorrectFirstTry = 1,
                 sessionSlowestAnswers = emptyList()
             )
@@ -639,8 +621,7 @@ class ReviewScreenTest {
     @Test
     fun sessionComplete_showsMissedItemsCard_whenPresent() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, isSessionComplete = true,
+            completeState(
                 sessionItemsReviewed = 2, sessionItemsCorrectFirstTry = 1,
                 sessionMissedItems = listOf(sampleItem)
             )
@@ -653,8 +634,7 @@ class ReviewScreenTest {
     @Test
     fun sessionComplete_hidesMissedItemsCard_whenEmpty() {
         setScreen(
-            ReviewUiState(
-                isLoading = false, isSessionComplete = true,
+            completeState(
                 sessionItemsReviewed = 1, sessionItemsCorrectFirstTry = 1,
                 sessionMissedItems = emptyList()
             )
@@ -664,22 +644,20 @@ class ReviewScreenTest {
     }
 
     @Test
-    fun sessionComplete_neverShowsSwipeUpDetailsHandle_evenWithStaleFeedback() {
-        // Regression test: feedback from the last-answered question used to leak into the
-        // completed state and kept this dead handle visible with nothing for it to reveal.
-        setScreen(
-            ReviewUiState(
-                isLoading = false, isSessionComplete = true,
-                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
-            )
-        )
+    fun sessionComplete_neverShowsSwipeUpDetailsHandle() {
+        // Regression test, updated for the sealed Phase design: Phase.Complete has no `feedback`
+        // field at all (unlike the old flat ReviewUiState, where a stale feedback value from the
+        // last-answered question could leak into the completed state and keep this dead handle
+        // visible with nothing for it to reveal). That leak is now impossible by construction —
+        // this just re-asserts the visible behavior still holds.
+        setScreen(completeState())
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.DETAILS_TOGGLE).assertCountEquals(0)
     }
 
     @Test
     fun errorState_showsErrorText() {
-        setScreen(ReviewUiState(isLoading = false, errorMessage = "Network error"))
+        setScreen(ReviewUiState(phase = ReviewUiState.Phase.Error(message = "Network error")))
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.ERROR_TEXT).assertIsDisplayed()
     }

@@ -7,15 +7,16 @@ import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
-import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
-import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
+import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
+import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
+import com.crazyfluff.shellfstudy.shared.session.QuizSessionController
 import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
@@ -143,8 +144,8 @@ private data class LevelDependentState(
 private data class LocalDueCounts(val reviewCount: Int, val lessonCount: Int)
 
 class DashboardViewModel(
-    private val reviewSessionRepository: ReviewSessionRepository,
-    private val lessonSessionRepository: LessonSessionRepository,
+    private val reviewSessionController: QuizSessionController<PersistedReviewSession>,
+    private val lessonSessionController: QuizSessionController<PersistedLessonSession>,
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
     private val assignmentRepository: AssignmentRepository,
@@ -164,8 +165,8 @@ class DashboardViewModel(
     private val _leaderboardRefreshing = MutableStateFlow(false)
 
     private val sessionSyncState: Flow<SessionSyncState> = combine(
-        reviewSessionRepository.hasActiveSession,
-        lessonSessionRepository.hasActiveSession,
+        reviewSessionController.hasActiveSession,
+        lessonSessionController.hasActiveSession,
         outboxRepository.observePendingCount(),
         outboxRepository.blockedOnAuth,
         settingsRepository.settings.map { it.dailyLessonGoal }.distinctUntilChanged()
@@ -436,11 +437,11 @@ class DashboardViewModel(
     }
 
     fun abandonReviewSession() {
-        viewModelScope.launch { reviewSessionRepository.clear() }
+        viewModelScope.launch { reviewSessionController.abandon() }
     }
 
     fun abandonLessonSession() {
-        viewModelScope.launch { lessonSessionRepository.clear() }
+        viewModelScope.launch { lessonSessionController.abandon() }
     }
 }
 

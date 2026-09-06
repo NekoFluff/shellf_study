@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import com.crazyfluff.shellfstudy.shared.session.PersistedSessionStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -9,7 +10,8 @@ import kotlinx.serialization.json.Json
 /** Which phase of a lesson session [PersistedLessonSession] represents — the study flashcards
  *  ([PersistedLessonSession.studyAssignmentIds]/[PersistedLessonSession.studyIndex]) or the quiz
  *  ([PersistedLessonSession.quizQueue]/progress). Only one half of the payload is meaningful at a
- *  time, matching [com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPhase]. */
+ *  time, matching [com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState.Phase]'s
+ *  Study/Quiz variants. */
 enum class PersistedLessonPhase { STUDY, QUIZ }
 
 @Serializable
@@ -43,16 +45,32 @@ data class PersistedLessonSession(
 class LessonSessionRepository(
     dataStore: DataStore<Preferences>,
     json: Json
-) {
+) : PersistedSessionStore<PersistedLessonSession> {
     private val store = JsonPreferenceStore(
         dataStore, json, "persisted_lesson_session", PersistedLessonSession.serializer()
     )
 
-    val hasActiveSession: Flow<Boolean> = store.exists
+    override val hasActiveSession: Flow<Boolean> = store.exists
 
-    suspend fun save(session: PersistedLessonSession) = store.save(session)
+    override suspend fun save(session: PersistedLessonSession) = store.save(session)
 
-    suspend fun load(): PersistedLessonSession? = store.load()
+    /** A QUIZ-phase snapshot with an empty queue is a corrupted leftover, not a resumable session
+     *  — see [PersistedLessonSession.phase]'s doc comment on why this can happen (a save racing a
+     *  completion-time clear, or a stale phase mismatch). A STUDY-phase snapshot is only resumable
+     *  if it actually references a batch of items. Self-heals by clearing storage in either
+     *  corrupted case so it doesn't keep reappearing. */
+    override suspend fun load(): PersistedLessonSession? {
+        val loaded = store.load() ?: return null
+        val isResumable = when (loaded.phase) {
+            PersistedLessonPhase.STUDY -> loaded.studyAssignmentIds.isNotEmpty()
+            PersistedLessonPhase.QUIZ -> loaded.quizQueue.isNotEmpty()
+        }
+        if (!isResumable) {
+            store.clear()
+            return null
+        }
+        return loaded
+    }
 
-    suspend fun clear() = store.clear()
+    override suspend fun clear() = store.clear()
 }

@@ -189,8 +189,7 @@ fun ReviewScreen(
     // Distinct from the gated details toggle below — an arbitrary subject looked up mid-review via
     // search has no relationship to the current question, so it's never gated by answer state.
     val searchDetailSheetState = rememberSubjectDetailSheetState()
-    val canManageSession = !uiState.isLoading && !uiState.isSessionComplete && !uiState.hasNoReviewsAvailable &&
-        uiState.errorMessage == null
+    val canManageSession = uiState.phase is ReviewUiState.Phase.Active
 
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
@@ -224,7 +223,7 @@ fun ReviewScreen(
                                 DropdownMenuItem(
                                     text = { Text("Wrap up") },
                                     leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
-                                    enabled = !uiState.isWrappingUp,
+                                    enabled = (uiState.phase as? ReviewUiState.Phase.Active)?.isWrappingUp != true,
                                     onClick = { menuExpanded = false; onWrapUp() },
                                     modifier = Modifier.testTag(ReviewScreenTestTags.WRAP_UP_MENU_ITEM)
                                 )
@@ -260,21 +259,21 @@ fun ReviewScreen(
         }
 
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            when {
-                uiState.isLoading -> {
+            when (val phase = uiState.phase) {
+                ReviewUiState.Phase.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(modifier = Modifier.testTag(ReviewScreenTestTags.LOADING_INDICATOR))
                     }
                 }
 
-                uiState.errorMessage != null -> {
+                is ReviewUiState.Phase.Error -> {
                     Column(
                         modifier = Modifier.fillMaxSize().padding(24.dp),
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = uiState.errorMessage,
+                            text = phase.message,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.testTag(ReviewScreenTestTags.ERROR_TEXT)
                         )
@@ -283,7 +282,7 @@ fun ReviewScreen(
                     }
                 }
 
-                uiState.hasNoReviewsAvailable -> {
+                ReviewUiState.Phase.NoReviewsAvailable -> {
                     Column(
                         modifier = Modifier.fillMaxSize().padding(24.dp),
                         verticalArrangement = Arrangement.Center,
@@ -302,18 +301,18 @@ fun ReviewScreen(
                     }
                 }
 
-                uiState.isSessionComplete -> {
+                is ReviewUiState.Phase.Complete -> {
                     SessionCompleteContent(
                         title = "Session complete!",
                         subtitle = null,
                         itemsLabel = "Items reviewed",
                         averageLabel = "Avg. time per item reviewed",
-                        itemsCount = uiState.sessionItemsReviewed,
-                        correctFirstTry = uiState.sessionItemsCorrectFirstTry,
-                        totalElapsedMs = uiState.sessionTotalElapsedMs,
-                        averageTimePerItemMs = uiState.sessionAverageTimePerItemMs,
-                        slowestAnswers = uiState.sessionSlowestAnswers.map { it.toSessionAnswerRow() },
-                        missedItems = uiState.sessionMissedItems.map { it.toSessionMissedItemRow() },
+                        itemsCount = phase.sessionItemsReviewed,
+                        correctFirstTry = phase.sessionItemsCorrectFirstTry,
+                        totalElapsedMs = phase.sessionTotalElapsedMs,
+                        averageTimePerItemMs = phase.sessionAverageTimePerItemMs,
+                        slowestAnswers = phase.sessionSlowestAnswers.map { it.toSessionAnswerRow() },
+                        missedItems = phase.sessionMissedItems.map { it.toSessionMissedItemRow() },
                         onDone = onDone,
                         onSubjectClick = { searchDetailSheetState.show(it) },
                         testTags = SessionCompleteTestTags(
@@ -331,29 +330,27 @@ fun ReviewScreen(
                     )
                 }
 
-                uiState.currentItem != null && uiState.currentQuestionType != null -> {
-                    val item = uiState.currentItem
-                    val questionType = uiState.currentQuestionType
+                is ReviewUiState.Phase.Active -> {
                     QuizQuestionContent(
                         uiState = QuizQuestionUiState(
-                            item = item,
-                            questionType = questionType,
-                            totalCount = uiState.totalCount,
-                            remainingCount = uiState.remainingCount,
-                            answerInput = uiState.answerInput,
-                            feedback = uiState.feedback,
-                            rankChange = uiState.rankChange,
-                            undoCounter = uiState.undoCounter,
-                            answerTypeMismatchCount = uiState.answerTypeMismatchCount,
-                            showSubjectTypeLabel = uiState.showSubjectTypeLabel,
-                            showQuestionTimer = uiState.showQuestionTimer,
-                            showTotalTimer = uiState.showTotalTimer,
-                            questionElapsedMs = uiState.questionElapsedMs,
-                            questionActiveElapsedMs = uiState.questionActiveElapsedMs,
-                            questionActiveSegmentStartMs = uiState.questionActiveSegmentStartMs,
-                            sessionActiveElapsedMs = uiState.sessionActiveElapsedMs,
-                            sessionActiveSegmentStartMs = uiState.sessionActiveSegmentStartMs,
-                            useJapaneseKeyboard = uiState.useJapaneseKeyboard,
+                            item = phase.currentItem,
+                            questionType = phase.currentQuestionType,
+                            totalCount = phase.totalCount,
+                            remainingCount = phase.remainingCount,
+                            answerInput = phase.answerInput,
+                            feedback = phase.feedback,
+                            rankChange = phase.rankChange,
+                            undoCounter = phase.undoCounter,
+                            answerTypeMismatchCount = phase.answerTypeMismatchCount,
+                            showSubjectTypeLabel = uiState.settings.showSubjectTypeLabel,
+                            showQuestionTimer = uiState.settings.showQuestionTimer,
+                            showTotalTimer = uiState.settings.showTotalTimer,
+                            questionElapsedMs = phase.timing.questionElapsedMs,
+                            questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
+                            questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
+                            sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
+                            sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
+                            useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
                             allowUndoAfterCorrect = true
                         ),
                         onAnswerInputChange = onAnswerInputChange,
@@ -396,16 +393,17 @@ fun ReviewScreen(
         // still has a valid (if stale) subject to sit on between questions.
         var lastDetailSubjectId by remember { mutableStateOf<Long?>(null) }
         var lastDetailQuestionType by remember { mutableStateOf<QuestionType?>(null) }
-        uiState.currentItem?.let { lastDetailSubjectId = it.subjectId }
-        uiState.currentQuestionType?.let { lastDetailQuestionType = it }
+        val activePhase = uiState.phase as? ReviewUiState.Phase.Active
+        activePhase?.let { lastDetailSubjectId = it.currentItem.subjectId }
+        activePhase?.let { lastDetailQuestionType = it.currentQuestionType }
 
         lastDetailSubjectId?.let { subjectId ->
             lastDetailQuestionType?.let { questionType ->
-                val active = !isSearchActive && uiState.feedback != null
+                val active = !isSearchActive && activePhase?.feedback != null
                 SubjectDetailSheet(
                     subjectId = subjectId,
                     active = active,
-                    expanded = uiState.isDetailsExpanded,
+                    expanded = activePhase?.isDetailsExpanded == true,
                     onToggle = onToggleDetails,
                     onDismiss = onCloseDetails,
                     revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,

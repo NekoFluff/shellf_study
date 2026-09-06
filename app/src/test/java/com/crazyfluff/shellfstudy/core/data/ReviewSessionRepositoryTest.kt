@@ -111,4 +111,34 @@ class ReviewSessionRepositoryTest {
             assertThat(awaitItem()).isFalse()
         }
     }
+
+    @Test
+    fun `load self-heals an empty-queue snapshot with no pending submission, treating it as unresumable`() = runTest {
+        // A save racing a completion-time clear (see QuizSessionController) can leave behind an
+        // empty-queue snapshot that was never meant to be resumed — load() must not hand this back.
+        val repository = createRepository()
+        repository.save(PersistedReviewSession(queue = emptyList(), progress = emptyList(), totalQuestions = 1))
+
+        assertThat(repository.load()).isNull()
+        // The corrupted record is also wiped, so it doesn't keep reappearing on every future load().
+        repository.hasActiveSession.test { assertThat(awaitItem()).isFalse() }
+    }
+
+    @Test
+    fun `load still returns an empty-queue snapshot that carries a pending submission`() = runTest {
+        // An empty queue with a pending submission is a legitimate, resumable state — it means the
+        // session reached its last question but the user hadn't tapped Continue yet, so the pending
+        // WaniKani submission still needs to be committed on resume. See
+        // PersistedReviewSession.pendingSubmissionAssignmentId's doc comment.
+        val repository = createRepository()
+        val pendingSession = PersistedReviewSession(
+            queue = emptyList(),
+            progress = emptyList(),
+            totalQuestions = 1,
+            pendingSubmissionAssignmentId = 42L
+        )
+        repository.save(pendingSession)
+
+        assertThat(repository.load()).isEqualTo(pendingSession)
+    }
 }
