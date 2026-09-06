@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -226,45 +225,46 @@ private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
             .border(1.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
     }
     val chipModifier = Modifier
-        .defaultMinSize(minWidth = 48.dp)
+        // Square min size (not just min-width) so the glyph is vertically centered in a predictable
+        // tile — without a height floor the chip shrank to the glyph's own box and the glyph sat
+        // wedged above the dots pinned to the bottom edge, leaving a big hollow gap above it.
+        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
         .then(backgroundModifier)
         .clickable { onClick(item.subjectId) }
         .testTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + item.subjectId)
 
-    Box(modifier = chipModifier) {
-        Box(
-            modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .align(Alignment.Center),
-            contentAlignment = Alignment.Center
-        ) {
-            SubjectGlyph(
-                characters = item.characters,
-                characterImageUrl = item.characterImageUrl,
-                subjectType = item.subjectType,
-                color = if (item.passed) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                fallbackText = item.display,
-                size = 28.dp
-            )
-        }
+    // Glyph and its sub-stage dots are one centered block, so the glyph is genuinely vertical-
+    // centered in the tile rather than floating in the middle of a taller chip with a gap down to
+    // the dots (which is what read as "not vertically centered / space above the text").
+    Box(modifier = chipModifier, contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(modifier = Modifier.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+                SubjectGlyph(
+                    characters = item.characters,
+                    characterImageUrl = item.characterImageUrl,
+                    subjectType = item.subjectType,
+                    color = if (item.passed) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fallbackText = item.display,
+                    size = 32.dp
+                )
+            }
 
-        val subStageDots = apprenticeSubStageDots(item.srsStage)
-        if (!item.passed && subStageDots != null) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .offset(y = (-3).dp)
-            ) {
-                repeat(4) { index ->
-                    Box(
-                        modifier = Modifier
-                            .size(4.dp)
-                            .background(
-                                color = if (index < subStageDots) accent else accent.copy(alpha = 0.25f),
-                                shape = CircleShape
-                            )
-                    )
+            val subStageDots = apprenticeSubStageDots(item.srsStage)
+            if (!item.passed && subStageDots != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.padding(top = 2.dp)
+                ) {
+                    repeat(4) { index ->
+                        Box(
+                            modifier = Modifier
+                                .size(4.dp)
+                                .background(
+                                    color = if (index < subStageDots) accent else accent.copy(alpha = 0.25f),
+                                    shape = CircleShape
+                                )
+                        )
+                    }
                 }
             }
         }
