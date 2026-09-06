@@ -169,6 +169,33 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
+    fun `switching subjects never exposes the previous subject's detail while the new one loads`() = runTest(mainDispatcherRule.dispatcher) {
+        // Bug regression: the detail pipeline restarts asynchronously when the subject changes,
+        // while the navigation state is published immediately — combine can emit an intermediate
+        // uiState pairing the previous subject's still-loaded detail with the new navigation
+        // state. The sheet renders whatever detail uiState carries, so that intermediate emission
+        // flashes the previous subject's content (sporting the new back arrow) while the tapped
+        // subject is still loading — the "screen flashes between kanji/radicals/vocabulary" bug.
+        viewModel.uiState.test {
+            awaitNotLoading()
+
+            viewModel.open(1)
+            awaitSettled(1)
+
+            viewModel.navigateToRelated(2)
+            // Drain until subject 2 is fully settled (same condition as awaitSettled), asserting
+            // each intermediate emission: from the moment navigation changed, no non-null detail
+            // may belong to subject 1.
+            var state = awaitItem()
+            while (state.detail?.subjectId != 2L || state.strokeOrder is StrokeOrderUiState.Loading) {
+                assertThat(state.detail?.subjectId).isAnyOf(null, 2L)
+                state = awaitItem()
+            }
+            assertThat(state.backStack).containsExactly(1L)
+        }
+    }
+
+    @Test
     fun `goBack pops the stack and returns false once empty`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             awaitNotLoading()

@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,7 +8,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -48,6 +48,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSec
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
+import kotlinx.coroutines.flow.first
 
 /** Whether the sheet shows everything (browse/study contexts) or hides the currently-tested field (mid-quiz). */
 enum class DetailRevealMode { FULL, HIDE_UNTIL_ANSWERED }
@@ -116,13 +117,22 @@ fun SubjectDetailContent(
     val hasReadings = detail.readings.isNotEmpty()
     val isVocabulary = detail.subjectType == SubjectType.VOCABULARY || detail.subjectType == SubjectType.KANA_VOCABULARY
 
-    // Jump to initialScrollOffset (not just remembered fresh) on every subject change — an
-    // effect-driven jump animates cleanly rather than discarding in-flight gesture state on the
-    // same frame the way keying rememberScrollState() to subjectId would. Callers reset this to 0
-    // when drilling into a related subject, and restore a recorded offset when going back.
-    val scrollState = rememberScrollState()
+    // Fresh scroll state per subject — keyed on the subject rather than remembered once, because a
+    // subject switch must never render the new content at the previous subject's scroll offset,
+    // even for a single frame (that frame, showing the new content mid-page at the old offset, is
+    // the flash seen when browsing between kanji/radicals/vocabulary). The jump effect below then
+    // handles the deliberate offsets: 0 when drilling into a related subject (a no-op on a fresh
+    // state) and the recorded offset when navigating back.
+    val scrollState = remember(detail.subjectId) { ScrollState(0) }
     LaunchedEffect(detail.subjectId) {
-        scrollState.scrollTo(initialScrollOffset)
+        // A fresh ScrollState's maxValue is still 0 until this subject's content has been laid out,
+        // so a back-navigation restore must wait for that first measurement before jumping — an
+        // immediate scrollTo would clamp against maxValue == 0 and silently lose the restore.
+        // Drill-down's offset-0 needs no jump at all (the fresh state already starts at the top).
+        if (initialScrollOffset > 0) {
+            snapshotFlow { scrollState.maxValue }.first { it > 0 }
+            scrollState.scrollTo(initialScrollOffset)
+        }
     }
     LaunchedEffect(detail.subjectId) {
         snapshotFlow { scrollState.value }.collect { onScrollPositionChanged(it) }

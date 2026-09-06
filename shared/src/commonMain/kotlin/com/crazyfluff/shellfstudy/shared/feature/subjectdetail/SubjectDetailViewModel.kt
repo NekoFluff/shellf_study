@@ -138,11 +138,28 @@ class SubjectDetailViewModel(
                 .combine(settingsRepository.settings) { pair, settings -> pair to settings }
                 .collect { (pair, settings) ->
                     val (detailAndRelated, nav) = pair
+                    // Only ever publish a detail that belongs to the subject the navigation says is
+                    // current. The detail pipeline restarts asynchronously when the subject changes
+                    // (cancelling the old Room flow and waiting for the new subject's first row),
+                    // while the navigation branch of the combine below emits immediately — so a
+                    // subject switch can emit one intermediate uiState pairing the *previous*
+                    // subject's still-loaded detail with the *new* back stack. The sheet renders
+                    // whatever detail uiState carries, so without this gate that frame flashes the
+                    // previous subject's content (sporting the new back arrow) while the tapped
+                    // subject loads — see SubjectDetailContent's scroll-state comment for the
+                    // companion fix on the render side. Anything gated out renders as the loading
+                    // state until the real detail lands.
+                    val displayedDetail = detailAndRelated.detail
+                        ?.takeIf { it.subjectId == nav.currentSubjectId }
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            detail = detailAndRelated.detail,
-                            relatedSubjects = detailAndRelated.related.associateBy { summary -> summary.subjectId },
+                            detail = displayedDetail,
+                            relatedSubjects = if (displayedDetail == null) {
+                                emptyMap()
+                            } else {
+                                detailAndRelated.related.associateBy { summary -> summary.subjectId }
+                            },
                             backStack = nav.backStack,
                             pendingScrollOffset = nav.pendingScrollOffset,
                             forceRevealAll = nav.forceRevealAll,
