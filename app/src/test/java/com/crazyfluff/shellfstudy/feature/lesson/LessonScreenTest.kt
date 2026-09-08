@@ -189,6 +189,7 @@ class LessonScreenTest {
         onPlayReading: (LessonItem, String) -> Unit = { _, _ -> },
         onContinue: () -> Unit = {},
         onRetry: () -> Unit = {},
+        onStudyOffline: () -> Unit = {},
         onAbandon: () -> Unit = {},
         onDone: () -> Unit = {},
         onBack: () -> Unit = {}
@@ -215,6 +216,7 @@ class LessonScreenTest {
                         LessonScreenEvent.ToggleDetails -> {}
                         LessonScreenEvent.CloseDetails -> {}
                         LessonScreenEvent.Retry -> onRetry()
+                        LessonScreenEvent.StudyOffline -> onStudyOffline()
                         LessonScreenEvent.Abandon -> onAbandon()
                         LessonScreenEvent.Done -> onDone()
                         LessonScreenEvent.Back -> onBack()
@@ -1036,6 +1038,19 @@ class LessonScreenTest {
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ERROR_TEXT).assertIsDisplayed()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.RETRY_BUTTON).performClick()
         assert(retried)
+    }
+
+    @Test
+    fun errorState_studyOfflineButton_invokesCallback() {
+        var studiedOffline = false
+        setScreen(
+            LessonUiState(phase = LessonUiState.Phase.Error(message = "Network error")),
+            onStudyOffline = { studiedOffline = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_OFFLINE_BUTTON).performClick()
+
+        assert(studiedOffline)
     }
 
     @Test

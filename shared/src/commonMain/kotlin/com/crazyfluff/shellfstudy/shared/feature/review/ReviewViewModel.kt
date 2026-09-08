@@ -259,6 +259,13 @@ class ReviewViewModel(
         }
     }
 
+    /** Bound to the error screen's "Study offline" action — builds the review queue from whatever
+     *  was cached as of the last successful sync instead of retrying the network refresh that just
+     *  failed in [fetchFreshQueue]. */
+    fun studyOffline() {
+        viewModelScope.launch { buildQueue(assignmentRepository.observeReviewQueue().first()) }
+    }
+
     private suspend fun resumeFromPersisted(persisted: PersistedReviewSession) {
         // Resolve exactly the assignments this persisted session references, by id — not via
         // observeReviewQueue()'s due filter. A fully-completed item's next-review time is pushed

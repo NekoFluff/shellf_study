@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -73,6 +74,8 @@ import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDe
 object ReviewScreenTestTags {
     const val LOADING_INDICATOR = "review_loading_indicator"
     const val ERROR_TEXT = "review_error_text"
+    const val RETRY_BUTTON = "review_retry_button"
+    const val STUDY_OFFLINE_BUTTON = "review_study_offline_button"
     const val NO_REVIEWS_TEXT = "review_no_reviews_text"
     const val NO_REVIEWS_DONE_BUTTON = "review_no_reviews_done_button"
     const val CHARACTERS = "review_characters"
@@ -120,6 +123,7 @@ sealed interface ReviewScreenEvent {
     data object ToggleDetails : ReviewScreenEvent
     data object CloseDetails : ReviewScreenEvent
     data object Retry : ReviewScreenEvent
+    data object StudyOffline : ReviewScreenEvent
     data object WrapUp : ReviewScreenEvent
     data object Abandon : ReviewScreenEvent
     data object Done : ReviewScreenEvent
@@ -154,6 +158,7 @@ fun ReviewRoute(
                 ReviewScreenEvent.ToggleDetails -> viewModel.toggleDetails()
                 ReviewScreenEvent.CloseDetails -> viewModel.closeDetails()
                 ReviewScreenEvent.Retry -> viewModel.loadOrResume()
+                ReviewScreenEvent.StudyOffline -> viewModel.studyOffline()
                 ReviewScreenEvent.WrapUp -> viewModel.wrapUp()
                 ReviewScreenEvent.Abandon -> viewModel.abandonSession()
                 ReviewScreenEvent.Done -> onSessionComplete()
@@ -181,6 +186,7 @@ fun ReviewScreen(
     val onToggleDetails = { onEvent(ReviewScreenEvent.ToggleDetails) }
     val onCloseDetails = { onEvent(ReviewScreenEvent.CloseDetails) }
     val onRetry = { onEvent(ReviewScreenEvent.Retry) }
+    val onStudyOffline = { onEvent(ReviewScreenEvent.StudyOffline) }
     val onWrapUp = { onEvent(ReviewScreenEvent.WrapUp) }
     val onAbandon = { onEvent(ReviewScreenEvent.Abandon) }
     val onDone = { onEvent(ReviewScreenEvent.Done) }
@@ -282,7 +288,15 @@ fun ReviewScreen(
                             modifier = Modifier.testTag(ReviewScreenTestTags.ERROR_TEXT)
                         )
                         Spacer(modifier = Modifier.height(16.dp))
-                        OutlinedButton(onClick = onRetry) { Text("Retry") }
+                        OutlinedButton(
+                            onClick = onRetry,
+                            modifier = Modifier.testTag(ReviewScreenTestTags.RETRY_BUTTON)
+                        ) { Text("Retry") }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = onStudyOffline,
+                            modifier = Modifier.testTag(ReviewScreenTestTags.STUDY_OFFLINE_BUTTON)
+                        ) { Text("Study offline with cached data") }
                     }
                 }
 

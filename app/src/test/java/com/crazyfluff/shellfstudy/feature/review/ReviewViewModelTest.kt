@@ -1691,6 +1691,52 @@ class ReviewViewModelTest {
         }
     }
 
+    @Test
+    fun `studyOffline builds the queue from cache when the network refresh fails`() = runTest(mainDispatcherRule.dispatcher) {
+        // Warm the local cache with one successful sync, then abandon so no persisted session is
+        // left behind to short-circuit the next viewModel's loadOrResume() into resuming it instead
+        // of attempting (and failing) a fresh fetch.
+        dispatch(
+            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+            subjectsResponse = jsonResponse(radicalSubjectsJson())
+        )
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).totalCount).isAtLeast(1)
+
+            firstViewModel.abandonSession()
+            var abandonedState = awaitItem()
+            while (!abandonedState.isAbandoned) abandonedState = awaitItem()
+        }
+
+        // Force the next fetchFreshQueue() to actually attempt the network rather than skip it as
+        // "still fresh" — otherwise the staleness gate in AssignmentRepository.refreshQueue would
+        // silently no-op and never reach the failing subjects endpoint below.
+        repositories.syncStateDao.clearAll()
+
+        // The device is offline: the subjects sync that gates a fresh fetch fails.
+        dispatch(
+            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+            subjectsResponse = jsonResponse("{}", 500)
+        )
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
+            assertThat((state.phase as? ReviewUiState.Phase.Error)?.message).isNotNull()
+
+            // Rather than retry the network, fall back to whatever was cached by the first sync.
+            viewModel.studyOffline()
+
+            state = awaitItem()
+            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).totalCount).isAtLeast(1)
+        }
+    }
+
     private fun threeRadicalAssignmentsJson() = """
         {
           "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 3,

@@ -414,27 +414,44 @@ class LessonViewModel(
 
         when (val result = assignmentRepository.refreshLessonQueue()) {
             is ApiResult.Error -> _uiState.update { it.copy(phase = LessonUiState.Phase.Error(result.message)) }
-            is ApiResult.Success -> {
-                val currentLevel = statsRepository.observeCurrentLevel().first() ?: 0
-                val levelUpProgress = assignmentRepository.observeLevelUpProgress(currentLevel).first()
-                val lessonsToday = assignmentRepository.observeLessonsCompletedToday().first()
-                val dailyGoal = settingsRepository.settings.first().dailyLessonGoal
-                val items = LessonPrioritizer.prioritize(
-                    items = assignmentRepository.observeLessonQueue().first(),
-                    levelUpProgress = levelUpProgress,
-                    isStrained = lessonsToday >= dailyGoal
-                )
-                if (items.isEmpty()) {
-                    _uiState.update { it.copy(phase = LessonUiState.Phase.NoLessonsAvailable) }
-                } else {
-                    val defaultSelection = items.take(DEFAULT_LESSON_SELECTION_SIZE)
-                        .map { it.assignmentId }
-                        .toSet()
-                    _uiState.update {
-                        it.copy(phase = LessonUiState.Phase.Select(availableLessons = items, selectedAssignmentIds = defaultSelection))
-                    }
-                }
+            is ApiResult.Success -> buildLessonSelectionFromCache()
+        }
+    }
+
+    /** Builds the lesson-selection phase straight from Room, without attempting a network refresh
+     *  first — shared by [fetchFreshQueue]'s success branch and [studyOffline], which bypasses the
+     *  refresh entirely (bound to the error screen's "Study offline" action, for when the refresh
+     *  itself is what failed but a previously-cached queue is still available). */
+    private suspend fun buildLessonSelectionFromCache() {
+        val currentLevel = statsRepository.observeCurrentLevel().first() ?: 0
+        val levelUpProgress = assignmentRepository.observeLevelUpProgress(currentLevel).first()
+        val lessonsToday = assignmentRepository.observeLessonsCompletedToday().first()
+        val dailyGoal = settingsRepository.settings.first().dailyLessonGoal
+        val items = LessonPrioritizer.prioritize(
+            items = assignmentRepository.observeLessonQueue().first(),
+            levelUpProgress = levelUpProgress,
+            isStrained = lessonsToday >= dailyGoal
+        )
+        if (items.isEmpty()) {
+            _uiState.update { it.copy(phase = LessonUiState.Phase.NoLessonsAvailable) }
+        } else {
+            val defaultSelection = items.take(DEFAULT_LESSON_SELECTION_SIZE)
+                .map { it.assignmentId }
+                .toSet()
+            _uiState.update {
+                it.copy(phase = LessonUiState.Phase.Select(availableLessons = items, selectedAssignmentIds = defaultSelection))
             }
+        }
+    }
+
+    /** Bound to the error screen's "Study offline" action — builds the lesson queue from whatever
+     *  was cached as of the last successful sync instead of retrying the network refresh that just
+     *  failed in [fetchFreshQueue]. */
+    fun studyOffline() {
+        viewModelScope.launch {
+            quizQueue.clear()
+            startedAssignmentIds.clear()
+            buildLessonSelectionFromCache()
         }
     }
 

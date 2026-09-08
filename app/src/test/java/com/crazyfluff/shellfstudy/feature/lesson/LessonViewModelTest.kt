@@ -936,6 +936,61 @@ class LessonViewModelTest {
     }
 
     @Test
+    fun `a network error during load sets an error message`() = runTest(mainDispatcherRule.dispatcher) {
+        // Subjects endpoint returns 500 — refreshLessonQueue will return ApiResult.Error after the
+        // subjects sync fails, so fetchFreshQueue sets the Error phase on the uiState.
+        dispatch(
+            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+            subjectsResponse = jsonResponse("{}", 500)
+        )
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat((state.phase as? LessonUiState.Phase.Error)?.message).isNotNull()
+        }
+    }
+
+    @Test
+    fun `studyOffline builds the lesson selection from cache when the network refresh fails`() = runTest(mainDispatcherRule.dispatcher) {
+        // Warm the local cache with one successful sync first.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat(state.phase).isInstanceOf(LessonUiState.Phase.Select::class.java)
+        }
+
+        // Force the next fetchFreshQueue() to actually attempt the network rather than skip it as
+        // "still fresh" — otherwise the staleness gate in AssignmentRepository.refreshQueue would
+        // silently no-op and never reach the failing subjects endpoint below.
+        repositories.syncStateDao.clearAll()
+
+        // The device is offline: the subjects sync that gates a fresh fetch fails.
+        dispatch(
+            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+            subjectsResponse = jsonResponse("{}", 500)
+        )
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat((state.phase as? LessonUiState.Phase.Error)?.message).isNotNull()
+
+            // Rather than retry the network, fall back to whatever was cached by the first sync.
+            viewModel.studyOffline()
+
+            state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat(state.phase).isInstanceOf(LessonUiState.Phase.Select::class.java)
+        }
+    }
+
+    @Test
     fun `completing the quiz clears the persisted lesson session`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 

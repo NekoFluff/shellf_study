@@ -127,6 +127,7 @@ class ReviewScreenTest {
         onToggleDetails: () -> Unit = {},
         onCloseDetails: () -> Unit = {},
         onRetry: () -> Unit = {},
+        onStudyOffline: () -> Unit = {},
         onWrapUp: () -> Unit = {},
         onAbandon: () -> Unit = {},
         onDone: () -> Unit = {},
@@ -146,6 +147,7 @@ class ReviewScreenTest {
                         ReviewScreenEvent.ToggleDetails -> onToggleDetails()
                         ReviewScreenEvent.CloseDetails -> onCloseDetails()
                         ReviewScreenEvent.Retry -> onRetry()
+                        ReviewScreenEvent.StudyOffline -> onStudyOffline()
                         ReviewScreenEvent.WrapUp -> onWrapUp()
                         ReviewScreenEvent.Abandon -> onAbandon()
                         ReviewScreenEvent.Done -> onDone()
@@ -789,5 +791,18 @@ class ReviewScreenTest {
         setScreen(ReviewUiState(phase = ReviewUiState.Phase.Error(message = "Network error")))
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.ERROR_TEXT).assertIsDisplayed()
+    }
+
+    @Test
+    fun errorState_studyOfflineButton_invokesCallback() {
+        var studiedOffline = false
+        setScreen(
+            ReviewUiState(phase = ReviewUiState.Phase.Error(message = "Network error")),
+            onStudyOffline = { studiedOffline = true }
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.STUDY_OFFLINE_BUTTON).performClick()
+
+        assert(studiedOffline)
     }
 }

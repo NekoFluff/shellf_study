@@ -53,6 +53,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -122,6 +123,7 @@ object LessonScreenTestTags {
     const val LOADING_INDICATOR = "lesson_loading_indicator"
     const val ERROR_TEXT = "lesson_error_text"
     const val RETRY_BUTTON = "lesson_retry_button"
+    const val STUDY_OFFLINE_BUTTON = "lesson_study_offline_button"
     const val BACK_BUTTON = "lesson_back_button"
     const val NO_LESSONS_TEXT = "lesson_no_lessons_text"
     const val NO_LESSONS_DONE_BUTTON = "lesson_no_lessons_done_button"
@@ -190,6 +192,7 @@ sealed interface LessonScreenEvent {
     data object ToggleDetails : LessonScreenEvent
     data object CloseDetails : LessonScreenEvent
     data object Retry : LessonScreenEvent
+    data object StudyOffline : LessonScreenEvent
     data object Abandon : LessonScreenEvent
     data object Done : LessonScreenEvent
     data object Back : LessonScreenEvent
@@ -231,6 +234,7 @@ fun LessonRoute(
                 LessonScreenEvent.ToggleDetails -> viewModel.toggleDetails()
                 LessonScreenEvent.CloseDetails -> viewModel.closeDetails()
                 LessonScreenEvent.Retry -> viewModel.load()
+                LessonScreenEvent.StudyOffline -> viewModel.studyOffline()
                 LessonScreenEvent.Abandon -> viewModel.abandonSession()
                 LessonScreenEvent.Done -> onSessionComplete()
                 LessonScreenEvent.Back -> onBack()
@@ -265,6 +269,7 @@ fun LessonScreen(
     val onToggleDetails = { onEvent(LessonScreenEvent.ToggleDetails) }
     val onCloseDetails = { onEvent(LessonScreenEvent.CloseDetails) }
     val onRetry = { onEvent(LessonScreenEvent.Retry) }
+    val onStudyOffline = { onEvent(LessonScreenEvent.StudyOffline) }
     val onAbandon = { onEvent(LessonScreenEvent.Abandon) }
     val onDone = { onEvent(LessonScreenEvent.Done) }
     val onBack = { onEvent(LessonScreenEvent.Back) }
@@ -370,6 +375,11 @@ fun LessonScreen(
                             onClick = onRetry,
                             modifier = Modifier.testTag(LessonScreenTestTags.RETRY_BUTTON)
                         ) { Text("Retry") }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = onStudyOffline,
+                            modifier = Modifier.testTag(LessonScreenTestTags.STUDY_OFFLINE_BUTTON)
+                        ) { Text("Study offline with cached data") }
                     }
                 }
 
