@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -15,10 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material3.Button
@@ -29,22 +25,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.designsystem.components.ExpandableAnswerListText
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailHandleHeight
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColor
@@ -57,7 +49,6 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.label
-import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 
 private val RankChangeChipWarmupValue = RankChange(from = SrsStage.APPRENTICE_1, to = SrsStage.APPRENTICE_2)
 
@@ -365,28 +356,16 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
                 modifier = Modifier.testTag(testTags.feedbackText)
             )
             feedbackDetailPrefix(feedback)?.let { prefix ->
-                var isDetailExpanded by remember(feedback) { mutableStateOf(false) }
-                val answers = formatAnswerList(feedback.correctAnswer, expanded = isDetailExpanded)
                 // Capped at a fixed height + internally scrollable rather than left unbounded:
                 // an item with many accepted synonyms could otherwise grow past this
                 // non-scrolling Column's bounds and push the Continue button down underneath
                 // the swipe-up handle's reserved space below, silently stealing its taps.
-                Text(
-                    text = "$prefix ${answers.text}",
-                    color = if (answers.hasMore) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = if (isDetailExpanded) Int.MAX_VALUE else 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .testTag(testTags.answerDetailText)
-                        .then(if (isDetailExpanded) Modifier.heightIn(max = 96.dp).verticalScroll(rememberScrollState()) else Modifier)
-                        .then(
-                            if (answers.hasMore) {
-                                Modifier.clickable { isDetailExpanded = !isDetailExpanded }
-                            } else {
-                                Modifier
-                            }
-                        )
+                ExpandableAnswerListText(
+                    joined = feedback.correctAnswer,
+                    resetKey = feedback,
+                    prefix = prefix,
+                    expandedMaxHeight = 96.dp,
+                    modifier = Modifier.testTag(testTags.answerDetailText)
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))

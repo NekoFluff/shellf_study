@@ -338,6 +338,28 @@ class ReviewScreenTest {
     }
 
     @Test
+    fun answerDetailText_overAnswerCountCap_tapExpandsThenCollapses() {
+        setScreen(
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(
+                    isCorrect = true,
+                    correctAnswer = "A, B, C, D, E",
+                    answerCount = 5
+                )
+            )
+        )
+
+        composeTestRule.onNodeWithText("Also accepted: A, B, C +2 more").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_DETAIL_TEXT).performClick()
+        composeTestRule.onNodeWithText("Also accepted: A, B, C, D, E").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_DETAIL_TEXT).performClick()
+        composeTestRule.onNodeWithText("Also accepted: A, B, C +2 more").assertIsDisplayed()
+    }
+
+    @Test
     fun totalTimer_shownWhenSettingEnabledAndSessionInProgress() {
         setScreen(
             activeState(

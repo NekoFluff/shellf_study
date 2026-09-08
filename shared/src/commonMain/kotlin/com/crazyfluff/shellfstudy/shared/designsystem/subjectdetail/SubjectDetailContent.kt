@@ -1,7 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -19,16 +18,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
@@ -36,6 +31,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.designsystem.components.ExpandableAnswerListText
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
@@ -47,7 +43,6 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeSection
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
-import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 
 /** Whether the sheet shows everything (browse/study contexts) or hides the currently-tested field (mid-quiz). */
 enum class DetailRevealMode { FULL, HIDE_UNTIL_ANSWERED }
@@ -437,21 +432,14 @@ fun ReadingTypeRow(label: String, readings: List<String>) {
 }
 
 /** Auxiliary meanings truncate to a "+N more" summary the same way the review screen's answer
- *  feedback does (see [formatAnswerList]) — tapping toggles the full list back open and closed,
- *  rather than always spelling out every whitelisted alternate meaning up front. Shared by every
- *  screen that shows a subject's/item's auxiliary meanings (subject detail, lesson). */
+ *  feedback does (see [ExpandableAnswerListText]) — tapping toggles the full list back open and
+ *  closed, rather than always spelling out every whitelisted alternate meaning up front. Shared by
+ *  every screen that shows a subject's/item's auxiliary meanings (subject detail, lesson). */
 @Composable
 fun AuxiliaryMeaningsText(auxiliaryMeanings: List<String>, resetKey: Any?) {
-    var isExpanded by remember(resetKey) { mutableStateOf(false) }
-    val display = formatAnswerList(auxiliaryMeanings.joinToString(", "), expanded = isExpanded)
-    Text(
-        text = display.text,
-        style = MaterialTheme.typography.bodySmall,
-        color = if (display.hasMore) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = if (isExpanded) Int.MAX_VALUE else 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier
-            .testTag(SubjectDetailTestTags.AUXILIARY_MEANINGS_TEXT)
-            .then(if (display.hasMore) Modifier.clickable { isExpanded = !isExpanded } else Modifier)
+    ExpandableAnswerListText(
+        joined = auxiliaryMeanings.joinToString(", "),
+        resetKey = resetKey,
+        modifier = Modifier.testTag(SubjectDetailTestTags.AUXILIARY_MEANINGS_TEXT)
     )
 }
