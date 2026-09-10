@@ -127,16 +127,14 @@ class LessonScreenTest {
         studyIndex: Int = 0,
         strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap(),
         batchIndex: Int = 0,
-        batchCount: Int = 1,
-        sessionItemCount: Int = studyItems.size
+        batchCount: Int = 1
     ) = LessonUiState(
         phase = LessonUiState.Phase.Study(
             studyItems = studyItems,
             studyIndex = studyIndex,
             strokeOrderBySubjectId = strokeOrderBySubjectId,
             batchIndex = batchIndex,
-            batchCount = batchCount,
-            sessionItemCount = sessionItemCount
+            batchCount = batchCount
         )
     )
 
@@ -527,21 +525,20 @@ class LessonScreenTest {
     }
 
     @Test
-    fun studyPhase_multiBatch_showsBatchContextAndNamesTheBatchBeingQuized() {
+    fun studyPhase_multiBatch_sitsTheBatchContextBesideTheBatchProgressCount() {
         setScreen(
             studyState(
                 studyItems = listOf(radicalItem, secondRadicalItem),
                 studyIndex = 1,
                 batchIndex = 0,
-                batchCount = 3,
-                sessionItemCount = 7
+                batchCount = 3
             )
         )
 
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_BATCH_LABEL)
-            .assertTextContains("Batch 1 of 3", substring = true)
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_BATCH_LABEL)
-            .assertTextContains("7 items in this session", substring = true)
+        // The count is the batch's own position, with the batch context annotating it rather than
+        // competing with it, and no session total repeated from the picker.
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_PROGRESS_COUNT).assertTextEquals("2 / 2")
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_BATCH_LABEL).assertTextEquals("Batch 1 of 3")
         // The last card of a non-final batch hands off to that batch's quiz, not the session's only one.
         composeTestRule.onNodeWithTag(LessonScreenTestTags.START_QUIZ_BUTTON).assertTextEquals("Quiz batch 1")
     }

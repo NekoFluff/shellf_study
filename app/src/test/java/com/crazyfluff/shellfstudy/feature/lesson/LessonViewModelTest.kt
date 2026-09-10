@@ -2042,7 +2042,6 @@ class LessonViewModelTest {
             val firstBatch = state.phase as LessonUiState.Phase.Study
             assertThat(firstBatch.batchIndex).isEqualTo(0)
             assertThat(firstBatch.batchCount).isEqualTo(2)
-            assertThat(firstBatch.sessionItemCount).isEqualTo(3)
             assertThat(firstBatch.studyItems.map { it.assignmentId }).containsExactly(101L, 102L).inOrder()
 
             viewModel.nextStudyCard()

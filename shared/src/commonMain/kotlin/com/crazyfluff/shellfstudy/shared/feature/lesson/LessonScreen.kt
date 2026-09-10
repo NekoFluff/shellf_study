@@ -635,22 +635,37 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
             .collect { page -> onSwiped(page) }
     }
 
-    Text(
-        text = "${study.studyIndex + 1} / ${study.studyItems.size}",
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
-            .testTag(LessonScreenTestTags.STUDY_PROGRESS_COUNT)
-    )
-    if (study.batchCount > 1) {
-        // Without this, "2 / 5" on its own reads as the whole session's progress — and a learner who
-        // picked 20 items has no way to tell that their quiz is only about the five cards here.
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Where the learner is in *this batch* — the bar below measures the same thing, and the quiz
+        // that follows covers exactly these cards. Solid rather than variant-colored, so the count
+        // dominates the row and the batch context reads as the annotation it is.
         Text(
-            text = "Batch ${study.batchIndex + 1} of ${study.batchCount} · ${study.sessionItemCount} items in this session",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp).testTag(LessonScreenTestTags.STUDY_BATCH_LABEL)
+            text = "${study.studyIndex + 1} / ${study.studyItems.size}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.testTag(LessonScreenTestTags.STUDY_PROGRESS_COUNT)
         )
+        if (study.batchCount > 1) {
+            // Which batch those cards belong to, in the same "position · context" idiom as the quiz
+            // header. The session's own total is deliberately not repeated here: the picker states it
+            // when it's the decision being made and the checkpoints state what's left, so a third
+            // number would only crowd the one screen where the learner is reading cards rather than
+            // counting them.
+            Text(
+                text = " · ",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Batch ${study.batchIndex + 1} of ${study.batchCount}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(LessonScreenTestTags.STUDY_BATCH_LABEL)
+            )
+        }
     }
     LinearProgressIndicator(
         progress = { (study.studyIndex + 1).toFloat() / study.studyItems.size },

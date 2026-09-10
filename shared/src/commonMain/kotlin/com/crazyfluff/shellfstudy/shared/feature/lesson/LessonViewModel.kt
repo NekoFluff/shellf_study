@@ -130,14 +130,12 @@ data class LessonUiState(
         }
 
         data class Study(
-            /** Just the current batch's cards, not the whole session — see [sessionItemCount]. */
+            /** Just the current batch's cards, not every item the session committed to — [batchIndex]
+             *  and [batchCount] are what say where that batch sits in the plan. */
             val studyItems: List<LessonItem> = emptyList(),
             val studyIndex: Int = 0,
             val batchIndex: Int = 0,
             val batchCount: Int = 1,
-            /** Every item the session committed to, across all batches — so the screen can put the
-             *  batch's progress in the context of the whole session without reconstructing the plan. */
-            val sessionItemCount: Int = 0,
             val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
             val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
             val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
@@ -484,7 +482,6 @@ class LessonViewModel(
                     studyIndex = persisted.studyIndex.coerceIn(0, items.lastIndex),
                     batchIndex = persisted.batchIndex,
                     batchCount = batchCount,
-                    sessionItemCount = planAssignmentIds.size,
                     pitchAccentsBySubjectId = pitchAccents,
                     relatedSubjectsById = relatedSubjects,
                     strokeOrderBySubjectId = strokeOrders
@@ -740,7 +737,6 @@ class LessonViewModel(
                     studyIndex = 0,
                     batchIndex = index,
                     batchCount = batchCount,
-                    sessionItemCount = planAssignmentIds.size,
                     pitchAccentsBySubjectId = pitchAccentsBySubjectId,
                     relatedSubjectsById = relatedSubjects,
                     strokeOrderBySubjectId = strokeOrders
