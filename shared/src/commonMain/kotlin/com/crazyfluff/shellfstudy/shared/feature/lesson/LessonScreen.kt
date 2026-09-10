@@ -847,10 +847,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteCo
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // Plain "Continue", not "Study next 5": the scale is the line above, and the count in
+                // the label was noise on a button whose only job is to move forward.
                 Button(
                     onClick = onContinue,
                     modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON)
-                ) { Text("Study next ${next.itemCount}") }
+                ) { Text("Continue") }
                 TextButton(
                     onClick = onFinishForNow,
                     modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON)

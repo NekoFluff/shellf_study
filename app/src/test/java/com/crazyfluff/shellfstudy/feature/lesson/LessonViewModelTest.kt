@@ -2089,7 +2089,6 @@ class LessonViewModelTest {
             assertThat(next).isInstanceOf(LessonUiState.Phase.BatchComplete.NextStep.StudyBatch::class.java)
             next as LessonUiState.Phase.BatchComplete.NextStep.StudyBatch
             assertThat(next.batchIndex).isEqualTo(1)
-            assertThat(next.itemCount).isEqualTo(1)
             assertThat(next.remainingSessionItems).isEqualTo(1)
 
             viewModel.continueSession()

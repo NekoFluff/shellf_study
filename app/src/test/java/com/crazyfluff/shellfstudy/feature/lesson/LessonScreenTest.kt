@@ -607,7 +607,7 @@ class LessonScreenTest {
                 itemsLearned = 5,
                 itemsCorrectFirstTry = 4,
                 next = LessonUiState.Phase.BatchComplete.NextStep.StudyBatch(
-                    batchIndex = 1, itemCount = 5, remainingSessionItems = 10
+                    batchIndex = 1, remainingSessionItems = 10
                 )
             ),
             onContinueSession = { continued = true },
@@ -617,7 +617,7 @@ class LessonScreenTest {
         composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_HEADLINE).assertTextEquals("Batch 1 of 3 done!")
         composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_SUMMARY_TEXT)
             .assertTextContains("5 learned · 4 right first try")
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON).assertTextEquals("Study next 5")
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON).assertTextEquals("Continue")
         // Stopping early is a first-class outcome, not an abandon.
         composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON).assertIsDisplayed()
 
@@ -632,7 +632,7 @@ class LessonScreenTest {
         setScreen(
             batchCompleteState(
                 next = LessonUiState.Phase.BatchComplete.NextStep.StudyBatch(
-                    batchIndex = 1, itemCount = 2, remainingSessionItems = 2
+                    batchIndex = 1, remainingSessionItems = 2
                 )
             ),
             onFinishForNow = { parked = true }

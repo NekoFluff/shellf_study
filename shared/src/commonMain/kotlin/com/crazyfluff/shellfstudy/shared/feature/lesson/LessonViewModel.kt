@@ -187,8 +187,7 @@ data class LessonUiState(
                 /** More of the plan left to study. */
                 data class StudyBatch(
                     val batchIndex: Int,
-                    val itemCount: Int,
-                    /** Items left in the whole session, this batch included. */
+                    /** Items left in the whole session, the next batch included. */
                     val remainingSessionItems: Int
                 ) : NextStep
 
@@ -1343,7 +1342,6 @@ class LessonViewModel(
         val next = if (studyNextBatch) {
             LessonUiState.Phase.BatchComplete.NextStep.StudyBatch(
                 batchIndex = nextBatchIndex,
-                itemCount = batchItems(nextBatchIndex).size,
                 remainingSessionItems = sessionBatches.drop(nextBatchIndex).sumOf { it.size }
             )
         } else {
