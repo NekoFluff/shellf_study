@@ -936,12 +936,31 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `a network error during load sets an error message`() = runTest(mainDispatcherRule.dispatcher) {
-        // Subjects endpoint returns 500 — refreshLessonQueue will return ApiResult.Error after the
-        // subjects sync fails, so fetchFreshQueue sets the Error phase on the uiState.
+    fun `a non-auth network error during load auto-falls back to no lessons available when cache is empty`() = runTest(mainDispatcherRule.dispatcher) {
+        // Subjects endpoint returns 500 — refreshLessonQueue returns ApiResult.Error, and since
+        // it is not an auth error, fetchFreshQueue auto-falls back to the (empty) cache, landing
+        // on NoLessonsAvailable rather than showing an error screen.
         dispatch(
             assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
             subjectsResponse = jsonResponse("{}", 500)
+        )
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat(state.phase).isEqualTo(LessonUiState.Phase.NoLessonsAvailable)
+        }
+    }
+
+    @Test
+    fun `an auth error during load sets an error message`() = runTest(mainDispatcherRule.dispatcher) {
+        // 401 is an auth error — fetchFreshQueue must not silently swallow it and should surface
+        // Phase.Error so the user knows their token is invalid.
+        dispatch(
+            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
+            subjectsResponse = jsonResponse("{}", 401)
         )
 
         val viewModel = createViewModel()
@@ -954,7 +973,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `studyOffline builds the lesson selection from cache when the network refresh fails`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a non-auth network error during load auto-falls back to cached lesson selection`() = runTest(mainDispatcherRule.dispatcher) {
         // Warm the local cache with one successful sync first.
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
         val firstViewModel = createViewModel()
@@ -979,13 +998,7 @@ class LessonViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-            assertThat((state.phase as? LessonUiState.Phase.Error)?.message).isNotNull()
-
-            // Rather than retry the network, fall back to whatever was cached by the first sync.
-            viewModel.studyOffline()
-
-            state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            // Non-auth error auto-falls back to the cached data from the first sync.
             assertThat(state.phase).isInstanceOf(LessonUiState.Phase.Select::class.java)
         }
     }
@@ -1688,12 +1701,12 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `a network error during load sets an error message and clears the loading state`() = runTest(mainDispatcherRule.dispatcher) {
-        // Subjects endpoint returns 500 — refreshQueue returns ApiResult.Error, so fetchFreshQueue
-        // sets errorMessage on the uiState.
+    fun `an auth error during load sets an error message and clears the loading state`() = runTest(mainDispatcherRule.dispatcher) {
+        // 401 is an auth error — fetchFreshQueue surfaces Phase.Error instead of auto-falling back,
+        // so loading clears and the error is visible. Loading and Error are disjoint sealed variants.
         dispatch(
             assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
-            subjectsResponse = jsonResponse("{}", 500)
+            subjectsResponse = jsonResponse("{}", 401)
         )
 
         val viewModel = createViewModel()
@@ -1701,17 +1714,16 @@ class LessonViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-            // Casting to Error already proves loading has cleared — Loading and Error are disjoint
-            // variants of the same sealed Phase.
             assertThat((state.phase as LessonUiState.Phase.Error).message).isNotEmpty()
         }
     }
 
     @Test
-    fun `retrying load() after an error clears the error and shows the lesson select screen`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `retrying load() after an auth error clears the error and shows the lesson select screen`() = runTest(mainDispatcherRule.dispatcher) {
+        // Use a 401 so the initial load lands in Phase.Error (non-auth errors auto-fall back).
         dispatch(
             assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
-            subjectsResponse = jsonResponse("{}", 500)
+            subjectsResponse = jsonResponse("{}", 401)
         )
 
         val viewModel = createViewModel()

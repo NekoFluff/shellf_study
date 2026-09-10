@@ -1645,12 +1645,12 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `a network error during load sets an error message and clears the loading state`() = runTest(mainDispatcherRule.dispatcher) {
-        // Subjects endpoint returns 500 — refreshQueue will return ApiResult.Error after the
-        // subjects sync fails, so fetchFreshQueue sets errorMessage on the uiState.
+    fun `an auth error during load sets an error message and clears the loading state`() = runTest(mainDispatcherRule.dispatcher) {
+        // 401 is an auth error — fetchFreshQueue surfaces Phase.Error instead of auto-falling back,
+        // so loading clears and the error is visible. Loading and Error are disjoint sealed variants.
         dispatch(
             assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
-            subjectsResponse = jsonResponse("{}", 500)
+            subjectsResponse = jsonResponse("{}", 401)
         )
 
         val viewModel = createViewModel()
@@ -1664,10 +1664,11 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `retrying loadOrResume after an error clears the error and shows the queue`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `retrying loadOrResume after an auth error clears the error and shows the queue`() = runTest(mainDispatcherRule.dispatcher) {
+        // Use a 401 so the initial load lands in Phase.Error (non-auth errors auto-fall back).
         dispatch(
             assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
-            subjectsResponse = jsonResponse("{}", 500)
+            subjectsResponse = jsonResponse("{}", 401)
         )
 
         val viewModel = createViewModel()
@@ -1692,7 +1693,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `studyOffline builds the queue from cache when the network refresh fails`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a non-auth network error during load auto-falls back to cached review queue`() = runTest(mainDispatcherRule.dispatcher) {
         // Warm the local cache with one successful sync, then abandon so no persisted session is
         // left behind to short-circuit the next viewModel's loadOrResume() into resuming it instead
         // of attempting (and failing) a fresh fetch.
@@ -1726,13 +1727,7 @@ class ReviewViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
-            assertThat((state.phase as? ReviewUiState.Phase.Error)?.message).isNotNull()
-
-            // Rather than retry the network, fall back to whatever was cached by the first sync.
-            viewModel.studyOffline()
-
-            state = awaitItem()
-            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
+            // Non-auth error auto-falls back to the cached data from the first sync.
             assertThat((state.phase as ReviewUiState.Phase.Active).totalCount).isAtLeast(1)
         }
     }
