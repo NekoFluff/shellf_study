@@ -90,6 +90,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.AuxiliaryMeaningsText
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.ReadingTypeRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.RelatedSubjectsSection
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SectionEyebrow
@@ -980,7 +981,11 @@ private fun LessonReadingSection(
                     item.readings.forEach { reading ->
                         VocabReadingRow(
                             reading = reading,
-                            pitchAccents = pitchAccents,
+                            // The lesson flow keeps a plain list on Phase.Study (see
+                            // LessonViewModel.fetchPitchAccents) — mid-lesson, "pending" and
+                            // "confirmed absent" both just mean no diagram, so there's nothing to
+                            // distinguish here.
+                            pitchAccentState = PitchAccentUiState.Available(pitchAccents),
                             showPitchAccent = showPitchAccent,
                             hasAudio = item.pronunciationAudios.isNotEmpty(),
                             onPlayReading = onPlayReading,

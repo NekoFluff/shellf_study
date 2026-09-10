@@ -28,6 +28,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.availableOrEmpty
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord
 import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
@@ -523,11 +524,18 @@ class LessonViewModel(
     }
 
     /** Fanned out in parallel rather than sequentially, so a large "Select All" batch of vocabulary
-     * items doesn't serialize dozens of individual pitch-accent lookups one after another. */
+     * items doesn't serialize dozens of individual pitch-accent lookups one after another. The three
+     * pitch-accent states collapse to a plain list here: mid-lesson, "pending" and "confirmed
+     * absent" both just mean no diagram to draw (only the subject detail sheet shows the difference). */
     private suspend fun fetchPitchAccents(items: List<LessonItem>): Map<Long, List<PitchAccent>> = coroutineScope {
         items
-            .filter { isPitchAccentEligible(it.subjectType) && it.characters != null }
-            .map { item -> item.subjectId to async { pitchAccentRepository.observePitchAccents(item.characters!!).first() } }
+            .filter { isPitchAccentEligible(it.subjectType) }
+            .mapNotNull { item -> item.characters?.let { item.subjectId to it } }
+            .map { (subjectId, characters) ->
+                subjectId to async {
+                    pitchAccentRepository.observePitchAccents(characters).first().availableOrEmpty()
+                }
+            }
             .associate { (subjectId, deferred) -> subjectId to deferred.await() }
     }
 

@@ -174,27 +174,48 @@ fun MoraReadingText(reading: String, modifier: Modifier = Modifier, textStyle: T
  * (e.g. one per part of speech); stacking rather than placing them side by side means any number
  * of patterns stay fully visible without needing horizontal scrolling. Each pattern is labeled by
  * its part of speech when more than one pattern is shown and that label is available.
+ *
+ * [pitchAccentState] carries the difference between "we haven't looked this word up yet" and "we
+ * looked, and there's no documented pitch accent for it" — the first renders nothing (the caller is
+ * Flow-based, so it resolves live once a scrape or bundled lookup completes), the second a muted
+ * caption saying so. Only the subject detail sheet asks for that distinction; the quiz-time
+ * [com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingPitchAccentHint] collapses both
+ * to "no hint" instead.
  */
 @Composable
 fun PitchAccentReadingRow(
     reading: String,
-    pitchAccents: List<PitchAccent>,
+    pitchAccentState: PitchAccentUiState,
     modifier: Modifier = Modifier,
     trailingContent: @Composable () -> Unit = {}
 ) {
-    val matches = remember(reading, pitchAccents) { pitchAccents.allForReading(reading) }
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             JapaneseText(reading, style = MaterialTheme.typography.bodyLarge)
             trailingContent()
         }
-        matches.forEach { match ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PitchAccentDiagram(reading = reading, pitchAccent = match)
-                if (matches.size > 1 && match.partOfSpeech != null) {
-                    Text(match.partOfSpeech, style = MaterialTheme.typography.labelSmall)
+        when (pitchAccentState) {
+            is PitchAccentUiState.Available -> {
+                val matches = remember(reading, pitchAccentState) {
+                    pitchAccentState.pitchAccents.allForReading(reading)
+                }
+                matches.forEach { match ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PitchAccentDiagram(reading = reading, pitchAccent = match)
+                        if (matches.size > 1 && match.partOfSpeech != null) {
+                            Text(match.partOfSpeech, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
             }
+            PitchAccentUiState.Unavailable -> Text(
+                text = "Pitch accent not available",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            // Still pending a scrape/bundled lookup — same "render nothing" convention as
+            // StrokeOrderSection/WritingPracticeSection for their own Loading state.
+            PitchAccentUiState.Loading -> Unit
         }
     }
 }

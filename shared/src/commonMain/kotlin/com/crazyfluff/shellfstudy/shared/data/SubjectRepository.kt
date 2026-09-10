@@ -1,7 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
-import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.model.toPronunciationAudios
@@ -10,6 +9,7 @@ import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.CharacterImageData
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
@@ -128,11 +128,13 @@ class SubjectRepository(
             val entity = entities.firstOrNull()
             val type = entity?.let { SubjectType.fromWkString(it.subjectType) }
             val characters = entity?.characters
-            val pitchAccentsFlow: Flow<List<PitchAccent>> =
+            val pitchAccentsFlow: Flow<PitchAccentUiState> =
                 if (characters != null && (type == SubjectType.VOCABULARY || type == SubjectType.KANA_VOCABULARY)) {
                     pitchAccentRepository.observePitchAccents(characters)
                 } else {
-                    flowOf(emptyList())
+                    // Kanji/radicals have no pitch accent to look up — a confirmed absence, not a
+                    // pending one, so the detail view doesn't offer to wait for data that can't come.
+                    flowOf(PitchAccentUiState.Unavailable)
                 }
             pitchAccentsFlow.map { pitchAccents -> entity?.toSubjectDetail(pitchAccents) }
         }.flowOn(defaultDispatcher)
@@ -155,7 +157,7 @@ private fun SubjectEntity.toSubjectSummary(): SubjectSummary = SubjectSummary(
     readings = readings.map { it.reading }
 )
 
-private fun SubjectEntity.toSubjectDetail(pitchAccents: List<PitchAccent> = emptyList()): SubjectDetail {
+private fun SubjectEntity.toSubjectDetail(pitchAccents: PitchAccentUiState = PitchAccentUiState.Loading): SubjectDetail {
     val readingsByType = readings.groupBy { it.type }
     return SubjectDetail(
         subjectId = id,

@@ -5,6 +5,7 @@ import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
@@ -59,12 +60,13 @@ class SubjectRepositoryTest {
 
         withPitchAccent.subjectRepository.observeSubjectDetail(900).test {
             val detail = awaitItem()
-            assertThat(detail?.pitchAccents).containsExactly(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+            assertThat(detail?.pitchAccents)
+                .isEqualTo(PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))))
         }
     }
 
     @Test
-    fun `observeSubjectDetail leaves pitch accents empty for a kanji subject even if the dictionary has an entry`() = runTest {
+    fun `observeSubjectDetail reports pitch accents unavailable for a kanji subject even if the dictionary has an entry`() = runTest {
         val withPitchAccent = buildTestRepositories(
             server.url("/").toString(),
             pitchAccentEntries = mapOf("水" to listOf(PitchAccent(reading = "スイ", partOfSpeech = null, pitchNumber = 1)))
@@ -74,7 +76,32 @@ class SubjectRepositoryTest {
 
         withPitchAccent.subjectRepository.observeSubjectDetail(440).test {
             val detail = awaitItem()
-            assertThat(detail?.pitchAccents).isEmpty()
+            // Not just "empty" — kanji have no pitch accent to look up at all, which the detail view
+            // reports as a confirmed absence rather than something still pending.
+            assertThat(detail?.pitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
+        }
+    }
+
+    @Test
+    fun `observeSubjectDetail reports Loading for a vocabulary subject with no cached or bundled pitch data`() = runTest {
+        repositories.subjectDao.upsertAll(
+            listOf(
+                SubjectEntity(
+                    id = 901,
+                    subjectType = "vocabulary",
+                    level = 1,
+                    slug = "水",
+                    characters = "水",
+                    meanings = listOf(MeaningData(meaning = "Water", primary = true)),
+                    readings = listOf(ReadingData(reading = "みず", primary = true)),
+                    documentUrl = null,
+                    searchTarget = "水 water"
+                )
+            )
+        )
+
+        repository.observeSubjectDetail(901).test {
+            assertThat(awaitItem()?.pitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 

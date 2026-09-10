@@ -23,6 +23,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectStatsTestTags
@@ -247,7 +248,7 @@ class SubjectDetailContentTest {
         val vocabDetail = detail.copy(
             subjectType = SubjectType.VOCABULARY,
             readings = listOf("みず"),
-            pitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+            pitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
         )
         composeTestRule.setContent {
             SubjectDetailContent(
@@ -270,7 +271,7 @@ class SubjectDetailContentTest {
         val vocabDetail = detail.copy(
             subjectType = SubjectType.VOCABULARY,
             readings = listOf("みず"),
-            pitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+            pitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
         )
         composeTestRule.setContent {
             SubjectDetailContent(
@@ -289,8 +290,12 @@ class SubjectDetailContentTest {
     }
 
     @Test
-    fun vocabularyWithNoPitchAccentData_staysPlainTextEvenWhenEnabled() {
-        val vocabDetail = detail.copy(subjectType = SubjectType.VOCABULARY, readings = listOf("みず"), pitchAccents = emptyList())
+    fun vocabularyWithUnavailablePitchAccent_showsTheNotAvailableCaptionWhenEnabled() {
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            pitchAccents = PitchAccentUiState.Unavailable
+        )
         composeTestRule.setContent {
             SubjectDetailContent(
                 detail = vocabDetail,
@@ -304,6 +309,54 @@ class SubjectDetailContentTest {
         }
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
+        composeTestRule.onNodeWithText("Pitch accent not available").assertIsDisplayed()
+        composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+    }
+
+    @Test
+    fun vocabularyWithPendingPitchAccent_staysPlainTextWithNoCaption() {
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            pitchAccents = PitchAccentUiState.Loading
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                showPitchAccent = true
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Pitch accent not available").assertCountEquals(0)
+        composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+    }
+
+    @Test
+    fun vocabularyWithUnavailablePitchAccent_hidesTheCaptionWhenSettingDisabled() {
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            pitchAccents = PitchAccentUiState.Unavailable
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                showPitchAccent = false
+            )
+        }
+
+        composeTestRule.onAllNodesWithText("Pitch accent not available").assertCountEquals(0)
         composeTestRule.onNodeWithText("みず").assertIsDisplayed()
     }
 
@@ -347,7 +400,7 @@ class SubjectDetailContentTest {
         val vocabDetail = detail.copy(
             subjectType = SubjectType.VOCABULARY,
             readings = listOf("みず"),
-            pitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)),
+            pitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))),
             pronunciationAudios = listOf(
                 PronunciationAudio(
                     url = "https://example.com/mizu.mp3",

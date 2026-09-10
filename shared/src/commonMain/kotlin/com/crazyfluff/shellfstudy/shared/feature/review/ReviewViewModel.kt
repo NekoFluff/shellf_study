@@ -47,6 +47,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.availableOrEmpty
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlin.time.Clock
@@ -503,7 +504,9 @@ class ReviewViewModel(
         if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType) && characters != null) {
             val answerReading = item.readings.firstOrNull()
             val answerPitchAccents = if (answerReading != null) {
-                pitchAccentRepository.observePitchAccents(characters).first()
+                // Collapsed to a list on purpose: during a quiz, "pending" and "confirmed absent"
+                // both just mean no hint to show right now.
+                pitchAccentRepository.observePitchAccents(characters).first().availableOrEmpty()
             } else {
                 emptyList()
             }

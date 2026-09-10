@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.data.model
 
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 
 /**
@@ -32,8 +33,13 @@ data class SubjectDetail(
     val componentSubjectIds: List<Long>,
     val amalgamationSubjectIds: List<Long>,
     val visuallySimilarSubjectIds: List<Long>,
-    /** Vocabulary/kana-vocabulary only — empty for kanji/radicals, which don't have pitch accent. */
-    val pitchAccents: List<PitchAccent> = emptyList(),
+    /**
+     * Vocabulary/kana-vocabulary only — kanji/radicals, which don't have pitch accent at all,
+     * resolve to [PitchAccentUiState.Unavailable]. Defaults to [PitchAccentUiState.Loading]: only
+     * [com.crazyfluff.shellfstudy.shared.data.SubjectRepository.observeSubjectDetail] can say whether
+     * a word's pitch accent is known, pending, or confirmed absent.
+     */
+    val pitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
     /** Vocabulary/kana-vocabulary only — kanji/radicals don't have spoken pronunciation clips. */
     val pronunciationAudios: List<PronunciationAudio> = emptyList()
 )

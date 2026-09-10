@@ -22,6 +22,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.MoraReadingT
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentDiagram
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentReadingRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.isHighMora
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.splitIntoMorae
 import com.google.common.truth.Truth.assertThat
@@ -166,7 +167,7 @@ class PitchAccentDiagramTest {
         composeTestRule.setContent {
             PitchAccentReadingRow(
                 reading = "みず",
-                pitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+                pitchAccentState = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
             )
         }
 
@@ -175,12 +176,39 @@ class PitchAccentDiagramTest {
     }
 
     @Test
-    fun `reading row falls back to plain text when no pitch accent matches`() {
+    fun `reading row renders no diagram when the available entries hold nothing for this reading`() {
         composeTestRule.setContent {
-            PitchAccentReadingRow(reading = "みず", pitchAccents = emptyList())
+            PitchAccentReadingRow(
+                reading = "みず",
+                pitchAccentState = PitchAccentUiState.Available(
+                    listOf(PitchAccent(reading = "ミズウミ", partOfSpeech = null, pitchNumber = 0))
+                )
+            )
         }
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
+        composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+    }
+
+    @Test
+    fun `reading row captions a confirmed-absent word instead of silently showing nothing`() {
+        composeTestRule.setContent {
+            PitchAccentReadingRow(reading = "みず", pitchAccentState = PitchAccentUiState.Unavailable)
+        }
+
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
+        composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Pitch accent not available").assertIsDisplayed()
+    }
+
+    @Test
+    fun `reading row renders neither diagram nor caption while the lookup is still pending`() {
+        composeTestRule.setContent {
+            PitchAccentReadingRow(reading = "みず", pitchAccentState = PitchAccentUiState.Loading)
+        }
+
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Pitch accent not available").assertCountEquals(0)
         composeTestRule.onNodeWithText("みず").assertIsDisplayed()
     }
 
@@ -189,9 +217,11 @@ class PitchAccentDiagramTest {
         composeTestRule.setContent {
             PitchAccentReadingRow(
                 reading = "いっそう",
-                pitchAccents = listOf(
-                    PitchAccent(reading = "イッソウ", partOfSpeech = "副", pitchNumber = 0),
-                    PitchAccent(reading = "イッソウ", partOfSpeech = "名", pitchNumber = 1)
+                pitchAccentState = PitchAccentUiState.Available(
+                    listOf(
+                        PitchAccent(reading = "イッソウ", partOfSpeech = "副", pitchNumber = 0),
+                        PitchAccent(reading = "イッソウ", partOfSpeech = "名", pitchNumber = 1)
+                    )
                 )
             )
         }
@@ -207,9 +237,11 @@ class PitchAccentDiagramTest {
         composeTestRule.setContent {
             PitchAccentReadingRow(
                 reading = "いっそう",
-                pitchAccents = listOf(
-                    PitchAccent(reading = "イッソウ", partOfSpeech = "副", pitchNumber = 0),
-                    PitchAccent(reading = "イッソウ", partOfSpeech = "名", pitchNumber = 1)
+                pitchAccentState = PitchAccentUiState.Available(
+                    listOf(
+                        PitchAccent(reading = "イッソウ", partOfSpeech = "副", pitchNumber = 0),
+                        PitchAccent(reading = "イッソウ", partOfSpeech = "名", pitchNumber = 1)
+                    )
                 )
             )
         }
@@ -225,11 +257,13 @@ class PitchAccentDiagramTest {
         composeTestRule.setContent {
             PitchAccentReadingRow(
                 reading = "けっこう",
-                pitchAccents = listOf(
-                    PitchAccent(reading = "ケッコウ", partOfSpeech = "副", pitchNumber = 0),
-                    PitchAccent(reading = "ケッコウ", partOfSpeech = "名", pitchNumber = 1),
-                    PitchAccent(reading = "ケッコウ", partOfSpeech = "名", pitchNumber = 2),
-                    PitchAccent(reading = "ケッコウ", partOfSpeech = "形動", pitchNumber = 4)
+                pitchAccentState = PitchAccentUiState.Available(
+                    listOf(
+                        PitchAccent(reading = "ケッコウ", partOfSpeech = "副", pitchNumber = 0),
+                        PitchAccent(reading = "ケッコウ", partOfSpeech = "名", pitchNumber = 1),
+                        PitchAccent(reading = "ケッコウ", partOfSpeech = "名", pitchNumber = 2),
+                        PitchAccent(reading = "ケッコウ", partOfSpeech = "形動", pitchNumber = 4)
+                    )
                 )
             ) {
                 Box(modifier = Modifier.size(24.dp).testTag("trailing"))
@@ -241,5 +275,17 @@ class PitchAccentDiagramTest {
         val textCenterY = (textBounds.top + textBounds.bottom) / 2
         val trailingCenterY = (trailingBounds.top + trailingBounds.bottom) / 2
         assertThat((trailingCenterY - textCenterY).value).isLessThan(4f)
+    }
+
+    @Test
+    fun `trailing content still renders for an Unavailable reading`() {
+        composeTestRule.setContent {
+            PitchAccentReadingRow(reading = "みず", pitchAccentState = PitchAccentUiState.Unavailable) {
+                Box(modifier = Modifier.size(24.dp).testTag("trailing"))
+            }
+        }
+
+        composeTestRule.onNodeWithTag("trailing").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Pitch accent not available").assertIsDisplayed()
     }
 }

@@ -28,7 +28,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
@@ -288,7 +287,7 @@ private fun VocabularyReadingList(
         detail.readings.forEach { reading ->
             VocabReadingRow(
                 reading = reading,
-                pitchAccents = detail.pitchAccents,
+                pitchAccentState = detail.pitchAccents,
                 showPitchAccent = showPitchAccent,
                 hasAudio = detail.pronunciationAudios.isNotEmpty(),
                 onPlayReading = onPlayReading,
@@ -415,13 +414,19 @@ fun SectionEyebrow(text: String) {
 @Composable
 fun VocabReadingRow(
     reading: String,
-    pitchAccents: List<PitchAccent>,
+    pitchAccentState: PitchAccentUiState,
     showPitchAccent: Boolean,
     hasAudio: Boolean,
     onPlayReading: ((String) -> Unit)?,
     playbackState: PlaybackState = PlaybackState.IDLE
 ) {
-    PitchAccentReadingRow(reading = reading, pitchAccents = if (showPitchAccent) pitchAccents else emptyList()) {
+    PitchAccentReadingRow(
+        reading = reading,
+        // Hidden by preference renders exactly like "not resolved yet": the reading plus its play
+        // button, with no pitch section at all — the same early-out shape showStrokeOrder uses in
+        // SubjectWritingZone, collapsed to the one state that draws nothing.
+        pitchAccentState = if (showPitchAccent) pitchAccentState else PitchAccentUiState.Loading
+    ) {
         if (onPlayReading != null && hasAudio) {
             IconButton(onClick = { onPlayReading(reading) }) {
                 if (playbackState == PlaybackState.ERROR) {
