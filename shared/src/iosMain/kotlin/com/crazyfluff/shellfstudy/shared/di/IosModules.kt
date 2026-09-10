@@ -32,7 +32,12 @@ import com.crazyfluff.shellfstudy.shared.notifications.NotificationStateReposito
 import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
+import com.crazyfluff.shellfstudy.shared.data.DrainOutcome
 import kotlin.time.Instant
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -84,17 +89,14 @@ private val iosSyncModule = module {
         override fun cancelPeriodicScrape() = Unit
     }}
     single<OutboxSyncScheduler> {
-        val appScope = get<kotlinx.coroutines.CoroutineScope>(APPLICATION_SCOPE)
+        val appScope = get<CoroutineScope>(APPLICATION_SCOPE)
         val drainer = OutboxDrainer(
             outboxDao = get(),
             waniKaniRepository = get(),
             assignmentRepository = get(),
             outboxRepository = get()
         )
-        object : OutboxSyncScheduler {
-            override fun requestSync() { appScope.launch { drainer.drain() } }
-            override fun requestImmediateSync() { appScope.launch { drainer.drain() } }
-        }
+        IosOutboxSyncScheduler(appScope, drainer)
     }
     single {
         SyncOrchestrator(

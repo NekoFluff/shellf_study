@@ -139,6 +139,7 @@ fun ReviewRoute(
     searchViewModel: SearchViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val playbackState by viewModel.playbackState.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
 
     LaunchedEffect(uiState.isAbandoned) {
@@ -147,6 +148,7 @@ fun ReviewRoute(
 
     ReviewScreen(
         uiState = uiState,
+        playbackState = playbackState,
         onEvent = { event ->
             when (event) {
                 is ReviewScreenEvent.AnswerInputChange -> viewModel.onAnswerInputChange(event.value)
@@ -175,7 +177,8 @@ fun ReviewRoute(
 fun ReviewScreen(
     uiState: ReviewUiState,
     onEvent: (ReviewScreenEvent) -> Unit,
-    searchUiState: SearchUiState = SearchUiState()
+    searchUiState: SearchUiState = SearchUiState(),
+    playbackState: com.crazyfluff.shellfstudy.shared.data.PlaybackState = com.crazyfluff.shellfstudy.shared.data.PlaybackState.IDLE
 ) {
     val onAnswerInputChange: (String) -> Unit = { onEvent(ReviewScreenEvent.AnswerInputChange(it)) }
     val onSubmit = { onEvent(ReviewScreenEvent.Submit) }
@@ -383,6 +386,7 @@ fun ReviewScreen(
                         onPlayAnswerReading = {
                             phase.answerReading?.let { reading -> onPlayReading(phase.currentItem, reading) }
                         },
+                        audioPlaybackState = playbackState,
                         testTags = QuizQuestionTestTags(
                             progressCount = ReviewScreenTestTags.PROGRESS_COUNT,
                             questionTimerText = ReviewScreenTestTags.QUESTION_TIMER_TEXT,

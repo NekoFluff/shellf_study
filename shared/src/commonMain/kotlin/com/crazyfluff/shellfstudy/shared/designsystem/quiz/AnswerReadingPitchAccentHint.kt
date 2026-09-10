@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -15,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.allForReading
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.MoraReadingText
@@ -44,6 +46,7 @@ fun AnswerReadingPitchAccentHint(
     pitchAccents: List<PitchAccent>,
     modifier: Modifier = Modifier,
     hasAudio: Boolean = false,
+    playbackState: PlaybackState = PlaybackState.IDLE,
     onPlayReading: (() -> Unit)? = null
 ) {
     val matches = remember(reading, pitchAccents) { pitchAccents.allForReading(reading) }
@@ -66,7 +69,11 @@ fun AnswerReadingPitchAccentHint(
         }
         if (playCallback != null) {
             IconButton(onClick = playCallback) {
-                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Play pronunciation for $reading")
+                if (playbackState == PlaybackState.ERROR) {
+                    Icon(Icons.AutoMirrored.Filled.VolumeOff, contentDescription = "Audio unavailable for $reading")
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Play pronunciation for $reading")
+                }
             }
         }
     }

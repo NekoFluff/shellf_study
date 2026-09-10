@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
+import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.components.ExpandableAnswerListText
@@ -120,7 +121,8 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
     onContinue: () -> Unit,
     onUndo: () -> Unit,
     onPlayAnswerReading: () -> Unit,
-    testTags: QuizQuestionTestTags
+    testTags: QuizQuestionTestTags,
+    audioPlaybackState: PlaybackState = PlaybackState.IDLE
 ) {
     val item = uiState.item
     val questionType = uiState.questionType
@@ -218,6 +220,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
                         pitchAccents = uiState.answerPitchAccents,
                         modifier = Modifier.testTag(testTags.answerReadingPitchAccentHint),
                         hasAudio = uiState.answerReadingHasAudio,
+                        playbackState = audioPlaybackState,
                         onPlayReading = onPlayAnswerReading
                     )
                     Spacer(modifier = Modifier.height(2.dp))

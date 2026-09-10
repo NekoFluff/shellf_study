@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.feature.review
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
 import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
@@ -35,6 +36,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.quiz.undoLastCorrectAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.undoLastIncorrectAnswer
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
@@ -146,6 +148,7 @@ class ReviewViewModel(
 
     private val _uiState = MutableStateFlow(ReviewUiState())
     val uiState: StateFlow<ReviewUiState> = _uiState.asStateFlow()
+    val playbackState: StateFlow<PlaybackState> = pronunciationAudioPlayer.state
 
     private val queue = QuizQueue<ReviewItem>()
     private val progressByAssignmentId = mutableMapOf<Long, ItemProgress>()
@@ -254,7 +257,16 @@ class ReviewViewModel(
 
     private suspend fun fetchFreshQueue() {
         when (val result = assignmentRepository.refreshReviewQueue()) {
-            is ApiResult.Error -> _uiState.update { it.copy(phase = ReviewUiState.Phase.Error(result.message)) }
+            is ApiResult.Error -> {
+                // Auth errors require user action (re-login) — surface them explicitly. Network
+                // errors auto-fall back to cached data so the user can review without connectivity,
+                // consistent with the dashboard's own offline behavior.
+                if (result.isAuthError) {
+                    _uiState.update { it.copy(phase = ReviewUiState.Phase.Error(result.message)) }
+                } else {
+                    buildQueue(assignmentRepository.observeReviewQueue().first())
+                }
+            }
             is ApiResult.Success -> buildQueue(assignmentRepository.observeReviewQueue().first())
         }
     }

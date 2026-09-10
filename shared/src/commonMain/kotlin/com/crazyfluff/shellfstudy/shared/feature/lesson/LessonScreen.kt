@@ -207,6 +207,7 @@ fun LessonRoute(
     searchViewModel: SearchViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val playbackState by viewModel.playbackState.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
 
     LaunchedEffect(uiState.isAbandoned) {
@@ -215,6 +216,7 @@ fun LessonRoute(
 
     LessonScreen(
         uiState = uiState,
+        playbackState = playbackState,
         onEvent = { event ->
             when (event) {
                 is LessonScreenEvent.ToggleLessonSelection -> viewModel.toggleLessonSelection(event.assignmentId)
@@ -250,7 +252,8 @@ fun LessonRoute(
 fun LessonScreen(
     uiState: LessonUiState,
     onEvent: (LessonScreenEvent) -> Unit,
-    searchUiState: SearchUiState = SearchUiState()
+    searchUiState: SearchUiState = SearchUiState(),
+    playbackState: com.crazyfluff.shellfstudy.shared.data.PlaybackState = com.crazyfluff.shellfstudy.shared.data.PlaybackState.IDLE
 ) {
     val onToggleLessonSelection: (Long) -> Unit = { onEvent(LessonScreenEvent.ToggleLessonSelection(it)) }
     val onSelectFirst: (Int) -> Unit = { onEvent(LessonScreenEvent.SelectFirst(it)) }
@@ -450,7 +453,8 @@ fun LessonScreen(
                         onPrevious = onPreviousStudyCard,
                         onSwiped = onStudyCardSwiped,
                         onSubjectClick = { detailSheetState.show(it) },
-                        onPlayReading = onPlayReading
+                        onPlayReading = onPlayReading,
+                        audioPlaybackState = playbackState
                     )
                 }
 
@@ -488,6 +492,7 @@ fun LessonScreen(
                         onPlayAnswerReading = {
                             phase.answerReading?.let { reading -> onPlayReading(phase.currentItem, reading) }
                         },
+                        audioPlaybackState = playbackState,
                         testTags = QuizQuestionTestTags(
                             progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
                             questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,
@@ -557,7 +562,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     onPrevious: () -> Unit,
     onSwiped: (Int) -> Unit,
     onSubjectClick: (Long) -> Unit,
-    onPlayReading: (LessonItem, String) -> Unit
+    onPlayReading: (LessonItem, String) -> Unit,
+    audioPlaybackState: com.crazyfluff.shellfstudy.shared.data.PlaybackState = com.crazyfluff.shellfstudy.shared.data.PlaybackState.IDLE
 ) {
     val currentItem = study.studyItems.getOrNull(study.studyIndex) ?: return
     val isLastCard = study.studyIndex == study.studyItems.lastIndex
@@ -649,7 +655,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                     hasReadingBreakdown = hasReadingBreakdown,
                     pitchAccents = study.pitchAccentsBySubjectId[item.subjectId].orEmpty(),
                     showPitchAccent = settings.showPitchAccent,
-                    onPlayReading = { reading -> onPlayReading(item, reading) }
+                    onPlayReading = { reading -> onPlayReading(item, reading) },
+                    audioPlaybackState = audioPlaybackState
                 )
             }
             if (isVocabulary && item.contextSentences.isNotEmpty()) {
@@ -957,7 +964,8 @@ private fun LessonReadingSection(
     hasReadingBreakdown: Boolean,
     pitchAccents: List<PitchAccent>,
     showPitchAccent: Boolean,
-    onPlayReading: (String) -> Unit
+    onPlayReading: (String) -> Unit,
+    audioPlaybackState: com.crazyfluff.shellfstudy.shared.data.PlaybackState = com.crazyfluff.shellfstudy.shared.data.PlaybackState.IDLE
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -975,7 +983,8 @@ private fun LessonReadingSection(
                             pitchAccents = pitchAccents,
                             showPitchAccent = showPitchAccent,
                             hasAudio = item.pronunciationAudios.isNotEmpty(),
-                            onPlayReading = onPlayReading
+                            onPlayReading = onPlayReading,
+                            playbackState = audioPlaybackState
                         )
                     }
                 }

@@ -254,6 +254,7 @@ private fun ColumnScope.SubjectDetailBody(
     viewModel: SubjectDetailViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val audioPlaybackState by viewModel.playbackState.collectAsState()
 
     LaunchedEffect(subjectId) { viewModel.open(subjectId) }
     DisposableEffect(Unit) { onDispose { viewModel.stopPlayback() } }
@@ -302,6 +303,7 @@ private fun ColumnScope.SubjectDetailBody(
                 .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
             showPitchAccent = uiState.showPitchAccent,
             onPlayReading = viewModel::playReading,
+            audioPlaybackState = audioPlaybackState,
             strokeOrder = uiState.strokeOrder,
             autoPlayStrokeOrder = autoPlayStrokeOrder,
             showStrokeOrder = uiState.showStrokeOrder,

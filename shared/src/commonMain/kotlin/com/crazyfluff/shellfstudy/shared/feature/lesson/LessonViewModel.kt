@@ -2,9 +2,11 @@ package com.crazyfluff.shellfstudy.shared.feature.lesson
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
@@ -161,6 +163,7 @@ class LessonViewModel(
 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
+    val playbackState: StateFlow<PlaybackState> = pronunciationAudioPlayer.state
 
     private val quizQueue = QuizQueue<LessonItem>()
     private val startedAssignmentIds = mutableSetOf<Long>()
@@ -413,7 +416,16 @@ class LessonViewModel(
         startedAssignmentIds.clear()
 
         when (val result = assignmentRepository.refreshLessonQueue()) {
-            is ApiResult.Error -> _uiState.update { it.copy(phase = LessonUiState.Phase.Error(result.message)) }
+            is ApiResult.Error -> {
+                // Auth errors require user action (re-login) — surface them explicitly. Network
+                // errors auto-fall back to cached data so the user can study without connectivity,
+                // consistent with the dashboard's own offline behavior.
+                if (result.isAuthError) {
+                    _uiState.update { it.copy(phase = LessonUiState.Phase.Error(result.message)) }
+                } else {
+                    buildLessonSelectionFromCache()
+                }
+            }
             is ApiResult.Success -> buildLessonSelectionFromCache()
         }
     }

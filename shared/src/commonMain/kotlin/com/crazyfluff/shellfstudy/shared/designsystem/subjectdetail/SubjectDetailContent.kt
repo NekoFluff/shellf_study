@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -98,6 +100,7 @@ fun SubjectDetailContent(
     modifier: Modifier = Modifier,
     showPitchAccent: Boolean = true,
     onPlayReading: ((String) -> Unit)? = null,
+    audioPlaybackState: PlaybackState = PlaybackState.IDLE,
     strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
     autoPlayStrokeOrder: Boolean = true,
     showStrokeOrder: Boolean = true,
@@ -144,7 +147,8 @@ fun SubjectDetailContent(
             isVocabulary = isVocabulary,
             showPitchAccent = showPitchAccent,
             onPlayReading = onPlayReading,
-            showDividerAbove = revealMeaning
+            showDividerAbove = revealMeaning,
+            playbackState = audioPlaybackState
         )
         SubjectContextSentencesSection(detail, isVocabulary)
         SubjectVisuallySimilarSection(detail, relatedSubjects, onRelatedSubjectClick)
@@ -274,7 +278,12 @@ private fun KanjiReadingBreakdown(detail: SubjectDetail) {
 }
 
 @Composable
-private fun VocabularyReadingList(detail: SubjectDetail, showPitchAccent: Boolean, onPlayReading: ((String) -> Unit)?) {
+private fun VocabularyReadingList(
+    detail: SubjectDetail,
+    showPitchAccent: Boolean,
+    onPlayReading: ((String) -> Unit)?,
+    playbackState: PlaybackState = PlaybackState.IDLE
+) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         detail.readings.forEach { reading ->
             VocabReadingRow(
@@ -282,7 +291,8 @@ private fun VocabularyReadingList(detail: SubjectDetail, showPitchAccent: Boolea
                 pitchAccents = detail.pitchAccents,
                 showPitchAccent = showPitchAccent,
                 hasAudio = detail.pronunciationAudios.isNotEmpty(),
-                onPlayReading = onPlayReading
+                onPlayReading = onPlayReading,
+                playbackState = playbackState
             )
         }
     }
@@ -296,7 +306,8 @@ private fun SubjectReadingZone(
     isVocabulary: Boolean,
     showPitchAccent: Boolean,
     onPlayReading: ((String) -> Unit)?,
-    showDividerAbove: Boolean
+    showDividerAbove: Boolean,
+    playbackState: PlaybackState = PlaybackState.IDLE
 ) {
     if (!(revealReading && hasReadings)) return
     val hasReadingBreakdown =
@@ -315,7 +326,7 @@ private fun SubjectReadingZone(
             )
             when (readingDisplayStyle(detail.subjectType, hasReadingBreakdown, isVocabulary)) {
                 ReadingDisplayStyle.KANJI_BREAKDOWN -> KanjiReadingBreakdown(detail)
-                ReadingDisplayStyle.VOCABULARY -> VocabularyReadingList(detail, showPitchAccent, onPlayReading)
+                ReadingDisplayStyle.VOCABULARY -> VocabularyReadingList(detail, showPitchAccent, onPlayReading, playbackState)
                 ReadingDisplayStyle.PLAIN -> JapaneseText(detail.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
             }
         }
@@ -407,12 +418,17 @@ fun VocabReadingRow(
     pitchAccents: List<PitchAccent>,
     showPitchAccent: Boolean,
     hasAudio: Boolean,
-    onPlayReading: ((String) -> Unit)?
+    onPlayReading: ((String) -> Unit)?,
+    playbackState: PlaybackState = PlaybackState.IDLE
 ) {
     PitchAccentReadingRow(reading = reading, pitchAccents = if (showPitchAccent) pitchAccents else emptyList()) {
         if (onPlayReading != null && hasAudio) {
             IconButton(onClick = { onPlayReading(reading) }) {
-                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Play pronunciation for $reading")
+                if (playbackState == PlaybackState.ERROR) {
+                    Icon(Icons.AutoMirrored.Filled.VolumeOff, contentDescription = "Audio unavailable for $reading")
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Play pronunciation for $reading")
+                }
             }
         }
     }
