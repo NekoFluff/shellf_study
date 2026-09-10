@@ -59,6 +59,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import kotlin.time.Duration.Companion.seconds
 
 class DashboardViewModelTest {
 
@@ -380,7 +381,52 @@ class DashboardViewModelTest {
             assertThat(state.isOffline).isTrue()
             assertThat(state.errorMessage).isNull()
             assertThat(state.username).isEqualTo("cached_user")
-            assertThat(state.lessonCount).isEqualTo(3)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `shows the locally-computed due count, not the stale cached one, once offline`() = runTest(mainDispatcherRule.dispatcher) {
+        // The cached /summary snapshot is from the last successful sync and says nothing's due,
+        // but the local assignments table — always queried live against the current time — knows
+        // better: reviews have since become available and a lesson has since unlocked. Offline,
+        // the dashboard must trust that live local data instead of parroting the stale cache.
+        dashboardCacheRepository.save(
+            username = "cached_user", level = 5, lessonCount = 0, reviewCount = 0, syncedAtMillis = 1_000L
+        )
+        val now = kotlin.time.Clock.System.now()
+        repositories.assignmentDao.upsertAll(
+            listOf(
+                com.crazyfluff.shellfstudy.shared.database.AssignmentEntity(
+                    id = 1, subjectId = 1, subjectType = "radical", srsStage = 1,
+                    createdAt = "2026-01-01T00:00:00.000000Z",
+                    availableAt = (now - 60.seconds).toString(), hidden = false
+                ),
+                com.crazyfluff.shellfstudy.shared.database.AssignmentEntity(
+                    id = 2, subjectId = 2, subjectType = "kanji", srsStage = 1,
+                    createdAt = "2026-01-01T00:00:00.000000Z",
+                    availableAt = (now - 60.seconds).toString(), hidden = false
+                ),
+                com.crazyfluff.shellfstudy.shared.database.AssignmentEntity(
+                    id = 3, subjectId = 3, subjectType = "vocabulary", srsStage = 0,
+                    createdAt = "2026-01-01T00:00:00.000000Z",
+                    unlockedAt = (now - 60.seconds).toString(), startedAt = null, hidden = false
+                )
+            )
+        )
+        dispatchByPath(emptyResponse(500), jsonResponse(summaryJson()))
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.isRefreshing) state = awaitItem()
+
+            assertThat(state.isOffline).isTrue()
+            assertThat(state.reviewCount).isEqualTo(2)
+            assertThat(state.lessonCount).isEqualTo(1)
+            assertThat(state.isReviewsCardEnabled).isTrue()
+            assertThat(state.isLessonsCardEnabled).isTrue()
             cancelAndIgnoreRemainingEvents()
         }
     }

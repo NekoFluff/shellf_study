@@ -228,15 +228,22 @@ class DashboardViewModel(
     val uiState: StateFlow<DashboardUiState> = combine(
         combine(_dashboardData, sessionSyncState, progressStatsState, levelDependentState, localDueCounts)
         { imperative, sessionSync, progress, levelDependent, localCounts ->
-            // Only clamp to the local count while the outbox still has unsent rows — that's
-            // exactly the window where a just-completed session's submissions haven't reached the
-            // server yet, so /summary's count is known-stale. Once the outbox drains, trust the
-            // freshly-fetched remote count outright again — the local assignments table isn't
-            // guaranteed to be resynced on every dashboard resume, so clamping unconditionally
-            // would let a merely-unsynced local cache mask genuinely due reviews/lessons.
+            // While offline, `imperative.reviewCount`/`lessonCount` are whatever /summary last
+            // reported — possibly hours stale — so trust the local assignments table instead; it's
+            // queried live against `availableAt <= now` (same source the review forecast uses) and
+            // is always current regardless of connectivity. While online, only clamp to the local
+            // count when the outbox still has unsent rows — that's exactly the window where a
+            // just-completed session's submissions haven't reached the server yet, so /summary's
+            // count is known-stale. Once the outbox drains, trust the freshly-fetched remote count
+            // outright again — the local assignments table isn't guaranteed to be resynced on every
+            // dashboard resume, so clamping unconditionally would let a merely-unsynced local cache
+            // mask genuinely due reviews/lessons.
             val hasUnsentSubmissions = sessionSync.pendingSyncCount > 0
-            fun reconcile(remoteCount: Int, localCount: Int) =
-                if (hasUnsentSubmissions) minOf(remoteCount, localCount) else remoteCount
+            fun reconcile(remoteCount: Int, localCount: Int) = when {
+                imperative.isOffline -> localCount
+                hasUnsentSubmissions -> minOf(remoteCount, localCount)
+                else -> remoteCount
+            }
             imperative.copy(
                 reviewCount = reconcile(imperative.reviewCount, localCounts.reviewCount),
                 lessonCount = reconcile(imperative.lessonCount, localCounts.lessonCount),
