@@ -580,7 +580,8 @@ class LessonScreenTest {
             )
         )
 
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECTION_OVER_GOAL_TEXT).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECTION_OVER_GOAL_TEXT)
+            .assertTextContains("Past today's goal of 2 — you can stop between batches at any time.", substring = true)
     }
 
     @Test

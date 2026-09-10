@@ -902,9 +902,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
         )
         if (select.isOverDailyGoal) {
             Spacer(modifier = Modifier.height(4.dp))
+            // Names the exit rather than reassuring about one: the checkpoint between batches is what
+            // actually makes an over-goal selection harmless, and it's visible later — a promise about
+            // lessons "staying available" here would just be a claim the learner has to take on faith.
             Text(
-                text = "Past today's goal of ${select.dailyLessonGoal} (${select.dailyLessonsCompletedToday} done) — " +
-                    "anything you don't reach stays available.",
+                text = "Past today's goal of ${select.dailyLessonGoal} — you can stop between batches at any time.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.testTag(LessonScreenTestTags.SELECTION_OVER_GOAL_TEXT)
