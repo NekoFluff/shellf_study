@@ -457,7 +457,7 @@ fun DashboardScreen(
             )
             AbandonConfirmKind.Lesson -> ConfirmationDialog(
                 title = "Abandon lesson session?",
-                text = "Progress on the lessons you haven't finished quizzing yet will be lost. Lessons you've already completed won't be affected.",
+                text = "Finished batches are kept. Lessons in the batch you're on that you haven't finished, and every batch after it, are dropped from this session — they stay available to study later.",
                 confirmLabel = "Abandon",
                 onConfirm = { abandonConfirm = null; callbacks.onAbandonLessonSession() },
                 onDismiss = { abandonConfirm = null },

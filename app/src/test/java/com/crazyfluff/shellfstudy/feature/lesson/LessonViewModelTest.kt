@@ -4,11 +4,13 @@ import com.crazyfluff.shellfstudy.shared.data.PersistedLessonPhase
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
+import com.crazyfluff.shellfstudy.shared.feature.lesson.QuizRound
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
@@ -110,6 +112,47 @@ class LessonViewModelTest {
         lastSessionSummaryRepository, pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository,
         pronunciationAudioPlayer, appForegroundTracker, backgroundScope
     )
+
+    /**
+     * Waits for the session summary, declining the end-of-session extra-practice checkpoint if the
+     * session stopped at one — a session with any miss now lands there before its summary, since that
+     * checkpoint is the only place "practice what you missed" can be offered.
+     */
+    private suspend fun ReceiveTurbine<LessonUiState>.awaitSessionSummary(viewModel: LessonViewModel): LessonUiState.Phase.Complete {
+        var state = awaitItem()
+        if (state.phase is LessonUiState.Phase.BatchComplete) {
+            viewModel.finishSessionNow()
+            state = awaitItem()
+        }
+        return state.phase as LessonUiState.Phase.Complete
+    }
+
+    /**
+     * Answers every question of the batch the session is currently quizzed on, correctly, and returns
+     * the state the queue empties into — a batch checkpoint, or the summary when that was the last
+     * batch and nothing was missed.
+     */
+    private suspend fun ReceiveTurbine<LessonUiState>.answerEveryQuestionInBatch(
+        initialState: LessonUiState,
+        viewModel: LessonViewModel
+    ): LessonUiState {
+        var state = initialState
+        var guard = 0
+        while (state.phase is LessonUiState.Phase.Quiz && guard++ < 20) {
+            val quiz = state.phase as LessonUiState.Phase.Quiz
+            val answer = when (quiz.currentQuestionType) {
+                QuestionType.MEANING -> quiz.currentItem.meanings.first()
+                QuestionType.READING -> quiz.currentItem.readings.first()
+            }
+            viewModel.onAnswerInputChange(answer)
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+            viewModel.onContinue()
+            state = awaitItem()
+        }
+        return state
+    }
 
     /** Routes by path — refreshing the lesson queue now syncs subjects and assignments, in either order. */
     private fun dispatch(
@@ -1048,8 +1091,8 @@ class LessonViewModelTest {
 
             viewModel.abandonSession()
             var abandonedState = awaitItem()
-            while (!abandonedState.isAbandoned) abandonedState = awaitItem()
-            assertThat(abandonedState.isAbandoned).isTrue()
+            while (abandonedState.exit != LessonUiState.ExitRequest.Abandoned) abandonedState = awaitItem()
+            assertThat(abandonedState.exit).isEqualTo(LessonUiState.ExitRequest.Abandoned)
         }
 
         assertThat(lessonSessionRepository.load()).isNull()
@@ -1087,7 +1130,7 @@ class LessonViewModelTest {
             awaitItem()
 
             viewModel.onContinue()
-            val finalState = awaitItem().phase as LessonUiState.Phase.Complete
+            val finalState = awaitSessionSummary(viewModel)
 
             assertThat(finalState.sessionItemsLearned).isEqualTo(1)
             assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(0)
@@ -1176,12 +1219,19 @@ class LessonViewModelTest {
             var safetyCounter = 0
             while (!isComplete && safetyCounter < 10) {
                 safetyCounter++
-                val item = (state.phase as LessonUiState.Phase.Quiz).currentItem
-                secondViewModel.onAnswerInputChange(item.meanings.first())
-                awaitItem()
-                secondViewModel.submitAnswer()
-                awaitItem()
-                secondViewModel.onContinue()
+                when (val phase = state.phase) {
+                    is LessonUiState.Phase.Quiz -> {
+                        secondViewModel.onAnswerInputChange(phase.currentItem.meanings.first())
+                        awaitItem()
+                        secondViewModel.submitAnswer()
+                        awaitItem()
+                        secondViewModel.onContinue()
+                    }
+                    // A session with a miss ends its last batch at the checkpoint that offers extra
+                    // practice on it; declining that offer is what "until the summary" means now.
+                    is LessonUiState.Phase.BatchComplete -> secondViewModel.finishSessionNow()
+                    else -> error("unexpected phase while waiting for the session summary: $phase")
+                }
                 state = awaitItem()
                 isComplete = state.phase is LessonUiState.Phase.Complete
             }
@@ -1251,12 +1301,19 @@ class LessonViewModelTest {
             var safetyCounter = 0
             while (!isComplete && safetyCounter < 10) {
                 safetyCounter++
-                val item = (state.phase as LessonUiState.Phase.Quiz).currentItem
-                secondViewModel.onAnswerInputChange(item.meanings.first())
-                awaitItem()
-                secondViewModel.submitAnswer()
-                awaitItem()
-                secondViewModel.onContinue()
+                when (val phase = state.phase) {
+                    is LessonUiState.Phase.Quiz -> {
+                        secondViewModel.onAnswerInputChange(phase.currentItem.meanings.first())
+                        awaitItem()
+                        secondViewModel.submitAnswer()
+                        awaitItem()
+                        secondViewModel.onContinue()
+                    }
+                    // Same as above: the last batch of a session with a miss stops at the extra-practice
+                    // checkpoint first.
+                    is LessonUiState.Phase.BatchComplete -> secondViewModel.finishSessionNow()
+                    else -> error("unexpected phase while waiting for the session summary: $phase")
+                }
                 state = awaitItem()
                 isComplete = state.phase is LessonUiState.Phase.Complete
             }
@@ -1795,7 +1852,7 @@ class LessonViewModelTest {
     @Test
     fun `abandoning the session does not leave a resumable session after navigation`() = runTest(mainDispatcherRule.dispatcher) {
         // Regression: abandonSession() cleared DataStore but onCleared() then fired and
-        // re-wrote the session via pauseActiveSegment() because isAbandoned was never checked.
+        // re-wrote the session via pauseActiveSegment() because the abandoned exit was never checked.
         // The dashboard would show "Resume" even after an explicit Abandon.
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
@@ -1807,13 +1864,13 @@ class LessonViewModelTest {
             awaitItem() // STUDY phase
             viewModel.nextStudyCard()
             awaitItem() // QUIZ phase (segment started)
-            // Abandon clears DataStore then sets isAbandoned = true; wait for both.
+            // Abandon clears DataStore then marks the exit as Abandoned; wait for both.
             viewModel.abandonSession()
             var s = awaitItem()
-            while (!s.isAbandoned) s = awaitItem()
+            while (s.exit != LessonUiState.ExitRequest.Abandoned) s = awaitItem()
         }
 
-        // isAbandoned is now true. onCleared() must not re-write the session.
+        // The exit is Abandoned now. onCleared() must not re-write the session.
         ViewModel::class.java.getDeclaredMethod("onCleared")
             .apply { isAccessible = true }
             .invoke(viewModel)
@@ -1957,6 +2014,218 @@ class LessonViewModelTest {
 
         assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
         assertThat(pronunciationAudioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
+    }
+
+    @Test
+    fun `a selection larger than the batch size is sliced into batches of the configured size`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(threeRadicalAssignmentsJson()), jsonResponse(threeRadicalSubjectsJson()))
+        settingsRepository.setLessonBatchSize(2)
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            // The picker opens with exactly one batch selected rather than the whole queue, and says
+            // how big a batch is.
+            val select = state.phase as LessonUiState.Phase.Select
+            assertThat(select.batchSize).isEqualTo(2)
+            assertThat(select.selectedAssignmentIds).hasSize(2)
+
+            viewModel.selectAll()
+            awaitItem()
+            viewModel.startSelectedLessons()
+            state = awaitItem()
+
+            // Studying starts at the first batch only — the third lesson isn't on the pager at all.
+            val firstBatch = state.phase as LessonUiState.Phase.Study
+            assertThat(firstBatch.batchIndex).isEqualTo(0)
+            assertThat(firstBatch.batchCount).isEqualTo(2)
+            assertThat(firstBatch.sessionItemCount).isEqualTo(3)
+            assertThat(firstBatch.studyItems.map { it.assignmentId }).containsExactly(101L, 102L).inOrder()
+
+            viewModel.nextStudyCard()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem()
+
+            // ...and the quiz is only about those two, not about every item the learner picked.
+            val quiz = state.phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.batchIndex).isEqualTo(0)
+            assertThat(quiz.batchCount).isEqualTo(2)
+            assertThat(quiz.round).isEqualTo(QuizRound.LESSON)
+            assertThat(quiz.totalQuizCount).isEqualTo(2)
+        }
+    }
+
+    @Test
+    fun `finishing a batch stops at a checkpoint offering the next batch`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(threeRadicalAssignmentsJson()), jsonResponse(threeRadicalSubjectsJson()))
+        settingsRepository.setLessonBatchSize(2)
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            viewModel.selectAll()
+            awaitItem()
+            viewModel.startSelectedLessons()
+            awaitItem() // batch 1 study
+            viewModel.nextStudyCard()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // batch 1 quiz
+
+            state = answerEveryQuestionInBatch(state, viewModel)
+            val checkpoint = state.phase as LessonUiState.Phase.BatchComplete
+
+            assertThat(checkpoint.batchIndex).isEqualTo(0)
+            assertThat(checkpoint.batchCount).isEqualTo(2)
+            assertThat(checkpoint.itemsLearned).isEqualTo(2)
+            assertThat(checkpoint.itemsCorrectFirstTry).isEqualTo(2)
+            assertThat(checkpoint.missedItems).isEmpty()
+            val next = checkpoint.next
+            assertThat(next).isInstanceOf(LessonUiState.Phase.BatchComplete.NextStep.StudyBatch::class.java)
+            next as LessonUiState.Phase.BatchComplete.NextStep.StudyBatch
+            assertThat(next.batchIndex).isEqualTo(1)
+            assertThat(next.itemCount).isEqualTo(1)
+            assertThat(next.remainingSessionItems).isEqualTo(1)
+
+            viewModel.continueSession()
+            val secondBatch = awaitItem().phase as LessonUiState.Phase.Study
+            assertThat(secondBatch.batchIndex).isEqualTo(1)
+            assertThat(secondBatch.studyItems.map { it.assignmentId }).containsExactly(103L)
+        }
+    }
+
+    @Test
+    fun `finish for now parks the session and resuming continues at the next batch`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(threeRadicalAssignmentsJson()), jsonResponse(threeRadicalSubjectsJson()))
+        settingsRepository.setLessonBatchSize(2)
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            firstViewModel.selectAll()
+            awaitItem()
+            firstViewModel.startSelectedLessons()
+            awaitItem() // batch 1 study
+            firstViewModel.nextStudyCard()
+            awaitItem()
+            firstViewModel.nextStudyCard()
+            state = awaitItem() // batch 1 quiz
+
+            state = answerEveryQuestionInBatch(state, firstViewModel)
+            assertThat(state.phase).isInstanceOf(LessonUiState.Phase.BatchComplete::class.java)
+
+            firstViewModel.finishForNow()
+            var parked = awaitItem()
+            while (parked.exit != LessonUiState.ExitRequest.Parked) parked = awaitItem()
+        }
+
+        // Parking keeps the session, pointed at the batch that hasn't been studied yet — which is what
+        // the dashboard's "Resume" then walks into.
+        val persisted = lessonSessionRepository.load()
+        assertThat(persisted).isNotNull()
+        assertThat(persisted!!.phase).isEqualTo(PersistedLessonPhase.CHECKPOINT)
+        assertThat(persisted.batchIndex).isEqualTo(1)
+
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            val resumed = state.phase as LessonUiState.Phase.Study
+            assertThat(resumed.batchIndex).isEqualTo(1)
+            assertThat(resumed.batchCount).isEqualTo(2)
+            assertThat(resumed.studyItems.map { it.assignmentId }).containsExactly(103L)
+        }
+    }
+
+    @Test
+    fun `the final checkpoint's extra practice asks only the missed half without changing the summary`() = runTest(mainDispatcherRule.dispatcher) {
+        // The kanji fixture gives each item both a meaning and a reading question, so missing one half
+        // is expressible while the other is answered correctly.
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz
+
+            var missedMeaning = false
+            var guard = 0
+            while (state.phase !is LessonUiState.Phase.BatchComplete && guard++ < 10) {
+                val quiz = state.phase as LessonUiState.Phase.Quiz
+                val answer = if (quiz.currentQuestionType == QuestionType.MEANING && !missedMeaning) {
+                    missedMeaning = true
+                    "definitely wrong"
+                } else {
+                    if (quiz.currentQuestionType == QuestionType.MEANING) quiz.currentItem.meanings.first() else quiz.currentItem.readings.first()
+                }
+                viewModel.onAnswerInputChange(answer)
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            val offer = (state.phase as LessonUiState.Phase.BatchComplete).next
+            assertThat(offer).isInstanceOf(LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed::class.java)
+            assertThat((offer as LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed).itemCount).isEqualTo(1)
+
+            viewModel.practiceMissedItems()
+            val cleanup = awaitItem().phase as LessonUiState.Phase.Quiz
+
+            assertThat(cleanup.round).isEqualTo(QuizRound.CLEANUP)
+            // Only the half that was missed is asked again — the reading was answered correctly on the
+            // way to learning the item.
+            assertThat(cleanup.totalQuizCount).isEqualTo(1)
+            assertThat(cleanup.currentQuestionType).isEqualTo(QuestionType.MEANING)
+
+            viewModel.onAnswerInputChange(cleanup.currentItem.meanings.first())
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+            viewModel.onContinue()
+            val complete = awaitItem().phase as LessonUiState.Phase.Complete
+
+            // Rehearsing an already-learned item can't retroactively make the session a clean one.
+            assertThat(complete.sessionItemsLearned).isEqualTo(1)
+            assertThat(complete.sessionItemsCorrectFirstTry).isEqualTo(0)
+            assertThat(complete.sessionMissedItems).hasSize(1)
+        }
+    }
+
+    @Test
+    fun `the picker defaults to what is left of the daily lesson goal`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(threeRadicalAssignmentsJson()), jsonResponse(threeRadicalSubjectsJson()))
+        settingsRepository.setDailyLessonGoal(2)
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            val select = state.phase as LessonUiState.Phase.Select
+            assertThat(select.selectedAssignmentIds).hasSize(2)
+            assertThat(select.remainingDailyGoal).isEqualTo(2)
+            assertThat(select.isOverDailyGoal).isFalse()
+
+            // Picking past the goal is allowed — it just says so.
+            viewModel.selectAll()
+            assertThat((awaitItem().phase as LessonUiState.Phase.Select).isOverDailyGoal).isTrue()
+        }
     }
 
     private fun kanjiAssignmentsJson() = """
@@ -2106,6 +2375,76 @@ class LessonViewModelTest {
               "meaning_mnemonic": "A stream of water."
             }
           }]
+        }
+    """.trimIndent()
+
+    private fun threeRadicalAssignmentsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 3,
+          "data": [
+            {
+              "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "radical",
+                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            },
+            {
+              "id": 102, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/102",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 2, "subject_type": "radical",
+                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            },
+            {
+              "id": 103, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/103",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 3, "subject_type": "radical",
+                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            }
+          ]
+        }
+    """.trimIndent()
+
+    private fun threeRadicalSubjectsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 3,
+          "data": [
+            {
+              "id": 1, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/1",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "mouth",
+                "characters": "口",
+                "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
+                "readings": []
+              }
+            },
+            {
+              "id": 2, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/2",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "ground",
+                "characters": "一",
+                "meanings": [{"meaning": "Ground", "primary": true, "accepted_meaning": true}],
+                "readings": []
+              }
+            },
+            {
+              "id": 3, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/3",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "two",
+                "characters": "二",
+                "meanings": [{"meaning": "Two", "primary": true, "accepted_meaning": true}],
+                "readings": []
+              }
+            }
+          ]
         }
     """.trimIndent()
 

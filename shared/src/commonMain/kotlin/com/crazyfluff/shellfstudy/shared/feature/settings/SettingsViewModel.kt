@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.shared.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
@@ -17,6 +18,7 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val dailyLessonGoal: Int = 15,
+    val lessonBatchSize: Int = DEFAULT_LESSON_BATCH_SIZE,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val showPitchAccent: Boolean = true,
     val autoplayPronunciationAudio: Boolean = true,
@@ -58,6 +60,7 @@ class SettingsViewModel(
     ) { app, notif, refresh ->
         SettingsUiState(
             dailyLessonGoal = app.dailyLessonGoal,
+            lessonBatchSize = app.lessonBatchSize,
             themeMode = app.themeMode,
             showPitchAccent = app.showPitchAccent,
             autoplayPronunciationAudio = app.autoplayPronunciationAudio,
@@ -85,6 +88,10 @@ class SettingsViewModel(
 
     fun onDailyLessonGoalChange(goal: Int) {
         viewModelScope.launch { settingsRepository.setDailyLessonGoal(goal) }
+    }
+
+    fun onLessonBatchSizeChange(size: Int) {
+        viewModelScope.launch { settingsRepository.setLessonBatchSize(size) }
     }
 
     fun onThemeModeChange(mode: ThemeMode) {

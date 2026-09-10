@@ -70,7 +70,9 @@ data class QuizQuestionTestTags(
     val feedbackText: String,
     val answerDetailText: String,
     val continueButton: String,
-    val answerReadingPitchAccentHint: String
+    val answerReadingPitchAccentHint: String,
+    /** The optional "Batch 2 of 4"-style label in the progress row. */
+    val sessionContextLabel: String
 )
 
 /** Everything [QuizQuestionContent] needs to render one quiz question — a read-only projection
@@ -103,7 +105,11 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     val showAnswerReadingPitchAccent: Boolean = false,
     val answerReading: String? = null,
     val answerPitchAccents: List<PitchAccent> = emptyList(),
-    val answerReadingHasAudio: Boolean = false
+    val answerReadingHasAudio: Boolean = false,
+    // Which pass of the session this question belongs to ("Batch 2 of 4", "Extra practice") — null
+    // when there's nothing worth saying, which is the case for every review question and for a lesson
+    // session that fits in a single batch.
+    val sessionContextLabel: String? = null
 )
 
 /**
@@ -141,12 +147,29 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = "${uiState.totalCount - uiState.remainingCount} / ${uiState.totalCount}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.testTag(testTags.progressCount)
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "${uiState.totalCount - uiState.remainingCount} / ${uiState.totalCount}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(testTags.progressCount)
+            )
+            // The count above is this pass's, not the session's — say which pass, so a learner midway
+            // through a multi-batch session doesn't read "2 / 10" as the whole thing.
+            uiState.sessionContextLabel?.let { label ->
+                Text(
+                    text = " · ",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(testTags.sessionContextLabel)
+                )
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (uiState.showQuestionTimer) {
                 val questionElapsedMs = uiState.questionElapsedMs

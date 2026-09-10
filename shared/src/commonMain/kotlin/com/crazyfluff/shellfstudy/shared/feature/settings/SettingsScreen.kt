@@ -52,6 +52,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.rememberNotificationPermissionRequest
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.shared.data.LESSON_BATCH_SIZE_RANGE
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 
 object SettingsScreenTestTags {
@@ -59,6 +60,9 @@ object SettingsScreenTestTags {
     const val LESSON_GOAL_DECREASE = "settings_lesson_goal_decrease"
     const val LESSON_GOAL_INCREASE = "settings_lesson_goal_increase"
     const val LESSON_GOAL_VALUE = "settings_lesson_goal_value"
+    const val LESSON_BATCH_SIZE_DECREASE = "settings_lesson_batch_size_decrease"
+    const val LESSON_BATCH_SIZE_INCREASE = "settings_lesson_batch_size_increase"
+    const val LESSON_BATCH_SIZE_VALUE = "settings_lesson_batch_size_value"
     const val THEME_SYSTEM_OPTION = "settings_theme_system_option"
     const val THEME_LIGHT_OPTION = "settings_theme_light_option"
     const val THEME_DARK_OPTION = "settings_theme_dark_option"
@@ -111,6 +115,7 @@ fun SettingsRoute(
     SettingsScreen(
         uiState = uiState,
         onDailyLessonGoalChange = viewModel::onDailyLessonGoalChange,
+        onLessonBatchSizeChange = viewModel::onLessonBatchSizeChange,
         onThemeModeChange = viewModel::onThemeModeChange,
         onShowPitchAccentChange = viewModel::onShowPitchAccentChange,
         onAutoplayPronunciationAudioChange = viewModel::onAutoplayPronunciationAudioChange,
@@ -144,6 +149,7 @@ fun SettingsRoute(
 fun SettingsScreen(
     uiState: SettingsUiState,
     onDailyLessonGoalChange: (Int) -> Unit,
+    onLessonBatchSizeChange: (Int) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
     onShowPitchAccentChange: (Boolean) -> Unit,
     onAutoplayPronunciationAudioChange: (Boolean) -> Unit,
@@ -212,6 +218,42 @@ fun SettingsScreen(
                         modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_INCREASE)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Increase daily lesson goal")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            SectionCard(title = "Lesson session size", icon = Icons.AutoMirrored.Filled.MenuBook) {
+                Text(
+                    text = "New lessons are studied and quizzed in batches of this size, so a long session " +
+                        "becomes a series of short study→quiz cycles instead of one long one.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    IconButton(
+                        onClick = { onLessonBatchSizeChange(uiState.lessonBatchSize - 1) },
+                        enabled = uiState.lessonBatchSize > LESSON_BATCH_SIZE_RANGE.first,
+                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_DECREASE)
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = "Smaller batches")
+                    }
+                    Text(
+                        text = uiState.lessonBatchSize.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_VALUE)
+                    )
+                    IconButton(
+                        onClick = { onLessonBatchSizeChange(uiState.lessonBatchSize + 1) },
+                        enabled = uiState.lessonBatchSize < LESSON_BATCH_SIZE_RANGE.last,
+                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_INCREASE)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Bigger batches")
                     }
                 }
             }

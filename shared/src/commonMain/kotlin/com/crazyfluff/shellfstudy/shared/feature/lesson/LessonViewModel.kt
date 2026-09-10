@@ -9,6 +9,8 @@ import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.DEFAULT_DAILY_LESSON_GOAL
+import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
@@ -17,6 +19,7 @@ import com.crazyfluff.shellfstudy.shared.data.PersistedAnsweredQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonPhase
 import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
+import com.crazyfluff.shellfstudy.shared.data.PersistedQuizRound
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
@@ -63,19 +66,34 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Default number of lessons pre-selected on the picker, matching WaniKani's own default batch size. */
-private const val DEFAULT_LESSON_SELECTION_SIZE = 5
+/** Which pass over the current queue a [LessonUiState.Phase.Quiz] is showing — the batch's own quiz
+ *  over material just studied, or the optional extra pass over everything missed during the session
+ *  (see [LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed]). Only a cleanup pass can ask
+ *  about an item whose lesson has already been committed. */
+enum class QuizRound { LESSON, CLEANUP }
 
 data class LessonUiState(
     val phase: Phase = Phase.Loading,
     val settings: DisplaySettings = DisplaySettings(),
-    // Deliberately not folded into Phase — abandoning is a one-shot navigation signal, not a
-    // rendering mode. The screen keeps rendering whatever phase was showing for one more frame
-    // while a LaunchedEffect(isAbandoned) fires the actual back-navigation; the abandon menu item
-    // that triggers this is already only shown while canManageSession is true (never once
-    // phase is Complete), so this can't combine with Complete in practice.
-    val isAbandoned: Boolean = false
+    // Deliberately not folded into Phase — leaving the screen is a one-shot navigation signal, not a
+    // rendering mode. The screen keeps rendering whatever phase was showing for one more frame while
+    // a LaunchedEffect(exit) fires the actual back-navigation. One sealed value rather than two
+    // booleans because the two ways out are mutually exclusive and mean opposite things to the
+    // dashboard: abandoning drops the session, parking keeps it resumable.
+    val exit: ExitRequest = ExitRequest.None
 ) {
+    /** Why the learner is leaving the lesson screen, if they are. */
+    sealed interface ExitRequest {
+        data object None : ExitRequest
+
+        /** The session was discarded — there is nothing left for the dashboard to resume. */
+        data object Abandoned : ExitRequest
+
+        /** "Finish for now": the session is kept exactly where it was left, so the dashboard offers to
+         *  resume it at the next batch. */
+        data object Parked : ExitRequest
+    }
+
     /** Settings-derived display flags — hoisted here rather than duplicated into every [Phase]
      *  variant, since they apply uniformly regardless of phase (never null/absent in one phase and
      *  required in another) and are only ever read, never used to decide which phase to render. */
@@ -95,23 +113,51 @@ data class LessonUiState(
 
         data class Select(
             val availableLessons: List<LessonItem> = emptyList(),
-            val selectedAssignmentIds: Set<Long> = emptySet()
-        ) : Phase
+            val selectedAssignmentIds: Set<Long> = emptySet(),
+            /** The batch size a session started from here gets sliced into — carried into the UI so
+             *  the picker can say how many batches a selection is, and default to a single one. */
+            val batchSize: Int = DEFAULT_LESSON_BATCH_SIZE,
+            val dailyLessonGoal: Int = DEFAULT_DAILY_LESSON_GOAL,
+            val dailyLessonsCompletedToday: Int = 0
+        ) : Phase {
+            /** How many more lessons today's goal still allows — 0 once it's met or passed. */
+            val remainingDailyGoal: Int get() = (dailyLessonGoal - dailyLessonsCompletedToday).coerceAtLeast(0)
+
+            /** A selection past what's left of today's goal. Deliberately not blocked — picking more is
+             *  a legitimate choice, and a goal is a pace rather than a cap — but worth saying out loud,
+             *  since the picker's slider puts an oversized session one drag away. */
+            val isOverDailyGoal: Boolean get() = dailyLessonGoal > 0 && selectedAssignmentIds.size > remainingDailyGoal
+        }
 
         data class Study(
+            /** Just the current batch's cards, not the whole session — see [sessionItemCount]. */
             val studyItems: List<LessonItem> = emptyList(),
             val studyIndex: Int = 0,
+            val batchIndex: Int = 0,
+            val batchCount: Int = 1,
+            /** Every item the session committed to, across all batches — so the screen can put the
+             *  batch's progress in the context of the whole session without reconstructing the plan. */
+            val sessionItemCount: Int = 0,
             val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
             val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
             val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
-        ) : Phase
+        ) : Phase {
+            val isLastCardInBatch: Boolean get() = studyIndex == studyItems.lastIndex
+
+            /** Whether more batches follow this one — the last card's primary action starts this
+             *  batch's quiz either way, but only a final batch ends the session's studying. */
+            val hasMoreBatches: Boolean get() = batchIndex < batchCount - 1
+        }
 
         data class Quiz(
-            // Non-nullable by construction — a next-question-or-complete decision always branches
-            // into either a Quiz with a real item, or straight into Complete; there's no way to
-            // construct a Quiz value with nothing to show.
+            // Non-nullable by construction — a next-question decision always branches into either a
+            // Quiz with a real item, or on to a checkpoint/Complete; there's no way to construct a
+            // Quiz value with nothing to show.
             val currentItem: LessonItem,
             val currentQuestionType: QuestionType,
+            val round: QuizRound = QuizRound.LESSON,
+            val batchIndex: Int = 0,
+            val batchCount: Int = 1,
             val answerInput: String = "",
             val feedback: AnswerFeedback? = null,
             val rankChange: RankChange? = null,
@@ -124,6 +170,35 @@ data class LessonUiState(
             val answerReading: String? = null,
             val answerPitchAccents: List<PitchAccent> = emptyList()
         ) : Phase
+
+        /** The end of a batch — where a session pauses instead of running every selected item's
+         *  flashcards before anything is quizzed. [next] is modelled as one sealed value rather than
+         *  two mutually-exclusive nullable fields, since exactly one of them ever applies. */
+        data class BatchComplete(
+            /** 0-based index of the batch that just finished. */
+            val batchIndex: Int,
+            val batchCount: Int,
+            val itemsLearned: Int,
+            val itemsCorrectFirstTry: Int,
+            /** Only this batch's misses — the per-batch feedback that makes a checkpoint worth
+             *  showing at all. */
+            val missedItems: List<LessonItem>,
+            val next: NextStep
+        ) : Phase {
+            sealed interface NextStep {
+                /** More of the plan left to study. */
+                data class StudyBatch(
+                    val batchIndex: Int,
+                    val itemCount: Int,
+                    /** Items left in the whole session, this batch included. */
+                    val remainingSessionItems: Int
+                ) : NextStep
+
+                /** Every batch is studied and quizzed; all that's left is one optional extra pass over
+                 *  what was missed along the way. */
+                data class PracticeMissed(val itemCount: Int) : NextStep
+            }
+        }
 
         data class Complete(
             val sessionItemsLearned: Int = 0,
@@ -147,6 +222,13 @@ private fun QuizSessionSummary<LessonItem>.toCompletePhase() = LessonUiState.Pha
 
 private typealias LessonItemProgress = QuizItemProgress<LessonItem>
 
+/** Which halves of an item have been missed so far — what the end-of-session cleanup pass asks about,
+ *  as a closed mapping rather than a pair of booleans repeated at the call site. */
+private fun LessonItemProgress.missedQuestionTypes(): List<QuestionType> = buildList {
+    if (hadIncorrectMeaning) add(QuestionType.MEANING)
+    if (hadIncorrectReading) add(QuestionType.READING)
+}
+
 class LessonViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
@@ -166,6 +248,30 @@ class LessonViewModel(
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
     val playbackState: StateFlow<PlaybackState> = pronunciationAudioPlayer.state
 
+    // The frozen plan for the session in progress: the ordered assignment ids the learner committed to
+    // at "Start session", sliced into batches by batchSize (see LessonSessionPlanner). Held as ids
+    // rather than LessonItems so it persists and restores verbatim, and resolved on demand through
+    // itemsById — by id rather than through observeLessonQueue()'s due filter, because an item leaves
+    // that filter the moment its lesson completes, even though it stays part of this session's progress
+    // tally (and of the cleanup pass, which may reach back to any batch).
+    private var planAssignmentIds: List<Long> = emptyList()
+    private var batchSize: Int = DEFAULT_LESSON_BATCH_SIZE
+    private var currentBatchIndex = 0
+    private var itemsById: Map<Long, LessonItem> = emptyMap()
+    private var currentRound = QuizRound.LESSON
+
+    // The session's batches, still as ids — see LessonSessionPlanner for why the plan is persisted as
+    // ids plus a batch size rather than as explicit boundaries.
+    private val sessionBatches: List<List<Long>> get() = LessonSessionPlanner.batches(planAssignmentIds, batchSize)
+
+    private val batchCount: Int get() = sessionBatches.size
+
+    /** The resolvable items of one batch, in plan order. Ids the cache no longer has are dropped —
+     *  [resumeFromPersisted] rejects a session with holes in it up front, so in practice this only
+     *  filters an item deleted between batches. */
+    private fun batchItems(index: Int): List<LessonItem> =
+        sessionBatches.getOrNull(index).orEmpty().mapNotNull { itemsById[it] }
+
     private val quizQueue = QuizQueue<LessonItem>()
     private val startedAssignmentIds = mutableSetOf<Long>()
     private var totalQuizCount = 0
@@ -173,24 +279,25 @@ class LessonViewModel(
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
     private val progressByAssignmentId = mutableMapOf<Long, LessonItemProgress>()
-    // Warmed by Study phase's own pitch-accent prefetch (or, on a mid-quiz resume that skips Study
-    // entirely, by resumeQuizPhase's own fetch) — kept alive here rather than scoped to Phase.Study
-    // so Quiz-phase grading can look a subject's pitch accents up for free (a plain map read, no
-    // suspend call) instead of re-fetching per answer the way Review has to.
+    // Warmed by each batch's own pitch-accent prefetch (or, on a mid-quiz resume that skips Study
+    // entirely, by resumeQuizPhase's own fetch), and merged rather than replaced as batches advance —
+    // kept alive here rather than scoped to Phase.Study so Quiz-phase grading can look a subject's
+    // pitch accents up for free (a plain map read, no suspend call) instead of re-fetching per answer
+    // the way Review has to, including during the cleanup pass, which reaches across every batch.
     private var pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap()
     // Individual per-answer records, used for the "slowest answers" summary — persisted and
     // restored across a resume just like progressByAssignmentId (see resumeQuizPhase), so the
-    // summary reflects the whole quiz, not just the segment since the most recent resume.
+    // summary reflects the whole session, not just the segment since the most recent resume.
     private val answeredQuestions = mutableListOf<AnsweredQuestionRecord<LessonItem>>()
 
-    // Tracks only the time the quiz was actively being viewed — see QuizSessionTiming. Pause skips
-    // re-persisting outside the QUIZ phase — currentPersistSnapshot() always writes phase = QUIZ,
-    // and in STUDY phase the correct snapshot is already kept current by persistStudySnapshot on
-    // every card change; overwriting it here with an empty-queue QUIZ record would make
-    // resumeQuizPhase() misread it as "session complete". The foreground tracker calls resume()
-    // unconditionally on app-foreground, so a segment can be running even while in STUDY phase —
-    // without this guard, a Home press in STUDY phase would write the corrupt snapshot. Writing the
-    // timing fields onto a non-Quiz phase is additionally impossible by construction now —
+    // Tracks only the time the session was actively being worked through — see QuizSessionTiming.
+    // Pause skips re-persisting outside the QUIZ phase — currentPersistSnapshot() always writes
+    // phase = QUIZ, and in STUDY phase the correct snapshot is already kept current by
+    // persistStudySnapshot on every card change; overwriting it here with a queue-less QUIZ record
+    // would make resumeQuizPhase() misread it as "session complete". The foreground tracker calls
+    // resume() unconditionally on app-foreground, so a segment can be running even while in STUDY
+    // phase — without this guard, a Home press in STUDY phase would write the corrupt snapshot.
+    // Writing the timing fields onto a non-Quiz phase is additionally impossible by construction now —
     // updateQuizTiming() silently no-ops when phase isn't Quiz, since Phase.Study has no such
     // properties to write into. A completed/abandoned/empty-queue session is handled structurally
     // by sessionController.persist() itself (a no-op once the session isn't ACTIVE), not by a flag
@@ -242,10 +349,20 @@ class LessonViewModel(
                 }
             }
         }
-        // The initial value is handled by beginQuiz/resumeQuizPhase/sessionTiming.resume() below
-        // instead — see QuizSessionTiming.wireForegroundTracking's doc comment.
-        sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
+        // The initial value is handled by beginBatchQuiz/resumeQuizPhase/sessionTiming.resume() below
+        // instead — see QuizSessionTiming.wireForegroundTracking's doc comment. The gate keeps a batch
+        // checkpoint (or the summary) from restarting the session clock just because the learner came
+        // back to the app while reading it.
+        sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker) { isSessionBeingWorked() }
         questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
+    }
+
+    /** Whether the learner is actually working through material right now — Study flashcards or a quiz
+     *  question. False at a batch checkpoint, on the summary, and everywhere before a session is
+     *  committed to, so none of that time lands in the session total. */
+    private fun isSessionBeingWorked(): Boolean = when (_uiState.value.phase) {
+        is LessonUiState.Phase.Study, is LessonUiState.Phase.Quiz -> true
+        else -> false
     }
 
     /** Guard-clause helper for updates that only apply while in the Quiz phase — a safe cast plus a
@@ -270,11 +387,12 @@ class LessonViewModel(
             _uiState.update { LessonUiState() }
             assignmentRepository.warmSrsSystemCache()
             sessionController.complete()
+            clearSessionState()
             fetchFreshQueue()
         }
     }
 
-    /** Resumes a persisted in-progress quiz if one exists, otherwise fetches a fresh queue. */
+    /** Resumes a persisted in-progress session if one exists, otherwise fetches a fresh queue. */
     private fun loadOrResume() {
         viewModelScope.launch {
             _uiState.update { LessonUiState() }
@@ -291,29 +409,64 @@ class LessonViewModel(
         }
     }
 
-    private suspend fun resumeFromPersisted(persisted: PersistedLessonSession) {
-        when (persisted.phase) {
-            PersistedLessonPhase.STUDY -> resumeStudyPhase(persisted)
-            PersistedLessonPhase.QUIZ -> resumeQuizPhase(persisted)
-        }
+    /** Drops every in-memory trace of a session — the plan included, so a fresh fetch can't resume or
+     *  re-persist the session it replaced. */
+    private fun clearSessionState() {
+        planAssignmentIds = emptyList()
+        itemsById = emptyMap()
+        currentBatchIndex = 0
+        currentRound = QuizRound.LESSON
+        quizQueue.clear()
+        startedAssignmentIds.clear()
+        progressByAssignmentId.clear()
+        answeredQuestions.clear()
+        pitchAccentsBySubjectId = emptyMap()
+        totalQuizCount = 0
     }
 
-    /** Resumes a session left mid-flashcard-study — after "Start session" but before the last card
-     *  hands off to the quiz. Reconstructs the same study batch, in the same order, and jumps back
-     *  to the card the user was on, rather than forcing lesson re-selection and restudying from the
-     *  first card, the same way [resumeQuizPhase] avoids re-fetching a fresh quiz queue. */
-    private suspend fun resumeStudyPhase(persisted: PersistedLessonSession) {
-        val itemsById = assignmentRepository.observeLessonQueue().first().associateBy { it.assignmentId }
+    private suspend fun resumeFromPersisted(persisted: PersistedLessonSession) {
+        val plan = persisted.migratedFromLegacyShape()
+        // Resolve exactly the assignments this persisted session references, by id — not via
+        // observeLessonQueue()'s due filter. An item's "started" transition happens the moment it
+        // finishes its quiz questions (applyOptimisticLessonStart), so by the time the user pauses and
+        // resumes it may no longer be "due for lesson" even though it's still part of this session's
+        // progress tally.
+        val resolved = assignmentRepository.getLessonItems(plan.sessionAssignmentIds).associateBy { it.assignmentId }
 
-        // The cache backing this persisted session is gone, or somehow nothing was actually
-        // selected — fall back to a fresh fetch rather than show a broken study session.
-        if (persisted.studyAssignmentIds.isEmpty() || persisted.studyAssignmentIds.any { it !in itemsById }) {
+        // The cache backing this persisted session is gone (e.g. app storage was cleared), or some of
+        // the plan's items no longer resolve — fall back to a fresh fetch rather than resume a session
+        // with holes in it.
+        if (plan.sessionAssignmentIds.any { it !in resolved }) {
             sessionController.complete()
+            clearSessionState()
             fetchFreshQueue()
             return
         }
 
-        val items = persisted.studyAssignmentIds.map { itemsById.getValue(it) }
+        planAssignmentIds = plan.sessionAssignmentIds
+        batchSize = LessonSessionPlanner.normalizeBatchSize(plan.batchSize)
+        itemsById = resolved
+        currentBatchIndex = plan.batchIndex
+        when (plan.phase) {
+            PersistedLessonPhase.STUDY -> resumeStudyPhase(plan)
+            PersistedLessonPhase.QUIZ -> resumeQuizPhase(plan)
+            PersistedLessonPhase.CHECKPOINT -> resumeCheckpoint(plan)
+        }
+    }
+
+    /** Resumes a session left mid-flashcard-study — after "Start session" but before that batch's last
+     *  card hands off to its quiz. Reconstructs the same batch, in the same order, and jumps back to
+     *  the card the user was on, rather than forcing lesson re-selection and restudying from the first
+     *  card, the same way [resumeQuizPhase] avoids re-fetching a fresh quiz queue. */
+    private suspend fun resumeStudyPhase(persisted: PersistedLessonSession) {
+        val items = batchItems(persisted.batchIndex)
+        if (items.isEmpty()) {
+            sessionController.complete()
+            clearSessionState()
+            fetchFreshQueue()
+            return
+        }
+
         val (pitchAccents, relatedSubjects, strokeOrders) = coroutineScope {
             val pitchAccentsDeferred = async { fetchPitchAccents(items) }
             val relatedSubjectsDeferred = async { fetchRelatedSubjects(items) }
@@ -321,41 +474,45 @@ class LessonViewModel(
             Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
         }
         pitchAccentsBySubjectId = pitchAccents
+        currentRound = QuizRound.LESSON
+        sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
         sessionController.begin()
         _uiState.update {
             it.copy(
                 phase = LessonUiState.Phase.Study(
                     studyItems = items,
                     studyIndex = persisted.studyIndex.coerceIn(0, items.lastIndex),
+                    batchIndex = persisted.batchIndex,
+                    batchCount = batchCount,
+                    sessionItemCount = planAssignmentIds.size,
                     pitchAccentsBySubjectId = pitchAccents,
                     relatedSubjectsById = relatedSubjects,
                     strokeOrderBySubjectId = strokeOrders
                 )
             )
         }
+        sessionTiming.resume()
     }
 
     private suspend fun resumeQuizPhase(persisted: PersistedLessonSession) {
-        // Resolve exactly the assignments this persisted session references, by id — not via
-        // observeLessonQueue()'s due filter. An item's "started" transition happens the moment
-        // it finishes its quiz questions (applyOptimisticLessonStart), so by the time the user
-        // pauses and resumes it may no longer be "due for lesson" even though it's still part of
-        // this session's progress tally.
-        val neededIds = (persisted.quizQueue.map { it.assignmentId } + persisted.progress.map { it.assignmentId }).toSet()
-        val itemsById = assignmentRepository.getLessonItems(neededIds).associateBy { it.assignmentId }
-
-        // The cache backing this persisted session is gone (e.g. app storage was cleared) — fall
-        // back to a fresh fetch rather than show a broken quiz.
+        // itemsById was resolved from the whole plan in resumeFromPersisted, so a queue entry can only
+        // miss if the snapshot references an assignment outside its own plan — genuinely corrupt,
+        // rather than merely "no longer due for lesson".
         if (persisted.quizQueue.any { it.assignmentId !in itemsById }) {
             sessionController.complete()
+            clearSessionState()
             fetchFreshQueue()
             return
         }
 
         // resumeQuizPhase skips Phase.Study entirely (a mid-quiz resume), so pitchAccentsBySubjectId
-        // was never warmed by resumeStudyPhase/startSelectedLessons the way it normally would be —
-        // fetch it here instead, once, before the quiz screen renders.
-        pitchAccentsBySubjectId = fetchPitchAccents(itemsById.values.toList())
+        // was never warmed by enterStudyPhase the way it normally would be — fetch it here instead,
+        // once, before the quiz screen renders.
+        pitchAccentsBySubjectId = fetchPitchAccents(
+            (persisted.quizQueue.map { it.assignmentId } + persisted.progress.map { it.assignmentId })
+                .distinct()
+                .mapNotNull { itemsById[it] }
+        )
 
         quizQueue.restore(
             persisted.quizQueue.map { entry ->
@@ -363,10 +520,62 @@ class LessonViewModel(
             }
         )
         startedAssignmentIds.clear()
+        restoreProgressAndAnswers(persisted)
+        currentRound = when (persisted.quizRound) {
+            PersistedQuizRound.LESSON -> QuizRound.LESSON
+            PersistedQuizRound.CLEANUP -> QuizRound.CLEANUP
+        }
+        // Restores the session's accumulated active time rather than restarting the clock — this is
+        // deliberately *not* wall-clock time since the session began; time spent away (backgrounded, at
+        // a checkpoint, or navigated off and back) must not count. sessionTiming.resume() below then
+        // starts a fresh viewing segment on top of that restored base, so the clock resumes right where
+        // it left off.
+        val questionStartedAt = questionTiming.restart()
+        // LessonSessionRepository.load() — reached here via sessionController.load() — guarantees a
+        // non-empty quizQueue for a QUIZ-phase snapshot (see its resumability check).
+        val next = requireNotNull(quizQueue.current) { "resumeQuizPhase: persisted QUIZ session had an empty queue despite the repository's resumability check" }
+        sessionController.begin()
+        _uiState.update {
+            it.copy(
+                phase = LessonUiState.Phase.Quiz(
+                    currentItem = next.item,
+                    currentQuestionType = next.type,
+                    round = currentRound,
+                    batchIndex = currentBatchIndex,
+                    batchCount = batchCount,
+                    totalQuizCount = totalQuizCount,
+                    remainingQuizCount = quizQueue.size,
+                    timing = QuizTimingUiState(
+                        sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                        sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
+                        questionActiveSegmentStartMs = questionStartedAt
+                    )
+                )
+            )
+        }
+        sessionTiming.resume()
+    }
+
+    /** Resumes a session parked at a batch checkpoint. A checkpoint at the end of the plan means every
+     *  batch is done, so it resumes into the summary rather than re-offering the cleanup pass — that
+     *  offer is a convenience, not something worth stranding a finished session behind. */
+    private suspend fun resumeCheckpoint(persisted: PersistedLessonSession) {
+        sessionController.begin()
+        if (persisted.batchIndex < batchCount) {
+            enterStudyPhase(persisted.batchIndex)
+            return
+        }
+        restoreProgressAndAnswers(persisted)
+        finishSession()
+    }
+
+    /** Rebuilds the session-wide tallies a resume needs in order to summarize (or keep grading) the
+     *  whole session, from a checkpoint or quiz snapshot. */
+    private fun restoreProgressAndAnswers(persisted: PersistedLessonSession) {
         progressByAssignmentId.clear()
         persisted.progress.forEach { p ->
-            // itemsById was resolved by id above, so this only misses for the same
-            // genuinely-unrecoverable case handled above — not merely "no longer due for lesson".
+            // itemsById was resolved by id in resumeFromPersisted, so this only misses for the same
+            // genuinely-unrecoverable case handled there — not merely "no longer due for lesson".
             val item = itemsById[p.assignmentId] ?: return@forEach
             progressByAssignmentId[p.assignmentId] = LessonItemProgress(item).apply {
                 meaningDone = p.meaningDone
@@ -382,39 +591,12 @@ class LessonViewModel(
                 AnsweredQuestionRecord(item, QuestionType.valueOf(p.questionType), p.isCorrect, p.elapsedMs)
             }
         )
-        // Restores the quiz's accumulated active time rather than restarting the clock — this is
-        // deliberately *not* wall-clock time since the quiz began; time spent away (backgrounded, or
-        // navigated off and back) must not count. sessionTiming.resume() then starts a fresh viewing
-        // segment on top of that restored base, so the clock resumes right where it left off.
-        sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
-        sessionTiming.resume()
-        val questionStartedAt = questionTiming.restart()
         totalQuizCount = persisted.totalQuizCount
-        // LessonSessionRepository.load() — reached here via sessionController.load() — guarantees
-        // a non-empty quizQueue for a QUIZ-phase snapshot (see its resumability check), so
-        // quizQueue.current is never null after restore() above.
-        val next = requireNotNull(quizQueue.current) { "resumeQuizPhase: persisted QUIZ session had an empty queue despite the repository's resumability check" }
-        sessionController.begin()
-        _uiState.update {
-            it.copy(
-                phase = LessonUiState.Phase.Quiz(
-                    currentItem = next.item,
-                    currentQuestionType = next.type,
-                    totalQuizCount = totalQuizCount,
-                    remainingQuizCount = quizQueue.size,
-                    timing = QuizTimingUiState(
-                        sessionActiveElapsedMs = sessionTiming.elapsedMs,
-                        sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                        questionActiveSegmentStartMs = questionStartedAt
-                    )
-                )
-            )
-        }
+        sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
     }
 
     private suspend fun fetchFreshQueue() {
-        quizQueue.clear()
-        startedAssignmentIds.clear()
+        clearSessionState()
 
         when (val result = assignmentRepository.refreshLessonQueue()) {
             is ApiResult.Error -> {
@@ -439,7 +621,9 @@ class LessonViewModel(
         val currentLevel = statsRepository.observeCurrentLevel().first() ?: 0
         val levelUpProgress = assignmentRepository.observeLevelUpProgress(currentLevel).first()
         val lessonsToday = assignmentRepository.observeLessonsCompletedToday().first()
-        val dailyGoal = settingsRepository.settings.first().dailyLessonGoal
+        val settings = settingsRepository.settings.first()
+        val dailyGoal = settings.dailyLessonGoal
+        val batchSize = LessonSessionPlanner.normalizeBatchSize(settings.lessonBatchSize)
         val items = LessonPrioritizer.prioritize(
             items = assignmentRepository.observeLessonQueue().first(),
             levelUpProgress = levelUpProgress,
@@ -447,13 +631,25 @@ class LessonViewModel(
         )
         if (items.isEmpty()) {
             _uiState.update { it.copy(phase = LessonUiState.Phase.NoLessonsAvailable) }
-        } else {
-            val defaultSelection = items.take(DEFAULT_LESSON_SELECTION_SIZE)
-                .map { it.assignmentId }
-                .toSet()
-            _uiState.update {
-                it.copy(phase = LessonUiState.Phase.Select(availableLessons = items, selectedAssignmentIds = defaultSelection))
-            }
+            return
+        }
+        // One batch by default, shrunk to whatever today's goal still allows — see
+        // LessonSessionPlanner.defaultSelectionSize.
+        val defaultSelectionSize = LessonSessionPlanner.defaultSelectionSize(
+            availableCount = items.size,
+            batchSize = batchSize,
+            remainingDailyGoal = dailyGoal - lessonsToday
+        )
+        _uiState.update {
+            it.copy(
+                phase = LessonUiState.Phase.Select(
+                    availableLessons = items,
+                    selectedAssignmentIds = items.take(defaultSelectionSize).map { it.assignmentId }.toSet(),
+                    batchSize = batchSize,
+                    dailyLessonGoal = dailyGoal,
+                    dailyLessonsCompletedToday = lessonsToday
+                )
+            )
         }
     }
 
@@ -462,8 +658,7 @@ class LessonViewModel(
      *  failed in [fetchFreshQueue]. */
     fun studyOffline() {
         viewModelScope.launch {
-            quizQueue.clear()
-            startedAssignmentIds.clear()
+            clearSessionState()
             buildLessonSelectionFromCache()
         }
     }
@@ -495,32 +690,64 @@ class LessonViewModel(
         updateSelect { select -> select.copy(selectedAssignmentIds = emptySet()) }
     }
 
+    /** Commits to a session: the selection becomes a frozen plan, sliced into batches, and the first
+     *  batch's flashcards open. */
     fun startSelectedLessons() {
         val select = _uiState.value.phase as? LessonUiState.Phase.Select ?: return
         val selected = select.availableLessons.filter { it.assignmentId in select.selectedAssignmentIds }
         if (selected.isEmpty()) return
         viewModelScope.launch {
-            val (pitchAccents, relatedSubjects, strokeOrders) = coroutineScope {
-                val pitchAccentsDeferred = async { fetchPitchAccents(selected) }
-                val relatedSubjectsDeferred = async { fetchRelatedSubjects(selected) }
-                val strokeOrdersDeferred = async { fetchStrokeOrders(selected) }
-                Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
-            }
-            pitchAccentsBySubjectId = pitchAccents
+            clearSessionState()
+            planAssignmentIds = selected.map { it.assignmentId }
+            batchSize = LessonSessionPlanner.normalizeBatchSize(select.batchSize)
+            itemsById = selected.associateBy { it.assignmentId }
             sessionController.begin()
-            _uiState.update {
-                it.copy(
-                    phase = LessonUiState.Phase.Study(
-                        studyItems = selected,
-                        studyIndex = 0,
-                        pitchAccentsBySubjectId = pitchAccents,
-                        relatedSubjectsById = relatedSubjects,
-                        strokeOrderBySubjectId = strokeOrders
-                    )
-                )
-            }
-            persistStudySnapshot(selected, 0)
+            enterStudyPhase(0)
         }
+    }
+
+    /** Opens batch [index]'s flashcards, prefetching only that batch's extras. Per batch rather than
+     *  once for the whole session: a 40-item session would otherwise stall on the first card while
+     *  dozens of pitch-accent, related-subject and stroke-order lookups resolve, and would hold all of
+     *  them in memory for the rest of the session. */
+    private suspend fun enterStudyPhase(index: Int) {
+        val items = batchItems(index)
+        if (items.isEmpty()) {
+            // Nothing left to study: the plan is empty, or this batch's items are gone from the cache.
+            // A fresh queue is a better outcome here than an empty summary.
+            sessionController.complete()
+            clearSessionState()
+            fetchFreshQueue()
+            return
+        }
+
+        val (pitchAccents, relatedSubjects, strokeOrders) = coroutineScope {
+            val pitchAccentsDeferred = async { fetchPitchAccents(items) }
+            val relatedSubjectsDeferred = async { fetchRelatedSubjects(items) }
+            val strokeOrdersDeferred = async { fetchStrokeOrders(items) }
+            Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
+        }
+        // Merged, not replaced: the quiz's answer-reveal lookup reads this map for any item it has
+        // already studied, including one from an earlier batch during the cleanup pass.
+        pitchAccentsBySubjectId = pitchAccentsBySubjectId + pitchAccents
+        currentBatchIndex = index
+        currentRound = QuizRound.LESSON
+        sessionTiming.resume()
+        _uiState.update {
+            it.copy(
+                phase = LessonUiState.Phase.Study(
+                    studyItems = items,
+                    studyIndex = 0,
+                    batchIndex = index,
+                    batchCount = batchCount,
+                    sessionItemCount = planAssignmentIds.size,
+                    pitchAccentsBySubjectId = pitchAccentsBySubjectId,
+                    relatedSubjectsById = relatedSubjects,
+                    strokeOrderBySubjectId = strokeOrders
+                )
+            )
+        }
+        persistStudySnapshot(0)
     }
 
     /** Fanned out in parallel rather than sequentially, so a large "Select All" batch of vocabulary
@@ -540,8 +767,8 @@ class LessonViewModel(
     }
 
     /** One batch lookup for every related subject (radicals/kanji/visually-similar/used-in) across
-     * the whole study set, so the glyphs the detail view shows for these can render on the study
-     * card too without a per-tile network/DB round trip. */
+     *  the whole study set, so the glyphs the detail view shows for these can render on the study
+     *  card too without a per-tile network/DB round trip. */
     private suspend fun fetchRelatedSubjects(items: List<LessonItem>): Map<Long, SubjectSummary> {
         val relatedIds = items
             .flatMap { it.componentSubjectIds + it.amalgamationSubjectIds + it.visuallySimilarSubjectIds }
@@ -553,7 +780,7 @@ class LessonViewModel(
     /** Stroke data is keyed purely by character (same lookup [SubjectDetailViewModel] uses), so only
      *  single-glyph items — kanji, and any radical with a real Unicode glyph — resolve to anything
      *  other than [StrokeOrderUiState.Unavailable]. Fanned out in parallel for the same reason
-     *  [fetchPitchAccents] is: a large study batch shouldn't serialize dozens of lookups. */
+     *  [fetchPitchAccents] is: a large batch shouldn't serialize dozens of lookups. */
     private suspend fun fetchStrokeOrders(items: List<LessonItem>): Map<Long, StrokeOrderUiState> = coroutineScope {
         items
             .mapNotNull { item -> item.characters?.singleOrNull()?.let { item.subjectId to it } }
@@ -577,17 +804,17 @@ class LessonViewModel(
         val study = _uiState.value.phase as? LessonUiState.Phase.Study ?: return
         if (index !in study.studyItems.indices) return
         updateStudy { it.copy(studyIndex = index) }
-        viewModelScope.launch { persistStudySnapshot(study.studyItems, index) }
+        viewModelScope.launch { persistStudySnapshot(index) }
     }
 
     fun nextStudyCard() {
         val study = _uiState.value.phase as? LessonUiState.Phase.Study ?: return
         val nextIndex = study.studyIndex + 1
         if (nextIndex >= study.studyItems.size) {
-            viewModelScope.launch { beginQuiz(study.studyItems) }
+            viewModelScope.launch { beginBatchQuiz(study.studyItems) }
         } else {
             updateStudy { it.copy(studyIndex = nextIndex) }
-            viewModelScope.launch { persistStudySnapshot(study.studyItems, nextIndex) }
+            viewModelScope.launch { persistStudySnapshot(nextIndex) }
         }
     }
 
@@ -596,49 +823,61 @@ class LessonViewModel(
         if (study.studyIndex == 0) return
         val previousIndex = study.studyIndex - 1
         updateStudy { it.copy(studyIndex = previousIndex) }
-        viewModelScope.launch { persistStudySnapshot(study.studyItems, previousIndex) }
+        viewModelScope.launch { persistStudySnapshot(previousIndex) }
     }
 
-    /** Persists just enough to resume mid-flashcard-study: which items are in the batch (in order)
-     *  and which card the user is on — see [resumeStudyPhase]. Called on every card change rather
-     *  than only at study's start, so a resume lands on the exact card left off on, not card one. */
-    private suspend fun persistStudySnapshot(items: List<LessonItem>, index: Int) {
+    /** Persists just enough to resume mid-flashcard-study: which batch, and which card of it the
+     *  learner is on. The batch's items themselves are derived from the plan (see
+     *  [LessonSessionPlanner]), so nothing else needs writing. Called on every card change rather than
+     *  only at study's start, so a resume lands on the exact card left off on, not card one. */
+    private suspend fun persistStudySnapshot(index: Int) {
         sessionController.persist(
             PersistedLessonSession(
                 phase = PersistedLessonPhase.STUDY,
-                studyAssignmentIds = items.map { it.assignmentId },
-                studyIndex = index
+                sessionAssignmentIds = planAssignmentIds,
+                batchSize = batchSize,
+                batchIndex = currentBatchIndex,
+                studyIndex = index,
+                sessionActiveElapsedMs = sessionTiming.currentElapsedMs()
             )
         )
     }
 
-    private suspend fun beginQuiz(items: List<LessonItem>) {
+    /** Builds and starts the current batch's quiz. The queue holds only this batch's items, so the
+     *  shuffle that follows interleaves a handful of just-studied items rather than every item the
+     *  learner selected — which is the whole point of quizzing per batch. */
+    private suspend fun beginBatchQuiz(batch: List<LessonItem>) {
         sessionController.begin()
-        quizQueue.build(items, typesFor = { item -> questionTypesFor(item.subjectType) })
+        currentRound = QuizRound.LESSON
+        quizQueue.build(batch, typesFor = { item -> questionTypesFor(item.subjectType) })
         totalQuizCount = quizQueue.size
 
-        progressByAssignmentId.clear()
-        items.forEach { item -> progressByAssignmentId[item.assignmentId] = LessonItemProgress(item) }
-        answeredQuestions.clear()
-        sessionTiming.elapsedMs = 0L
-        sessionTiming.resume()
-        val questionStartedAt = questionTiming.restart()
+        // getOrPut, not assignment: a resumed session's progress for this batch is already loaded, and
+        // the session-wide tallies deliberately survive across batches so the summary at the end still
+        // covers the whole session.
+        batch.forEach { item -> progressByAssignmentId.getOrPut(item.assignmentId) { LessonItemProgress(item) } }
 
         val next = quizQueue.current
         if (next == null) {
-            // Every item in this batch was already fully learned before quizzing began — go
-            // straight to Complete instead of ever constructing a Quiz phase with no question.
-            sessionController.complete()
-            val summary = sessionSummary()
-            persistLastSessionSummary(summary)
-            _uiState.update { it.copy(phase = summary.toCompletePhase()) }
+            // Nothing to ask — every item in this batch was already fully learned before quizzing began
+            // (only reachable from a resumed snapshot). Move on as if the batch had been quizzed, rather
+            // than ever constructing a Quiz phase with no question.
+            enterCheckpoint(nextBatchIndex = currentBatchIndex + 1)
             return
         }
+
+        // Not restarted: the session clock spans the whole session, study passes included. Only the
+        // per-question clock starts fresh here.
+        sessionTiming.resume()
+        val questionStartedAt = questionTiming.restart()
         _uiState.update {
             it.copy(
                 phase = LessonUiState.Phase.Quiz(
                     currentItem = next.item,
                     currentQuestionType = next.type,
+                    round = QuizRound.LESSON,
+                    batchIndex = currentBatchIndex,
+                    batchCount = batchCount,
                     totalQuizCount = totalQuizCount,
                     remainingQuizCount = totalQuizCount,
                     timing = QuizTimingUiState(
@@ -767,11 +1006,9 @@ class LessonViewModel(
             quizQueue.noneMatches { it.item.assignmentId == item.assignmentId }
         }
 
-        // Whether this answer was the very last one due — if so, commitGradeDurably completes the
-        // session outright instead of saving a snapshot of the now-empty queue. That snapshot would
-        // only ever get overwritten by advanceQuiz's own completion once the user taps Continue
-        // anyway; not writing it in the first place, right when the queue empties, is simpler and
-        // safer than writing it and relying on a later completion to overwrite it.
+        // Whether this answer was the very last one due in this pass — either the session is over
+        // outright, or what comes next is a batch checkpoint rather than another question. See
+        // commitGradeDurably for why the two cases persist differently.
         val queueIsEmpty = quizQueue.current == null
 
         // Snapshotted synchronously, right after mutating quizQueue above, so the detached
@@ -847,10 +1084,15 @@ class LessonViewModel(
      *  afterward (see [gradeAnswer]'s deferred [commitGradeDurably] call). */
     private fun currentPersistSnapshot(): PersistedLessonSession = PersistedLessonSession(
         phase = PersistedLessonPhase.QUIZ,
-        quizQueue = quizQueue.toList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
-        progress = progressByAssignmentId.map { (id, p) ->
-            PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
+        sessionAssignmentIds = planAssignmentIds,
+        batchSize = batchSize,
+        batchIndex = currentBatchIndex,
+        quizRound = when (currentRound) {
+            QuizRound.LESSON -> PersistedQuizRound.LESSON
+            QuizRound.CLEANUP -> PersistedQuizRound.CLEANUP
         },
+        quizQueue = quizQueue.toList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
+        progress = persistedProgress(),
         totalQuizCount = totalQuizCount,
         sessionActiveElapsedMs = sessionTiming.currentElapsedMs(),
         answeredQuestions = answeredQuestions.map {
@@ -858,19 +1100,53 @@ class LessonViewModel(
         }
     )
 
+    /** The checkpoint at the end of a pass: every batch up to [currentBatchIndex] is done, so the
+     *  snapshot records the *next* batch as where a resume belongs (see
+     *  [PersistedLessonSession.batchIndex]). A cleanup pass is the session's last pass, so it points
+     *  past the end of the plan — resuming a session parked there goes straight to the summary. */
+    private fun checkpointSnapshot(): PersistedLessonSession = PersistedLessonSession(
+        phase = PersistedLessonPhase.CHECKPOINT,
+        sessionAssignmentIds = planAssignmentIds,
+        batchSize = batchSize,
+        batchIndex = if (currentRound == QuizRound.CLEANUP) batchCount else currentBatchIndex + 1,
+        progress = persistedProgress(),
+        totalQuizCount = totalQuizCount,
+        sessionActiveElapsedMs = sessionTiming.currentElapsedMs(),
+        answeredQuestions = answeredQuestions.map {
+            PersistedAnsweredQuestion(it.item.assignmentId, it.type.name, it.isCorrect, it.elapsedMs)
+        }
+    )
+
+    private fun persistedProgress(): List<PersistedItemProgress> = progressByAssignmentId.map { (id, p) ->
+        PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
+    }
+
+    /** Persists the in-progress quiz. A Quiz phase whose queue is empty has, by definition, just
+     *  finished its pass — its last answer graded, feedback on screen, checkpoint next — so it is
+     *  snapshotted as a checkpoint rather than as a quiz with nothing left to answer, which
+     *  LessonSessionRepository would rightly treat as a corrupted leftover and clear. Backgrounding on
+     *  that exact screen, or navigating away from it, is how a parked session would otherwise lose its
+     *  place. */
     private suspend fun persistCurrentState() {
-        sessionController.persist(currentPersistSnapshot())
+        val snapshot = if (quizQueue.isEmpty) checkpointSnapshot() else currentPersistSnapshot()
+        sessionController.persist(snapshot)
+    }
+
+    /** True when the pass that just ended was the session's last one and there is nothing left to
+     *  offer — i.e. [advanceQuiz] will go straight to the summary. Lets [commitGradeDurably] complete
+     *  the session outright instead of saving a checkpoint snapshot that the very next Continue tap
+     *  would replace. */
+    private fun isSessionOverAfterCurrentPass(queueIsEmpty: Boolean): Boolean {
+        if (!queueIsEmpty) return false
+        if (currentRound == QuizRound.CLEANUP) return true
+        return currentBatchIndex + 1 >= batchCount && sessionMissedItems().isEmpty()
     }
 
     /** Runs the post-grading durability writes (outbox enqueue, session persistence), as one queued
      *  unit via [sessionController]'s `alongside` parameter — not as a separately-awaited suspension
      *  before it, which would let a concurrent reader (e.g. a test asserting against
      *  [sessionController] right after the next emitted uiState) observe the outbox enqueue as done
-     *  but the session write as not yet applied. Completes the session instead of saving [snapshot]
-     *  when [queueIsEmpty] — this was the last due question, so [snapshot] is already an empty-queue
-     *  shell that advanceQuiz's own completion would just overwrite once the user taps Continue; not
-     *  saving it in the first place is simpler than saving it and relying on a later completion to
-     *  overwrite it. */
+     *  but the session write as not yet applied. */
     private suspend fun commitGradeDurably(isNewlyStarted: Boolean, item: LessonItem, snapshot: PersistedLessonSession, queueIsEmpty: Boolean) {
         val outboxWork: suspend () -> Unit = {
             if (isNewlyStarted) {
@@ -878,10 +1154,15 @@ class LessonViewModel(
                 outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
             }
         }
-        if (queueIsEmpty) {
-            sessionController.complete(alongside = outboxWork)
-        } else {
-            sessionController.persist(snapshot, alongside = outboxWork)
+        when {
+            // The session is over: complete now, exactly as a single-batch session always did — the
+            // Continue tap that follows only has to render the summary.
+            isSessionOverAfterCurrentPass(queueIsEmpty) -> sessionController.complete(alongside = outboxWork)
+            // A batch just ended (or the session's last batch, with misses left to offer): record the
+            // checkpoint, so a crash on the feedback screen resumes at the checkpoint instead of
+            // re-asking questions that were already answered.
+            queueIsEmpty -> sessionController.persist(checkpointSnapshot(), alongside = outboxWork)
+            else -> sessionController.persist(snapshot, alongside = outboxWork)
         }
     }
 
@@ -897,12 +1178,93 @@ class LessonViewModel(
         updateQuiz { it.copy(isDetailsExpanded = false) }
     }
 
-    /** Discards a persisted in-progress lesson session (study or quiz) and exits — a clean slate
-     *  next time. Mirrors ReviewViewModel.abandonSession. */
+    /** Walks from a just-finished batch into the next one — the checkpoint's primary action. */
+    fun continueSession() {
+        val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
+        val next = checkpoint.next as? LessonUiState.Phase.BatchComplete.NextStep.StudyBatch ?: return
+        viewModelScope.launch { enterStudyPhase(next.batchIndex) }
+    }
+
+    /** "Finish for now": keeps the session where it is instead of abandoning it. Nothing needs writing
+     *  here — [enterCheckpoint] already persisted the checkpoint — so this only asks the screen to
+     *  navigate back, where the dashboard will offer to resume at the next batch. Refuses on the final
+     *  checkpoint, where the exits are the cleanup pass or the summary, not a park. */
+    fun finishForNow() {
+        val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
+        if (checkpoint.next !is LessonUiState.Phase.BatchComplete.NextStep.StudyBatch) return
+        _uiState.update { it.copy(exit = LessonUiState.ExitRequest.Parked) }
+    }
+
+    /** Declines the final checkpoint's extra practice and shows the session summary. */
+    fun finishSessionNow() {
+        val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
+        if (checkpoint.next !is LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed) return
+        viewModelScope.launch { finishSession() }
+    }
+
+    /** Accepts the final checkpoint's extra practice: one more pass over the items missed during this
+     *  session, asking only the halves that were missed.
+     *
+     *  Summary-neutral by construction — every question in this pass belongs to an item whose lesson
+     *  was already committed, so answering it can neither start a lesson twice (startedAssignmentIds)
+     *  nor clear the miss flags that made the item count as missed in the first place. The pass exists
+     *  purely to give the session's weakest items one more retrieval. */
+    fun practiceMissedItems() {
+        val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
+        if (checkpoint.next !is LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed) return
+        viewModelScope.launch {
+            val missedItems = sessionMissedItems()
+            if (missedItems.isEmpty()) {
+                finishSession()
+                return@launch
+            }
+            currentRound = QuizRound.CLEANUP
+            quizQueue.build(
+                missedItems,
+                typesFor = { item -> progressByAssignmentId[item.assignmentId]?.missedQuestionTypes().orEmpty() }
+            )
+            totalQuizCount = quizQueue.size
+
+            val next = quizQueue.current
+            if (next == null) {
+                finishSession()
+                return@launch
+            }
+
+            // A resumed session may not have prefetched every batch's accents (see resumeQuizPhase),
+            // and this pass reaches across all of them.
+            pitchAccentsBySubjectId = pitchAccentsBySubjectId + fetchPitchAccents(missedItems)
+            sessionTiming.resume()
+            val questionStartedAt = questionTiming.restart()
+            _uiState.update {
+                it.copy(
+                    phase = LessonUiState.Phase.Quiz(
+                        currentItem = next.item,
+                        currentQuestionType = next.type,
+                        round = QuizRound.CLEANUP,
+                        batchIndex = currentBatchIndex,
+                        batchCount = batchCount,
+                        totalQuizCount = totalQuizCount,
+                        remainingQuizCount = totalQuizCount,
+                        timing = QuizTimingUiState(
+                            sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                            sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
+                            questionActiveSegmentStartMs = questionStartedAt
+                        )
+                    )
+                )
+            }
+            persistCurrentState()
+        }
+    }
+
+    /** Discards a persisted in-progress lesson session (study, quiz, or a parked checkpoint) and
+     *  exits — a clean slate next time. Mirrors ReviewViewModel.abandonSession. */
     fun abandonSession() {
         viewModelScope.launch {
             sessionController.abandon()
-            _uiState.update { it.copy(isAbandoned = true) }
+            clearSessionState()
+            _uiState.update { it.copy(exit = LessonUiState.ExitRequest.Abandoned) }
         }
     }
 
@@ -914,9 +1276,18 @@ class LessonViewModel(
 
     /** Items learned, how many were correct without ever missing, which were missed at least once,
      *  and timing — mirrors ReviewViewModel.sessionSummary(). "Missed" here means at least one wrong
-     *  attempt during the quiz, not a real SRS miss — every lesson item is requeued until correct. */
+     *  attempt during the quiz, not a real SRS miss — every lesson item is requeued until correct.
+     *  Spans the whole session: every batch, plus the cleanup pass. */
     private fun sessionSummary(): QuizSessionSummary<LessonItem> =
         summarizeQuizSession(progressByAssignmentId.values, answeredQuestions, sessionTiming.currentElapsedMs())
+
+    /** Every item missed at least once anywhere in this session — what the final checkpoint offers
+     *  extra practice on, and what tells [isSessionOverAfterCurrentPass] whether there's an offer to
+     *  make at all. */
+    private fun sessionMissedItems(): List<LessonItem> =
+        progressByAssignmentId.values
+            .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
+            .map { it.item }
 
     /** Snapshots a just-completed session's summary so it can be revisited later from the
      *  dashboard, after this ViewModel (and its otherwise-ephemeral session-complete state) is
@@ -938,34 +1309,98 @@ class LessonViewModel(
         }
     }
 
-    private suspend fun advanceQuiz() {
-        val next = quizQueue.current
-        if (next == null) {
-            sessionController.complete()
-            outboxRepository.requestSyncNow()
-            val summary = sessionSummary()
-            persistLastSessionSummary(summary)
-            _uiState.update { it.copy(phase = summary.toCompletePhase()) }
+    /** Ends the session and shows its summary — terminal: the persisted snapshot is cleared before the
+     *  summary renders, so nothing can save a session the learner has already finished. */
+    private suspend fun finishSession() {
+        sessionTiming.freeze()
+        sessionController.complete()
+        outboxRepository.requestSyncNow()
+        val summary = sessionSummary()
+        persistLastSessionSummary(summary)
+        _uiState.update { it.copy(phase = summary.toCompletePhase()) }
+    }
+
+    /** Shows the checkpoint at the end of a pass over batch [nextBatchIndex] - 1.
+     *
+     *  Stops the session clock first: deciding whether to continue isn't studying, and letting the
+     *  interstitial bill the session clock would inflate both its total and its per-item average.
+     *  When there's no next batch and nothing missed, this is the same "session is over" case
+     *  [commitGradeDurably] already completed at grading time — covered here for the paths that reach a
+     *  checkpoint without grading a last answer. */
+    private suspend fun enterCheckpoint(nextBatchIndex: Int) {
+        sessionTiming.freeze()
+
+        val completedBatchIndex = nextBatchIndex - 1
+        val completedProgress = sessionBatches.getOrNull(completedBatchIndex).orEmpty()
+            .mapNotNull { progressByAssignmentId[it] }
+        val missedInBatch = completedProgress
+            .filter { it.hadIncorrectMeaning || it.hadIncorrectReading }
+            .map { it.item }
+        val studyNextBatch = nextBatchIndex < batchCount
+        val sessionMisses = sessionMissedItems()
+
+        if (!studyNextBatch && sessionMisses.isEmpty()) {
+            finishSession()
             return
         }
-        val questionStartedAt = questionTiming.restart()
-        updateQuiz {
+
+        val next = if (studyNextBatch) {
+            LessonUiState.Phase.BatchComplete.NextStep.StudyBatch(
+                batchIndex = nextBatchIndex,
+                itemCount = batchItems(nextBatchIndex).size,
+                remainingSessionItems = sessionBatches.drop(nextBatchIndex).sumOf { it.size }
+            )
+        } else {
+            LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed(itemCount = sessionMisses.size)
+        }
+
+        _uiState.update {
             it.copy(
-                currentItem = next.item,
-                currentQuestionType = next.type,
-                answerInput = "",
-                feedback = null,
-                rankChange = null,
-                answerReading = null,
-                answerPitchAccents = emptyList(),
-                isDetailsExpanded = false,
-                remainingQuizCount = quizQueue.size,
-                timing = it.timing.copy(
-                    questionActiveElapsedMs = 0L,
-                    questionActiveSegmentStartMs = questionStartedAt,
-                    questionElapsedMs = null
+                phase = LessonUiState.Phase.BatchComplete(
+                    batchIndex = completedBatchIndex,
+                    batchCount = batchCount,
+                    itemsLearned = completedProgress.size,
+                    itemsCorrectFirstTry = completedProgress.count { p -> !p.hadIncorrectMeaning && !p.hadIncorrectReading },
+                    missedItems = missedInBatch,
+                    next = next
                 )
             )
         }
+        sessionController.persist(checkpointSnapshot())
+    }
+
+    private suspend fun advanceQuiz() {
+        val next = quizQueue.current
+        if (next != null) {
+            val questionStartedAt = questionTiming.restart()
+            updateQuiz {
+                it.copy(
+                    currentItem = next.item,
+                    currentQuestionType = next.type,
+                    answerInput = "",
+                    feedback = null,
+                    rankChange = null,
+                    answerReading = null,
+                    answerPitchAccents = emptyList(),
+                    isDetailsExpanded = false,
+                    remainingQuizCount = quizQueue.size,
+                    timing = it.timing.copy(
+                        questionActiveElapsedMs = 0L,
+                        questionActiveSegmentStartMs = questionStartedAt,
+                        questionElapsedMs = null
+                    )
+                )
+            }
+            return
+        }
+
+        // The pass is over, and its durability write already happened at grading time (see
+        // commitGradeDurably), so this only has to decide where the learner goes next: the next batch's
+        // checkpoint, or — after the cleanup pass — the summary.
+        if (currentRound == QuizRound.CLEANUP) {
+            finishSession()
+            return
+        }
+        enterCheckpoint(nextBatchIndex = currentBatchIndex + 1)
     }
 }

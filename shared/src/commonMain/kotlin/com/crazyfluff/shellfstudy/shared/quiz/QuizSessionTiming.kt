@@ -80,11 +80,20 @@ class QuizSessionTiming(
     /** Starts a collector that resumes/pauses the segment on every foreground/background
      *  transition after the first — the initial value is left to the caller's own load/resume
      *  flow, so a ViewModel created while already foregrounded doesn't publish a redundant extra
-     *  uiState emission for it. */
-    fun wireForegroundTracking(scope: CoroutineScope, appForegroundTracker: AppForegroundTracker) {
+     *  uiState emission for it.
+     *
+     *  [shouldTime] gates the *resume* half only: a lesson session parks its clock while it shows a
+     *  batch checkpoint (the learner is deciding whether to continue, not studying), so returning to
+     *  the app on that screen must not silently restart the session clock — pausing is always allowed,
+     *  since folding away a running segment is never wrong. */
+    fun wireForegroundTracking(
+        scope: CoroutineScope,
+        appForegroundTracker: AppForegroundTracker,
+        shouldTime: () -> Boolean = { true }
+    ) {
         scope.launch {
             appForegroundTracker.isForeground.drop(1).collect { isForeground ->
-                if (isForeground) resume() else pause()
+                if (isForeground && shouldTime()) resume() else pause()
             }
         }
     }

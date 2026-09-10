@@ -13,6 +13,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -27,6 +28,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
@@ -106,23 +108,53 @@ class LessonScreenTest {
 
     private fun selectState(
         availableLessons: List<LessonItem> = emptyList(),
-        selectedAssignmentIds: Set<Long> = emptySet()
+        selectedAssignmentIds: Set<Long> = emptySet(),
+        batchSize: Int = DEFAULT_LESSON_BATCH_SIZE,
+        dailyLessonGoal: Int = 15,
+        dailyLessonsCompletedToday: Int = 0
     ) = LessonUiState(
         phase = LessonUiState.Phase.Select(
             availableLessons = availableLessons,
-            selectedAssignmentIds = selectedAssignmentIds
+            selectedAssignmentIds = selectedAssignmentIds,
+            batchSize = batchSize,
+            dailyLessonGoal = dailyLessonGoal,
+            dailyLessonsCompletedToday = dailyLessonsCompletedToday
         )
     )
 
     private fun studyState(
         studyItems: List<LessonItem>,
         studyIndex: Int = 0,
-        strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
+        strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap(),
+        batchIndex: Int = 0,
+        batchCount: Int = 1,
+        sessionItemCount: Int = studyItems.size
     ) = LessonUiState(
         phase = LessonUiState.Phase.Study(
             studyItems = studyItems,
             studyIndex = studyIndex,
-            strokeOrderBySubjectId = strokeOrderBySubjectId
+            strokeOrderBySubjectId = strokeOrderBySubjectId,
+            batchIndex = batchIndex,
+            batchCount = batchCount,
+            sessionItemCount = sessionItemCount
+        )
+    )
+
+    private fun batchCompleteState(
+        batchIndex: Int = 0,
+        batchCount: Int = 1,
+        itemsLearned: Int = 2,
+        itemsCorrectFirstTry: Int = 2,
+        missedItems: List<LessonItem> = emptyList(),
+        next: LessonUiState.Phase.BatchComplete.NextStep
+    ) = LessonUiState(
+        phase = LessonUiState.Phase.BatchComplete(
+            batchIndex = batchIndex,
+            batchCount = batchCount,
+            itemsLearned = itemsLearned,
+            itemsCorrectFirstTry = itemsCorrectFirstTry,
+            missedItems = missedItems,
+            next = next
         )
     )
 
@@ -191,6 +223,10 @@ class LessonScreenTest {
         onRetry: () -> Unit = {},
         onStudyOffline: () -> Unit = {},
         onAbandon: () -> Unit = {},
+        onContinueSession: () -> Unit = {},
+        onFinishForNow: () -> Unit = {},
+        onPracticeMissed: () -> Unit = {},
+        onFinishSession: () -> Unit = {},
         onDone: () -> Unit = {},
         onBack: () -> Unit = {}
     ) {
@@ -218,6 +254,10 @@ class LessonScreenTest {
                         LessonScreenEvent.Retry -> onRetry()
                         LessonScreenEvent.StudyOffline -> onStudyOffline()
                         LessonScreenEvent.Abandon -> onAbandon()
+                        LessonScreenEvent.ContinueSession -> onContinueSession()
+                        LessonScreenEvent.FinishForNow -> onFinishForNow()
+                        LessonScreenEvent.PracticeMissed -> onPracticeMissed()
+                        LessonScreenEvent.FinishSession -> onFinishSession()
                         LessonScreenEvent.Done -> onDone()
                         LessonScreenEvent.Back -> onBack()
                         is LessonScreenEvent.SearchQueryChange -> {}
@@ -484,6 +524,155 @@ class LessonScreenTest {
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_PREVIOUS_BUTTON).assertIsNotEnabled()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.START_QUIZ_BUTTON).assertIsDisplayed()
+    }
+
+    @Test
+    fun studyPhase_multiBatch_showsBatchContextAndNamesTheBatchBeingQuized() {
+        setScreen(
+            studyState(
+                studyItems = listOf(radicalItem, secondRadicalItem),
+                studyIndex = 1,
+                batchIndex = 0,
+                batchCount = 3,
+                sessionItemCount = 7
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_BATCH_LABEL)
+            .assertTextContains("Batch 1 of 3", substring = true)
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_BATCH_LABEL)
+            .assertTextContains("7 items in this session", substring = true)
+        // The last card of a non-final batch hands off to that batch's quiz, not the session's only one.
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.START_QUIZ_BUTTON).assertTextEquals("Quiz batch 1")
+    }
+
+    @Test
+    fun studyPhase_singleBatch_hidesBatchContextAndKeepsStartQuizLabel() {
+        setScreen(studyState(studyItems = listOf(radicalItem), studyIndex = 0))
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_BATCH_LABEL).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.START_QUIZ_BUTTON).assertTextEquals("Start Quiz")
+    }
+
+    @Test
+    fun selectPhase_showsItemCountBatchCountAndTimeEstimate() {
+        setScreen(
+            selectState(
+                availableLessons = listOf(radicalItem, secondRadicalItem, glyphlessRadicalItem),
+                selectedAssignmentIds = setOf(1L, 2L, 3L),
+                batchSize = 2
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECTION_SESSION_PLAN_TEXT)
+            .assertTextContains("3 items · 2 batches of up to 2 · ~6 min")
+    }
+
+    @Test
+    fun selectPhase_warnsOnceTheSelectionGoesPastTodaysGoal() {
+        setScreen(
+            selectState(
+                availableLessons = listOf(radicalItem, secondRadicalItem, glyphlessRadicalItem),
+                selectedAssignmentIds = setOf(1L, 2L, 3L),
+                batchSize = 5,
+                dailyLessonGoal = 2,
+                dailyLessonsCompletedToday = 0
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECTION_OVER_GOAL_TEXT).assertIsDisplayed()
+    }
+
+    @Test
+    fun selectPhase_hidesTheOverGoalWarningWhileWithinTheGoal() {
+        setScreen(
+            selectState(
+                availableLessons = listOf(radicalItem, secondRadicalItem),
+                selectedAssignmentIds = setOf(1L, 2L),
+                batchSize = 5,
+                dailyLessonGoal = 5,
+                dailyLessonsCompletedToday = 0
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECTION_OVER_GOAL_TEXT).assertDoesNotExist()
+    }
+
+    @Test
+    fun batchCompletePhase_offersTheNextBatchAndAChanceToStop() {
+        var continued = false
+        var parked = false
+        setScreen(
+            batchCompleteState(
+                batchIndex = 0,
+                batchCount = 3,
+                itemsLearned = 5,
+                itemsCorrectFirstTry = 4,
+                next = LessonUiState.Phase.BatchComplete.NextStep.StudyBatch(
+                    batchIndex = 1, itemCount = 5, remainingSessionItems = 10
+                )
+            ),
+            onContinueSession = { continued = true },
+            onFinishForNow = { parked = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_HEADLINE).assertTextEquals("Batch 1 of 3 done!")
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_SUMMARY_TEXT)
+            .assertTextContains("5 learned · 4 right first try")
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON).assertTextEquals("Study next 5")
+        // Stopping early is a first-class outcome, not an abandon.
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON).assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON).performClick()
+        assertThat(continued).isTrue()
+        assertThat(parked).isFalse()
+    }
+
+    @Test
+    fun batchCompletePhase_finishForNow_invokesItsCallback() {
+        var parked = false
+        setScreen(
+            batchCompleteState(
+                next = LessonUiState.Phase.BatchComplete.NextStep.StudyBatch(
+                    batchIndex = 1, itemCount = 2, remainingSessionItems = 2
+                )
+            ),
+            onFinishForNow = { parked = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON).performClick()
+
+        assertThat(parked).isTrue()
+    }
+
+    @Test
+    fun batchCompletePhase_finalBatchOffersPracticeOnTheMisses() {
+        var practiced = false
+        var finished = false
+        setScreen(
+            batchCompleteState(
+                batchIndex = 1,
+                batchCount = 2,
+                itemsLearned = 5,
+                itemsCorrectFirstTry = 3,
+                missedItems = listOf(radicalItem, secondRadicalItem),
+                next = LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed(itemCount = 2)
+            ),
+            onPracticeMissed = { practiced = true },
+            onFinishSession = { finished = true }
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_HEADLINE).assertTextEquals("Last batch done!")
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_MISSED_TEXT).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.PRACTICE_MISSED_BUTTON).assertTextEquals("Practice 2 missed")
+        // The final checkpoint's non-primary exit is the summary, so "Finish for now" isn't offered.
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON).assertDoesNotExist()
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.PRACTICE_MISSED_BUTTON).performClick()
+        assertThat(practiced).isTrue()
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_SESSION_BUTTON).performClick()
+        assertThat(finished).isTrue()
     }
 
     @Test

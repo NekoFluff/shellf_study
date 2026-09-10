@@ -30,6 +30,7 @@ class SettingsScreenTest {
     private fun setContent(
         uiState: SettingsUiState,
         onDailyLessonGoalChange: (Int) -> Unit = {},
+        onLessonBatchSizeChange: (Int) -> Unit = {},
         onThemeModeChange: (ThemeMode) -> Unit = {},
         onShowPitchAccentChange: (Boolean) -> Unit = {},
         onAutoplayPronunciationAudioChange: (Boolean) -> Unit = {},
@@ -77,6 +78,7 @@ class SettingsScreenTest {
                 onQuietHoursStartHourChange = onQuietHoursStartHourChange,
                 onQuietHoursEndHourChange = onQuietHoursEndHourChange,
                 onFullRefreshRequested = onFullRefreshRequested,
+                onLessonBatchSizeChange = onLessonBatchSizeChange,
                 onBack = onBack
             )
         }
@@ -156,7 +158,7 @@ class SettingsScreenTest {
             onAutoplayPronunciationAudioChange = { autoplay = it }
         )
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE).performScrollTo().performClick()
         assert(autoplay == false)
     }
 

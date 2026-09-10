@@ -118,6 +118,7 @@ import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailShee
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 object LessonScreenTestTags {
@@ -173,6 +174,18 @@ object LessonScreenTestTags {
     const val OVERFLOW_MENU = "lesson_overflow_menu"
     const val ABANDON_MENU_ITEM = "lesson_abandon_menu_item"
     const val ABANDON_CONFIRM_BUTTON = "lesson_abandon_confirm_button"
+    const val STUDY_BATCH_LABEL = "lesson_study_batch_label"
+    const val QUIZ_SESSION_CONTEXT_LABEL = "lesson_quiz_session_context_label"
+    const val SELECTION_SESSION_PLAN_TEXT = "lesson_selection_session_plan_text"
+    const val SELECTION_OVER_GOAL_TEXT = "lesson_selection_over_goal_text"
+    const val BATCH_COMPLETE = "lesson_batch_complete"
+    const val BATCH_COMPLETE_HEADLINE = "lesson_batch_complete_headline"
+    const val BATCH_COMPLETE_SUMMARY_TEXT = "lesson_batch_complete_summary_text"
+    const val BATCH_COMPLETE_MISSED_TEXT = "lesson_batch_complete_missed_text"
+    const val CONTINUE_SESSION_BUTTON = "lesson_continue_session_button"
+    const val FINISH_FOR_NOW_BUTTON = "lesson_finish_for_now_button"
+    const val PRACTICE_MISSED_BUTTON = "lesson_practice_missed_button"
+    const val FINISH_SESSION_BUTTON = "lesson_finish_session_button"
 }
 
 sealed interface LessonScreenEvent {
@@ -195,6 +208,14 @@ sealed interface LessonScreenEvent {
     data object Retry : LessonScreenEvent
     data object StudyOffline : LessonScreenEvent
     data object Abandon : LessonScreenEvent
+    /** The batch checkpoint's primary action — walks into the next batch's flashcards. */
+    data object ContinueSession : LessonScreenEvent
+    /** The batch checkpoint's "Finishing for now" — keeps the session and leaves the screen. */
+    data object FinishForNow : LessonScreenEvent
+    /** The final checkpoint's optional extra pass over the session's misses. */
+    data object PracticeMissed : LessonScreenEvent
+    /** The final checkpoint's "See results" — declines the extra practice and shows the summary. */
+    data object FinishSession : LessonScreenEvent
     data object Done : LessonScreenEvent
     data object Back : LessonScreenEvent
     data class SearchQueryChange(val query: String) : LessonScreenEvent
@@ -211,8 +232,11 @@ fun LessonRoute(
     val playbackState by viewModel.playbackState.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
 
-    LaunchedEffect(uiState.isAbandoned) {
-        if (uiState.isAbandoned) onBack()
+    // Both exits navigate back; which one it was is the ViewModel's business (abandoning cleared the
+    // persisted session, parking kept it), and the dashboard reads the difference from whether a
+    // session is still stored.
+    LaunchedEffect(uiState.exit) {
+        if (uiState.exit != LessonUiState.ExitRequest.None) onBack()
     }
 
     LessonScreen(
@@ -239,6 +263,10 @@ fun LessonRoute(
                 LessonScreenEvent.Retry -> viewModel.load()
                 LessonScreenEvent.StudyOffline -> viewModel.studyOffline()
                 LessonScreenEvent.Abandon -> viewModel.abandonSession()
+                LessonScreenEvent.ContinueSession -> viewModel.continueSession()
+                LessonScreenEvent.FinishForNow -> viewModel.finishForNow()
+                LessonScreenEvent.PracticeMissed -> viewModel.practiceMissedItems()
+                LessonScreenEvent.FinishSession -> viewModel.finishSessionNow()
                 LessonScreenEvent.Done -> onSessionComplete()
                 LessonScreenEvent.Back -> onBack()
                 is LessonScreenEvent.SearchQueryChange -> searchViewModel.onQueryChange(event.query)
@@ -275,6 +303,10 @@ fun LessonScreen(
     val onRetry = { onEvent(LessonScreenEvent.Retry) }
     val onStudyOffline = { onEvent(LessonScreenEvent.StudyOffline) }
     val onAbandon = { onEvent(LessonScreenEvent.Abandon) }
+    val onContinueSession = { onEvent(LessonScreenEvent.ContinueSession) }
+    val onFinishForNow = { onEvent(LessonScreenEvent.FinishForNow) }
+    val onPracticeMissed = { onEvent(LessonScreenEvent.PracticeMissed) }
+    val onFinishSession = { onEvent(LessonScreenEvent.FinishSession) }
     val onDone = { onEvent(LessonScreenEvent.Done) }
     val onBack = { onEvent(LessonScreenEvent.Back) }
     val onSearchQueryChange: (String) -> Unit = { onEvent(LessonScreenEvent.SearchQueryChange(it)) }
@@ -283,11 +315,13 @@ fun LessonScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     var showAbandonConfirm by remember { mutableStateOf(false) }
     var isSearchActive by remember { mutableStateOf(false) }
-    // A session only exists to abandon once the user has committed to a lesson batch — the SELECT
+    // A session only exists to abandon once the user has committed to a lesson session — the SELECT
     // phase hasn't persisted anything yet (see LessonSessionRepository), so there's nothing there
     // for the dashboard's "Abandon lesson session" entry, or this screen's own copy of it, to act on.
+    // A batch checkpoint counts: the session is mid-plan and resumable, so it's exactly the state a
+    // learner might want to throw away from here.
     val canManageSession = when (uiState.phase) {
-        is LessonUiState.Phase.Study, is LessonUiState.Phase.Quiz -> true
+        is LessonUiState.Phase.Study, is LessonUiState.Phase.Quiz, is LessonUiState.Phase.BatchComplete -> true
         else -> false
     }
 
@@ -347,7 +381,7 @@ fun LessonScreen(
         if (showAbandonConfirm) {
             ConfirmationDialog(
                 title = "Abandon this session?",
-                text = "Progress on lessons you haven't finished studying or quizzing yet will be lost. Lessons you've already completed won't be affected.",
+                text = "Finished batches are kept. Lessons in the batch you're on that you haven't finished, and every batch after it, are dropped from this session — they stay available to study later.",
                 confirmLabel = "Abandon",
                 onConfirm = { showAbandonConfirm = false; onAbandon() },
                 onDismiss = { showAbandonConfirm = false },
@@ -466,6 +500,13 @@ fun LessonScreen(
                             questionType = phase.currentQuestionType,
                             totalCount = phase.totalQuizCount,
                             remainingCount = phase.remainingQuizCount,
+                            // Which pass of the session this question belongs to: a plan of several
+                            // batches needs saying out loud, or "3 / 10" reads as the whole session.
+                            sessionContextLabel = when {
+                                phase.round == QuizRound.CLEANUP -> "Extra practice"
+                                phase.batchCount > 1 -> "Batch ${phase.batchIndex + 1} of ${phase.batchCount}"
+                                else -> null
+                            },
                             answerInput = phase.answerInput,
                             feedback = phase.feedback,
                             rankChange = phase.rankChange,
@@ -510,8 +551,20 @@ fun LessonScreen(
                             feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
                             answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
                             continueButton = LessonScreenTestTags.CONTINUE_BUTTON,
-                            answerReadingPitchAccentHint = LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT
+                            answerReadingPitchAccentHint = LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT,
+                            sessionContextLabel = LessonScreenTestTags.QUIZ_SESSION_CONTEXT_LABEL
                         )
+                    )
+                }
+
+                is LessonUiState.Phase.BatchComplete -> {
+                    LessonBatchCompleteContent(
+                        checkpoint = phase,
+                        onContinue = onContinueSession,
+                        onFinishForNow = onFinishForNow,
+                        onPracticeMissed = onPracticeMissed,
+                        onFinishSession = onFinishSession,
+                        onSubjectClick = { detailSheetState.show(it) }
                     )
                 }
             }
@@ -589,6 +642,16 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
         modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
             .testTag(LessonScreenTestTags.STUDY_PROGRESS_COUNT)
     )
+    if (study.batchCount > 1) {
+        // Without this, "2 / 5" on its own reads as the whole session's progress — and a learner who
+        // picked 20 items has no way to tell that their quiz is only about the five cards here.
+        Text(
+            text = "Batch ${study.batchIndex + 1} of ${study.batchCount} · ${study.sessionItemCount} items in this session",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp).testTag(LessonScreenTestTags.STUDY_BATCH_LABEL)
+        )
+    }
     LinearProgressIndicator(
         progress = { (study.studyIndex + 1).toFloat() / study.studyItems.size },
         modifier = Modifier.fillMaxWidth(),
@@ -693,7 +756,113 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
             modifier = Modifier
                 .weight(1f)
                 .testTag(if (isLastCard) LessonScreenTestTags.START_QUIZ_BUTTON else LessonScreenTestTags.STUDY_NEXT_BUTTON)
-        ) { Text(if (isLastCard) "Start Quiz" else "Next") }
+        ) {
+            Text(
+                when {
+                    !isLastCard -> "Next"
+                    // Naming the batch makes it clear this quiz covers only what was just studied,
+                    // rather than every item the learner selected.
+                    study.hasMoreBatches -> "Quiz batch ${study.batchIndex + 1}"
+                    else -> "Start Quiz"
+                }
+            )
+        }
+    }
+}
+
+/** The batch checkpoint — the screen a session pauses at between batches, or lands on when the last
+ *  batch is done and there's something worth offering. Deliberately short: a per-batch tally, the
+ *  misses, and two ways forward. Anything longer (a full summary, timers, accuracy charts) would make
+ *  the checkpoint feel like a hurdle rather than a breath. */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteContent(
+    checkpoint: LessonUiState.Phase.BatchComplete,
+    onContinue: () -> Unit,
+    onFinishForNow: () -> Unit,
+    onPracticeMissed: () -> Unit,
+    onFinishSession: () -> Unit,
+    onSubjectClick: (Long) -> Unit
+) {
+    val isFinalBatch = checkpoint.batchIndex == checkpoint.batchCount - 1
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
+            .testTag(LessonScreenTestTags.BATCH_COMPLETE),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = if (isFinalBatch) "Last batch done!" else "Batch ${checkpoint.batchIndex + 1} of ${checkpoint.batchCount} done!",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.testTag(LessonScreenTestTags.BATCH_COMPLETE_HEADLINE)
+        )
+        Text(
+            text = "${checkpoint.itemsLearned} learned · ${checkpoint.itemsCorrectFirstTry} right first try",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.testTag(LessonScreenTestTags.BATCH_COMPLETE_SUMMARY_TEXT)
+        )
+
+        if (checkpoint.missedItems.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Worth another look",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.testTag(LessonScreenTestTags.BATCH_COMPLETE_MISSED_TEXT)
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    checkpoint.missedItems.forEach { item ->
+                        LessonGlyphTile(
+                            lessonItem = item,
+                            selected = false,
+                            minWidth = 56.dp,
+                            minHeight = 64.dp,
+                            maxWidth = 96.dp,
+                            onClick = { onSubjectClick(item.subjectId) }
+                        )
+                    }
+                }
+            }
+        }
+
+        when (val next = checkpoint.next) {
+            is LessonUiState.Phase.BatchComplete.NextStep.StudyBatch -> {
+                Text(
+                    text = "${next.remainingSessionItems} items left in this session.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = onContinue,
+                    modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON)
+                ) { Text("Study next ${next.itemCount}") }
+                TextButton(
+                    onClick = onFinishForNow,
+                    modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON)
+                ) { Text("Finish for now") }
+                Text(
+                    text = "Stopping here is fine — you can pick the session back up from the dashboard.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            is LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed -> {
+                Text(
+                    text = "${next.itemCount} didn't stick on the first try.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = onPracticeMissed,
+                    modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.PRACTICE_MISSED_BUTTON)
+                ) { Text("Practice ${next.itemCount} missed") }
+                TextButton(
+                    onClick = onFinishSession,
+                    modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.FINISH_SESSION_BUTTON)
+                ) { Text("See results") }
+            }
+        }
     }
 }
 
@@ -722,6 +891,25 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
         Text("Choose lessons to study", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Text("$selectedCount of $total selected", style = MaterialTheme.typography.bodyMedium)
+        Spacer(modifier = Modifier.height(4.dp))
+        // What the selection actually costs, and how it will be broken up: a raw count doesn't tell a
+        // learner that 20 items means four study→quiz cycles and roughly 40 minutes.
+        Text(
+            text = lessonSessionPlanSummary(selectedCount, select.batchSize),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag(LessonScreenTestTags.SELECTION_SESSION_PLAN_TEXT)
+        )
+        if (select.isOverDailyGoal) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Past today's goal of ${select.dailyLessonGoal} (${select.dailyLessonsCompletedToday} done) — " +
+                    "anything you don't reach stays available.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag(LessonScreenTestTags.SELECTION_OVER_GOAL_TEXT)
+            )
+        }
 
         if (!customizeExpanded) {
             Spacer(modifier = Modifier.height(24.dp))
@@ -1023,4 +1211,19 @@ private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
             }
         }
     }
+}
+
+/** A rough per-item cost for the picker's "how long is this?" line. Deliberately crude — an estimate
+ *  to steer a size decision, not a promise — and it errs high rather than low, so an oversized
+ *  selection doesn't look cheaper than it is. */
+private const val ESTIMATED_MINUTES_PER_LESSON_ITEM = 2
+
+/** One line describing what a selection will actually be: how much material, how many study→quiz
+ *  cycles it breaks into, and roughly how long that takes. */
+private fun lessonSessionPlanSummary(selectedCount: Int, batchSize: Int): String {
+    if (selectedCount == 0) return "Nothing selected yet."
+    val batches = ceil(selectedCount.toDouble() / batchSize).toInt()
+    val batchLabel = if (batches == 1) "1 batch" else "$batches batches"
+    val minutes = selectedCount * ESTIMATED_MINUTES_PER_LESSON_ITEM
+    return "$selectedCount items · $batchLabel of up to $batchSize · ~$minutes min"
 }

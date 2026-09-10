@@ -12,10 +12,20 @@ import kotlinx.coroutines.flow.map
 
 const val DEFAULT_DAILY_LESSON_GOAL = 15
 
+/** How many new lessons one study→quiz batch holds by default — matches WaniKani's own default
+ *  batch size, and the size every lesson selection is sliced into when the learner picks more than
+ *  this many items (see [com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSessionPlanner]). */
+const val DEFAULT_LESSON_BATCH_SIZE = 5
+
+/** Bounds [AppSettings.lessonBatchSize] — 1 is a legitimate "one card, then quiz it" choice, and 20
+ *  is already a long batch for brand-new material. */
+val LESSON_BATCH_SIZE_RANGE = 1..20
+
 enum class ThemeMode { SYSTEM, LIGHT, DARK, EINK }
 
 data class AppSettings(
     val dailyLessonGoal: Int = DEFAULT_DAILY_LESSON_GOAL,
+    val lessonBatchSize: Int = DEFAULT_LESSON_BATCH_SIZE,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val showPitchAccent: Boolean = true,
     val autoplayPronunciationAudio: Boolean = true,
@@ -45,6 +55,7 @@ class SettingsRepository(
     private val dataStore: DataStore<Preferences>
 ) {
     private val dailyLessonGoalKey = intPreferencesKey("daily_lesson_goal")
+    private val lessonBatchSizeKey = intPreferencesKey("lesson_batch_size")
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val showPitchAccentKey = booleanPreferencesKey("show_pitch_accent")
     private val autoplayPronunciationAudioKey = booleanPreferencesKey("autoplay_pronunciation_audio")
@@ -78,6 +89,7 @@ class SettingsRepository(
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
         AppSettings(
             dailyLessonGoal = prefs[dailyLessonGoalKey] ?: DEFAULT_DAILY_LESSON_GOAL,
+            lessonBatchSize = prefs[lessonBatchSizeKey] ?: DEFAULT_LESSON_BATCH_SIZE,
             themeMode = prefs[themeModeKey]?.let { raw -> runCatching { ThemeMode.valueOf(raw) }.getOrNull() }
                 ?: ThemeMode.SYSTEM,
             showPitchAccent = prefs[showPitchAccentKey] ?: true,
@@ -110,6 +122,10 @@ class SettingsRepository(
 
     suspend fun setDailyLessonGoal(goal: Int) {
         dataStore.edit { it[dailyLessonGoalKey] = goal.coerceIn(1, 99) }
+    }
+
+    suspend fun setLessonBatchSize(size: Int) {
+        dataStore.edit { it[lessonBatchSizeKey] = size.coerceIn(LESSON_BATCH_SIZE_RANGE) }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {

@@ -111,6 +111,9 @@ object ReviewScreenTestTags {
     const val TOTAL_TIMER_TEXT = "review_total_timer_text"
     const val QUESTION_TIMER_TEXT = "review_question_timer_text"
     const val ANSWER_READING_PITCH_ACCENT = "review_answer_reading_pitch_accent"
+    /** Unused by Review's own UI (a review queue *is* the session), but required by the shared
+     *  [com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags]. */
+    const val SESSION_CONTEXT_LABEL = "review_session_context_label"
 }
 
 sealed interface ReviewScreenEvent {
@@ -403,7 +406,9 @@ fun ReviewScreen(
                             feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
                             answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
                             continueButton = ReviewScreenTestTags.CONTINUE_BUTTON,
-                            answerReadingPitchAccentHint = ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT
+                            answerReadingPitchAccentHint = ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT,
+                            // Review has no session context to name — its queue is the whole session.
+                            sessionContextLabel = ReviewScreenTestTags.SESSION_CONTEXT_LABEL
                         )
                     )
                 }
