@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.di
 
 import com.crazyfluff.shellfstudy.shared.data.CmpPitchAccentBundledSource
+import com.crazyfluff.shellfstudy.shared.data.IosOutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.IosPronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
