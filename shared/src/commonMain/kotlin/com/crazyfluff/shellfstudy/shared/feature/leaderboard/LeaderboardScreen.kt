@@ -54,8 +54,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
+import com.crazyfluff.shellfstudy.shared.data.model.friendRosterIndex
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserPalette
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserColor
 import kotlinx.coroutines.flow.drop
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -94,7 +95,6 @@ fun LeaderboardScreen(
     var showAddFriendDialog by remember { mutableStateOf(false) }
     var friendToDelete by remember { mutableStateOf<FriendEntry?>(null) }
     var friendToEdit by remember { mutableStateOf<FriendEntry?>(null) }
-    val palette = leaderboardUserPalette()
 
     LaunchedEffect(uiState.addFriendSuccess) {
         if (uiState.addFriendSuccess) showAddFriendDialog = false
@@ -157,10 +157,16 @@ fun LeaderboardScreen(
                         }
                     }
                     itemsIndexed(uiState.friends, key = { _, friend -> friend.id }) { index, friend ->
+                        val stats = statsByFriendId?.get(friend.id)
+                        // Prefer the roster index the repository assigned to this friend's stats, so
+                        // this list and the dashboard's rows resolve through the same value; a friend
+                        // whose stats aren't cached yet has no entry there and falls back to the same
+                        // roster rule applied to this list, which is the list the repository indexed.
+                        val rosterIndex = stats?.rosterIndex ?: friendRosterIndex(index)
                         FriendCard(
                             friend = friend,
-                            stats = statsByFriendId?.get(friend.id),
-                            avatarColor = palette[index % palette.size],
+                            stats = stats,
+                            avatarColor = leaderboardUserColor(rosterIndex),
                             onEdit = { friendToEdit = friend },
                             onDelete = { friendToDelete = friend },
                             modifier = Modifier

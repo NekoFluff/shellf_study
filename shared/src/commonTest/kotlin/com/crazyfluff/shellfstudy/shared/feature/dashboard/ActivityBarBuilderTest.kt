@@ -34,6 +34,7 @@ class ActivityBarBuilderTest {
         daysSinceStart = null,
         levelTimeline = emptyList(),
         isCurrentUser = false,
+        rosterIndex = 0,
         learned = ActivityStats(),
         burned = ActivityStats(),
         learnedBuckets = learnedBuckets,

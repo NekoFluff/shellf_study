@@ -41,6 +41,21 @@ enum class LeaderboardWindow(val label: String) {
     ALL_TIME("All time")
 }
 
+/**
+ * Roster position of the current user. Friends occupy [friendRosterIndex] slots after this one, so
+ * a participant's roster index is stable for as long as they stay in the roster — unlike their rank,
+ * which changes with the selected metric/window. The UI maps it to a per-user color.
+ */
+const val SELF_ROSTER_INDEX = 0
+
+/**
+ * Roster index for the friend at [friendIndex] in the friend list's insertion order — the order the
+ * friends flow emits, which is also the order the full friends list is rendered in. Computed from
+ * the *unfiltered* friend list so a friend whose stats haven't been fetched yet doesn't shift
+ * everyone below them onto a different color.
+ */
+fun friendRosterIndex(friendIndex: Int): Int = friendIndex + 1
+
 data class FriendStats(
     val friendEntryId: String,
     val nickname: String,
@@ -51,6 +66,7 @@ data class FriendStats(
     val daysSinceStart: Int?,
     val levelTimeline: List<LevelTimelinePoint>,
     val isCurrentUser: Boolean,
+    val rosterIndex: Int,
     val learned: ActivityStats = ActivityStats(),
     val burned: ActivityStats = ActivityStats(),
     val learnedBuckets: ActivityBuckets = ActivityBuckets(),

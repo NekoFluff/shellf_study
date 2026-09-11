@@ -8,6 +8,8 @@ import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelTimelinePoint
+import com.crazyfluff.shellfstudy.shared.data.model.SELF_ROSTER_INDEX
+import com.crazyfluff.shellfstudy.shared.data.model.friendRosterIndex
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
@@ -226,8 +228,14 @@ class FriendStatsRepository(
             if (friends.isEmpty()) return@combine null
 
             val statsByFriendId = cachedStats.associateBy { it.friendId }
-            val friendEntries = friends.mapNotNull { entry ->
-                statsByFriendId[entry.id]?.toFriendStats(nickname = entry.nickname)
+            // Indexed against the unfiltered list, then filtered: a friend whose stats aren't
+            // cached yet must not shift the roster index (and so the color) of the friends after
+            // them. Ids of friends that were removed leave a gap, which only wastes a palette slot.
+            val friendEntries = friends.mapIndexedNotNull { index, entry ->
+                statsByFriendId[entry.id]?.toFriendStats(
+                    nickname = entry.nickname,
+                    rosterIndex = friendRosterIndex(index)
+                )
             }
 
             val all = listOf(selfStats) + friendEntries
@@ -395,6 +403,7 @@ class FriendStatsRepository(
             daysSinceStart = core.daysSinceStart,
             levelTimeline = core.timeline.map { LevelTimelinePoint(it.daysSinceStart, it.level) },
             isCurrentUser = true,
+            rosterIndex = SELF_ROSTER_INDEX,
             learned = core.learned,
             burned = core.burned,
             learnedBuckets = core.learnedBuckets,
@@ -402,7 +411,7 @@ class FriendStatsRepository(
         )
     }
 
-    private fun FriendStatsEntity.toFriendStats(nickname: String): FriendStats {
+    private fun FriendStatsEntity.toFriendStats(nickname: String, rosterIndex: Int): FriendStats {
         val timeline = runCatching {
             json.decodeFromString(ListSerializer(TimelinePointJson.serializer()), levelTimelineJson)
                 .map { LevelTimelinePoint(it.daysSinceStart, it.level) }
@@ -423,6 +432,7 @@ class FriendStatsRepository(
             daysSinceStart = if (daysSinceStart < 0) null else daysSinceStart,
             levelTimeline = timeline,
             isCurrentUser = false,
+            rosterIndex = rosterIndex,
             learned = ActivityStats(
                 today = learnedToday,
                 week = learnedWeek,

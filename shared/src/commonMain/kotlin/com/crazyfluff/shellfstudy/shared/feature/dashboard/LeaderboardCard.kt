@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,14 +44,20 @@ import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserPalette
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.vocabularyColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserColor
 
 
 private val metrics = listOf(LeaderboardMetric.LEARNED, LeaderboardMetric.BURNED, LeaderboardMetric.LEVEL)
 
+/** How many participants the dashboard card shows before deferring to the full leaderboard screen.
+ *  Matches the palette's slot count, so the visible rows never repeat a color. */
+private const val MAX_VISIBLE_ENTRIES = 5
+
+object LeaderboardCardTestTags {
+    const val CARD = "leaderboard_card"
+    const val ROW = "leaderboard_row"
+    const val SEE_ALL = "leaderboard_see_all"
+}
 
 @Composable
 fun LeaderboardCard(
@@ -63,7 +70,7 @@ fun LeaderboardCard(
     selectedWindow: LeaderboardWindow = leaderboard.window,
     modifier: Modifier = Modifier
 ) {
-    Card(modifier = modifier) {
+    Card(modifier = modifier.testTag(LeaderboardCardTestTags.CARD)) {
         Column {
             if (isLoading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -116,25 +123,26 @@ fun LeaderboardCard(
                 }
             }
 
-            val palette = leaderboardUserPalette()
-            val displayEntries = leaderboard.entries.take(3)
+            val displayEntries = leaderboard.entries.take(MAX_VISIBLE_ENTRIES)
             displayEntries.forEachIndexed { index, entry ->
                 if (index > 0) HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 LeaderboardRow(
                     entry = entry,
                     rank = index + 1,
-                    color = palette.getOrElse(index) { palette.last() },
                     metric = selectedMetric,
                     window = selectedWindow
                 )
             }
 
-            if (leaderboard.entries.size > 3) {
+            if (leaderboard.entries.size > MAX_VISIBLE_ENTRIES) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onSeeAll) { Text("See all") }
+                    TextButton(
+                        onClick = onSeeAll,
+                        modifier = Modifier.testTag(LeaderboardCardTestTags.SEE_ALL)
+                    ) { Text("See all") }
                 }
             } else {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -147,11 +155,11 @@ fun LeaderboardCard(
 private fun LeaderboardRow(
     entry: FriendStats,
     rank: Int,
-    color: Color,
     metric: LeaderboardMetric,
     window: LeaderboardWindow,
     modifier: Modifier = Modifier
 ) {
+    val color = leaderboardUserColor(entry.rosterIndex)
     val background = if (entry.isCurrentUser) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
     } else {
@@ -161,6 +169,7 @@ private fun LeaderboardRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .testTag(LeaderboardCardTestTags.ROW)
             .background(background)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically

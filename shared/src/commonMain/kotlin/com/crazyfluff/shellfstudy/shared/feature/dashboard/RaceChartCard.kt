@@ -46,7 +46,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserPalette
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserColor
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.format.MonthNames
 import kotlinx.datetime.number
@@ -69,6 +69,15 @@ private fun formatMonthYear(epochMillis: Long): String {
     val year = (dt.year % 100).toString().padStart(2, '0')
     return "${MonthNames.ENGLISH_ABBREVIATED.names[dt.month.number - 1]} '$year"
 }
+
+/**
+ * One participant as a chart draws them: who they are, the color resolved for them, and the points
+ * belonging to that user. The color is resolved once, in composable scope, because both charts draw
+ * these inside a `Canvas` lambda — which is a `DrawScope`, not a composable, so calling
+ * `leaderboardUserColor` there doesn't compile. Pairing it with the entry keeps the color travelling
+ * with the user rather than being re-derived from a list position.
+ */
+private data class ChartSeries<T>(val entry: FriendStats, val color: Color, val points: List<T>)
 
 /**
  * Pinch-to-zoom/pan math shared by both charts below. Content is conceptually [viewportWPx] wide
@@ -115,9 +124,7 @@ fun RaceChartCard(
 
 @Composable
 private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
-    val usersWithData = leaderboard.entries.filter {
-        it.levelTimeline.isNotEmpty() && it.daysSinceStart != null
-    }
+    val usersWithData = leaderboard.entries.filter { it.levelTimeline.isNotEmpty() }
     if (usersWithData.isEmpty()) return
 
     val nowMillis = Clock.System.now().toEpochMilliseconds()
@@ -131,7 +138,6 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
 
     val subtitle = levelChartSubtitle(window)
 
-    val palette = leaderboardUserPalette()
     val textMeasurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -139,8 +145,9 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
     val tooltipBg = MaterialTheme.colorScheme.surfaceContainerHigh
     val tooltipFg = MaterialTheme.colorScheme.onSurface
 
-    val userTimelines = usersWithData.map { user ->
-        val startMs = nowMillis - user.daysSinceStart!! * DAY_MS_CHART
+    val userSeries = usersWithData.mapNotNull { user ->
+        val daysSinceStart = user.daysSinceStart ?: return@mapNotNull null
+        val startMs = nowMillis - daysSinceStart * DAY_MS_CHART
         val allPoints = user.levelTimeline.map { pt -> startMs + pt.daysSinceStart * DAY_MS_CHART to pt.level }
 
         val points = if (window == LeaderboardWindow.ALL_TIME) {
@@ -155,11 +162,12 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                 if (last().first < nowMillis) add(nowMillis to user.level)
             }
         }
-        user to points
+        ChartSeries(entry = user, color = leaderboardUserColor(user.rosterIndex), points = points)
     }
+    if (userSeries.isEmpty()) return
 
     val globalMinMs = if (window == LeaderboardWindow.ALL_TIME) {
-        userTimelines.minOf { (_, pts) -> pts.first().first }
+        userSeries.minOf { it.points.first().first }
     } else {
         windowStartMs
     }
@@ -254,9 +262,10 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                     }
 
                     // User lines
-                    userTimelines.forEachIndexed { idx, (user, points) ->
-                        val color = palette.getOrElse(idx) { palette.last() }
-                        val strokeW = if (user.isCurrentUser) 3.dp.toPx() else 1.5.dp.toPx()
+                    userSeries.forEach { series ->
+                        val color = series.color
+                        val points = series.points
+                        val strokeW = if (series.entry.isCurrentUser) 3.dp.toPx() else 1.5.dp.toPx()
 
                         if (points.size == 1) {
                             val (ms, lvl) = points.first()
@@ -292,14 +301,15 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                         else -> formatMonthYear(selectedMs)
                     }
                     val headerResult = textMeasurer.measure(dateLabel, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))
-                    val userResults = userTimelines.mapIndexed { idx, (user, points) ->
-                        val color = palette.getOrElse(idx) { palette.last() }
+                    val userResults = userSeries.map { series ->
+                        val points = series.points
+                        val color = series.color
                         val lvl = points.lastOrNull { (ms, _) -> ms <= selectedMs }?.second
                             ?: points.firstOrNull()?.second
-                            ?: user.level
+                            ?: series.entry.level
                         drawCircle(color, 5.dp.toPx(), Offset(sx, yOf(lvl)))
                         drawCircle(Color.White, 2.5.dp.toPx(), Offset(sx, yOf(lvl)))
-                        Triple(textMeasurer.measure("${user.nickname}: Lv. $lvl", labelStyle), color, lvl)
+                        Triple(textMeasurer.measure("${series.entry.nickname}: Lv. $lvl", labelStyle), color, lvl)
                     }
 
                     drawTooltip(
@@ -314,11 +324,11 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
             }
 
             Spacer(Modifier.height(12.dp))
-            usersWithData.forEachIndexed { idx, user ->
+            userSeries.forEach { series ->
                 ChartLegendRow(
-                    color = palette.getOrElse(idx) { palette.last() },
-                    label = user.nickname,
-                    isCurrentUser = user.isCurrentUser
+                    color = series.color,
+                    label = series.entry.nickname,
+                    isCurrentUser = series.entry.isCurrentUser
                 )
             }
         }
@@ -345,7 +355,6 @@ private fun ActivityWindowChart(
 
     val subtitle = activityChartSubtitle(leaderboard.window)
 
-    val palette = leaderboardUserPalette()
     val textMeasurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -353,12 +362,15 @@ private fun ActivityWindowChart(
     val tooltipBg = MaterialTheme.colorScheme.surfaceContainerHigh
     val tooltipFg = MaterialTheme.colorScheme.onSurface
 
-    val cumulativeSeries: List<List<Int>> = entries.indices.map { ui ->
-        bars.map { bar -> bar.counts.getOrElse(ui) { 0 } }
+    // Each entry paired with its own cumulative series, so every user's identity travels with their
+    // line, dots and legend swatch instead of being re-looked-up by list position.
+    val series: List<ChartSeries<Int>> = entries.mapIndexed { ui, entry ->
+        val cumulative = bars.map { bar -> bar.counts.getOrElse(ui) { 0 } }
             .runningFold(0) { acc, v -> acc + v }
             .drop(1)
+        ChartSeries(entry = entry, color = leaderboardUserColor(entry.rosterIndex), points = cumulative)
     }
-    val maxVal = cumulativeSeries.flatten().maxOrNull()?.coerceAtLeast(1) ?: 1
+    val maxVal = series.flatMap { it.points }.maxOrNull()?.coerceAtLeast(1) ?: 1
     val numPoints = bars.size
 
     // Default to the most recent bar so "today"'s numbers are visible with no interaction at
@@ -452,20 +464,20 @@ private fun ActivityWindowChart(
                     }
 
                     // Lines per user
-                    cumulativeSeries.forEachIndexed { ui, cumValues ->
-                        val color = palette.getOrElse(ui) { palette.last() }
-                        val strokeW = if (entries.getOrNull(ui)?.isCurrentUser == true) 3.dp.toPx() else 1.5.dp.toPx()
+                    series.forEach { user ->
+                        val cumValues = user.points
+                        val strokeW = if (user.entry.isCurrentUser) 3.dp.toPx() else 1.5.dp.toPx()
                         if (cumValues.size >= 2) {
                             val path = Path()
                             cumValues.forEachIndexed { i, v ->
                                 val x = xOf(i); val y = yOf(v)
                                 if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                             }
-                            drawPath(path, color, style = Stroke(strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                            drawPath(path, user.color, style = Stroke(strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round))
                         }
                         val lastIdx = cumValues.lastIndex
                         if (lastIdx >= 0) {
-                            drawCircle(color, 4.dp.toPx(), Offset(xOf(lastIdx), yOf(cumValues[lastIdx])))
+                            drawCircle(user.color, 4.dp.toPx(), Offset(xOf(lastIdx), yOf(cumValues[lastIdx])))
                         }
                     }
 
@@ -483,13 +495,11 @@ private fun ActivityWindowChart(
 
                     // Intersection dots + tooltip
                     val headerResult = textMeasurer.measure(bars[snapIdx].label, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))
-                    val userResults = cumulativeSeries.mapIndexed { ui, cumValues ->
-                        val color = palette.getOrElse(ui) { palette.last() }
-                        val v = cumValues.getOrElse(snapIdx) { 0 }
-                        drawCircle(color, 5.dp.toPx(), Offset(snapX, yOf(v)))
+                    val userResults = series.map { user ->
+                        val v = user.points.getOrElse(snapIdx) { 0 }
+                        drawCircle(user.color, 5.dp.toPx(), Offset(snapX, yOf(v)))
                         drawCircle(Color.White, 2.5.dp.toPx(), Offset(snapX, yOf(v)))
-                        val nickname = entries.getOrNull(ui)?.nickname ?: "?"
-                        textMeasurer.measure("$nickname: $v", labelStyle) to color
+                        textMeasurer.measure("${user.entry.nickname}: $v", labelStyle) to user.color
                     }
                     drawTooltip(
                         header = headerResult,
@@ -503,11 +513,11 @@ private fun ActivityWindowChart(
             }
 
             Spacer(Modifier.height(12.dp))
-            entries.forEachIndexed { idx, user ->
+            series.forEach { user ->
                 ChartLegendRow(
-                    color = palette.getOrElse(idx) { palette.last() },
-                    label = user.nickname,
-                    isCurrentUser = user.isCurrentUser
+                    color = user.color,
+                    label = user.entry.nickname,
+                    isCurrentUser = user.entry.isCurrentUser
                 )
             }
         }
