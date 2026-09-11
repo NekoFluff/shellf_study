@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,7 +32,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -44,6 +47,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -116,7 +121,6 @@ import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailShee
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
-import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 object LessonScreenTestTags {
@@ -173,8 +177,9 @@ object LessonScreenTestTags {
     const val ABANDON_CONFIRM_BUTTON = "lesson_abandon_confirm_button"
     const val STUDY_BATCH_LABEL = "lesson_study_batch_label"
     const val QUIZ_SESSION_CONTEXT_LABEL = "lesson_quiz_session_context_label"
-    const val SELECTION_SESSION_PLAN_TEXT = "lesson_selection_session_plan_text"
-    const val SELECTION_OVER_GOAL_TEXT = "lesson_selection_over_goal_text"
+    fun typeSelectorChipTag(type: SubjectType) = "lesson_type_selector_${type.name.lowercase()}"
+    const val SORT_DROPDOWN = "lesson_sort_dropdown"
+    fun sortOptionTag(sort: LessonSort) = "lesson_sort_option_${sort.name.lowercase()}"
     const val BATCH_COMPLETE = "lesson_batch_complete"
     const val BATCH_COMPLETE_HEADLINE = "lesson_batch_complete_headline"
     const val BATCH_COMPLETE_SUMMARY_TEXT = "lesson_batch_complete_summary_text"
@@ -187,6 +192,8 @@ object LessonScreenTestTags {
 
 sealed interface LessonScreenEvent {
     data class ToggleLessonSelection(val assignmentId: Long) : LessonScreenEvent
+    data class ToggleLessonTypeSelection(val type: SubjectType) : LessonScreenEvent
+    data class SetLessonSort(val sort: LessonSort) : LessonScreenEvent
     data class SelectFirst(val count: Int) : LessonScreenEvent
     data object SelectAll : LessonScreenEvent
     data object SelectNone : LessonScreenEvent
@@ -239,6 +246,8 @@ fun LessonRoute(
         onEvent = { event ->
             when (event) {
                 is LessonScreenEvent.ToggleLessonSelection -> viewModel.toggleLessonSelection(event.assignmentId)
+                is LessonScreenEvent.ToggleLessonTypeSelection -> viewModel.toggleLessonTypeSelection(event.type)
+                is LessonScreenEvent.SetLessonSort -> viewModel.setLessonSort(event.sort)
                 is LessonScreenEvent.SelectFirst -> viewModel.selectFirst(event.count)
                 LessonScreenEvent.SelectAll -> viewModel.selectAll()
                 LessonScreenEvent.SelectNone -> viewModel.selectNone()
@@ -277,6 +286,8 @@ fun LessonScreen(
     searchUiState: SearchUiState = SearchUiState()
 ) {
     val onToggleLessonSelection: (Long) -> Unit = { onEvent(LessonScreenEvent.ToggleLessonSelection(it)) }
+    val onToggleLessonTypeSelection: (SubjectType) -> Unit = { onEvent(LessonScreenEvent.ToggleLessonTypeSelection(it)) }
+    val onSetLessonSort: (LessonSort) -> Unit = { onEvent(LessonScreenEvent.SetLessonSort(it)) }
     val onSelectFirst: (Int) -> Unit = { onEvent(LessonScreenEvent.SelectFirst(it)) }
     val onSelectAll = { onEvent(LessonScreenEvent.SelectAll) }
     val onSelectNone = { onEvent(LessonScreenEvent.SelectNone) }
@@ -464,6 +475,8 @@ fun LessonScreen(
                     LessonSelectionContent(
                         select = phase,
                         onToggle = onToggleLessonSelection,
+                        onToggleTypeSelection = onToggleLessonTypeSelection,
+                        onSortChange = onSetLessonSort,
                         onSelectFirst = onSelectFirst,
                         onSelectAll = onSelectAll,
                         onSelectNone = onSelectNone,
@@ -768,15 +781,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 .weight(1f)
                 .testTag(if (isLastCard) LessonScreenTestTags.START_QUIZ_BUTTON else LessonScreenTestTags.STUDY_NEXT_BUTTON)
         ) {
-            Text(
-                when {
-                    !isLastCard -> "Next"
-                    // Naming the batch makes it clear this quiz covers only what was just studied,
-                    // rather than every item the learner selected.
-                    study.hasMoreBatches -> "Quiz batch ${study.batchIndex + 1}"
-                    else -> "Start Quiz"
-                }
-            )
+            Text(if (isLastCard) "Start Quiz" else "Next")
         }
     }
 }
@@ -879,11 +884,60 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteCo
     }
 }
 
+/** Picks the picker's queue order. A plain clickable Row rather than a Material button, for the same
+ *  reason the dashboard's forecast-window dropdown is one: a button's enforced ~40dp minimum height
+ *  would inflate the count line it sits on. */
+@Composable
+private fun LessonSortDropdownButton(
+    selectedSort: LessonSort,
+    onSortChange: (LessonSort) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .clickable { expanded = true }
+                .testTag(LessonScreenTestTags.SORT_DROPDOWN),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Sort: ${selectedSort.label}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = "Change lesson sort",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            LessonSort.entries.forEach { sort ->
+                DropdownMenuItem(
+                    text = { Text(sort.label) },
+                    onClick = {
+                        onSortChange(sort)
+                        expanded = false
+                    },
+                    trailingIcon = if (sort == selectedSort) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    } else null,
+                    modifier = Modifier.testTag(LessonScreenTestTags.sortOptionTag(sort))
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionContent(
     select: LessonUiState.Phase.Select,
     onToggle: (Long) -> Unit,
+    onToggleTypeSelection: (SubjectType) -> Unit,
+    onSortChange: (LessonSort) -> Unit,
     onSelectFirst: (Int) -> Unit,
     onSelectAll: () -> Unit,
     onSelectNone: () -> Unit,
@@ -904,26 +958,34 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
         Text("Choose lessons to study", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Text("$selectedCount of $total selected", style = MaterialTheme.typography.bodyMedium)
-        Spacer(modifier = Modifier.height(4.dp))
-        // What the selection actually costs, and how it will be broken up: a raw count doesn't tell a
-        // learner that 20 items means four study→quiz cycles and roughly 40 minutes.
-        Text(
-            text = lessonSessionPlanSummary(selectedCount, select.batchSize),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.testTag(LessonScreenTestTags.SELECTION_SESSION_PLAN_TEXT)
-        )
-        if (select.isOverDailyGoal) {
-            Spacer(modifier = Modifier.height(4.dp))
-            // Names the exit rather than reassuring about one: the checkpoint between batches is what
-            // actually makes an over-goal selection harmless, and it's visible later — a promise about
-            // lessons "staying available" here would just be a claim the learner has to take on faith.
-            Text(
-                text = "Past today's goal of ${select.dailyLessonGoal} — you can stop between batches at any time.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.testTag(LessonScreenTestTags.SELECTION_OVER_GOAL_TEXT)
-            )
+
+        if (select.availableTypes.size > 1) {
+            Spacer(modifier = Modifier.height(12.dp))
+            // Whole-type shortcuts, shown in both picker modes: one tap gets every kanji (or clears
+            // them again), which is the fastest route to a kanji-only session. A chip is filled in
+            // only while *all* of that type is selected, so a partial selection reads as "tap to
+            // complete" rather than as done.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                select.availableTypes.forEach { type ->
+                    val allSelected = select.isTypeFullySelected(type)
+                    FilterChip(
+                        selected = allSelected,
+                        onClick = { onToggleTypeSelection(type) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        border = if (allSelected) null else FilterChipDefaults.filterChipBorder(enabled = true, selected = false),
+                        label = { Text("${subjectTypeLabel(type)} · ${select.countOfType(type)}") },
+                        modifier = Modifier.testTag(LessonScreenTestTags.typeSelectorChipTag(type))
+                    )
+                }
+            }
         }
 
         if (!customizeExpanded) {
@@ -1001,21 +1063,30 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
         if (customizeExpanded) {
             Spacer(modifier = Modifier.height(8.dp))
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                AssistChip(
-                    onClick = onSelectAll,
-                    label = { Text("All") },
-                    modifier = Modifier.testTag(LessonScreenTestTags.SELECT_ALL_CHIP)
-                )
-                AssistChip(
-                    onClick = onSelectNone,
-                    label = { Text("None") },
-                    modifier = Modifier.testTag(LessonScreenTestTags.SELECT_NONE_CHIP)
-                )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AssistChip(
+                        onClick = onSelectAll,
+                        label = { Text("All") },
+                        modifier = Modifier.testTag(LessonScreenTestTags.SELECT_ALL_CHIP)
+                    )
+                    AssistChip(
+                        onClick = onSelectNone,
+                        label = { Text("None") },
+                        modifier = Modifier.testTag(LessonScreenTestTags.SELECT_NONE_CHIP)
+                    )
+                }
+                // Order only means anything once the queue mixes types — an all-kanji queue sorts to
+                // itself either way, so the control would just be noise.
+                if (select.availableTypes.size > 1) {
+                    LessonSortDropdownButton(selectedSort = select.sort, onSortChange = onSortChange)
+                }
             }
         }
     }
@@ -1150,19 +1221,4 @@ private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
             }
         }
     }
-}
-
-/** A rough per-item cost for the picker's "how long is this?" line. Deliberately crude — an estimate
- *  to steer a size decision, not a promise — and it errs high rather than low, so an oversized
- *  selection doesn't look cheaper than it is. */
-private const val ESTIMATED_MINUTES_PER_LESSON_ITEM = 2
-
-/** One line describing what a selection will actually be: how much material, how many study→quiz
- *  cycles it breaks into, and roughly how long that takes. */
-private fun lessonSessionPlanSummary(selectedCount: Int, batchSize: Int): String {
-    if (selectedCount == 0) return "Nothing selected yet."
-    val batches = ceil(selectedCount.toDouble() / batchSize).toInt()
-    val batchLabel = if (batches == 1) "1 batch" else "$batches batches"
-    val minutes = selectedCount * ESTIMATED_MINUTES_PER_LESSON_ITEM
-    return "$selectedCount items · $batchLabel of up to $batchSize · ~$minutes min"
 }

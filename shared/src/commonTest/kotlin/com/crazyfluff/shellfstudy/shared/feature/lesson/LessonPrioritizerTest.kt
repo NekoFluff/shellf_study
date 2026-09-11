@@ -98,4 +98,39 @@ class LessonPrioritizerTest {
         val result = LessonPrioritizer.prioritize(items, notReady, isStrained = false)
         assertEquals(2, result.size)
     }
+
+    @Test
+    fun kanjiFirstPutsEveryKanjiAheadOfRadicalsAndVocab() {
+        val vocab = item(4, SubjectType.VOCABULARY, lessonPosition = 1)
+        val kanji = item(2, SubjectType.KANJI, lessonPosition = 2)
+        val radical = item(3, SubjectType.RADICAL, lessonPosition = 99)
+        val earlierKanji = item(1, SubjectType.KANJI, lessonPosition = 1)
+
+        val result = LessonPrioritizer.prioritize(
+            listOf(vocab, kanji, radical, earlierKanji),
+            notReady,
+            isStrained = false,
+            sort = LessonSort.KANJI_FIRST
+        )
+
+        // Kanji first in level/lesson-position order, then the rest in the default order (radicals
+        // ahead of vocabulary) — the sort overrides the level-up cadence, radicals included.
+        assertEquals(listOf(1L, 2L, 3L, 4L), ids(result))
+    }
+
+    @Test
+    fun kanjiFirstIgnoresTheLevelUpReadyShortcut() {
+        val kanji = item(1, SubjectType.KANJI, lessonPosition = 5)
+        val vocab = item(2, SubjectType.VOCABULARY, lessonPosition = 1)
+
+        val result = LessonPrioritizer.prioritize(
+            listOf(kanji, vocab),
+            ready,
+            isStrained = false,
+            sort = LessonSort.KANJI_FIRST
+        )
+
+        // Unlike DEFAULT, the learner's explicit choice isn't second-guessed once level-up is secured.
+        assertEquals(listOf(1L, 2L), ids(result))
+    }
 }

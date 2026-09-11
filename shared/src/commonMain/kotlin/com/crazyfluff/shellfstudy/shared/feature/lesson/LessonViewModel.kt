@@ -9,7 +9,6 @@ import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
-import com.crazyfluff.shellfstudy.shared.data.DEFAULT_DAILY_LESSON_GOAL
 import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
@@ -26,6 +25,7 @@ import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
@@ -33,6 +33,7 @@ import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord
 import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
@@ -117,19 +118,26 @@ data class LessonUiState(
         data class Select(
             val availableLessons: List<LessonItem> = emptyList(),
             val selectedAssignmentIds: Set<Long> = emptySet(),
-            /** The batch size a session started from here gets sliced into — carried into the UI so
-             *  the picker can say how many batches a selection is, and default to a single one. */
+            /** The batch size a session started from here gets sliced into. */
             val batchSize: Int = DEFAULT_LESSON_BATCH_SIZE,
-            val dailyLessonGoal: Int = DEFAULT_DAILY_LESSON_GOAL,
-            val dailyLessonsCompletedToday: Int = 0
+            /** How [availableLessons] is ordered. Reset to [LessonSort.DEFAULT] on every fresh fetch —
+             *  it's a way of browsing the queue, not a stored preference. */
+            val sort: LessonSort = LessonSort.DEFAULT
         ) : Phase {
-            /** How many more lessons today's goal still allows — 0 once it's met or passed. */
-            val remainingDailyGoal: Int get() = (dailyLessonGoal - dailyLessonsCompletedToday).coerceAtLeast(0)
+            /** The types on offer, in [SubjectType]'s own order (radicals, kanji, vocabulary) so the
+             *  picker's chips never shuffle around when the sort changes. */
+            val availableTypes: List<SubjectType>
+                get() = SubjectType.entries.filter { type -> availableLessons.any { it.subjectType == type } }
 
-            /** A selection past what's left of today's goal. Deliberately not blocked — picking more is
-             *  a legitimate choice, and a goal is a pace rather than a cap — but worth saying out loud,
-             *  since the picker's slider puts an oversized session one drag away. */
-            val isOverDailyGoal: Boolean get() = dailyLessonGoal > 0 && selectedAssignmentIds.size > remainingDailyGoal
+            fun countOfType(type: SubjectType): Int = availableLessons.count { it.subjectType == type }
+
+            fun selectedCountOfType(type: SubjectType): Int =
+                availableLessons.count { it.subjectType == type && it.assignmentId in selectedAssignmentIds }
+
+            /** Whether every lesson of [type] is selected — what fills in that type's chip. A type the
+             *  queue has none of is never "fully selected"; partial selections read as unselected. */
+            fun isTypeFullySelected(type: SubjectType): Boolean =
+                countOfType(type) > 0 && selectedCountOfType(type) == countOfType(type)
         }
 
         data class Study(
@@ -144,10 +152,6 @@ data class LessonUiState(
             val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
         ) : Phase {
             val isLastCardInBatch: Boolean get() = studyIndex == studyItems.lastIndex
-
-            /** Whether more batches follow this one — the last card's primary action starts this
-             *  batch's quiz either way, but only a final batch ends the session's studying. */
-            val hasMoreBatches: Boolean get() = batchIndex < batchCount - 1
         }
 
         data class Quiz(
@@ -259,6 +263,14 @@ class LessonViewModel(
     private var currentBatchIndex = 0
     private var itemsById: Map<Long, LessonItem> = emptyMap()
     private var currentRound = QuizRound.LESSON
+
+    // The picker's inputs, kept as plain fields so a sort change can re-order the queue without
+    // another fetch: what Room handed back, plus the level-up context LessonPrioritizer needs. Only
+    // ever read while a Select phase is showing, and always overwritten together by
+    // buildLessonSelectionFromCache.
+    private var lessonQueue: List<LessonItem> = emptyList()
+    private var currentLevelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 0, kanjiTotal = 0)
+    private var isStrained = false
 
     // The session's batches, still as ids — see LessonSessionPlanner for why the plan is persisted as
     // ids plus a batch size rather than as explicit boundaries.
@@ -619,15 +631,19 @@ class LessonViewModel(
      *  itself is what failed but a previously-cached queue is still available). */
     private suspend fun buildLessonSelectionFromCache() {
         val currentLevel = statsRepository.observeCurrentLevel().first() ?: 0
-        val levelUpProgress = assignmentRepository.observeLevelUpProgress(currentLevel).first()
         val lessonsToday = assignmentRepository.observeLessonsCompletedToday().first()
         val settings = settingsRepository.settings.first()
         val dailyGoal = settings.dailyLessonGoal
         val batchSize = LessonSessionPlanner.normalizeBatchSize(settings.lessonBatchSize)
+        // Retained so a later sort change re-orders the same queue instead of re-reading Room.
+        lessonQueue = assignmentRepository.observeLessonQueue().first()
+        currentLevelUpProgress = assignmentRepository.observeLevelUpProgress(currentLevel).first()
+        isStrained = lessonsToday >= dailyGoal
         val items = LessonPrioritizer.prioritize(
-            items = assignmentRepository.observeLessonQueue().first(),
-            levelUpProgress = levelUpProgress,
-            isStrained = lessonsToday >= dailyGoal
+            items = lessonQueue,
+            levelUpProgress = currentLevelUpProgress,
+            isStrained = isStrained,
+            sort = LessonSort.DEFAULT
         )
         if (items.isEmpty()) {
             _uiState.update { it.copy(phase = LessonUiState.Phase.NoLessonsAvailable) }
@@ -645,9 +661,7 @@ class LessonViewModel(
                 phase = LessonUiState.Phase.Select(
                     availableLessons = items,
                     selectedAssignmentIds = items.take(defaultSelectionSize).map { it.assignmentId }.toSet(),
-                    batchSize = batchSize,
-                    dailyLessonGoal = dailyGoal,
-                    dailyLessonsCompletedToday = lessonsToday
+                    batchSize = batchSize
                 )
             )
         }
@@ -682,12 +696,52 @@ class LessonViewModel(
         updateSelect { select -> select.copy(selectedAssignmentIds = select.availableLessons.take(n).map { it.assignmentId }.toSet()) }
     }
 
+    /** Selects everything on offer. */
     fun selectAll() {
         updateSelect { select -> select.copy(selectedAssignmentIds = select.availableLessons.map { it.assignmentId }.toSet()) }
     }
 
     fun selectNone() {
         updateSelect { select -> select.copy(selectedAssignmentIds = emptySet()) }
+    }
+
+    /** Toggles a whole subject type at once — "select all kanji", or clear them again on a second
+     *  tap. A partially selected type completes rather than clearing, so the first tap always lands
+     *  on "all of them" and only a fully selected type empties. No-op for a type the queue has none
+     *  of. */
+    fun toggleLessonTypeSelection(type: SubjectType) {
+        updateSelect { select ->
+            val assignmentIds = select.availableLessons
+                .filter { it.subjectType == type }
+                .map { it.assignmentId }
+                .toSet()
+            if (assignmentIds.isEmpty()) return@updateSelect select
+            val allSelected = assignmentIds.all { it in select.selectedAssignmentIds }
+            val selected = if (allSelected) {
+                select.selectedAssignmentIds - assignmentIds
+            } else {
+                select.selectedAssignmentIds + assignmentIds
+            }
+            select.copy(selectedAssignmentIds = selected)
+        }
+    }
+
+    /** Re-orders the picker's queue. Selection is untouched — it's a set of assignment ids, so the
+     *  same lessons stay selected and simply sit in a different order (which is what the slider's
+     *  "first N" and the session's batch slicing then follow). */
+    fun setLessonSort(sort: LessonSort) {
+        updateSelect { select ->
+            if (select.sort == sort) return@updateSelect select
+            select.copy(
+                availableLessons = LessonPrioritizer.prioritize(
+                    items = lessonQueue,
+                    levelUpProgress = currentLevelUpProgress,
+                    isStrained = isStrained,
+                    sort = sort
+                ),
+                sort = sort
+            )
+        }
     }
 
     /** Commits to a session: the selection becomes a frozen plan, sliced into batches, and the first

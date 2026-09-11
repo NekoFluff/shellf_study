@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.feature.lesson
 
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonPhase
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSort
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import com.crazyfluff.shellfstudy.shared.feature.lesson.QuizRound
@@ -32,6 +33,7 @@ import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentBundledSource
@@ -2218,14 +2220,225 @@ class LessonViewModelTest {
 
             val select = state.phase as LessonUiState.Phase.Select
             assertThat(select.selectedAssignmentIds).hasSize(2)
-            assertThat(select.remainingDailyGoal).isEqualTo(2)
-            assertThat(select.isOverDailyGoal).isFalse()
-
-            // Picking past the goal is allowed — it just says so.
-            viewModel.selectAll()
-            assertThat((awaitItem().phase as LessonUiState.Phase.Select).isOverDailyGoal).isTrue()
         }
     }
+
+    @Test
+    fun `the picker offers every type in the queue, radicals first`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(mixedAssignmentsJson()), jsonResponse(mixedSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            val select = state.phase as LessonUiState.Phase.Select
+            assertThat(select.availableTypes)
+                .containsExactly(SubjectType.RADICAL, SubjectType.KANJI, SubjectType.VOCABULARY)
+                .inOrder()
+            assertThat(select.countOfType(SubjectType.KANJI)).isEqualTo(2)
+        }
+    }
+
+    @Test
+    fun `toggling a type selects every lesson of it`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(mixedAssignmentsJson()), jsonResponse(mixedSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.selectNone()
+            awaitItem()
+            viewModel.toggleLessonTypeSelection(SubjectType.KANJI)
+            val select = awaitItem().phase as LessonUiState.Phase.Select
+
+            assertThat(select.selectedAssignmentIds).containsExactly(102L, 104L)
+            // The whole point of the chip's filled state: it only reads as on when all of the type is in.
+            assertThat(select.isTypeFullySelected(SubjectType.KANJI)).isTrue()
+            assertThat(select.isTypeFullySelected(SubjectType.RADICAL)).isFalse()
+        }
+    }
+
+    @Test
+    fun `toggling a fully selected type again clears it`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(mixedAssignmentsJson()), jsonResponse(mixedSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            // This queue is shorter than the default batch, so everything starts selected — every
+            // chip is filled in before the learner touches one.
+            val all = state.phase as LessonUiState.Phase.Select
+            assertThat(all.isTypeFullySelected(SubjectType.KANJI)).isTrue()
+
+            viewModel.toggleLessonTypeSelection(SubjectType.KANJI)
+            val select = awaitItem().phase as LessonUiState.Phase.Select
+
+            assertThat(select.selectedAssignmentIds).containsExactly(101L, 103L)
+            assertThat(select.isTypeFullySelected(SubjectType.KANJI)).isFalse()
+        }
+    }
+
+    @Test
+    fun `a partially selected type completes on the first toggle`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(mixedAssignmentsJson()), jsonResponse(mixedSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            // One of the two kanji, so the kanji chip is unfilled — a tap should add the missing one
+            // rather than wipe the type out.
+            viewModel.selectFirst(2)
+            val partial = awaitItem().phase as LessonUiState.Phase.Select
+            assertThat(partial.selectedAssignmentIds).containsExactly(101L, 102L)
+            assertThat(partial.isTypeFullySelected(SubjectType.KANJI)).isFalse()
+
+            viewModel.toggleLessonTypeSelection(SubjectType.KANJI)
+            val completed = awaitItem().phase as LessonUiState.Phase.Select
+
+            assertThat(completed.selectedAssignmentIds).containsExactly(101L, 102L, 104L)
+            assertThat(completed.isTypeFullySelected(SubjectType.KANJI)).isTrue()
+        }
+    }
+
+    @Test
+    fun `toggling a type the queue has none of is a no-op`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(mixedAssignmentsJson()), jsonResponse(mixedSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.toggleLessonTypeSelection(SubjectType.KANA_VOCABULARY)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `toggling kanji then starting a session studies only kanji`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(mixedAssignmentsJson()), jsonResponse(mixedSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.selectNone()
+            awaitItem()
+            viewModel.toggleLessonTypeSelection(SubjectType.KANJI)
+            awaitItem()
+
+            viewModel.startSelectedLessons()
+
+            var study = awaitItem().phase
+            while (study !is LessonUiState.Phase.Study) study = awaitItem().phase
+            assertThat(study.studyItems.map { it.subjectType })
+                .containsExactly(SubjectType.KANJI, SubjectType.KANJI)
+        }
+    }
+
+    @Test
+    fun `setLessonSort reorders the queue kanji-first and keeps the selection`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(mixedAssignmentsJson()), jsonResponse(mixedSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            val before = state.phase as LessonUiState.Phase.Select
+            assertThat(before.sort).isEqualTo(LessonSort.DEFAULT)
+            assertThat(before.availableLessons.map { it.assignmentId })
+                .containsExactly(101L, 102L, 103L, 104L)
+                .inOrder()
+
+            viewModel.setLessonSort(LessonSort.KANJI_FIRST)
+            val sorted = awaitItem().phase as LessonUiState.Phase.Select
+
+            assertThat(sorted.sort).isEqualTo(LessonSort.KANJI_FIRST)
+            assertThat(sorted.availableLessons.map { it.assignmentId })
+                .containsExactly(102L, 104L, 101L, 103L)
+                .inOrder()
+            // Re-ordering isn't re-selecting: the same lessons stay chosen.
+            assertThat(sorted.selectedAssignmentIds).isEqualTo(before.selectedAssignmentIds)
+        }
+    }
+
+    @Test
+    fun `re-selecting the current sort is a no-op`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(mixedAssignmentsJson()), jsonResponse(mixedSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.setLessonSort(LessonSort.DEFAULT)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `selectFirst follows the chosen sort`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(mixedAssignmentsJson()), jsonResponse(mixedSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.setLessonSort(LessonSort.KANJI_FIRST)
+            awaitItem()
+            viewModel.selectFirst(1)
+            val select = awaitItem().phase as LessonUiState.Phase.Select
+
+            // The quick pick's first slot is now the kanji, which is the whole point of sorting.
+            assertThat(select.selectedAssignmentIds).containsExactly(102L)
+        }
+    }
+
+    @Test
+    fun `a kanji-first session studies the kanji before anything else`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(mixedAssignmentsJson()), jsonResponse(mixedSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.setLessonSort(LessonSort.KANJI_FIRST)
+            awaitItem()
+            viewModel.selectFirst(3)
+            awaitItem()
+
+            viewModel.startSelectedLessons()
+
+            var study = awaitItem().phase
+            while (study !is LessonUiState.Phase.Study) study = awaitItem().phase
+            // The sort is the plan order: the session's first batch is both kanji, ahead of the radical.
+            assertThat(study.studyItems.map { it.subjectType })
+                .containsExactly(SubjectType.KANJI, SubjectType.KANJI, SubjectType.RADICAL)
+                .inOrder()
+        }
+    }
+
+    // --- Fixtures -----------------------------------------------------------------------------
 
     private fun kanjiAssignmentsJson() = """
         {
@@ -2499,10 +2712,102 @@ class LessonViewModelTest {
         }
     """.trimIndent()
 
+    /** One radical, two kanji and one vocabulary item, all level 1 — the smallest queue that can
+     *  exercise both whole-type selection (a type with more than one lesson, so it can be partially
+     *  selected) and the sort orders. Ties in lesson position break by assignment id, so by default
+     *  [LessonPrioritizer] orders these 101 (radical) → 102 → 103 (vocab) → 104, and kanji-first
+     *  orders them 102 → 104 → 101 → 103. */
+    private fun mixedAssignmentsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 4,
+          "data": [
+            {
+              "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "radical",
+                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            },
+            {
+              "id": 102, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/102",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 2, "subject_type": "kanji",
+                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            },
+            {
+              "id": 103, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/103",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 3, "subject_type": "vocabulary",
+                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            },
+            {
+              "id": 104, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/104",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 4, "subject_type": "kanji",
+                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            }
+          ]
+        }
+    """.trimIndent()
+
+    private fun mixedSubjectsJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 4,
+          "data": [
+            {
+              "id": 1, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/1",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "mouth",
+                "characters": "口",
+                "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
+                "readings": []
+              }
+            },
+            {
+              "id": 2, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/2",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "water",
+                "characters": "水",
+                "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
+                "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}]
+              }
+            },
+            {
+              "id": 3, "object": "vocabulary", "url": "https://api.wanikani.com/v2/subjects/3",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "water-vocab",
+                "characters": "水",
+                "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
+                "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}]
+              }
+            },
+            {
+              "id": 4, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/4",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "fire",
+                "characters": "火",
+                "meanings": [{"meaning": "Fire", "primary": true, "accepted_meaning": true}],
+                "readings": [{"reading": "ひ", "primary": true, "accepted_reading": true}]
+              }
+            }
+          ]
+        }
+    """.trimIndent()
+
     private fun emptyCollectionJson() = """
         {"object": "collection", "url": "https://api.wanikani.com/v2/x", "total_count": 0, "data": []}
     """.trimIndent()
-
     private fun startAssignmentResultJson() = """
         {
           "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",

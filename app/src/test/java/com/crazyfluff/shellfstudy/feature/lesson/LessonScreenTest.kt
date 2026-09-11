@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.feature.lesson
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreen
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenEvent
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenTestTags
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSort
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -14,6 +15,8 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -107,6 +110,30 @@ class LessonScreenTest {
         readingMnemonic = null
     )
 
+    private val kanjiItem = LessonItem(
+        assignmentId = 4,
+        subjectId = 4,
+        subjectType = SubjectType.KANJI,
+        characters = "口",
+        level = 1,
+        meanings = listOf("Mouth"),
+        readings = listOf("コウ"),
+        meaningMnemonic = "A mouth.",
+        readingMnemonic = "A row of mouths."
+    )
+
+    private val vocabularyItem = LessonItem(
+        assignmentId = 5,
+        subjectId = 5,
+        subjectType = SubjectType.VOCABULARY,
+        characters = "口",
+        level = 2,
+        meanings = listOf("Mouth"),
+        readings = listOf("くち"),
+        meaningMnemonic = "A mouth.",
+        readingMnemonic = "A mouth."
+    )
+
     // --- LessonUiState fixture helpers -------------------------------------------------------
     // LessonUiState.Phase is a sealed hierarchy now (Select/Study/Quiz/Complete/etc.) instead of a
     // flat data class with a `phase: LessonPhase` enum plus a pile of independent nullable fields.
@@ -117,15 +144,13 @@ class LessonScreenTest {
         availableLessons: List<LessonItem> = emptyList(),
         selectedAssignmentIds: Set<Long> = emptySet(),
         batchSize: Int = DEFAULT_LESSON_BATCH_SIZE,
-        dailyLessonGoal: Int = 15,
-        dailyLessonsCompletedToday: Int = 0
+        sort: LessonSort = LessonSort.DEFAULT
     ) = LessonUiState(
         phase = LessonUiState.Phase.Select(
             availableLessons = availableLessons,
             selectedAssignmentIds = selectedAssignmentIds,
             batchSize = batchSize,
-            dailyLessonGoal = dailyLessonGoal,
-            dailyLessonsCompletedToday = dailyLessonsCompletedToday
+            sort = sort
         )
     )
 
@@ -214,6 +239,8 @@ class LessonScreenTest {
     private fun setScreen(
         uiState: LessonUiState,
         onToggleLessonSelection: (Long) -> Unit = {},
+        onToggleTypeSelection: (SubjectType) -> Unit = {},
+        onSetLessonSort: (LessonSort) -> Unit = {},
         onSelectFirst: (Int) -> Unit = {},
         onSelectAll: () -> Unit = {},
         onSelectNone: () -> Unit = {},
@@ -244,6 +271,8 @@ class LessonScreenTest {
                     onEvent = { event ->
                         when (event) {
                             is LessonScreenEvent.ToggleLessonSelection -> onToggleLessonSelection(event.assignmentId)
+                            is LessonScreenEvent.ToggleLessonTypeSelection -> onToggleTypeSelection(event.type)
+                            is LessonScreenEvent.SetLessonSort -> onSetLessonSort(event.sort)
                             is LessonScreenEvent.SelectFirst -> onSelectFirst(event.count)
                             LessonScreenEvent.SelectAll -> onSelectAll()
                             LessonScreenEvent.SelectNone -> onSelectNone()
@@ -409,6 +438,57 @@ class LessonScreenTest {
     }
 
     @Test
+    fun selectPhase_sortDropdown_showsTheCurrentSortAndInvokesOnSetLessonSort() {
+        var chosenSort: LessonSort? = null
+        setScreen(
+            selectState(
+                availableLessons = listOf(radicalItem, kanjiItem, vocabularyItem),
+                selectedAssignmentIds = setOf(1L)
+            ),
+            onSetLessonSort = { chosenSort = it }
+        )
+
+        // Only part of the checklist, not of the quick pick.
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.SORT_DROPDOWN).assertCountEquals(0)
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SORT_DROPDOWN).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Sort: Default").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.SORT_DROPDOWN).performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.sortOptionTag(LessonSort.KANJI_FIRST)).performClick()
+
+        assertThat(chosenSort).isEqualTo(LessonSort.KANJI_FIRST)
+    }
+
+    @Test
+    fun selectPhase_sortDropdown_reflectsANonDefaultSort() {
+        setScreen(
+            selectState(
+                availableLessons = listOf(radicalItem, kanjiItem, vocabularyItem),
+                sort = LessonSort.KANJI_FIRST
+            )
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("Sort: Kanji first").assertIsDisplayed()
+    }
+
+    @Test
+    fun selectPhase_sortDropdown_absentWhenTheQueueHoldsASingleType() {
+        setScreen(selectState(availableLessons = listOf(radicalItem, secondRadicalItem)))
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.SORT_DROPDOWN).assertCountEquals(0)
+    }
+
+    @Test
     fun selectPhase_levelGroupToggle_showsAndHidesTilesForUnselectedLevel() {
         var toggledId: Long? = null
         setScreen(
@@ -561,8 +641,9 @@ class LessonScreenTest {
         // competing with it, and no session total repeated from the picker.
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_PROGRESS_COUNT).assertTextEquals("2 / 2")
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_BATCH_LABEL).assertTextEquals("Batch 1 of 3")
-        // The last card of a non-final batch hands off to that batch's quiz, not the session's only one.
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.START_QUIZ_BUTTON).assertTextEquals("Quiz batch 1")
+        // The last card of a non-final batch hands off to that batch's quiz; the button says so the
+        // same way it does for a single-batch session.
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.START_QUIZ_BUTTON).assertTextEquals("Start Quiz")
     }
 
     @Test
@@ -574,48 +655,58 @@ class LessonScreenTest {
     }
 
     @Test
-    fun selectPhase_showsItemCountBatchCountAndTimeEstimate() {
+    fun selectPhase_typeSelectorChips_showOnePerAvailableTypeWithCounts() {
         setScreen(
             selectState(
-                availableLessons = listOf(radicalItem, secondRadicalItem, glyphlessRadicalItem),
-                selectedAssignmentIds = setOf(1L, 2L, 3L),
-                batchSize = 2
+                availableLessons = listOf(radicalItem, kanjiItem, vocabularyItem),
+                selectedAssignmentIds = setOf(1L)
             )
         )
 
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECTION_SESSION_PLAN_TEXT)
-            .assertTextContains("3 items · 2 batches of up to 2 · ~6 min")
+        // Whole-type shortcuts live in the picker's header, so they're reachable without opening the
+        // checklist — that's what makes one-tap kanji-only possible from the quick pick.
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.RADICAL))
+            .assertTextEquals("Radical · 1")
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.KANJI))
+            .assertTextEquals("Kanji · 1")
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.VOCABULARY))
+            .assertTextEquals("Vocabulary · 1")
     }
 
     @Test
-    fun selectPhase_warnsOnceTheSelectionGoesPastTodaysGoal() {
+    fun selectPhase_typeSelectorChips_fillOnlyWhenTheWholeTypeIsSelected() {
         setScreen(
             selectState(
-                availableLessons = listOf(radicalItem, secondRadicalItem, glyphlessRadicalItem),
-                selectedAssignmentIds = setOf(1L, 2L, 3L),
-                batchSize = 5,
-                dailyLessonGoal = 2,
-                dailyLessonsCompletedToday = 0
+                // Two radicals with only one of them selected: the chip must read as unfilled, since
+                // tapping it would add the missing lesson rather than clear the type.
+                availableLessons = listOf(radicalItem, secondRadicalItem, kanjiItem),
+                selectedAssignmentIds = setOf(1L, 4L)
             )
         )
 
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECTION_OVER_GOAL_TEXT)
-            .assertTextContains("Past today's goal of 2 — you can stop between batches at any time.", substring = true)
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.RADICAL)).assertIsNotSelected()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.KANJI)).assertIsSelected()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.VOCABULARY)).assertDoesNotExist()
     }
 
     @Test
-    fun selectPhase_hidesTheOverGoalWarningWhileWithinTheGoal() {
+    fun selectPhase_typeSelectorChips_absentWhenTheQueueHoldsASingleType() {
+        setScreen(selectState(availableLessons = listOf(radicalItem, secondRadicalItem)))
+
+        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.RADICAL)).assertCountEquals(0)
+    }
+
+    @Test
+    fun selectPhase_typeSelectorChipClick_invokesOnToggleTypeSelection() {
+        var toggledType: SubjectType? = null
         setScreen(
-            selectState(
-                availableLessons = listOf(radicalItem, secondRadicalItem),
-                selectedAssignmentIds = setOf(1L, 2L),
-                batchSize = 5,
-                dailyLessonGoal = 5,
-                dailyLessonsCompletedToday = 0
-            )
+            selectState(availableLessons = listOf(radicalItem, kanjiItem)),
+            onToggleTypeSelection = { toggledType = it }
         )
 
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECTION_OVER_GOAL_TEXT).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.KANJI)).performClick()
+
+        assertThat(toggledType).isEqualTo(SubjectType.KANJI)
     }
 
     @Test
