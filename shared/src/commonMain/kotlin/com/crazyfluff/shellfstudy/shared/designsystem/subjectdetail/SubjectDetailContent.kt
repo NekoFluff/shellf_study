@@ -180,10 +180,10 @@ private fun SubjectHeadline(
     reading: @Composable () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.End),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = "Level ${detail.level} · ${subjectTypeLabel(detail.subjectType)}",
