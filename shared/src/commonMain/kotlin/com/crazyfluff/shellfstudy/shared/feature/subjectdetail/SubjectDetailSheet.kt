@@ -72,8 +72,6 @@ import kotlinx.coroutines.flow.drop
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
 
-private val SubjectDetailOpenHandleHeight = 32.dp
-
 private enum class SheetAnchor { Collapsed, Open }
 
 /**
@@ -188,42 +186,32 @@ fun SubjectDetailSheet(
                 .offset { IntOffset(0, dragState.requireOffset().roundToInt()) }
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
+                // The collapsed peek strip. Still composed once the sheet is open (at zero height)
+                // rather than removed: the in-flight drag that opened the sheet is delivered to this
+                // node, so dropping it mid-gesture would cancel that drag and strand the sheet at a
+                // partial offset. Open, the body owns the top of the sheet — the X closes it.
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (isOpenIsh) SubjectDetailOpenHandleHeight else SubjectDetailHandleHeight)
+                        .height(if (isOpenIsh) 0.dp else SubjectDetailHandleHeight)
                         .then(if (active) Modifier.anchoredDraggable(dragState, Orientation.Vertical) else Modifier)
                         .then(if (active) Modifier.clickable(onClick = onToggle) else Modifier)
                         .testTag(handleTestTag)
                 ) {
-                    if (isOpenIsh) {
-                        Spacer(modifier = Modifier.weight(1f))
-                        Box(
-                            modifier = Modifier
-                                .width(32.dp)
-                                .height(4.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                    RoundedCornerShape(2.dp)
-                                )
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                    } else {
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Icon(
-                            Icons.Filled.KeyboardArrowUp,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Swipe up for details",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Tap to view details",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
 
                 if (isOpenIsh && active) {
