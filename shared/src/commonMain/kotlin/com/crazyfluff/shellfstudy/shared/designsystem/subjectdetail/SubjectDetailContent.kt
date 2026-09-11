@@ -130,23 +130,21 @@ fun SubjectDetailContent(
             .testTag(SubjectDetailTestTags.CONTENT_ROOT),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        SubjectHeadline(detail, assignmentStats, isVocabulary, showMeaning = revealMeaning) {
-            // The reading is part of the word's identity cluster — it follows the tags at the cluster's
-            // own 8dp rhythm rather than the 16dp the page's sections use, and stays above the writing
-            // zone so a learner checking an answer never scrolls past a stroke-order diagram for it.
-            if (revealReading) {
-                SubjectReadingAnswer(
-                    subjectType = detail.subjectType,
-                    readings = detail.readings,
-                    onyomiReadings = detail.onyomiReadings,
-                    kunyomiReadings = detail.kunyomiReadings,
-                    nanoriReadings = detail.nanoriReadings,
-                    pronunciationAudios = detail.pronunciationAudios,
-                    pitchAccents = detail.pitchAccents,
-                    showPitchAccent = showPitchAccent,
-                    restrictAudioToMp3 = restrictAudioToMp3
-                )
-            }
+        // The reading is part of the word's identity cluster — it stays right under the meaning
+        // (see SubjectHeadline's tighter meaning/reading spacing) and above the writing zone, so a
+        // learner checking an answer never scrolls past a stroke-order diagram for it.
+        SubjectHeadline(detail, assignmentStats, isVocabulary, showMeaning = revealMeaning, showReading = revealReading) {
+            SubjectReadingAnswer(
+                subjectType = detail.subjectType,
+                readings = detail.readings,
+                onyomiReadings = detail.onyomiReadings,
+                kunyomiReadings = detail.kunyomiReadings,
+                nanoriReadings = detail.nanoriReadings,
+                pronunciationAudios = detail.pronunciationAudios,
+                pitchAccents = detail.pitchAccents,
+                showPitchAccent = showPitchAccent,
+                restrictAudioToMp3 = restrictAudioToMp3
+            )
         }
         SubjectWritingZone(strokeOrder, autoPlayStrokeOrder, showStrokeOrder, detail.subjectId)
         SubjectComponentsSection(detail, relatedSubjects, onRelatedSubjectClick)
@@ -168,7 +166,9 @@ fun SubjectDetailContent(
 // Headline: the subject's characters with their meaning directly underneath — the strongest place on
 // the page, and the first thing a learner checking an answer looks for — then [reading], then the
 // level/type line with its SRS chip on a line of its own, then the part-of-speech tags. One cluster,
-// so its parts sit at 8dp from each other instead of at the page's section spacing.
+// so its parts sit at 8dp from each other instead of at the page's section spacing — except the
+// meaning and reading themselves, which sit at a tighter 2dp: they read as one answer pair, not two
+// separate facts about the word.
 //
 // The bookkeeping comes after the answers on purpose. Level/type/SRS used to sit between the meaning
 // and the reading, which was invisible in browse mode (the meaning filled the space) but left a
@@ -180,6 +180,7 @@ private fun SubjectHeadline(
     assignmentStats: SubjectAssignmentStats?,
     isVocabulary: Boolean,
     showMeaning: Boolean,
+    showReading: Boolean,
     reading: @Composable () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -193,14 +194,20 @@ private fun SubjectHeadline(
             // character.
             boxHeight = headlineGlyphBoxHeight(80.dp)
         )
-        if (showMeaning) {
-            SubjectMeaningAnswer(
-                meanings = detail.meanings,
-                auxiliaryMeanings = detail.auxiliaryMeanings,
-                resetKey = detail.subjectId
-            )
+        if (showMeaning || showReading) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (showMeaning) {
+                    SubjectMeaningAnswer(
+                        meanings = detail.meanings,
+                        auxiliaryMeanings = detail.auxiliaryMeanings,
+                        resetKey = detail.subjectId
+                    )
+                }
+                if (showReading) {
+                    reading()
+                }
+            }
         }
-        reading()
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
