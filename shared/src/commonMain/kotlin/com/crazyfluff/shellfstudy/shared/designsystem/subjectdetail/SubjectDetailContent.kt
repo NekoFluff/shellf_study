@@ -79,11 +79,11 @@ private fun List<Long>.resolve(relatedSubjects: Map<Long, SubjectSummary>): List
 
 /**
  * The shared "everything about this subject" content, used from Review (gated), Lesson, Search,
- * and the Dashboard's level-progress breakdown. Section order puts the answer first: the subject's
- * characters with the headerless meaning underneath (see [SubjectMeaningAnswer]), then the
- * level/type line and tags, the headerless reading (see [SubjectReadingAnswer]), the writing zone and
- * components, the mnemonics (see [SubjectMnemonicZone]), then context sentences, visually similar,
- * used-in, and stats.
+ * and the Dashboard's level-progress breakdown. Section order puts the answer first: the level/type
+ * line with its SRS chip (pinned to the trailing edge, above the characters), the subject's
+ * characters, then the headerless meaning underneath (see [SubjectMeaningAnswer]), the headerless
+ * reading (see [SubjectReadingAnswer]), the part-of-speech tags, the writing zone and components, the
+ * mnemonics (see [SubjectMnemonicZone]), then context sentences, visually similar, used-in, and stats.
  */
 @Composable
 fun SubjectDetailContent(
@@ -163,17 +163,13 @@ fun SubjectDetailContent(
     }
 }
 
-// Headline: the subject's characters with their meaning directly underneath — the strongest place on
-// the page, and the first thing a learner checking an answer looks for — then [reading], then the
-// level/type line with its SRS chip on a line of its own, then the part-of-speech tags. One cluster,
-// so its parts sit at 8dp from each other instead of at the page's section spacing — except the
-// meaning and reading themselves, which sit at a tighter 2dp: they read as one answer pair, not two
-// separate facts about the word.
-//
-// The bookkeeping comes after the answers on purpose. Level/type/SRS used to sit between the meaning
-// and the reading, which was invisible in browse mode (the meaning filled the space) but left a
-// metadata row's worth of blank space between the characters and the reading whenever the meaning was
-// gated away mid-quiz — exactly when a learner wants the reading right under the word.
+// Headline: the level/type line with its SRS chip sits above the characters, pinned to the trailing
+// edge (metadata about the character, off to the side rather than competing with it for the
+// strongest spot on the page), then the glyph, then the meaning directly underneath it — the
+// strongest place on the page, and the first thing a learner checking an answer looks for — then
+// [reading], then the part-of-speech tags. One cluster, so its parts sit at 8dp from each other
+// instead of at the page's section spacing — except the meaning and reading themselves, which sit at
+// a tighter 2dp: they read as one answer pair, not two separate facts about the word.
 @Composable
 private fun SubjectHeadline(
     detail: SubjectDetail,
@@ -184,6 +180,20 @@ private fun SubjectHeadline(
     reading: @Composable () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.End),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Level ${detail.level} · ${subjectTypeLabel(detail.subjectType)}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (assignmentStats != null) {
+                SrsStageChip(assignmentStats.srsStage)
+            }
+        }
         SubjectGlyph(
             characters = detail.characters,
             characterImageUrl = detail.characterImageUrl,
@@ -206,19 +216,6 @@ private fun SubjectHeadline(
                 if (showReading) {
                     reading()
                 }
-            }
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "Level ${detail.level} · ${subjectTypeLabel(detail.subjectType)}",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (assignmentStats != null) {
-                SrsStageChip(assignmentStats.srsStage)
             }
         }
         if (isVocabulary && detail.partsOfSpeech.isNotEmpty()) {

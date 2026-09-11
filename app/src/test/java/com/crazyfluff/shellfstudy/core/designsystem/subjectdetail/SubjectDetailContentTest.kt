@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -230,7 +231,7 @@ class SubjectDetailContentTest {
     }
 
     @Test
-    fun levelAndType_sitOnTheirOwnLine_belowTheReading() {
+    fun levelAndType_sitAboveTheGlyph_pinnedToTheTrailingEdge() {
         composeTestRule.setContent {
             SubjectDetailContent(
                 detail = detail,
@@ -242,17 +243,18 @@ class SubjectDetailContentTest {
             )
         }
 
-        val meaningBounds = composeTestRule.onNodeWithTag(SubjectDetailTestTags.MEANING_ANSWER).getUnclippedBoundsInRoot()
+        val glyphBounds = composeTestRule.onNodeWithText("水").getUnclippedBoundsInRoot()
         val levelLineBounds = composeTestRule.onNodeWithText("Level 3 · Kanji").getUnclippedBoundsInRoot()
-        val readingBounds = composeTestRule.onNodeWithTag(SubjectDetailTestTags.READING_ANSWER).getUnclippedBoundsInRoot()
-        // Bookkeeping follows the answers rather than sitting between them, and it stays on a
-        // full-width row of its own instead of competing with the glyph.
-        assertThat(levelLineBounds.top >= readingBounds.bottom).isTrue()
-        assertThat(levelLineBounds.left <= meaningBounds.left).isTrue()
+        val rootBounds = composeTestRule.onRoot().getUnclippedBoundsInRoot()
+        val rootWidth = rootBounds.right - rootBounds.left
+        // Bookkeeping sits above the characters, off to the side, rather than competing with the
+        // glyph for the strongest spot on the page — and it hugs the trailing (right) edge.
+        assertThat(levelLineBounds.bottom <= glyphBounds.top).isTrue()
+        assertThat(levelLineBounds.right).isGreaterThan(rootWidth / 2)
     }
 
     @Test
-    fun reading_sitsAboveTheLevelLine_whenTheMeaningIsGatedAway() {
+    fun levelLine_staysAboveTheGlyph_whenTheMeaningIsGatedAway() {
         composeTestRule.setContent {
             SubjectDetailContent(
                 detail = detail,
@@ -264,12 +266,12 @@ class SubjectDetailContentTest {
             )
         }
 
-        // Mid-quiz the meaning is absent, so nothing but the reading's own 8dp of cluster spacing may
-        // sit between it and the characters — the level line used to, which read as a large gap.
-        val readingBounds = composeTestRule.onNodeWithTag(SubjectDetailTestTags.READING_ANSWER).getUnclippedBoundsInRoot()
+        // Mid-quiz the meaning is absent, but the level line is metadata about the character rather
+        // than an answer, so it still sits above the glyph regardless of what's gated.
+        val glyphBounds = composeTestRule.onNodeWithText("水").getUnclippedBoundsInRoot()
         val levelLineBounds = composeTestRule.onNodeWithText("Level 3 · Kanji").getUnclippedBoundsInRoot()
-        assertThat(readingBounds.bottom <= levelLineBounds.top).isTrue()
-        // And the meaning really is gone in this state, so the assertion above is testing what it says.
+        assertThat(levelLineBounds.bottom <= glyphBounds.top).isTrue()
+        // And the meaning really is gone in this state, so the reading is the only answer showing.
         composeTestRule.onAllNodesWithTag(SubjectDetailTestTags.MEANING_ANSWER).assertCountEquals(0)
     }
 
