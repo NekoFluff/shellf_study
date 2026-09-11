@@ -62,6 +62,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.PlatformBackHandler
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPitchAccentCheck
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentCheck
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.canOfferForceReveal
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.resolveEffectiveRevealMode
@@ -286,7 +287,16 @@ private fun ColumnScope.SubjectDetailBody(
             CircularProgressIndicator()
         }
     } else {
-        CompositionLocalProvider(LocalPitchAccentCheck provides viewModel::checkPitchAccent) {
+        // Remembered so a reading only recomposes when the check state flips, not on every unrelated
+        // uiState change (the detail flow re-emits for settings, scroll offsets, stats, ...).
+        val pitchAccentCheck = remember(uiState.isCheckingPitchAccent, uiState.pitchAccentCheckFailed, viewModel) {
+            PitchAccentCheck(
+                inProgress = uiState.isCheckingPitchAccent,
+                failed = uiState.pitchAccentCheckFailed,
+                onClick = viewModel::checkPitchAccent
+            )
+        }
+        CompositionLocalProvider(LocalPitchAccentCheck provides pitchAccentCheck) {
             SubjectDetailContent(
                 detail = detail,
                 relatedSubjects = uiState.relatedSubjects,

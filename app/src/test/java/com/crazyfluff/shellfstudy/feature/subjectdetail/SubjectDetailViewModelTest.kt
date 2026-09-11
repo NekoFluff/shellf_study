@@ -30,6 +30,7 @@ import com.crazyfluff.shellfstudy.fakes.FakeWeblioApi
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
@@ -481,11 +482,175 @@ class SubjectDetailViewModelTest {
 
                 subjectDetailViewModel.checkPitchAccent()
 
+                // Drain past the in-progress emission too: a successful scrape has to clear the flags,
+                // not leave the reading captioned as a failure.
                 var state = awaitItem()
-                while (state.detail?.pitchAccents != scraped) state = awaitItem()
+                while (state.detail?.pitchAccents != scraped || state.isCheckingPitchAccent) state = awaitItem()
                 assertThat(state.detail?.pitchAccents).isEqualTo(scraped)
+                assertThat(state.pitchAccentCheckFailed).isFalse()
             }
         }
+
+    @Test
+    fun `checkPitchAccent marks the check in progress while the scrape is still running`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // A multi-glyph word: single-glyph subjects re-run their stroke-order lookup on every
+            // detail emission, which adds unrelated emissions this test would have to drain.
+            val characters = "お土産"
+            val html = """<div class="NetDicHead">オミヤゲ<span style="font-size:75%;">［0］</span></div>"""
+            val scraped = PitchAccentUiState.Available(
+                listOf(PitchAccent(reading = "オミヤゲ", partOfSpeech = null, pitchNumber = 0))
+            )
+            // Held shut until the test releases it, so the state *during* the fetch is observable —
+            // which is the whole point of the progress flag.
+            val gate = CompletableDeferred<Unit>()
+            val pitchAccentRepository = PitchAccentRepository(
+                FakePitchAccentBundledSource(),
+                repositories.pitchAccentCacheDao,
+                FakeWeblioApi(mapOf(characters to html), gate),
+                WeblioPitchAccentParser()
+            )
+            val subjectDetailViewModel = SubjectDetailViewModel(
+                repositories.subjectRepository, repositories.assignmentRepository, settingsRepository,
+                audioPlayer, strokeOrderRepository, repositories.statsRepository, pitchAccentRepository
+            )
+            repositories.subjectDao.upsertAll(
+                listOf(subjectEntity(id = 7, characters = characters, meaning = "Souvenir", subjectType = "vocabulary", readings = listOf("おみやげ")))
+            )
+
+            subjectDetailViewModel.uiState.test {
+                awaitNotLoading()
+
+                subjectDetailViewModel.open(7)
+                awaitSettled(7)
+
+                subjectDetailViewModel.checkPitchAccent()
+
+                var state = awaitItem()
+                while (!state.isCheckingPitchAccent) state = awaitItem()
+                assertThat(state.pitchAccentCheckFailed).isFalse()
+
+                gate.complete(Unit)
+
+                // The release flows through to the resolved word, clearing progress and the flags.
+                while (state.isCheckingPitchAccent || state.detail?.pitchAccents != scraped) state = awaitItem()
+                assertThat(state.pitchAccentCheckFailed).isFalse()
+            }
+        }
+
+    @Test
+    fun `checkPitchAccent reports a failed fetch instead of silently leaving the word unchecked`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val characters = "お土産"
+            // No page configured for the query, so the fake throws exactly where a real network error
+            // or a weblio 404 would — the path that writes a null fetchedAt and leaves the word
+            // classified as still-unchecked.
+            val pitchAccentRepository = PitchAccentRepository(
+                FakePitchAccentBundledSource(),
+                repositories.pitchAccentCacheDao,
+                FakeWeblioApi(),
+                WeblioPitchAccentParser()
+            )
+            val subjectDetailViewModel = SubjectDetailViewModel(
+                repositories.subjectRepository, repositories.assignmentRepository, settingsRepository,
+                audioPlayer, strokeOrderRepository, repositories.statsRepository, pitchAccentRepository
+            )
+            // A vocabulary word: only vocab has a pitch accent to look up, so only there does a
+            // failed fetch leave the caption pending.
+            repositories.subjectDao.upsertAll(
+                listOf(subjectEntity(id = 7, characters = characters, meaning = "Souvenir", subjectType = "vocabulary", readings = listOf("おみやげ")))
+            )
+
+            subjectDetailViewModel.uiState.test {
+                awaitNotLoading()
+
+                subjectDetailViewModel.open(7)
+                assertThat(awaitSettled(7).detail?.pitchAccents).isEqualTo(PitchAccentUiState.Loading)
+
+                subjectDetailViewModel.checkPitchAccent()
+
+                var state = awaitItem()
+                while (!state.pitchAccentCheckFailed) state = awaitItem()
+                assertThat(state.isCheckingPitchAccent).isFalse()
+                // The failure is an extra fact, not a different pitch state: the word really is still
+                // unchecked, which is exactly why the flag has to carry the news.
+                assertThat(state.detail?.pitchAccents).isEqualTo(PitchAccentUiState.Loading)
+            }
+        }
+
+    @Test
+    fun `checkPitchAccent resolves a weblio 404 to a confirmed absence instead of a pending word`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val characters = "お土産"
+            // weblio definitively has no entry for this query: that is an answer, so the word must
+            // stop reading as "not checked yet" and must not be reported as a failed check.
+            val pitchAccentRepository = PitchAccentRepository(
+                FakePitchAccentBundledSource(),
+                repositories.pitchAccentCacheDao,
+                FakeWeblioApi(notFoundQueries = setOf(characters)),
+                WeblioPitchAccentParser()
+            )
+            val subjectDetailViewModel = SubjectDetailViewModel(
+                repositories.subjectRepository, repositories.assignmentRepository, settingsRepository,
+                audioPlayer, strokeOrderRepository, repositories.statsRepository, pitchAccentRepository
+            )
+            repositories.subjectDao.upsertAll(
+                listOf(subjectEntity(id = 7, characters = characters, meaning = "Souvenir", subjectType = "vocabulary", readings = listOf("おみやげ")))
+            )
+
+            subjectDetailViewModel.uiState.test {
+                awaitNotLoading()
+
+                subjectDetailViewModel.open(7)
+                assertThat(awaitSettled(7).detail?.pitchAccents).isEqualTo(PitchAccentUiState.Loading)
+
+                subjectDetailViewModel.checkPitchAccent()
+
+                var state = awaitItem()
+                while (state.detail?.pitchAccents != PitchAccentUiState.Unavailable || state.isCheckingPitchAccent) {
+                    state = awaitItem()
+                }
+                assertThat(state.pitchAccentCheckFailed).isFalse()
+            }
+        }
+
+    @Test
+    fun `a failed check is not carried over to the next subject`() = runTest(mainDispatcherRule.dispatcher) {
+        val pitchAccentRepository = PitchAccentRepository(
+            FakePitchAccentBundledSource(),
+            repositories.pitchAccentCacheDao,
+            FakeWeblioApi(),
+            WeblioPitchAccentParser()
+        )
+        val subjectDetailViewModel = SubjectDetailViewModel(
+            repositories.subjectRepository, repositories.assignmentRepository, settingsRepository,
+            audioPlayer, strokeOrderRepository, repositories.statsRepository, pitchAccentRepository
+        )
+        repositories.subjectDao.upsertAll(
+            listOf(
+                subjectEntity(id = 7, characters = "お土産", meaning = "Souvenir", subjectType = "vocabulary", readings = listOf("おみやげ")),
+                subjectEntity(id = 8, characters = "火曜", meaning = "Tuesday", subjectType = "vocabulary", readings = listOf("かよう"))
+            )
+        )
+
+        subjectDetailViewModel.uiState.test {
+            awaitNotLoading()
+
+            subjectDetailViewModel.open(7)
+            awaitSettled(7)
+
+            subjectDetailViewModel.checkPitchAccent()
+            var state = awaitItem()
+            while (!state.pitchAccentCheckFailed) state = awaitItem()
+
+            // The failure belonged to お土産 — showing it over 火曜's own "not checked yet" caption
+            // would attribute one word's fetch result to another.
+            subjectDetailViewModel.navigateToRelated(8)
+            val next = awaitSettled(8)
+            assertThat(next.pitchAccentCheckFailed).isFalse()
+            assertThat(next.isCheckingPitchAccent).isFalse()
+        }
+    }
 
     @Test
     fun `checkPitchAccent before any detail is loaded is a no-op`() = runTest(mainDispatcherRule.dispatcher) {

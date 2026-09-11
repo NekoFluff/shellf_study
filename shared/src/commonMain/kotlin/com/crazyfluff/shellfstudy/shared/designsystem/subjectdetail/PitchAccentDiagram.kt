@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,11 +41,16 @@ import kotlin.math.hypot
 object PitchAccentTestTags {
     const val DIAGRAM = "pitch_accent_diagram"
 
-    /** The "not checked yet" / "not available" caption every pitch-accent renderer shows in place of a diagram. */
+    /** The caption every pitch-accent renderer shows in place of a diagram: "not checked yet",
+     *  "not available", or — when a fetch the reader asked for failed — "Couldn't check pitch accent". */
     const val MESSAGE = "pitch_accent_message"
 
-    /** The "Check now" button offered under the "not checked yet" caption — see [PitchAccentDiagram]. */
+    /** The inline "Check now"/"Try again" link offered under the "not checked yet" / failed caption
+     *  — see [PitchAccentDiagram]. */
     const val CHECK = "pitch_accent_check"
+
+    /** The spinner shown in place of that link while a check is in flight. */
+    const val CHECKING = "pitch_accent_checking"
 
     /** The whole row — reading, play button, and whatever pitch section applies. Tags itself, so
      *  callers don't have to pass one in just to make the block findable from a test. */
@@ -99,6 +106,13 @@ internal fun pitchPatternColor(pitchNumber: Int, moraCount: Int): Color {
 @Composable
 internal fun pitchAccentTextStyle(): TextStyle = MaterialTheme.typography.bodyLarge
 
+/** What the surrounding content can say about fetching a word's pitch accent on demand. */
+data class PitchAccentCheck(
+    val inProgress: Boolean,
+    val failed: Boolean,
+    val onClick: () -> Unit
+)
+
 /**
  * The check a "not checked yet" reading offers its reader, provided around the content that shows
  * readings (currently the subject detail sheet) rather than handed down through intermediate
@@ -107,7 +121,7 @@ internal fun pitchAccentTextStyle(): TextStyle = MaterialTheme.typography.bodyLa
  * simply leave it unprovided, so they show no "Check now" link at all instead of one that looks
  * tappable and does nothing. Offering the value *is* the affordance.
  */
-val LocalPitchAccentCheck = staticCompositionLocalOf<(() -> Unit)?> { null }
+val LocalPitchAccentCheck = staticCompositionLocalOf<PitchAccentCheck?> { null }
 
 /**
  * The pitch-accent patterns for one reading — the diagrams, or a caption saying why there are none.
@@ -127,13 +141,17 @@ val LocalPitchAccentCheck = staticCompositionLocalOf<(() -> Unit)?> { null }
  * ([PitchAccentTestTags.ROOT]).
  *
  * Reads [LocalPitchAccentCheck] rather than taking it as an argument, since this is where it is
- * consumed. Offering it is what shows the "Check now" link, and only under
+ * consumed. Offering it is what shows the check affordance, and only under
  * [ReadingPitchAccent.Pending] — the one state a fetch can still resolve. [ReadingPitchAccent.NoEntry]
  * renders its caption alone, since a confirmed absence is an answer rather than something to retry.
+ * [PitchAccentCheck.inProgress] swaps the link for a spinner and "Checking pitch accent…";
+ * [PitchAccentCheck.failed] keeps the link (as "Try again") but replaces the caption, because a
+ * failed fetch leaves the word in that same pending state — the caption would otherwise still claim
+ * the word was never checked and say nothing about the failure.
  */
 @Composable
 fun PitchAccentDiagram(readingPitchAccent: ReadingPitchAccent) {
-    val onCheckPitchAccent = LocalPitchAccentCheck.current
+    val pitchAccentCheck = LocalPitchAccentCheck.current
 
     Column(modifier = Modifier.testTag(PitchAccentTestTags.ROOT)) {
         when (readingPitchAccent) {
@@ -149,24 +167,44 @@ fun PitchAccentDiagram(readingPitchAccent: ReadingPitchAccent) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = readingPitchAccent.message,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(PitchAccentTestTags.MESSAGE)
-                )
                 // Pending is the only "no patterns" state a fetch can still turn into an answer;
-                // NoEntry has already been looked up, so offering a retry there would be noise. Set in
-                // the caption's own size beside it — an inline link, not a button with its own weight.
-                if (readingPitchAccent is ReadingPitchAccent.Pending && onCheckPitchAccent != null) {
-                    Text(
-                        text = "Check now",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                // NoEntry has already been looked up, so offering a retry there would be noise.
+                if (readingPitchAccent is ReadingPitchAccent.Pending && pitchAccentCheck?.inProgress == true) {
+                    CircularProgressIndicator(
                         modifier = Modifier
-                            .clickable(role = Role.Button, onClickLabel = "Check pitch accent now", onClick = onCheckPitchAccent)
-                            .testTag(PitchAccentTestTags.CHECK)
+                            .size(12.dp)
+                            .testTag(PitchAccentTestTags.CHECKING),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        strokeWidth = 2.dp
                     )
+                    Text(
+                        text = "Checking pitch accent…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = if (readingPitchAccent is ReadingPitchAccent.Pending && pitchAccentCheck?.failed == true) {
+                            "Couldn't check pitch accent"
+                        } else {
+                            readingPitchAccent.message
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag(PitchAccentTestTags.MESSAGE)
+                    )
+                    // Set in the caption's own size beside it — an inline link, not a button with its
+                    // own weight.
+                    if (readingPitchAccent is ReadingPitchAccent.Pending && pitchAccentCheck != null) {
+                        Text(
+                            text = if (pitchAccentCheck.failed) "Try again" else "Check now",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clickable(role = Role.Button, onClickLabel = "Check pitch accent now", onClick = pitchAccentCheck.onClick)
+                                .testTag(PitchAccentTestTags.CHECK)
+                        )
+                    }
                 }
             }
         }

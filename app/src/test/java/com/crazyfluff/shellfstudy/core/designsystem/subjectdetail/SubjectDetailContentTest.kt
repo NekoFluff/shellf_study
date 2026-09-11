@@ -26,6 +26,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPitchAccentCheck
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentCheck
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
@@ -503,7 +504,9 @@ class SubjectDetailContentTest {
         )
         var checks = 0
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalPitchAccentCheck provides { checks++ }) {
+            CompositionLocalProvider(
+                LocalPitchAccentCheck provides PitchAccentCheck(inProgress = false, failed = false, onClick = { checks++ })
+            ) {
                 SubjectDetailContent(
                     detail = vocabDetail,
                     relatedSubjects = emptyMap(),
@@ -532,7 +535,9 @@ class SubjectDetailContentTest {
             pitchAccents = PitchAccentUiState.Unavailable
         )
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalPitchAccentCheck provides {}) {
+            CompositionLocalProvider(
+                LocalPitchAccentCheck provides PitchAccentCheck(inProgress = false, failed = false, onClick = {})
+            ) {
                 SubjectDetailContent(
                     detail = vocabDetail,
                     relatedSubjects = emptyMap(),

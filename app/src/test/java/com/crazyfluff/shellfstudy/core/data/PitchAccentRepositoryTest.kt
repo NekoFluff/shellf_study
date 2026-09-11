@@ -137,8 +137,9 @@ class PitchAccentRepositoryTest {
     fun `scrapeAndCache on a failed fetch records the attempt without clobbering with fake data`() = runTest {
         val repository = PitchAccentRepository(bundled, cacheDao, FakeWeblioApi(), WeblioPitchAccentParser())
 
-        repository.scrapeAndCache("水", now = 2_000L)
+        val definitive = repository.scrapeAndCache("水", now = 2_000L)
 
+        assertThat(definitive).isFalse()
         val cached = cacheDao.observeByCharacters("水")
         cached.test {
             val entity = awaitItem()
@@ -146,5 +147,36 @@ class PitchAccentRepositoryTest {
             assertThat(entity?.lastAttemptedAt).isEqualTo(2_000L)
             assertThat(entity?.pitchAccents).isEmpty()
         }
+    }
+
+    // --- A weblio 404: a definitive "no entry", cached as a confirmed absence rather than a failure. ---
+
+    @Test
+    fun `a weblio 404 is cached as a confirmed absence instead of a failed attempt`() = runTest {
+        val repository = PitchAccentRepository(
+            FakePitchAccentBundledSource(), cacheDao, FakeWeblioApi(notFoundQueries = setOf("水")), WeblioPitchAccentParser()
+        )
+
+        val definitive = repository.scrapeAndCache("水", now = 2_000L)
+
+        assertThat(definitive).isTrue()
+        cacheDao.observeByCharacters("水").test {
+            val entity = awaitItem()
+            assertThat(entity?.fetchedAt).isEqualTo(2_000L)
+            assertThat(entity?.lastAttemptedAt).isEqualTo(2_000L)
+            assertThat(entity?.pitchAccents).isEmpty()
+        }
+        assertThat(repository.stateFor()).isEqualTo(PitchAccentUiState.Unavailable)
+    }
+
+    @Test
+    fun `a weblio 404 still falls back to the bundled dictionary`() = runTest {
+        val repository = PitchAccentRepository(
+            bundled, cacheDao, FakeWeblioApi(notFoundQueries = setOf("水")), WeblioPitchAccentParser()
+        )
+
+        repository.scrapeAndCache("水", now = 2_000L)
+
+        assertThat(repository.stateFor()).isEqualTo(PitchAccentUiState.Available(listOf(MIZU)))
     }
 }

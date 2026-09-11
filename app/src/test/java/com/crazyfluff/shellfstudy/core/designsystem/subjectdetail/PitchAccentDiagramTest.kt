@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPitchAccentCheck
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentCheck
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentDiagram
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.ReadingPitchAccent
@@ -169,13 +170,53 @@ class PitchAccentDiagramTest {
     fun `offers a check button under the not-checked-yet caption when the caller can fetch it`() {
         var checks = 0
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalPitchAccentCheck provides { checks++ }) {
+            CompositionLocalProvider(
+                LocalPitchAccentCheck provides PitchAccentCheck(inProgress = false, failed = false, onClick = { checks++ })
+            ) {
                 PitchAccentDiagram(readingPitchAccent = ReadingPitchAccent.Pending("みず"))
             }
         }
 
         composeTestRule.onNodeWithText("Pitch accent not checked yet").assertIsDisplayed()
         composeTestRule.onNodeWithTag(PitchAccentTestTags.CHECK).assertIsDisplayed().performClick()
+        assertThat(checks).isEqualTo(1)
+    }
+
+    @Test
+    fun `shows progress instead of the link while a check is in flight`() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(
+                LocalPitchAccentCheck provides PitchAccentCheck(inProgress = true, failed = false, onClick = {})
+            ) {
+                PitchAccentDiagram(readingPitchAccent = ReadingPitchAccent.Pending("みず"))
+            }
+        }
+
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.CHECKING).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Checking pitch accent…").assertIsDisplayed()
+        // No longer "not checked yet" — the tap is visibly doing something — and nothing to tap.
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.MESSAGE).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.CHECK).assertCountEquals(0)
+    }
+
+    @Test
+    fun `says the check failed and offers a retry when the last fetch failed`() {
+        var checks = 0
+        composeTestRule.setContent {
+            CompositionLocalProvider(
+                LocalPitchAccentCheck provides PitchAccentCheck(inProgress = false, failed = true, onClick = { checks++ })
+            ) {
+                PitchAccentDiagram(readingPitchAccent = ReadingPitchAccent.Pending("みず"))
+            }
+        }
+
+        // A failed fetch leaves the word pending, so the caption has to stop claiming it was never
+        // checked — that sameness is exactly what the reader couldn't tell apart before.
+        composeTestRule.onNodeWithText("Couldn't check pitch accent").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.MESSAGE).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Pitch accent not checked yet").assertCountEquals(0)
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.CHECK).assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithText("Try again").assertIsDisplayed()
         assertThat(checks).isEqualTo(1)
     }
 
@@ -194,7 +235,9 @@ class PitchAccentDiagramTest {
         // NoEntry has already been looked up — a retry there would be offering to repeat a
         // question that already has its answer.
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalPitchAccentCheck provides {}) {
+            CompositionLocalProvider(
+                LocalPitchAccentCheck provides PitchAccentCheck(inProgress = false, failed = false, onClick = {})
+            ) {
                 PitchAccentDiagram(readingPitchAccent = ReadingPitchAccent.NoEntry("みず"))
             }
         }

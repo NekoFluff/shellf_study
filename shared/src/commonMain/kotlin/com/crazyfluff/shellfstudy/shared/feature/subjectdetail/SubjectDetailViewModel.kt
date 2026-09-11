@@ -47,7 +47,15 @@ data class SubjectDetailUiState(
     val reviewStats: SubjectReviewStats? = null,
     /** Scroll offset (px) [SubjectDetailContent] should jump to for the current [detail]'s subject —
      *  the recorded offset when returning via [SubjectDetailViewModel.goBack], 0 otherwise. */
-    val pendingScrollOffset: Int = 0
+    val pendingScrollOffset: Int = 0,
+    /** True while [SubjectDetailViewModel.checkPitchAccent]'s on-demand scrape is in flight, so the
+     *  reading's "not checked yet" caption can show progress instead of looking like a dead tap. */
+    val isCheckingPitchAccent: Boolean = false,
+    /** True when the last on-demand check failed. A failed scrape leaves the word classified as
+     *  still-unknown (see [PitchAccentRepository.scrapeAndCache]), i.e. indistinguishable from an
+     *  untried one, so the UI has to say the check failed itself. Cleared when a new check starts and
+     *  when the loaded subject changes. */
+    val pitchAccentCheckFailed: Boolean = false
 )
 
 /** Intermediate combine result — [SubjectDetailViewModel.uiState]'s detail/related/stroke/stats fields. */
@@ -155,6 +163,10 @@ class SubjectDetailViewModel(
                     val detail = detailAndRelated.detail
                     if (detail != null && detail.subjectId != nav.currentSubjectId) return@collect
                     _uiState.update {
+                        // A check's progress and outcome belong to the word it was started for, so a
+                        // different subject arriving (a switch, or a reopened sheet) must not inherit
+                        // either flag — a failure on one word would otherwise caption another.
+                        val subjectChanged = it.detail?.subjectId != detailAndRelated.detail?.subjectId
                         it.copy(
                             isLoading = false,
                             detail = detailAndRelated.detail,
@@ -167,7 +179,9 @@ class SubjectDetailViewModel(
                             showStrokeOrder = settings.showStrokeOrder,
                             strokeOrder = detailAndRelated.strokeOrder,
                             assignmentStats = detailAndRelated.assignmentStats,
-                            reviewStats = detailAndRelated.reviewStats
+                            reviewStats = detailAndRelated.reviewStats,
+                            isCheckingPitchAccent = if (subjectChanged) false else it.isCheckingPitchAccent,
+                            pitchAccentCheckFailed = if (subjectChanged) false else it.pitchAccentCheckFailed
                         )
                     }
                 }
@@ -211,10 +225,31 @@ class SubjectDetailViewModel(
     }
 
     /** Fetches this subject's pitch accent now, for a word the background scrape hasn't reached; the
-     *  detail flow re-emits when the result lands, replacing the caption in place. */
+     *  detail flow re-emits when the result lands, replacing the caption in place.
+     *
+     *  A fetch takes real network time, so the tap is acknowledged immediately by flipping
+     *  [SubjectDetailUiState.isCheckingPitchAccent] (the caption becomes a progress row) and a fetch
+     *  that fails — a word weblio doesn't answer for, a network error — is reported through
+     *  [SubjectDetailUiState.pitchAccentCheckFailed]: the word stays "not checked yet" either way, so
+     *  without that flag a failed check would look exactly like no check at all. A second tap while
+     *  one is already running is ignored. */
     fun checkPitchAccent() {
-        val characters = _uiState.value.detail?.characters ?: return
-        viewModelScope.launch { pitchAccentRepository.scrapeAndCache(characters, Clock.System.now().toEpochMilliseconds()) }
+        val detail = _uiState.value.detail ?: return
+        val characters = detail.characters ?: return
+        if (_uiState.value.isCheckingPitchAccent) return
+        _uiState.update { it.copy(isCheckingPitchAccent = true, pitchAccentCheckFailed = false) }
+        viewModelScope.launch {
+            val scraped = pitchAccentRepository.scrapeAndCache(characters, Clock.System.now().toEpochMilliseconds())
+            // Only publish for the subject that started the check: a switch mid-fetch resets the
+            // flags, and this completion must not raise them against whatever word is loaded by then.
+            _uiState.update {
+                if (it.detail?.subjectId != detail.subjectId) {
+                    it
+                } else {
+                    it.copy(isCheckingPitchAccent = false, pitchAccentCheckFailed = !scraped)
+                }
+            }
+        }
     }
 
     /** Stroke data is keyed purely by character, so only single-glyph subjects (kanji, and any
