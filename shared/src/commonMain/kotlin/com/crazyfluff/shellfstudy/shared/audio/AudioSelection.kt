@@ -11,7 +11,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 fun PronunciationAudioPlayer.playMatchingReading(
     pronunciationAudios: List<PronunciationAudio>,
     reading: String,
-    preference: VoicePreference? = null,
+    preference: VoicePreference = VoicePreference.RANDOM,
     mp3Only: Boolean = false
 ) {
     selectAudioFor(pronunciationAudios, reading, preference, mp3Only)?.let(::play)
@@ -20,7 +20,7 @@ fun PronunciationAudioPlayer.playMatchingReading(
 fun selectAudioFor(
     audios: List<PronunciationAudio>,
     reading: String,
-    preference: VoicePreference? = null,
+    preference: VoicePreference = VoicePreference.RANDOM,
     mp3Only: Boolean = false
 ): PronunciationAudio? {
     val eligible = if (mp3Only) audios.filter { it.contentType == "audio/mpeg" } else audios
@@ -32,6 +32,6 @@ fun selectAudioFor(
         VoicePreference.MALE -> matching.firstOrNull { it.gender == "male" } ?: matching.first()
         VoicePreference.FEMALE -> matching.firstOrNull { it.gender == "female" } ?: matching.first()
         VoicePreference.RANDOM -> matching.random()
-        VoicePreference.ALTERNATE, null -> matching.first()
+        VoicePreference.ALTERNATE -> matching.first()
     }
 }

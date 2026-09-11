@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.shared.data.CmpPitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.IosOutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.IosPronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
+import com.crazyfluff.shellfstudy.shared.data.audio.IosAudioFileCache
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
@@ -72,7 +73,8 @@ private val iosDataStoreModule = module {
 }
 
 private val iosAudioModule = module {
-    single { IosPronunciationAudioPlayer() } bind PronunciationAudioPlayer::class
+    single { IosAudioFileCache() }
+    single { IosPronunciationAudioPlayer(get()) } bind PronunciationAudioPlayer::class
 }
 
 /** Periodic background sync (BGTaskScheduler) and pitch-accent scraping are stubbed — they fire

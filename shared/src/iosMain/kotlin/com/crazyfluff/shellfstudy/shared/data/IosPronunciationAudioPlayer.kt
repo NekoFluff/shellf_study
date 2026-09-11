@@ -1,10 +1,15 @@
 package com.crazyfluff.shellfstudy.shared.data
 
+import com.crazyfluff.shellfstudy.shared.data.audio.IosAudioFileCache
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryOptionDuckOthers
 import platform.AVFAudio.AVAudioSessionCategoryPlayback
@@ -46,11 +51,14 @@ import platform.darwin.NSObjectProtocol
  * app-lifetime-old answer becoming stale once the user pauses their own music mid-session.
  */
 @OptIn(ExperimentalForeignApi::class)
-class IosPronunciationAudioPlayer : PronunciationAudioPlayer {
+class IosPronunciationAudioPlayer(
+    private val audioFileCache: IosAudioFileCache
+) : PronunciationAudioPlayer {
 
     private val player = AVPlayer()
     private val _state = MutableStateFlow(PlaybackState.IDLE)
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
+    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private var endObserver: NSObjectProtocol? = null
     private var failureObserver: NSObjectProtocol? = null
@@ -112,7 +120,13 @@ class IosPronunciationAudioPlayer : PronunciationAudioPlayer {
     }
 
     override fun play(audio: PronunciationAudio) {
-        val url = NSURL.URLWithString(audio.url)
+        val cachedPath = audioFileCache.cachedFile(audio)
+        val url = if (cachedPath != null) {
+            NSURL.fileURLWithPath(cachedPath)
+        } else {
+            cacheScope.launch { audioFileCache.download(audio) }
+            NSURL.URLWithString(audio.url)
+        }
         if (url == null) {
             _state.value = PlaybackState.ERROR
             return
