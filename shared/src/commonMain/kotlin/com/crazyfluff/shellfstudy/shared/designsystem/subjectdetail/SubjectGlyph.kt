@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,12 +32,26 @@ private val MinGlyphFontSize = 10.sp
 private const val GlyphFontFraction = 0.55f
 private const val GlyphInkScale = 0.6f
 
+// How much of a headline glyph's square box is actually needed. The ink is [GlyphFontFraction] of it
+// (plus a line box), so a square box leaves a band of empty space above and below the character —
+// which read as a gap between the characters and the meaning under them. Headlines pass
+// [headlineGlyphBoxHeight] so the box hugs the ink, and both headlines use the same proportion.
+private const val HeadlineGlyphBoxFraction = 0.8f
+
+/** The box height a headline glyph of ink [size] should use — see [HeadlineGlyphBoxFraction]. */
+fun headlineGlyphBoxHeight(size: Dp): Dp = size * HeadlineGlyphBoxFraction
+
 /**
  * The single low-level primitive for rendering a subject's glyph: its unicode character when it
  * has one, otherwise its WaniKani-hosted PNG image (radicals like "drop" have no unicode glyph),
  * otherwise a "?" fallback. Every subject-glyph UI in the app (search results, related-subject
  * tiles, level-progress chips, the detail sheet headline) builds on this instead of re-deriving the
  * character-or-image-or-fallback logic separately.
+ *
+ * [size] is both the ink's ceiling (see [GlyphFontFraction] / [GlyphInkScale]) and the box's default
+ * height. [boxHeight] decouples the two: the ink is centred in the box, so a square box leaves a
+ * band of empty space above and below a character that only fills ~55% of it. Headlines pass a
+ * trimmed [boxHeight] to close that gap without shrinking the glyph.
  */
 @Composable
 fun SubjectGlyph(
@@ -46,7 +61,8 @@ fun SubjectGlyph(
     size: Dp,
     modifier: Modifier = Modifier,
     color: Color? = null,
-    fallbackText: String = "?"
+    fallbackText: String = "?",
+    boxHeight: Dp = size
 ) {
     // The ceiling a single short glyph renders at; callers size this from a small 28dp tile chip
     // up to a large detail-sheet headline and get proportionally bigger glyphs.
@@ -61,7 +77,7 @@ fun SubjectGlyph(
         // single measure pass — a hand-rolled "shrink a bit each recomposition until it fits" loop
         // was tried first but didn't reliably converge for long strings before hitting the ellipsis
         // fallback; this is Compose's own purpose-built solution for exactly this problem.
-        characters != null -> Box(modifier = modifier.height(size), contentAlignment = Alignment.Center) {
+        characters != null -> Box(modifier = modifier.height(boxHeight), contentAlignment = Alignment.Center) {
             Text(
                 text = characters,
                 style = textStyle.copy(fontFamily = LocalJapaneseFontFamily.current),
@@ -72,7 +88,7 @@ fun SubjectGlyph(
                 autoSize = TextAutoSize.StepBased(minFontSize = MinGlyphFontSize, maxFontSize = maxFontSize)
             )
         }
-        characterImageUrl != null -> Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
+        characterImageUrl != null -> Box(modifier = modifier.width(size).height(boxHeight), contentAlignment = Alignment.Center) {
             // These SVGs are flat monochrome line art (fill:none, a single stroke color) baked to a
             // hardcoded fallback black by SvgCssVariableInterceptor — tinting to the same
             // subject-type color the text-glyph branch above uses keeps them visible and consistent
@@ -85,7 +101,7 @@ fun SubjectGlyph(
                 modifier = Modifier.size(size * GlyphInkScale)
             )
         }
-        else -> Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
+        else -> Box(modifier = modifier.width(size).height(boxHeight), contentAlignment = Alignment.Center) {
             Text(
                 text = fallbackText,
                 style = textStyle.copy(fontSize = maxFontSize),

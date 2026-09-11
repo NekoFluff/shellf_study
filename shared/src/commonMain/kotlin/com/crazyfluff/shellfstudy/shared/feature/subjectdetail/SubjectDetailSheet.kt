@@ -254,9 +254,15 @@ private fun ColumnScope.SubjectDetailBody(
     val canShowAll = canOfferForceReveal(revealMode, uiState.backStack.isNotEmpty(), uiState.forceRevealAll)
     val effectiveRevealMode = resolveEffectiveRevealMode(revealMode, uiState.backStack.isNotEmpty(), uiState.forceRevealAll)
 
+    // Top padding is what keeps the controls off the sheet's rounded top edge: open, this row is the
+    // first thing in the Surface (the peek strip above it collapses to zero height), so without it the
+    // 48dp icon buttons sit flush against the corner. Kept modest on the bottom so the content's own
+    // 8dp top padding is what separates the header from the glyph.
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)
     ) {
         if (uiState.backStack.isNotEmpty()) {
             IconButton(onClick = { viewModel.goBack() }) {

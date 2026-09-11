@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -221,11 +222,129 @@ class SubjectDetailContentTest {
 
         composeTestRule.onNodeWithText("On'yomi").assertIsDisplayed()
         composeTestRule.onNodeWithText("スイ").assertIsDisplayed()
-        // Reading now sits below the meaning card (including its mnemonic prose), so on a
-        // Robolectric-sized window these rows can land past the fold — scroll them into view first,
-        // same as a real user would.
-        composeTestRule.onNodeWithText("Kun'yomi").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("みず").performScrollTo().assertIsDisplayed()
+        // The reading rows sit in the headerless reading block under the tags, above the writing zone,
+        // so both fit on the first screen without scrolling.
+        composeTestRule.onNodeWithText("Kun'yomi").assertIsDisplayed()
+        composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+    }
+
+    @Test
+    fun levelAndType_sitOnTheirOwnLine_belowTheReading() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        val meaningBounds = composeTestRule.onNodeWithTag(SubjectDetailTestTags.MEANING_ANSWER).getUnclippedBoundsInRoot()
+        val levelLineBounds = composeTestRule.onNodeWithText("Level 3 · Kanji").getUnclippedBoundsInRoot()
+        val readingBounds = composeTestRule.onNodeWithTag(SubjectDetailTestTags.READING_ANSWER).getUnclippedBoundsInRoot()
+        // Bookkeeping follows the answers rather than sitting between them, and it stays on a
+        // full-width row of its own instead of competing with the glyph.
+        assertThat(levelLineBounds.top >= readingBounds.bottom).isTrue()
+        assertThat(levelLineBounds.left <= meaningBounds.left).isTrue()
+    }
+
+    @Test
+    fun reading_sitsAboveTheLevelLine_whenTheMeaningIsGatedAway() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
+                isAnswered = true,
+                questionType = DetailQuestionType.READING,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        // Mid-quiz the meaning is absent, so nothing but the reading's own 8dp of cluster spacing may
+        // sit between it and the characters — the level line used to, which read as a large gap.
+        val readingBounds = composeTestRule.onNodeWithTag(SubjectDetailTestTags.READING_ANSWER).getUnclippedBoundsInRoot()
+        val levelLineBounds = composeTestRule.onNodeWithText("Level 3 · Kanji").getUnclippedBoundsInRoot()
+        assertThat(readingBounds.bottom <= levelLineBounds.top).isTrue()
+        // And the meaning really is gone in this state, so the assertion above is testing what it says.
+        composeTestRule.onAllNodesWithTag(SubjectDetailTestTags.MEANING_ANSWER).assertCountEquals(0)
+    }
+
+    @Test
+    fun vocabularyTags_sitBelowTheReading() {
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            partsOfSpeech = listOf("transitive verb", "godan verb")
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        val readingBounds = composeTestRule.onNodeWithTag(SubjectDetailTestTags.READING_ANSWER).getUnclippedBoundsInRoot()
+        val tagBounds = composeTestRule.onNodeWithText("transitive verb").getUnclippedBoundsInRoot()
+        assertThat(readingBounds.bottom <= tagBounds.top).isTrue()
+    }
+
+    @Test
+    fun meaningAndReading_stayAboveTheWritingZone_andAreReachableWithoutScrolling() {
+        val longWindedDetail = detail.copy(
+            meaningMnemonic = "Looks like flowing water. ".repeat(20),
+            readingMnemonic = "Sounds like mee-zoo. ".repeat(20)
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = longWindedDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                strokeOrder = StrokeOrderUiState.Available(
+                    listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f))
+                )
+            )
+        }
+
+        // The regression this guards: the answer used to render below the stroke-order diagram and the
+        // writing canvas, so a learner checking a quiz answer had to scroll for it.
+        composeTestRule.onNodeWithTag(SubjectDetailTestTags.MEANING_ANSWER).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(SubjectDetailTestTags.READING_ANSWER).assertIsDisplayed()
+
+        val answerBottom = composeTestRule.onNodeWithTag(SubjectDetailTestTags.READING_ANSWER).getUnclippedBoundsInRoot().bottom
+        val strokeOrderTop = composeTestRule.onNodeWithTag(StrokeOrderTestTags.SECTION).getUnclippedBoundsInRoot().top
+        assertThat(answerBottom <= strokeOrderTop).isTrue()
+    }
+
+    @Test
+    fun meaningAndReading_haveNoHeaders() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        // The field names are the only thing removed as *titles* — the values stay headerless, and the
+        // mnemonics keep their own titled blocks down the page.
+        composeTestRule.onAllNodesWithText("Meaning").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Reading").assertCountEquals(0)
+        composeTestRule.onNodeWithText("Water").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Meaning mnemonic").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Reading mnemonic").assertIsDisplayed()
     }
 
     @Test

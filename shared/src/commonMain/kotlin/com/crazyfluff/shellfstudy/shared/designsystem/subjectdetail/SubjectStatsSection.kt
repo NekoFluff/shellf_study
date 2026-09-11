@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
+import com.crazyfluff.shellfstudy.shared.designsystem.components.SectionTitle
 import com.crazyfluff.shellfstudy.shared.data.model.formatHourOfDay
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -58,7 +59,7 @@ fun SubjectStatsSection(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth().testTag(SubjectStatsTestTags.SECTION), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(text = "Stats", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        SectionTitle("Stats")
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             QuestionTypeStatsCard(

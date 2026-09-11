@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.HorizontalDivider
@@ -19,20 +18,16 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
-import com.crazyfluff.shellfstudy.shared.designsystem.components.ExpandableAnswerListText
+import com.crazyfluff.shellfstudy.shared.designsystem.components.SectionTitle
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
 import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRow
-import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
@@ -72,6 +67,11 @@ object SubjectDetailTestTags {
     const val CONTENT_ROOT = "subject_detail_content_root"
     const val PEEK_HANDLE = "subject_detail_peek_handle"
     const val AUXILIARY_MEANINGS_TEXT = "subject_detail_auxiliary_meanings_text"
+
+    /** The headerless meaning and reading, tagged separately so a test can assert each is reachable
+     *  without scrolling and where it sits (see [SubjectMeaningAnswer], [SubjectReadingAnswer]). */
+    const val MEANING_ANSWER = "subject_detail_meaning_answer"
+    const val READING_ANSWER = "subject_detail_reading_answer"
 }
 
 private fun List<Long>.resolve(relatedSubjects: Map<Long, SubjectSummary>): List<SubjectSummary> =
@@ -79,9 +79,11 @@ private fun List<Long>.resolve(relatedSubjects: Map<Long, SubjectSummary>): List
 
 /**
  * The shared "everything about this subject" content, used from Review (gated), Lesson, Search,
- * and the Dashboard's level-progress breakdown. Section order mirrors Smouldering Durtles'
- * information architecture: headline, meanings, readings, components, mnemonics, parts of speech,
- * context sentences, visually similar, used-in.
+ * and the Dashboard's level-progress breakdown. Section order puts the answer first: the subject's
+ * characters with the headerless meaning underneath (see [SubjectMeaningAnswer]), then the
+ * level/type line and tags, the headerless reading (see [SubjectReadingAnswer]), the writing zone and
+ * components, the mnemonics (see [SubjectMnemonicZone]), then context sentences, visually similar,
+ * used-in, and stats.
  */
 @Composable
 fun SubjectDetailContent(
@@ -104,7 +106,6 @@ fun SubjectDetailContent(
 ) {
     val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.MEANING)
     val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered && questionType == DetailQuestionType.READING)
-    val hasReadings = detail.readings.isNotEmpty()
     val isVocabulary = detail.subjectType == SubjectType.VOCABULARY || detail.subjectType == SubjectType.KANA_VOCABULARY
 
     // One scroll state per (subject, arrival offset), seeded with that offset. This is what makes
@@ -129,18 +130,33 @@ fun SubjectDetailContent(
             .testTag(SubjectDetailTestTags.CONTENT_ROOT),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        SubjectHeadline(detail, assignmentStats, isVocabulary)
+        SubjectHeadline(detail, assignmentStats, isVocabulary, showMeaning = revealMeaning) {
+            // The reading is part of the word's identity cluster — it follows the tags at the cluster's
+            // own 8dp rhythm rather than the 16dp the page's sections use, and stays above the writing
+            // zone so a learner checking an answer never scrolls past a stroke-order diagram for it.
+            if (revealReading) {
+                SubjectReadingAnswer(
+                    subjectType = detail.subjectType,
+                    readings = detail.readings,
+                    onyomiReadings = detail.onyomiReadings,
+                    kunyomiReadings = detail.kunyomiReadings,
+                    nanoriReadings = detail.nanoriReadings,
+                    pronunciationAudios = detail.pronunciationAudios,
+                    pitchAccents = detail.pitchAccents,
+                    showPitchAccent = showPitchAccent,
+                    restrictAudioToMp3 = restrictAudioToMp3
+                )
+            }
+        }
         SubjectWritingZone(strokeOrder, autoPlayStrokeOrder, showStrokeOrder, detail.subjectId)
         SubjectComponentsSection(detail, relatedSubjects, onRelatedSubjectClick)
-        SubjectMeaningZone(detail, revealMeaning)
-        SubjectReadingZone(
-            detail = detail,
-            revealReading = revealReading,
-            hasReadings = hasReadings,
-            isVocabulary = isVocabulary,
-            showPitchAccent = showPitchAccent,
-            restrictAudioToMp3 = restrictAudioToMp3,
-            showDividerAbove = revealMeaning
+        SubjectMnemonicZone(
+            meaningMnemonic = detail.meaningMnemonic,
+            meaningHint = detail.meaningHint,
+            readingMnemonic = detail.readingMnemonic,
+            readingHint = detail.readingHint,
+            showMeaning = revealMeaning,
+            showReading = revealReading
         )
         SubjectContextSentencesSection(detail, isVocabulary)
         SubjectVisuallySimilarSection(detail, relatedSubjects, onRelatedSubjectClick)
@@ -149,24 +165,49 @@ fun SubjectDetailContent(
     }
 }
 
-// Headline: title, level/type subtitle, and part-of-speech tags read as one tight cluster —
-// they're all "what is this" at a glance, so they sit closer together than the sections below.
+// Headline: the subject's characters with their meaning directly underneath — the strongest place on
+// the page, and the first thing a learner checking an answer looks for — then [reading], then the
+// level/type line with its SRS chip on a line of its own, then the part-of-speech tags. One cluster,
+// so its parts sit at 8dp from each other instead of at the page's section spacing.
+//
+// The bookkeeping comes after the answers on purpose. Level/type/SRS used to sit between the meaning
+// and the reading, which was invisible in browse mode (the meaning filled the space) but left a
+// metadata row's worth of blank space between the characters and the reading whenever the meaning was
+// gated away mid-quiz — exactly when a learner wants the reading right under the word.
 @Composable
-private fun SubjectHeadline(detail: SubjectDetail, assignmentStats: SubjectAssignmentStats?, isVocabulary: Boolean) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+private fun SubjectHeadline(
+    detail: SubjectDetail,
+    assignmentStats: SubjectAssignmentStats?,
+    isVocabulary: Boolean,
+    showMeaning: Boolean,
+    reading: @Composable () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SubjectGlyph(
             characters = detail.characters,
             characterImageUrl = detail.characterImageUrl,
             subjectType = detail.subjectType,
-            size = 80.dp
+            size = 80.dp,
+            // Trimmed box: the ink only fills ~55% of a square 80dp box, and the empty band under it
+            // is what pushed the meaning away. Trimming the box closes that gap without shrinking the
+            // character.
+            boxHeight = headlineGlyphBoxHeight(80.dp)
         )
+        if (showMeaning) {
+            SubjectMeaningAnswer(
+                meanings = detail.meanings,
+                auxiliaryMeanings = detail.auxiliaryMeanings,
+                resetKey = detail.subjectId
+            )
+        }
+        reading()
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = "Level ${detail.level} · ${subjectTypeLabel(detail.subjectType)}",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (assignmentStats != null) {
@@ -208,136 +249,8 @@ private fun SubjectComponentsSection(
     )
 }
 
-// Meaning and Reading are deliberately structured the same way — title, then its own mnemonic
-// right underneath — so the two read as parallel, equal-weight sections rather than one standing
-// out from the other. Plain sections (no card) keep them visually lightweight for a view learners
-// scroll through constantly; a divider between them is enough separation.
-@Composable
-private fun SubjectMeaningZone(detail: SubjectDetail, revealMeaning: Boolean) {
-    if (!revealMeaning) return
-    val meaningMnemonic = detail.meaningMnemonic
-    val meaningHint = detail.meaningHint
-    val hasMeaningMnemonic = !meaningMnemonic.isNullOrBlank()
-
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "Meaning",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(detail.meanings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
-            if (detail.auxiliaryMeanings.isNotEmpty()) {
-                AuxiliaryMeaningsText(detail.auxiliaryMeanings, resetKey = detail.subjectId)
-            }
-        }
-
-        if (hasMeaningMnemonic) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SectionEyebrow("Meaning mnemonic")
-                WkMnemonicText(meaningMnemonic, style = MaterialTheme.typography.bodyMedium)
-                if (!meaningHint.isNullOrBlank()) {
-                    WkMnemonicText(meaningHint, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-    }
-}
-
-private enum class ReadingDisplayStyle { KANJI_BREAKDOWN, VOCABULARY, PLAIN }
-
-private fun readingDisplayStyle(
-    subjectType: SubjectType,
-    hasReadingBreakdown: Boolean,
-    isVocabulary: Boolean
-): ReadingDisplayStyle = when {
-    subjectType == SubjectType.KANJI && hasReadingBreakdown -> ReadingDisplayStyle.KANJI_BREAKDOWN
-    isVocabulary -> ReadingDisplayStyle.VOCABULARY
-    else -> ReadingDisplayStyle.PLAIN
-}
-
-@Composable
-private fun KanjiReadingBreakdown(detail: SubjectDetail) {
-    if (detail.onyomiReadings.isNotEmpty()) {
-        ReadingTypeRow(label = "On'yomi", readings = detail.onyomiReadings)
-    }
-    if (detail.kunyomiReadings.isNotEmpty()) {
-        ReadingTypeRow(label = "Kun'yomi", readings = detail.kunyomiReadings)
-    }
-    if (detail.nanoriReadings.isNotEmpty()) {
-        ReadingTypeRow(label = "Nanori", readings = detail.nanoriReadings)
-    }
-}
-
-@Composable
-private fun VocabularyReadingList(
-    detail: SubjectDetail,
-    showPitchAccent: Boolean,
-    restrictAudioToMp3: Boolean
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        detail.readings.forEach { reading ->
-            Column {
-                // The clip is selected here, through the caller's own settings, so a reading whose
-                // every clip the mp3-only filter drops gets no button at all rather than one that
-                // plays nothing.
-                ReadingRow(
-                    reading = reading,
-                    audio = selectAudioFor(detail.pronunciationAudios, reading, mp3Only = restrictAudioToMp3)
-                )
-                // The setting controls the markers, not the reading: switched off, the row above is
-                // all there is.
-                if (showPitchAccent) {
-                    PitchAccentDiagram(detail.pitchAccents.forReading(reading))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SubjectReadingZone(
-    detail: SubjectDetail,
-    revealReading: Boolean,
-    hasReadings: Boolean,
-    isVocabulary: Boolean,
-    showPitchAccent: Boolean,
-    restrictAudioToMp3: Boolean,
-    showDividerAbove: Boolean
-) {
-    if (!(revealReading && hasReadings)) return
-    val hasReadingBreakdown =
-        detail.onyomiReadings.isNotEmpty() || detail.kunyomiReadings.isNotEmpty() || detail.nanoriReadings.isNotEmpty()
-    val readingMnemonic = detail.readingMnemonic
-    val readingHint = detail.readingHint
-    val hasReadingMnemonic = !readingMnemonic.isNullOrBlank()
-
-    if (showDividerAbove) HorizontalDivider()
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "Reading",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            when (readingDisplayStyle(detail.subjectType, hasReadingBreakdown, isVocabulary)) {
-                ReadingDisplayStyle.KANJI_BREAKDOWN -> KanjiReadingBreakdown(detail)
-                ReadingDisplayStyle.VOCABULARY -> VocabularyReadingList(detail, showPitchAccent, restrictAudioToMp3)
-                ReadingDisplayStyle.PLAIN -> JapaneseText(detail.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-
-        if (hasReadingMnemonic) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SectionEyebrow("Reading mnemonic")
-                WkMnemonicText(readingMnemonic, style = MaterialTheme.typography.bodyMedium)
-                if (!readingHint.isNullOrBlank()) {
-                    WkMnemonicText(readingHint, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-    }
-}
+// Meaning/reading rendering lives in SubjectAnswerSections.kt, next to the mnemonic zone that follows
+// it in the page — shared with the lesson study card, which used to carry its own copy of both.
 
 @Composable
 private fun SubjectContextSentencesSection(detail: SubjectDetail, isVocabulary: Boolean) {
@@ -345,7 +258,7 @@ private fun SubjectContextSentencesSection(detail: SubjectDetail, isVocabulary: 
     val shareText = rememberShareText()
     HorizontalDivider()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionEyebrow("Context sentences")
+        SectionTitle("Context sentences")
         // 20dp between example sentences (vs. 2dp between a sentence's own JP/EN pair) so
         // each example reads as its own distinct card of information while scanning.
         AkebiSelectableContainer {
@@ -396,40 +309,4 @@ fun componentsLabel(type: SubjectType): String = when (type) {
     SubjectType.KANJI -> "Radicals"
     SubjectType.VOCABULARY, SubjectType.KANA_VOCABULARY -> "Kanji"
     SubjectType.RADICAL -> "Components"
-}
-
-/** A small uppercase, letter-spaced label for secondary sections (mnemonics, context sentences) — kept visually quieter than the primary "Meaning"/"Reading" headers so the two hierarchy tiers are easy to tell apart while scanning. */
-@Composable
-fun SectionEyebrow(text: String) {
-    Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.8.sp),
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-}
-
-@Composable
-fun ReadingTypeRow(label: String, readings: List<String>) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(80.dp)
-        )
-        JapaneseText(readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-/** Auxiliary meanings truncate to a "+N more" summary the same way the review screen's answer
- *  feedback does (see [ExpandableAnswerListText]) — tapping toggles the full list back open and
- *  closed, rather than always spelling out every whitelisted alternate meaning up front. Shared by
- *  every screen that shows a subject's/item's auxiliary meanings (subject detail, lesson). */
-@Composable
-fun AuxiliaryMeaningsText(auxiliaryMeanings: List<String>, resetKey: Any?) {
-    ExpandableAnswerListText(
-        joined = auxiliaryMeanings.joinToString(", "),
-        resetKey = resetKey,
-        modifier = Modifier.testTag(SubjectDetailTestTags.AUXILIARY_MEANINGS_TEXT)
-    )
 }

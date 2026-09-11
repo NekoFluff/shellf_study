@@ -16,6 +16,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -28,6 +29,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
@@ -478,6 +480,18 @@ class LessonScreenTest {
         setScreen(studyState(studyItems = listOf(radicalItem), studyIndex = 0))
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_CHARACTERS).assertIsDisplayed()
+    }
+
+    @Test
+    fun studyPhase_headlineGlyphBoxIsTrimmedToTheInk() {
+        setScreen(studyState(studyItems = listOf(radicalItem), studyIndex = 0))
+
+        // The character only fills ~55% of a square box, and that empty band is what pushed the meaning
+        // away from the glyph. The box is deliberately shorter than the 96dp ink size — a square box
+        // here means the trim was lost.
+        val glyphBounds = composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_CHARACTERS)
+            .getUnclippedBoundsInRoot()
+        assertThat(glyphBounds.bottom - glyphBounds.top < 96.dp).isTrue()
     }
 
     @Test

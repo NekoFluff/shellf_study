@@ -67,16 +67,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
-import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
+import com.crazyfluff.shellfstudy.shared.designsystem.components.SectionTitle
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags
@@ -89,17 +88,14 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSlowestAnswers
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.AuxiliaryMeaningsText
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentDiagram
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.ReadingRow
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.forReading
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.ReadingTypeRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.RelatedSubjectsSection
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SectionEyebrow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.WkMnemonicText
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectMeaningAnswer
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectMnemonicZone
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectReadingAnswer
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.componentsLabel
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.headlineGlyphBoxHeight
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
@@ -676,21 +672,40 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             val isVocabulary = item.subjectType == SubjectType.VOCABULARY || item.subjectType == SubjectType.KANA_VOCABULARY
-            val hasReadingBreakdown = item.onyomiReadings.isNotEmpty() || item.kunyomiReadings.isNotEmpty() || item.nanoriReadings.isNotEmpty()
 
-            // Headline: glyph + level/type subtitle + (vocab) part-of-speech tags as one tight
-            // cluster, mirroring the subject detail view's headline — see SubjectDetailContent.kt.
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Headline: the item's characters with the meaning directly underneath, then the reading,
+            // then the level/type on a line of its own (labelMedium — it annotates the item, it is not
+            // part of the answer), then the (vocab) part-of-speech tags. Same shape as the subject
+            // detail view's headline, see SubjectDetailContent.kt. One cluster, so its parts sit at 8dp
+            // from each other rather than at the page's section spacing.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SubjectGlyph(
                     characters = item.characters,
                     characterImageUrl = item.characterImageUrl,
                     subjectType = item.subjectType,
                     size = 96.dp,
-                    modifier = Modifier.testTag(LessonScreenTestTags.STUDY_CHARACTERS)
+                    modifier = Modifier.testTag(LessonScreenTestTags.STUDY_CHARACTERS),
+                    boxHeight = headlineGlyphBoxHeight(96.dp)
+                )
+                SubjectMeaningAnswer(
+                    meanings = item.meanings,
+                    auxiliaryMeanings = item.auxiliaryMeanings,
+                    resetKey = item.subjectId
+                )
+                SubjectReadingAnswer(
+                    subjectType = item.subjectType,
+                    readings = item.readings,
+                    onyomiReadings = item.onyomiReadings,
+                    kunyomiReadings = item.kunyomiReadings,
+                    nanoriReadings = item.nanoriReadings,
+                    pronunciationAudios = item.pronunciationAudios,
+                    pitchAccents = study.pitchAccentsBySubjectId[item.subjectId] ?: PitchAccentUiState.Loading,
+                    showPitchAccent = settings.showPitchAccent,
+                    restrictAudioToMp3 = settings.restrictAudioToMp3
                 )
                 Text(
                     text = "Level ${item.level} · ${subjectTypeLabel(item.subjectType)}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (isVocabulary && item.partsOfSpeech.isNotEmpty()) {
@@ -710,19 +725,15 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 onSubjectClick = onSubjectClick
             )
 
-            LessonMeaningSection(item)
+            SubjectMnemonicZone(
+                meaningMnemonic = item.meaningMnemonic,
+                meaningHint = item.meaningHint,
+                readingMnemonic = item.readingMnemonic,
+                readingHint = item.readingHint,
+                showMeaning = true,
+                showReading = true
+            )
 
-            if (item.readings.isNotEmpty()) {
-                HorizontalDivider()
-                LessonReadingSection(
-                    item = item,
-                    isVocabulary = isVocabulary,
-                    hasReadingBreakdown = hasReadingBreakdown,
-                    pitchAccentState = study.pitchAccentsBySubjectId[item.subjectId] ?: PitchAccentUiState.Loading,
-                    showPitchAccent = settings.showPitchAccent,
-                    restrictAudioToMp3 = settings.restrictAudioToMp3
-                )
-            }
             if (isVocabulary && item.contextSentences.isNotEmpty()) {
                 HorizontalDivider()
                 LessonContextSentencesSection(item.contextSentences)
@@ -1127,84 +1138,10 @@ private fun LessonGlyphTile(
 }
 
 @Composable
-private fun LessonMeaningSection(item: LessonItem) {
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Meaning", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(item.meanings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
-            if (item.auxiliaryMeanings.isNotEmpty()) {
-                AuxiliaryMeaningsText(item.auxiliaryMeanings, resetKey = item.subjectId)
-            }
-        }
-        val meaningMnemonic = item.meaningMnemonic
-        val meaningHint = item.meaningHint
-        if (!meaningMnemonic.isNullOrBlank()) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SectionEyebrow("Meaning mnemonic")
-                WkMnemonicText(meaningMnemonic, style = MaterialTheme.typography.bodyMedium)
-                if (!meaningHint.isNullOrBlank()) {
-                    WkMnemonicText(meaningHint, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LessonReadingSection(
-    item: LessonItem,
-    isVocabulary: Boolean,
-    hasReadingBreakdown: Boolean,
-    pitchAccentState: PitchAccentUiState,
-    showPitchAccent: Boolean,
-    restrictAudioToMp3: Boolean
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Reading", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            when {
-                item.subjectType == SubjectType.KANJI && hasReadingBreakdown -> {
-                    if (item.onyomiReadings.isNotEmpty()) ReadingTypeRow(label = "On'yomi", readings = item.onyomiReadings)
-                    if (item.kunyomiReadings.isNotEmpty()) ReadingTypeRow(label = "Kun'yomi", readings = item.kunyomiReadings)
-                    if (item.nanoriReadings.isNotEmpty()) ReadingTypeRow(label = "Nanori", readings = item.nanoriReadings)
-                }
-                isVocabulary -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // The clip is selected here, through the same settings autoplay honours, so a
-                    // reading with nothing playable left after the mp3-only filter shows no button.
-                    item.readings.forEach { reading ->
-                        Column {
-                            ReadingRow(
-                                reading = reading,
-                                audio = selectAudioFor(item.pronunciationAudios, reading, mp3Only = restrictAudioToMp3)
-                            )
-                            if (showPitchAccent) {
-                                PitchAccentDiagram(pitchAccentState.forReading(reading))
-                            }
-                        }
-                    }
-                }
-                else -> JapaneseText(item.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-        val readingMnemonic = item.readingMnemonic
-        val readingHint = item.readingHint
-        if (!readingMnemonic.isNullOrBlank()) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SectionEyebrow("Reading mnemonic")
-                WkMnemonicText(readingMnemonic, style = MaterialTheme.typography.bodyMedium)
-                if (!readingHint.isNullOrBlank()) {
-                    WkMnemonicText(readingHint, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
     val shareText = rememberShareText()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionEyebrow("Context sentences")
+        SectionTitle("Context sentences")
         AkebiSelectableContainer {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 sentences.forEach { sentence ->
