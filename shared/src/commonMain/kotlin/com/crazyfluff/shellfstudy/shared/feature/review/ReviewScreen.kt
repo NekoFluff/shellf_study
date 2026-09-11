@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -59,6 +60,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.toDetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPitchAccentCheck
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentCheck
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
@@ -123,6 +126,8 @@ sealed interface ReviewScreenEvent {
     data object Undo : ReviewScreenEvent
     data object ToggleDetails : ReviewScreenEvent
     data object CloseDetails : ReviewScreenEvent
+    /** The quiz hint's "Check now"/"Try again" link — carries the question it was offered on. */
+    data class CheckPitchAccent(val item: ReviewItem) : ReviewScreenEvent
     data object Retry : ReviewScreenEvent
     data object StudyOffline : ReviewScreenEvent
     data object WrapUp : ReviewScreenEvent
@@ -157,6 +162,7 @@ fun ReviewRoute(
                 ReviewScreenEvent.Undo -> viewModel.undoLastAnswer()
                 ReviewScreenEvent.ToggleDetails -> viewModel.toggleDetails()
                 ReviewScreenEvent.CloseDetails -> viewModel.closeDetails()
+                is ReviewScreenEvent.CheckPitchAccent -> viewModel.checkPitchAccent(event.item)
                 ReviewScreenEvent.Retry -> viewModel.loadOrResume()
                 ReviewScreenEvent.StudyOffline -> viewModel.studyOffline()
                 ReviewScreenEvent.WrapUp -> viewModel.wrapUp()
@@ -348,57 +354,71 @@ fun ReviewScreen(
                 }
 
                 is ReviewUiState.Phase.Active -> {
-                    QuizQuestionContent(
-                        uiState = QuizQuestionUiState(
-                            item = phase.currentItem,
-                            questionType = phase.currentQuestionType,
-                            totalCount = phase.totalCount,
-                            remainingCount = phase.remainingCount,
-                            answerInput = phase.answerInput,
-                            feedback = phase.feedback,
-                            rankChange = phase.rankChange,
-                            undoCounter = phase.undoCounter,
-                            answerTypeMismatchCount = phase.answerTypeMismatchCount,
-                            showSubjectTypeLabel = uiState.settings.showSubjectTypeLabel,
-                            showQuestionTimer = uiState.settings.showQuestionTimer,
-                            showTotalTimer = uiState.settings.showTotalTimer,
-                            questionElapsedMs = phase.timing.questionElapsedMs,
-                            questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
-                            questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
-                            sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
-                            sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
-                            useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
-                            allowUndoAfterCorrect = true,
-                            showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
-                            answerReading = phase.answerReading,
-                            answerPitchAccents = phase.answerPitchAccents,
-                            answerReadingAudio = phase.answerReadingAudio
-                        ),
-                        onAnswerInputChange = onAnswerInputChange,
-                        onSubmit = onSubmit,
-                        onDontKnow = onDontKnow,
-                        onContinue = onContinue,
-                        onUndo = onUndo,
-                        testTags = QuizQuestionTestTags(
-                            progressCount = ReviewScreenTestTags.PROGRESS_COUNT,
-                            questionTimerText = ReviewScreenTestTags.QUESTION_TIMER_TEXT,
-                            totalTimerText = ReviewScreenTestTags.TOTAL_TIMER_TEXT,
-                            characters = ReviewScreenTestTags.CHARACTERS,
-                            subjectTypeLabel = ReviewScreenTestTags.SUBJECT_TYPE_LABEL,
-                            rankChangeText = ReviewScreenTestTags.RANK_CHANGE_TEXT,
-                            questionLabel = ReviewScreenTestTags.QUESTION_LABEL,
-                            answerField = ReviewScreenTestTags.ANSWER_FIELD,
-                            typeMismatchText = ReviewScreenTestTags.TYPE_MISMATCH_TEXT,
-                            dontKnowButton = ReviewScreenTestTags.DONT_KNOW_BUTTON,
-                            submitButton = ReviewScreenTestTags.SUBMIT_BUTTON,
-                            undoButton = ReviewScreenTestTags.UNDO_BUTTON,
-                            feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
-                            answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
-                            continueButton = ReviewScreenTestTags.CONTINUE_BUTTON,
-                            // Review has no session context to name — its queue is the whole session.
-                            sessionContextLabel = ReviewScreenTestTags.SESSION_CONTEXT_LABEL
+                    // Remembered so a reading only recomposes when the check state flips, not on every
+                    // unrelated uiState change (the timers tick through here), exactly as
+                    // SubjectDetailSheet hands it to the detail content. Keyed on the current item too,
+                    // so the lambda can't capture a previous question's item.
+                    val currentItem = phase.currentItem
+                    val pitchAccentCheck = remember(uiState.isCheckingPitchAccent, uiState.pitchAccentCheckFailed, currentItem) {
+                        PitchAccentCheck(
+                            inProgress = uiState.isCheckingPitchAccent,
+                            failed = uiState.pitchAccentCheckFailed,
+                            onClick = { onEvent(ReviewScreenEvent.CheckPitchAccent(currentItem)) }
                         )
-                    )
+                    }
+                    CompositionLocalProvider(LocalPitchAccentCheck provides pitchAccentCheck) {
+                        QuizQuestionContent(
+                            uiState = QuizQuestionUiState(
+                                item = phase.currentItem,
+                                questionType = phase.currentQuestionType,
+                                totalCount = phase.totalCount,
+                                remainingCount = phase.remainingCount,
+                                answerInput = phase.answerInput,
+                                feedback = phase.feedback,
+                                rankChange = phase.rankChange,
+                                undoCounter = phase.undoCounter,
+                                answerTypeMismatchCount = phase.answerTypeMismatchCount,
+                                showSubjectTypeLabel = uiState.settings.showSubjectTypeLabel,
+                                showQuestionTimer = uiState.settings.showQuestionTimer,
+                                showTotalTimer = uiState.settings.showTotalTimer,
+                                questionElapsedMs = phase.timing.questionElapsedMs,
+                                questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
+                                questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
+                                sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
+                                sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
+                                useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
+                                allowUndoAfterCorrect = true,
+                                showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
+                                answerReading = phase.answerReading,
+                                answerPitchAccents = phase.answerPitchAccents,
+                                answerReadingAudio = phase.answerReadingAudio
+                            ),
+                            onAnswerInputChange = onAnswerInputChange,
+                            onSubmit = onSubmit,
+                            onDontKnow = onDontKnow,
+                            onContinue = onContinue,
+                            onUndo = onUndo,
+                            testTags = QuizQuestionTestTags(
+                                progressCount = ReviewScreenTestTags.PROGRESS_COUNT,
+                                questionTimerText = ReviewScreenTestTags.QUESTION_TIMER_TEXT,
+                                totalTimerText = ReviewScreenTestTags.TOTAL_TIMER_TEXT,
+                                characters = ReviewScreenTestTags.CHARACTERS,
+                                subjectTypeLabel = ReviewScreenTestTags.SUBJECT_TYPE_LABEL,
+                                rankChangeText = ReviewScreenTestTags.RANK_CHANGE_TEXT,
+                                questionLabel = ReviewScreenTestTags.QUESTION_LABEL,
+                                answerField = ReviewScreenTestTags.ANSWER_FIELD,
+                                typeMismatchText = ReviewScreenTestTags.TYPE_MISMATCH_TEXT,
+                                dontKnowButton = ReviewScreenTestTags.DONT_KNOW_BUTTON,
+                                submitButton = ReviewScreenTestTags.SUBMIT_BUTTON,
+                                undoButton = ReviewScreenTestTags.UNDO_BUTTON,
+                                feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
+                                answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
+                                continueButton = ReviewScreenTestTags.CONTINUE_BUTTON,
+                                // Review has no session context to name — its queue is the whole session.
+                                sessionContextLabel = ReviewScreenTestTags.SESSION_CONTEXT_LABEL
+                            )
+                        )
+                    }
                 }
             }
         }

@@ -52,10 +52,14 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -63,7 +67,15 @@ data class ReviewUiState(
     val phase: Phase = Phase.Loading,
     val settings: DisplaySettings = DisplaySettings(),
     // Deliberately not folded into Phase — see LessonUiState.isAbandoned's doc comment for why.
-    val isAbandoned: Boolean = false
+    val isAbandoned: Boolean = false,
+    /** True while [ReviewViewModel.checkPitchAccent]'s on-demand scrape is in flight, so the quiz
+     *  hint's "not checked yet" caption can show progress instead of looking like a dead tap. */
+    val isCheckingPitchAccent: Boolean = false,
+    /** True when the last on-demand check failed. A failed scrape leaves the word classified as
+     *  still-unknown (see [PitchAccentRepository.scrapeAndCache]), i.e. indistinguishable from an
+     *  untried one, so the UI has to say the check failed itself. Cleared when a new check starts and
+     *  when the current question changes. */
+    val pitchAccentCheckFailed: Boolean = false
 ) {
     /** Settings-derived display flags — hoisted here rather than duplicated into every [Phase]
      *  variant, since they apply uniformly regardless of phase. */
@@ -98,10 +110,11 @@ data class ReviewUiState(
             // really are different rendering modes).
             val isWrappingUp: Boolean = false,
             val timing: QuizTimingUiState = QuizTimingUiState(),
-            // The reading + pitch-accent patterns for the just-graded reading question, populated
-            // shortly after feedback (see gradeAnswer) rather than atomically with it — kept out of
-            // the same synchronous block that builds feedback/rankChange, whose timing is
-            // deliberately protected (see latestSettings's doc comment above).
+            // The reading + pitch-accent patterns for the just-graded reading question. The reading
+            // is published with the feedback (see gradeAnswer); the patterns are *observed* live for
+            // as long as this question is the current one (see pitchAccentHintKey/init), so a scrape
+            // from any writer — the detail sheet, the background worker, this screen's own check —
+            // lands here without a refetch.
             val answerReading: String? = null,
             val answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
             // The clip that survived the user's own audio settings for [answerReading] — null when
@@ -137,6 +150,18 @@ private typealias ItemProgress = QuizItemProgress<ReviewItem>
 private fun ItemProgress.toReviewGrade(): ReviewGrade =
     ReviewGrade(meaningCorrect = !hadIncorrectMeaning, readingCorrect = !hadIncorrectReading)
 
+/**
+ * Identifies the word whose pitch accent the current question's hint should be watching — null
+ * whenever there is nothing to show (a meaning question, the "show answer reading pitch accent"
+ * setting off, a subject type pitch accent doesn't apply to, or no answer revealed yet).
+ *
+ * [assignmentId] and [reading] pin the observation to the *question* that asked for it: the answer
+ * reading is chosen and published at the same moment the key is set, so an emission can be matched
+ * back to the exact hint it belongs to and can't land on the next question's.
+ */
+private data class PitchAccentHintKey(val assignmentId: Long, val characters: String, val reading: String)
+
+@OptIn(ExperimentalCoroutinesApi::class)
 class ReviewViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val outboxRepository: OutboxRepository,
@@ -152,6 +177,11 @@ class ReviewViewModel(
 
     private val _uiState = MutableStateFlow(ReviewUiState())
     val uiState: StateFlow<ReviewUiState> = _uiState.asStateFlow()
+
+    /** The word the current question's reading hint is watching — see [PitchAccentHintKey]. A plain
+     *  field rather than part of [ReviewUiState] because the screen never reads the key itself; it
+     *  only ever sees the [PitchAccentUiState] the collector below derives from it. */
+    private val pitchAccentHintKey = MutableStateFlow<PitchAccentHintKey?>(null)
 
     private val queue = QuizQueue<ReviewItem>()
     private val progressByAssignmentId = mutableMapOf<Long, ItemProgress>()
@@ -222,6 +252,32 @@ class ReviewViewModel(
                 }
             }
         }
+        // The hint's pitch patterns are followed live rather than fetched once at grading time: the
+        // repository's Room flow is the single source of truth, so whichever writer resolves the word
+        // (this screen's own check, the detail sheet's, the background scrape worker) the hint
+        // updates in place with no propagation code anywhere. flatMapLatest swaps the observation
+        // when the question changes, which also cancels it outright when the key goes null.
+        viewModelScope.launch {
+            pitchAccentHintKey
+                .flatMapLatest { key ->
+                    key?.let { hint -> pitchAccentRepository.observePitchAccents(hint.characters).map { hint to it } }
+                        ?: flowOf(null)
+                }
+                .collect { hint ->
+                    updateActive {
+                        // Drop anything that doesn't belong to the hint on screen right now — an
+                        // emission can land after an undo or an advance, and must neither resurrect a
+                        // stale word's patterns nor overwrite the next question's.
+                        if (hint == null || it.currentItem.assignmentId != hint.first.assignmentId ||
+                            it.answerReading != hint.first.reading || it.feedback == null
+                        ) {
+                            it.copy(answerPitchAccents = PitchAccentUiState.Loading)
+                        } else {
+                            it.copy(answerPitchAccents = hint.second)
+                        }
+                    }
+                }
+        }
         // The initial value is handled by loadOrResume/sessionTiming.resume() below instead — see
         // QuizSessionTiming.wireForegroundTracking's doc comment.
         sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
@@ -245,6 +301,7 @@ class ReviewViewModel(
     fun loadOrResume() {
         viewModelScope.launch {
             _uiState.update { ReviewUiState() }
+            pitchAccentHintKey.value = null
             // Warmed once here, during the loading spinner, so every answer graded during this
             // session can compute its rank change synchronously — see
             // AssignmentRepository.computeReviewRankChange.
@@ -375,6 +432,40 @@ class ReviewViewModel(
         updateActive { it.copy(isDetailsExpanded = false) }
     }
 
+    /** Fetches [item]'s pitch accent now, for a word the background scrape hasn't reached — the same
+     *  on-demand check the subject detail sheet offers, mirrored onto the quiz hint.
+     *
+     *  The hint already observes the cache (see the collector in init), so this only has to cause the
+     *  write: nothing is copied back into [ReviewUiState.Phase.Active.answerPitchAccents] here, the new
+     *  value arrives through the flow. A fetch takes real network time, so the tap is acknowledged
+     *  immediately by flipping [ReviewUiState.isCheckingPitchAccent] (the caption becomes a progress
+     *  row) and a fetch that fails — a word weblio doesn't answer for, a network error — is reported
+     *  through [ReviewUiState.pitchAccentCheckFailed]: the word stays "not checked yet" either way, so
+     *  without that flag a failed check would look exactly like no check at all. A second tap while
+     *  one is already running is ignored.
+     *
+     *  No-ops for an item with no [ReviewItem.characters] — there is nothing to look up, and an empty
+     *  query would only cache a meaningless row. */
+    fun checkPitchAccent(item: ReviewItem) {
+        val characters = item.characters ?: return
+        if (_uiState.value.isCheckingPitchAccent) return
+        _uiState.update { it.copy(isCheckingPitchAccent = true, pitchAccentCheckFailed = false) }
+        viewModelScope.launch {
+            val scraped = pitchAccentRepository.scrapeAndCache(characters, Clock.System.now().toEpochMilliseconds())
+            // Only publish for the assignment that started the check: advancing mid-fetch resets the
+            // flags, and this completion must not raise them against whatever question is current by
+            // then.
+            _uiState.update {
+                val active = it.phase as? ReviewUiState.Phase.Active
+                if (active?.currentItem?.assignmentId != item.assignmentId) {
+                    it
+                } else {
+                    it.copy(isCheckingPitchAccent = false, pitchAccentCheckFailed = !scraped)
+                }
+            }
+        }
+    }
+
     fun submitAnswer() {
         val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
         if (active.feedback != null) return
@@ -489,39 +580,21 @@ class ReviewViewModel(
             }
         }
 
-        // Deliberately outside the synchronous `run` block above (and its own updateActive call),
-        // for the same reason `latestSettings` exists at all — see its doc comment. A cache/bundled
-        // read here is cheap but still a suspend hop; keeping it off that already-jank-sensitive
-        // path costs one extra recomposition, which the answer hint's own entrance animation
-        // absorbs gracefully.
+        // Both halves of the hint are published synchronously here now — there is no fetch left to
+        // resolve late, so none of the old "did the user already move on?" guard is needed. The
+        // reading and its audio are snapshots (subject audio can't change mid-session); the pitch
+        // patterns are watched live off `pitchAccentHintKey` (see init), which is set *after* the
+        // reading is published so the collector's first emission always finds it in place.
         val characters = item.characters
         if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType) && characters != null) {
             val answerReading = item.readings.firstOrNull()
-            val answerPitchAccents = if (answerReading != null) {
-                pitchAccentRepository.observePitchAccents(characters).first()
-            } else {
-                PitchAccentUiState.Loading
-            }
             // Selected here, where the item and the settings are already in hand, so the hint's row
             // only has to render whatever clip this produced — null when none survives the filter.
             val answerReadingAudio = answerReading?.let { reading ->
                 selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
             }
-            // Guarded against still-showing-feedback-for-this-same-question, not applied
-            // unconditionally — by the time this suspend fetch resolves, the user may have already
-            // undone this answer (feedback == null again) or advanced past it (a different item/
-            // type), and this arriving late must not resurrect stale hint data over either.
-            updateActive {
-                if (it.currentItem.assignmentId == item.assignmentId && it.currentQuestionType == type && it.feedback != null) {
-                    it.copy(
-                        answerReading = answerReading,
-                        answerPitchAccents = answerPitchAccents,
-                        answerReadingAudio = answerReadingAudio
-                    )
-                } else {
-                    it
-                }
-            }
+            updateActive { it.copy(answerReading = answerReading, answerReadingAudio = answerReadingAudio) }
+            pitchAccentHintKey.value = answerReading?.let { PitchAccentHintKey(item.assignmentId, characters, it) }
         }
 
         commitGradeDurably(snapshot, queueIsEmpty)
@@ -587,6 +660,10 @@ class ReviewViewModel(
                     )
                 )
             }
+            // The hint the answer revealed goes away with it. The check flags deliberately don't: a
+            // failed check was a fact about the *word*, and the word is still the same one — exactly
+            // the state SubjectDetailViewModel keeps across an unrelated uiState change.
+            pitchAccentHintKey.value = null
         }
     }
 
@@ -684,12 +761,22 @@ class ReviewViewModel(
             outboxRepository.requestSyncNow()
             val summary = sessionSummary()
             persistLastSessionSummary(summary)
-            _uiState.update { it.copy(phase = summary.toCompletePhase()) }
+            // Nothing is on screen to check any more, so the hint and its check state go with the
+            // session — same cleanup the next-question path below does.
+            pitchAccentHintKey.value = null
+            _uiState.update { it.copy(phase = summary.toCompletePhase(), isCheckingPitchAccent = false, pitchAccentCheckFailed = false) }
             return
         }
         val questionStartedAt = questionTiming.restart()
+        // The new question owns neither the previous one's hint nor its check's progress/outcome —
+        // a failure on one word must not caption the next one's "not checked yet", and a check still
+        // in flight must not keep this question's caption spinning. Its completion is dropped later
+        // by checkPitchAccent's own assignment-id guard.
+        pitchAccentHintKey.value = null
         _uiState.update {
             it.copy(
+                isCheckingPitchAccent = false,
+                pitchAccentCheckFailed = false,
                 phase = ReviewUiState.Phase.Active(
                     currentItem = next.item,
                     currentQuestionType = next.type,

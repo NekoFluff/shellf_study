@@ -57,13 +57,18 @@ import com.crazyfluff.shellfstudy.shared.quiz.undoLastIncorrectAnswer
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -81,7 +86,22 @@ data class LessonUiState(
     // a LaunchedEffect(exit) fires the actual back-navigation. One sealed value rather than two
     // booleans because the two ways out are mutually exclusive and mean opposite things to the
     // dashboard: abandoning drops the session, parking keeps it resumable.
-    val exit: ExitRequest = ExitRequest.None
+    val exit: ExitRequest = ExitRequest.None,
+    /** The pitch-accent knowledge for every item currently in play (this batch's study cards and its
+     *  quiz), keyed by subject id. Hoisted to the top level rather than carried per-phase because the
+     *  study card and the quiz hint are two views of the *same* live observation — the repository's
+     *  Room flow is the single source of truth, so a scrape from any writer (the detail sheet, the
+     *  background worker, this screen's own check) reaches both without a refetch or any propagation
+     *  code. A subject absent from the map is "not checked yet". */
+    val pitchAccentsBySubjectId: Map<Long, PitchAccentUiState> = emptyMap(),
+    /** True while [LessonViewModel.checkPitchAccent]'s on-demand scrape is in flight, so the quiz
+     *  hint's "not checked yet" caption can show progress instead of looking like a dead tap. */
+    val isCheckingPitchAccent: Boolean = false,
+    /** True when the last on-demand check failed. A failed scrape leaves the word classified as
+     *  still-unknown (see [PitchAccentRepository.scrapeAndCache]), i.e. indistinguishable from an
+     *  untried one, so the UI has to say the check failed itself. Cleared when a new check starts and
+     *  when the current question changes. */
+    val pitchAccentCheckFailed: Boolean = false
 ) {
     /** Why the learner is leaving the lesson screen, if they are. */
     sealed interface ExitRequest {
@@ -147,7 +167,6 @@ data class LessonUiState(
             val studyIndex: Int = 0,
             val batchIndex: Int = 0,
             val batchCount: Int = 1,
-            val pitchAccentsBySubjectId: Map<Long, PitchAccentUiState> = emptyMap(),
             val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
             val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
         ) : Phase {
@@ -173,7 +192,6 @@ data class LessonUiState(
             val remainingQuizCount: Int = 0,
             val timing: QuizTimingUiState = QuizTimingUiState(),
             val answerReading: String? = null,
-            val answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
             val answerReadingAudio: PronunciationAudio? = null
         ) : Phase
 
@@ -234,6 +252,7 @@ private fun LessonItemProgress.missedQuestionTypes(): List<QuestionType> = build
     if (hadIncorrectReading) add(QuestionType.READING)
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class LessonViewModel(
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
@@ -291,12 +310,13 @@ class LessonViewModel(
     private val gradingGuard = QuizGradingGuard(viewModelScope)
 
     private val progressByAssignmentId = mutableMapOf<Long, LessonItemProgress>()
-    // Warmed by each batch's own pitch-accent prefetch (or, on a mid-quiz resume that skips Study
-    // entirely, by resumeQuizPhase's own fetch), and merged rather than replaced as batches advance —
-    // kept alive here rather than scoped to Phase.Study so Quiz-phase grading can look a subject's
-    // pitch accents up for free (a plain map read, no suspend call) instead of re-fetching per answer
-    // the way Review has to, including during the cleanup pass, which reaches across every batch.
-    private var pitchAccentsBySubjectId: Map<Long, PitchAccentUiState> = emptyMap()
+    /** The items whose pitch accents the screen can currently show — this batch's study cards, or
+     *  the quiz's own items (the current batch's, or the cleanup pass's misses). Held as a separate
+     *  flow so the observation follows the session's phases: flatMapLatest swaps the whole set of
+     *  per-item Room flows when the learner moves from one batch to the next, instead of holding one
+     *  flow per item of the entire session open for its duration. What it produces lands in
+     *  [LessonUiState.pitchAccentsBySubjectId] — see the collector in init. */
+    private val pitchAccentItems = MutableStateFlow<List<LessonItem>>(emptyList())
     // Individual per-answer records, used for the "slowest answers" summary — persisted and
     // restored across a resume just like progressByAssignmentId (see resumeQuizPhase), so the
     // summary reflects the whole session, not just the segment since the most recent resume.
@@ -361,6 +381,30 @@ class LessonViewModel(
                     )
                 }
             }
+        }
+        // The study card and the quiz hint both read pitch accents from
+        // LessonUiState.pitchAccentsBySubjectId, which this collector keeps live off the repository's
+        // own Room flows — the single source of truth. A scrape from anywhere (the detail sheet's
+        // check, the background worker, this screen's own check) therefore reaches both surfaces with
+        // no refetch and no propagation code. Follows the items in play rather than the whole session
+        // plan: flatMapLatest cancels the previous batch's queries when the learner moves on.
+        viewModelScope.launch {
+            pitchAccentItems
+                .flatMapLatest { items ->
+                    val words = items
+                        .filter { isPitchAccentEligible(it.subjectType) }
+                        .mapNotNull { item -> item.characters?.let { characters -> item.subjectId to characters } }
+                    if (words.isEmpty()) {
+                        flowOf(emptyMap())
+                    } else {
+                        // One flow per word in play; combine re-emits whenever any of them is
+                        // invalidated by a cache write.
+                        combine(words.map { (subjectId, characters) ->
+                            pitchAccentRepository.observePitchAccents(characters).map { subjectId to it }
+                        }) { accents -> accents.toMap() }
+                    }
+                }
+                .collect { accents -> _uiState.update { it.copy(pitchAccentsBySubjectId = accents) } }
         }
         // The initial value is handled by beginBatchQuiz/resumeQuizPhase/sessionTiming.resume() below
         // instead — see QuizSessionTiming.wireForegroundTracking's doc comment. The gate keeps a batch
@@ -433,7 +477,7 @@ class LessonViewModel(
         startedAssignmentIds.clear()
         progressByAssignmentId.clear()
         answeredQuestions.clear()
-        pitchAccentsBySubjectId = emptyMap()
+        pitchAccentItems.value = emptyList()
         totalQuizCount = 0
     }
 
@@ -480,13 +524,12 @@ class LessonViewModel(
             return
         }
 
-        val (pitchAccents, relatedSubjects, strokeOrders) = coroutineScope {
-            val pitchAccentsDeferred = async { fetchPitchAccents(items) }
+        val (relatedSubjects, strokeOrders) = coroutineScope {
             val relatedSubjectsDeferred = async { fetchRelatedSubjects(items) }
             val strokeOrdersDeferred = async { fetchStrokeOrders(items) }
-            Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
+            relatedSubjectsDeferred.await() to strokeOrdersDeferred.await()
         }
-        pitchAccentsBySubjectId = pitchAccents
+        pitchAccentItems.value = items
         currentRound = QuizRound.LESSON
         sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
         sessionController.begin()
@@ -497,7 +540,6 @@ class LessonViewModel(
                     studyIndex = persisted.studyIndex.coerceIn(0, items.lastIndex),
                     batchIndex = persisted.batchIndex,
                     batchCount = batchCount,
-                    pitchAccentsBySubjectId = pitchAccents,
                     relatedSubjectsById = relatedSubjects,
                     strokeOrderBySubjectId = strokeOrders
                 )
@@ -517,14 +559,12 @@ class LessonViewModel(
             return
         }
 
-        // resumeQuizPhase skips Phase.Study entirely (a mid-quiz resume), so pitchAccentsBySubjectId
-        // was never warmed by enterStudyPhase the way it normally would be — fetch it here instead,
-        // once, before the quiz screen renders.
-        pitchAccentsBySubjectId = fetchPitchAccents(
-            (persisted.quizQueue.map { it.assignmentId } + persisted.progress.map { it.assignmentId })
-                .distinct()
-                .mapNotNull { itemsById[it] }
-        )
+        // resumeQuizPhase skips Phase.Study entirely (a mid-quiz resume), so nothing has told the
+        // live observation which items are in play — hand it the queue's own items, which is also
+        // what makes a resumed session's hint pick up cache writes exactly like a normal one.
+        pitchAccentItems.value = (persisted.quizQueue.map { it.assignmentId } + persisted.progress.map { it.assignmentId })
+            .distinct()
+            .mapNotNull { itemsById[it] }
 
         quizQueue.restore(
             persisted.quizQueue.map { entry ->
@@ -760,10 +800,10 @@ class LessonViewModel(
         }
     }
 
-    /** Opens batch [index]'s flashcards, prefetching only that batch's extras. Per batch rather than
-     *  once for the whole session: a 40-item session would otherwise stall on the first card while
-     *  dozens of pitch-accent, related-subject and stroke-order lookups resolve, and would hold all of
-     *  them in memory for the rest of the session. */
+    /** Opens batch [index]'s flashcards. Only this batch's related-subject and stroke-order extras
+     *  are resolved here; pitch accents are watched live instead (see the collector in init), per
+     *  batch because a 40-item session shouldn't hold a Room query open for every item it will ever
+     *  show. */
     private suspend fun enterStudyPhase(index: Int) {
         val items = batchItems(index)
         if (items.isEmpty()) {
@@ -775,15 +815,14 @@ class LessonViewModel(
             return
         }
 
-        val (pitchAccents, relatedSubjects, strokeOrders) = coroutineScope {
-            val pitchAccentsDeferred = async { fetchPitchAccents(items) }
+        val (relatedSubjects, strokeOrders) = coroutineScope {
             val relatedSubjectsDeferred = async { fetchRelatedSubjects(items) }
             val strokeOrdersDeferred = async { fetchStrokeOrders(items) }
-            Triple(pitchAccentsDeferred.await(), relatedSubjectsDeferred.await(), strokeOrdersDeferred.await())
+            relatedSubjectsDeferred.await() to strokeOrdersDeferred.await()
         }
-        // Merged, not replaced: the quiz's answer-reveal lookup reads this map for any item it has
-        // already studied, including one from an earlier batch during the cleanup pass.
-        pitchAccentsBySubjectId = pitchAccentsBySubjectId + pitchAccents
+        // Replaces rather than merges: the observation follows one batch at a time, and the cleanup
+        // pass (which reaches back across batches) re-points it at the items it asks about.
+        pitchAccentItems.value = items
         currentBatchIndex = index
         currentRound = QuizRound.LESSON
         sessionTiming.resume()
@@ -794,29 +833,12 @@ class LessonViewModel(
                     studyIndex = 0,
                     batchIndex = index,
                     batchCount = batchCount,
-                    pitchAccentsBySubjectId = pitchAccentsBySubjectId,
                     relatedSubjectsById = relatedSubjects,
                     strokeOrderBySubjectId = strokeOrders
                 )
             )
         }
         persistStudySnapshot(0)
-    }
-
-    /** Fanned out in parallel rather than sequentially, so a large "Select All" batch of vocabulary
-     * items doesn't serialize dozens of individual pitch-accent lookups one after another. The
-     * lookups stay one-shot reads (`.first()`), so a word whose data arrives later shows its updated
-     * state on the next answer rather than mid-question. */
-    private suspend fun fetchPitchAccents(items: List<LessonItem>): Map<Long, PitchAccentUiState> = coroutineScope {
-        items
-            .filter { isPitchAccentEligible(it.subjectType) }
-            .mapNotNull { item -> item.characters?.let { item.subjectId to it } }
-            .map { (subjectId, characters) ->
-                subjectId to async {
-                    pitchAccentRepository.observePitchAccents(characters).first()
-                }
-            }
-            .associate { (subjectId, deferred) -> subjectId to deferred.await() }
     }
 
     /** One batch lookup for every related subject (radicals/kanji/visually-similar/used-in) across
@@ -833,7 +855,7 @@ class LessonViewModel(
     /** Stroke data is keyed purely by character (same lookup [SubjectDetailViewModel] uses), so only
      *  single-glyph items — kanji, and any radical with a real Unicode glyph — resolve to anything
      *  other than [StrokeOrderUiState.Unavailable]. Fanned out in parallel for the same reason
-     *  [fetchPitchAccents] is: a large batch shouldn't serialize dozens of lookups. */
+     *  [fetchRelatedSubjects] is: a large batch shouldn't serialize dozens of lookups. */
     private suspend fun fetchStrokeOrders(items: List<LessonItem>): Map<Long, StrokeOrderUiState> = coroutineScope {
         items
             .mapNotNull { item -> item.characters?.singleOrNull()?.let { item.subjectId to it } }
@@ -910,6 +932,10 @@ class LessonViewModel(
         // covers the whole session.
         batch.forEach { item -> progressByAssignmentId.getOrPut(item.assignmentId) { LessonItemProgress(item) } }
 
+        // The quiz asks about exactly the batch that was just studied, so the live observation
+        // stays pointed at the same items — no update needed when it already is (StateFlow conflates
+        // an equal list), and a re-point when a resumed session reaches its quiz directly.
+        pitchAccentItems.value = batch
         val next = quizQueue.current
         if (next == null) {
             // Nothing to ask — every item in this batch was already fully learned before quizzing began
@@ -925,6 +951,8 @@ class LessonViewModel(
         val questionStartedAt = questionTiming.restart()
         _uiState.update {
             it.copy(
+                isCheckingPitchAccent = false,
+                pitchAccentCheckFailed = false,
                 phase = LessonUiState.Phase.Quiz(
                     currentItem = next.item,
                     currentQuestionType = next.type,
@@ -1015,8 +1043,10 @@ class LessonViewModel(
             updateQuiz {
                 it.copy(
                     feedback = null,
+                    // The hint goes away with the answer. The check flags deliberately don't: a failed
+                    // check was a fact about the *word*, which hasn't changed — same treatment
+                    // SubjectDetailViewModel gives it across an unrelated uiState change.
                     answerReading = null,
-                    answerPitchAccents = PitchAccentUiState.Loading,
                     answerReadingAudio = null,
                     answerInput = "",
                     remainingQuizCount = quizQueue.size,
@@ -1086,30 +1116,20 @@ class LessonViewModel(
         // Reads the field kept warm by the settings collector in init{} instead of
         // `settingsRepository.settings.first()` — see `latestSettings`'s doc comment.
         val settings = latestSettings
-        // A plain map lookup against pitchAccentsBySubjectId (already fetched, in-memory) rather
-        // than a fresh repository call — unlike Review, which has no equivalent prefetch phase and
-        // must defer this outside its own synchronous grading block, this is cheap enough to fold
-        // in atomically with feedback/rankChange here. isPitchAccentEligible (matching
-        // fetchPitchAccents's own filter) is enforced explicitly here too — a kanji/radical item's
-        // map entry would simply be absent, but answerReading itself has no such natural gate, so
-        // without this check it would still surface the reading (with no pitch accent alongside it)
-        // for a kanji reading question, which the shared vocabulary-only scoping rule says it shouldn't.
+        // isPitchAccentEligible (matching the live collection's own filter) is enforced explicitly
+        // here too — a kanji/radical item's map entry would simply be absent, but answerReading itself
+        // has no such natural gate, so without this check it would still surface the reading (with no
+        // pitch accent alongside it) for a kanji reading question, which the shared vocabulary-only
+        // scoping rule says it shouldn't.
         val answerReading = if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType)) {
             item.readings.firstOrNull()
         } else {
             null
         }
-        // Set only alongside answerReading (the hint renders on both): the state is carried through
-        // rather than collapsed to a list, so the hint can say whether a word's pitch accent is
-        // pending or confirmed absent. A missing map entry means the prefetch never covered this
-        // item, which is precisely "not checked yet".
-        val answerPitchAccents = if (answerReading == null) {
-            PitchAccentUiState.Loading
-        } else {
-            pitchAccentsBySubjectId[item.subjectId] ?: PitchAccentUiState.Loading
-        }
         // Selected here, where the item and the settings are already in hand, so the hint's row only
         // has to render whatever clip this produced — null when none survives the mp3-only filter.
+        // The pitch patterns are *not* copied here: the hint reads them live off
+        // LessonUiState.pitchAccentsBySubjectId, so a scrape from any writer reaches it in place.
         val answerReadingAudio = answerReading?.let { reading ->
             selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
         }
@@ -1125,7 +1145,6 @@ class LessonViewModel(
                 // same moment.
                 timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null),
                 answerReading = answerReading,
-                answerPitchAccents = answerPitchAccents,
                 answerReadingAudio = answerReadingAudio
             )
         }
@@ -1238,6 +1257,40 @@ class LessonViewModel(
         updateQuiz { it.copy(isDetailsExpanded = false) }
     }
 
+    /** Fetches [item]'s pitch accent now, for a word the background scrape hasn't reached — the same
+     *  on-demand check the subject detail sheet offers, mirrored onto the quiz hint.
+     *
+     *  The hint already observes the cache (see the collector in init), so this only has to cause the
+     *  write: nothing is copied back into [LessonUiState.pitchAccentsBySubjectId] here, the new value
+     *  arrives through the flow. A fetch takes real network time, so the tap is acknowledged
+     *  immediately by flipping [LessonUiState.isCheckingPitchAccent] (the caption becomes a progress
+     *  row) and a fetch that fails — a word weblio doesn't answer for, a network error — is reported
+     *  through [LessonUiState.pitchAccentCheckFailed]: the word stays "not checked yet" either way, so
+     *  without that flag a failed check would look exactly like no check at all. A second tap while
+     *  one is already running is ignored.
+     *
+     *  No-ops for an item with no [LessonItem.characters] — there is nothing to look up, and an empty
+     *  query would only cache a meaningless row. */
+    fun checkPitchAccent(item: LessonItem) {
+        val characters = item.characters ?: return
+        if (_uiState.value.isCheckingPitchAccent) return
+        _uiState.update { it.copy(isCheckingPitchAccent = true, pitchAccentCheckFailed = false) }
+        viewModelScope.launch {
+            val scraped = pitchAccentRepository.scrapeAndCache(characters, Clock.System.now().toEpochMilliseconds())
+            // Only publish for the subject that started the check: advancing mid-fetch resets the
+            // flags, and this completion must not raise them against whatever question is current by
+            // then.
+            _uiState.update {
+                val quiz = it.phase as? LessonUiState.Phase.Quiz
+                if (quiz?.currentItem?.subjectId != item.subjectId) {
+                    it
+                } else {
+                    it.copy(isCheckingPitchAccent = false, pitchAccentCheckFailed = !scraped)
+                }
+            }
+        }
+    }
+
     /** Walks from a just-finished batch into the next one — the checkpoint's primary action. */
     fun continueSession() {
         val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
@@ -1291,13 +1344,15 @@ class LessonViewModel(
                 return@launch
             }
 
-            // A resumed session may not have prefetched every batch's accents (see resumeQuizPhase),
-            // and this pass reaches across all of them.
-            pitchAccentsBySubjectId = pitchAccentsBySubjectId + fetchPitchAccents(missedItems)
+            // This pass reaches back across every batch, so re-point the live observation at exactly
+            // the items it asks about rather than whatever batch happened to be in play last.
+            pitchAccentItems.value = missedItems
             sessionTiming.resume()
             val questionStartedAt = questionTiming.restart()
             _uiState.update {
                 it.copy(
+                    isCheckingPitchAccent = false,
+                    pitchAccentCheckFailed = false,
                     phase = LessonUiState.Phase.Quiz(
                         currentItem = next.item,
                         currentQuestionType = next.type,
@@ -1377,7 +1432,17 @@ class LessonViewModel(
         outboxRepository.requestSyncNow()
         val summary = sessionSummary()
         persistLastSessionSummary(summary)
-        _uiState.update { it.copy(phase = summary.toCompletePhase()) }
+        // The summary has no pitch accents to show, so the live observation and the check state that
+        // belonged to the pass just finished are done with.
+        pitchAccentItems.value = emptyList()
+        _uiState.update {
+            it.copy(
+                phase = summary.toCompletePhase(),
+                pitchAccentsBySubjectId = emptyMap(),
+                isCheckingPitchAccent = false,
+                pitchAccentCheckFailed = false
+            )
+        }
     }
 
     /** Shows the checkpoint at the end of a pass over batch [nextBatchIndex] - 1.
@@ -1415,6 +1480,11 @@ class LessonViewModel(
 
         _uiState.update {
             it.copy(
+                // Nothing pitch-related is on screen at a checkpoint any more, so drop the
+                // observation's items and the check state that belonged to the pass just finished.
+                pitchAccentsBySubjectId = emptyMap(),
+                isCheckingPitchAccent = false,
+                pitchAccentCheckFailed = false,
                 phase = LessonUiState.Phase.BatchComplete(
                     batchIndex = completedBatchIndex,
                     batchCount = batchCount,
@@ -1425,6 +1495,7 @@ class LessonViewModel(
                 )
             )
         }
+        pitchAccentItems.value = emptyList()
         sessionController.persist(checkpointSnapshot())
     }
 
@@ -1432,6 +1503,9 @@ class LessonViewModel(
         val next = quizQueue.current
         if (next != null) {
             val questionStartedAt = questionTiming.restart()
+            // The new question owns neither the previous one's hint nor its check's
+            // progress/outcome — a failure on one word must not caption the next one's "not checked
+            // yet". Its completion is dropped later by checkPitchAccent's own subject-id guard.
             updateQuiz {
                 it.copy(
                     currentItem = next.item,
@@ -1440,7 +1514,6 @@ class LessonViewModel(
                     feedback = null,
                     rankChange = null,
                     answerReading = null,
-                    answerPitchAccents = PitchAccentUiState.Loading,
                     answerReadingAudio = null,
                     isDetailsExpanded = false,
                     remainingQuizCount = quizQueue.size,
@@ -1451,6 +1524,7 @@ class LessonViewModel(
                     )
                 )
             }
+            _uiState.update { it.copy(isCheckingPitchAccent = false, pitchAccentCheckFailed = false) }
             return
         }
 

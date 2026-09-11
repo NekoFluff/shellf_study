@@ -115,11 +115,12 @@ data class PitchAccentCheck(
 
 /**
  * The check a "not checked yet" reading offers its reader, provided around the content that shows
- * readings (currently the subject detail sheet) rather than handed down through intermediate
- * composables — a row knows which reading it draws, but has no business owning the fetch. Nullable
- * on purpose: surfaces whose state a fetch cannot update (the quiz hint, the lesson study card)
- * simply leave it unprovided, so they show no "Check now" link at all instead of one that looks
- * tappable and does nothing. Offering the value *is* the affordance.
+ * readings (the subject detail sheet and both quiz screens) rather than handed down through
+ * intermediate composables — a row knows which reading it draws, but has no business owning the
+ * fetch. Nullable on purpose: a surface whose state a fetch cannot update (the lesson study card,
+ * whose readings are reference material rather than a just-graded answer) simply leaves it
+ * unprovided, so it shows no "Check now" link at all instead of one that looks tappable and does
+ * nothing. Offering the value *is* the affordance.
  */
 val LocalPitchAccentCheck = staticCompositionLocalOf<PitchAccentCheck?> { null }
 

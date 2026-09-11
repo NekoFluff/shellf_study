@@ -83,7 +83,9 @@ class ReviewScreenTest {
         settings: ReviewUiState.DisplaySettings = ReviewUiState.DisplaySettings(),
         answerReading: String? = null,
         answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
-        answerReadingAudio: PronunciationAudio? = null
+        answerReadingAudio: PronunciationAudio? = null,
+        isCheckingPitchAccent: Boolean = false,
+        pitchAccentCheckFailed: Boolean = false
     ) = ReviewUiState(
         phase = ReviewUiState.Phase.Active(
             currentItem = item,
@@ -102,7 +104,9 @@ class ReviewScreenTest {
             answerPitchAccents = answerPitchAccents,
             answerReadingAudio = answerReadingAudio
         ),
-        settings = settings
+        settings = settings,
+        isCheckingPitchAccent = isCheckingPitchAccent,
+        pitchAccentCheckFailed = pitchAccentCheckFailed
     )
 
     /** Builds a [ReviewUiState] in the [ReviewUiState.Phase.Complete] phase. */
@@ -134,6 +138,7 @@ class ReviewScreenTest {
         audioPlayer: FakePronunciationAudioPlayer = FakePronunciationAudioPlayer(),
         onToggleDetails: () -> Unit = {},
         onCloseDetails: () -> Unit = {},
+        onCheckPitchAccent: (ReviewItem) -> Unit = {},
         onRetry: () -> Unit = {},
         onStudyOffline: () -> Unit = {},
         onWrapUp: () -> Unit = {},
@@ -154,6 +159,7 @@ class ReviewScreenTest {
                             ReviewScreenEvent.Undo -> onUndo()
                             ReviewScreenEvent.ToggleDetails -> onToggleDetails()
                             ReviewScreenEvent.CloseDetails -> onCloseDetails()
+                            is ReviewScreenEvent.CheckPitchAccent -> onCheckPitchAccent(event.item)
                             ReviewScreenEvent.Retry -> onRetry()
                             ReviewScreenEvent.StudyOffline -> onStudyOffline()
                             ReviewScreenEvent.WrapUp -> onWrapUp()
@@ -343,6 +349,63 @@ class ReviewScreenTest {
         )
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
+    }
+
+    @Test
+    fun answerReadingPitchAccentHint_offersCheckNowForAPendingReadingAndInvokesTheViewModel() {
+        // The hint observes the cache live now, so a "not checked yet" reading is exactly the state a
+        // check can still resolve — the screen must offer the link and route the tap to the ViewModel.
+        var checkedItem: ReviewItem? = null
+        setScreen(
+            activeState(
+                questionType = QuestionType.READING,
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
+                answerReading = "みず",
+                answerPitchAccents = PitchAccentUiState.Loading
+            ),
+            onCheckPitchAccent = { checkedItem = it }
+        )
+
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.CHECK).assertIsDisplayed().performClick()
+        assertThat(checkedItem).isEqualTo(sampleItem)
+    }
+
+    @Test
+    fun answerReadingPitchAccentHint_showsProgressInsteadOfTheLinkWhileChecking() {
+        setScreen(
+            activeState(
+                questionType = QuestionType.READING,
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
+                answerReading = "みず",
+                answerPitchAccents = PitchAccentUiState.Loading,
+                isCheckingPitchAccent = true
+            )
+        )
+
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.CHECKING).assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.CHECK).assertCountEquals(0)
+    }
+
+    @Test
+    fun answerReadingPitchAccentHint_offersTryAgainUnderAFailedCheckCaption() {
+        setScreen(
+            activeState(
+                questionType = QuestionType.READING,
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
+                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
+                answerReading = "みず",
+                answerPitchAccents = PitchAccentUiState.Loading,
+                pitchAccentCheckFailed = true
+            )
+        )
+
+        composeTestRule.onNodeWithText("Couldn't check pitch accent").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Try again").assertIsDisplayed()
     }
 
     @Test
