@@ -20,4 +20,9 @@ class FakePronunciationAudioPlayer : PronunciationAudioPlayer {
     override fun stop() {
         _state.value = PlaybackState.IDLE
     }
+
+    /** Test hook for reporting a state [play]/[stop] can't reach on their own — e.g. a failed load. */
+    fun reportState(state: PlaybackState) {
+        _state.value = state
+    }
 }

@@ -352,67 +352,18 @@ class SubjectDetailViewModelTest {
     )
 
     @Test
-    fun `playReading plays the audio matching the requested reading`() = runTest(mainDispatcherRule.dispatcher) {
-        viewModel.uiState.test {
-            awaitNotLoading()
+    fun `uiState exposes the restrictAudioToMp3 setting so reading rows can filter their own clips`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRestrictAudioToMp3(true)
 
-            viewModel.open(3)
-            awaitSettled(3)
-        }
-
-        viewModel.playReading("みず")
-
-        assertThat(audioPlayer.playedAudios).hasSize(1)
-        assertThat(audioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
-    }
-
-    @Test
-    fun `playReading is a no-op when the subject has no pronunciation audio`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
             awaitNotLoading()
 
             viewModel.open(1)
-            awaitSettled(1)
-        }
-
-        viewModel.playReading("みず")
-
-        assertThat(audioPlayer.playedAudios).isEmpty()
-    }
-
-    @Test
-    fun `playReading picks the mp3 clip when restrictAudioToMp3 is enabled`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRestrictAudioToMp3(true)
-
-        viewModel.uiState.test {
-            awaitNotLoading()
-
-            viewModel.open(4)
-            var state = awaitSettled(4)
+            var state = awaitSettled(1)
             while (!state.restrictAudioToMp3) state = awaitItem()
+
+            assertThat(state.restrictAudioToMp3).isTrue()
         }
-
-        viewModel.playReading("みず")
-
-        assertThat(audioPlayer.playedAudios).hasSize(1)
-        assertThat(audioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
-    }
-
-    @Test
-    fun `playReading is a no-op when restrictAudioToMp3 is enabled and only an ogg clip exists`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRestrictAudioToMp3(true)
-
-        viewModel.uiState.test {
-            awaitNotLoading()
-
-            viewModel.open(5)
-            var state = awaitSettled(5)
-            while (!state.restrictAudioToMp3) state = awaitItem()
-        }
-
-        viewModel.playReading("みず")
-
-        assertThat(audioPlayer.playedAudios).isEmpty()
     }
 
     @Test

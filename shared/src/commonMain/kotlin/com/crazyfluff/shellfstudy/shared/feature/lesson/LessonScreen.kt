@@ -73,9 +73,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
+import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
-import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionContent
@@ -90,12 +90,14 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionTimingCard
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.AuxiliaryMeaningsText
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentDiagram
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.ReadingRow
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.forReading
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.ReadingTypeRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.RelatedSubjectsSection
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SectionEyebrow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.VocabReadingRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.WkMnemonicText
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.componentsLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
@@ -155,7 +157,6 @@ object LessonScreenTestTags {
     const val FEEDBACK_TEXT = "lesson_feedback_text"
     const val ANSWER_DETAIL_TEXT = "lesson_answer_detail_text"
     const val QUIZ_SUBJECT_TYPE_LABEL = "lesson_quiz_subject_type_label"
-    const val QUIZ_ANSWER_READING_PITCH_ACCENT = "lesson_quiz_answer_reading_pitch_accent"
     const val QUESTION_LABEL = "lesson_question_label"
     const val UNDO_BUTTON = "lesson_undo_button"
     const val RANK_CHANGE_TEXT = "lesson_rank_change_text"
@@ -201,7 +202,6 @@ sealed interface LessonScreenEvent {
     data object Submit : LessonScreenEvent
     data object DontKnow : LessonScreenEvent
     data object Undo : LessonScreenEvent
-    data class PlayReading(val item: LessonItem, val reading: String) : LessonScreenEvent
     data object Continue : LessonScreenEvent
     data object ToggleDetails : LessonScreenEvent
     data object CloseDetails : LessonScreenEvent
@@ -229,7 +229,6 @@ fun LessonRoute(
     searchViewModel: SearchViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val playbackState by viewModel.playbackState.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
 
     // Both exits navigate back; which one it was is the ViewModel's business (abandoning cleared the
@@ -241,7 +240,6 @@ fun LessonRoute(
 
     LessonScreen(
         uiState = uiState,
-        playbackState = playbackState,
         onEvent = { event ->
             when (event) {
                 is LessonScreenEvent.ToggleLessonSelection -> viewModel.toggleLessonSelection(event.assignmentId)
@@ -256,7 +254,6 @@ fun LessonRoute(
                 LessonScreenEvent.Submit -> viewModel.submitAnswer()
                 LessonScreenEvent.DontKnow -> viewModel.dontKnowAnswer()
                 LessonScreenEvent.Undo -> viewModel.undoLastAnswer()
-                is LessonScreenEvent.PlayReading -> viewModel.playReading(event.item, event.reading)
                 LessonScreenEvent.Continue -> viewModel.onContinue()
                 LessonScreenEvent.ToggleDetails -> viewModel.toggleDetails()
                 LessonScreenEvent.CloseDetails -> viewModel.closeDetails()
@@ -281,8 +278,7 @@ fun LessonRoute(
 fun LessonScreen(
     uiState: LessonUiState,
     onEvent: (LessonScreenEvent) -> Unit,
-    searchUiState: SearchUiState = SearchUiState(),
-    playbackState: com.crazyfluff.shellfstudy.shared.data.PlaybackState = com.crazyfluff.shellfstudy.shared.data.PlaybackState.IDLE
+    searchUiState: SearchUiState = SearchUiState()
 ) {
     val onToggleLessonSelection: (Long) -> Unit = { onEvent(LessonScreenEvent.ToggleLessonSelection(it)) }
     val onSelectFirst: (Int) -> Unit = { onEvent(LessonScreenEvent.SelectFirst(it)) }
@@ -296,7 +292,6 @@ fun LessonScreen(
     val onSubmit = { onEvent(LessonScreenEvent.Submit) }
     val onDontKnow = { onEvent(LessonScreenEvent.DontKnow) }
     val onUndo = { onEvent(LessonScreenEvent.Undo) }
-    val onPlayReading: (LessonItem, String) -> Unit = { item, reading -> onEvent(LessonScreenEvent.PlayReading(item, reading)) }
     val onContinue = { onEvent(LessonScreenEvent.Continue) }
     val onToggleDetails = { onEvent(LessonScreenEvent.ToggleDetails) }
     val onCloseDetails = { onEvent(LessonScreenEvent.CloseDetails) }
@@ -487,9 +482,7 @@ fun LessonScreen(
                         onNext = onNextStudyCard,
                         onPrevious = onPreviousStudyCard,
                         onSwiped = onStudyCardSwiped,
-                        onSubjectClick = { detailSheetState.show(it) },
-                        onPlayReading = onPlayReading,
-                        audioPlaybackState = playbackState
+                        onSubjectClick = { detailSheetState.show(it) }
                     )
                 }
 
@@ -524,17 +517,13 @@ fun LessonScreen(
                             showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
                             answerReading = phase.answerReading,
                             answerPitchAccents = phase.answerPitchAccents,
-                            answerReadingHasAudio = phase.currentItem.pronunciationAudios.isNotEmpty()
+                            answerReadingAudio = phase.answerReadingAudio
                         ),
                         onAnswerInputChange = onAnswerInputChange,
                         onSubmit = onSubmit,
                         onDontKnow = onDontKnow,
                         onContinue = onContinue,
                         onUndo = onUndo,
-                        onPlayAnswerReading = {
-                            phase.answerReading?.let { reading -> onPlayReading(phase.currentItem, reading) }
-                        },
-                        audioPlaybackState = playbackState,
                         testTags = QuizQuestionTestTags(
                             progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
                             questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,
@@ -551,7 +540,6 @@ fun LessonScreen(
                             feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
                             answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
                             continueButton = LessonScreenTestTags.CONTINUE_BUTTON,
-                            answerReadingPitchAccentHint = LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT,
                             sessionContextLabel = LessonScreenTestTags.QUIZ_SESSION_CONTEXT_LABEL
                         )
                     )
@@ -615,9 +603,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSwiped: (Int) -> Unit,
-    onSubjectClick: (Long) -> Unit,
-    onPlayReading: (LessonItem, String) -> Unit,
-    audioPlaybackState: com.crazyfluff.shellfstudy.shared.data.PlaybackState = com.crazyfluff.shellfstudy.shared.data.PlaybackState.IDLE
+    onSubjectClick: (Long) -> Unit
 ) {
     val currentItem = study.studyItems.getOrNull(study.studyIndex) ?: return
     val isLastCard = study.studyIndex == study.studyItems.lastIndex
@@ -732,10 +718,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                     item = item,
                     isVocabulary = isVocabulary,
                     hasReadingBreakdown = hasReadingBreakdown,
-                    pitchAccents = study.pitchAccentsBySubjectId[item.subjectId].orEmpty(),
+                    pitchAccentState = study.pitchAccentsBySubjectId[item.subjectId] ?: PitchAccentUiState.Loading,
                     showPitchAccent = settings.showPitchAccent,
-                    onPlayReading = { reading -> onPlayReading(item, reading) },
-                    audioPlaybackState = audioPlaybackState
+                    restrictAudioToMp3 = settings.restrictAudioToMp3
                 )
             }
             if (isVocabulary && item.contextSentences.isNotEmpty()) {
@@ -1170,10 +1155,9 @@ private fun LessonReadingSection(
     item: LessonItem,
     isVocabulary: Boolean,
     hasReadingBreakdown: Boolean,
-    pitchAccents: List<PitchAccent>,
+    pitchAccentState: PitchAccentUiState,
     showPitchAccent: Boolean,
-    onPlayReading: (String) -> Unit,
-    audioPlaybackState: com.crazyfluff.shellfstudy.shared.data.PlaybackState = com.crazyfluff.shellfstudy.shared.data.PlaybackState.IDLE
+    restrictAudioToMp3: Boolean
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1185,19 +1169,18 @@ private fun LessonReadingSection(
                     if (item.nanoriReadings.isNotEmpty()) ReadingTypeRow(label = "Nanori", readings = item.nanoriReadings)
                 }
                 isVocabulary -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // The clip is selected here, through the same settings autoplay honours, so a
+                    // reading with nothing playable left after the mp3-only filter shows no button.
                     item.readings.forEach { reading ->
-                        VocabReadingRow(
-                            reading = reading,
-                            // The lesson flow keeps a plain list on Phase.Study (see
-                            // LessonViewModel.fetchPitchAccents) — mid-lesson, "pending" and
-                            // "confirmed absent" both just mean no diagram, so there's nothing to
-                            // distinguish here.
-                            pitchAccentState = PitchAccentUiState.Available(pitchAccents),
-                            showPitchAccent = showPitchAccent,
-                            hasAudio = item.pronunciationAudios.isNotEmpty(),
-                            onPlayReading = onPlayReading,
-                            playbackState = audioPlaybackState
-                        )
+                        Column {
+                            ReadingRow(
+                                reading = reading,
+                                audio = selectAudioFor(item.pronunciationAudios, reading, mp3Only = restrictAudioToMp3)
+                            )
+                            if (showPitchAccent) {
+                                PitchAccentDiagram(pitchAccentState.forReading(reading))
+                            }
+                        }
                     }
                 }
                 else -> JapaneseText(item.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)

@@ -30,6 +30,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
@@ -252,9 +253,9 @@ class LessonViewModelTest {
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
             assertThat(feedbackState.answerReading).isEqualTo("けんあ")
             // "件亜" is a fabricated word — guaranteed absent from the real bundled pitch-accent
-            // dictionary, so this also covers the "no match" silent-empty case: the reading still
-            // surfaces, but with no pitch pattern to show alongside it.
-            assertThat(feedbackState.answerPitchAccents).isEmpty()
+            // dictionary, so the reading still surfaces but with no pitch pattern alongside it, and
+            // the state stays Loading ("not checked yet") rather than claiming a confirmed absence.
+            assertThat(feedbackState.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 
@@ -288,7 +289,7 @@ class LessonViewModelTest {
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
             assertThat(feedbackState.answerReading).isNull()
-            assertThat(feedbackState.answerPitchAccents).isEmpty()
+            assertThat(feedbackState.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 
@@ -323,7 +324,7 @@ class LessonViewModelTest {
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
             assertThat(feedbackState.answerReading).isNull()
-            assertThat(feedbackState.answerPitchAccents).isEmpty()
+            assertThat(feedbackState.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 
@@ -360,7 +361,7 @@ class LessonViewModelTest {
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
             assertThat(feedbackState.answerReading).isNull()
-            assertThat(feedbackState.answerPitchAccents).isEmpty()
+            assertThat(feedbackState.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 
@@ -400,7 +401,7 @@ class LessonViewModelTest {
             val undoneState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(undoneState.feedback).isNull()
             assertThat(undoneState.answerReading).isNull()
-            assertThat(undoneState.answerPitchAccents).isEmpty()
+            assertThat(undoneState.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 
@@ -454,11 +455,11 @@ class LessonViewModelTest {
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
             assertThat(feedbackState.answerReading).isEqualTo("みず")
-            // Only comes back non-empty if resumeQuizPhase's own fetch actually populated
+            // Only comes back populated if resumeQuizPhase's own fetch actually populated
             // pitchAccentsBySubjectId with the seeded entry above, since this ViewModel instance
             // never went through Phase.Study.
-            assertThat(feedbackState.answerPitchAccents).isNotEmpty()
-            assertThat(feedbackState.answerPitchAccents.first().pitchNumber).isEqualTo(0)
+            assertThat(feedbackState.answerPitchAccents)
+                .isEqualTo(PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))))
         }
     }
 

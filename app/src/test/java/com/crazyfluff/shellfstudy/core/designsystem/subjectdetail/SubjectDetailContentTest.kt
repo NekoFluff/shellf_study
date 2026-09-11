@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo
 import android.content.pm.ResolveInfo
 import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -17,11 +18,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
@@ -267,6 +270,38 @@ class SubjectDetailContentTest {
     }
 
     @Test
+    fun vocabularyWithTwoReadings_labelsTheReadingThatHasNoPitchAccentOfItsOwn() {
+        // weblio records one canonical reading per headword, so a word can have a documented pattern
+        // under one reading and none under another. That row used to render silently while its
+        // sibling drew a diagram; both now say which they are.
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず", "スイ"),
+            pitchAccents = PitchAccentUiState.Available(
+                listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+            )
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                showPitchAccent = true
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(1)
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.MESSAGE).assertCountEquals(1)
+        // Both rows are in the sheet's scrolling column, so the second one has to be scrolled to.
+        composeTestRule.onNodeWithText("Pitch accent not available").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+        composeTestRule.onNodeWithText("スイ").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun vocabularyWithPitchAccentData_hidesTheDiagramWhenSettingDisabled() {
         val vocabDetail = detail.copy(
             subjectType = SubjectType.VOCABULARY,
@@ -314,7 +349,7 @@ class SubjectDetailContentTest {
     }
 
     @Test
-    fun vocabularyWithPendingPitchAccent_staysPlainTextWithNoCaption() {
+    fun vocabularyWithPendingPitchAccent_showsTheNotCheckedYetCaption() {
         val vocabDetail = detail.copy(
             subjectType = SubjectType.VOCABULARY,
             readings = listOf("みず"),
@@ -333,6 +368,8 @@ class SubjectDetailContentTest {
         }
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
+        // Distinct from the confirmed-absent caption — "we haven't looked yet" is a different answer.
+        composeTestRule.onNodeWithText("Pitch accent not checked yet").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Pitch accent not available").assertCountEquals(0)
         composeTestRule.onNodeWithText("みず").assertIsDisplayed()
     }
@@ -361,15 +398,49 @@ class SubjectDetailContentTest {
     }
 
     @Test
-    fun vocabularyWithPronunciationAudio_showsPlayButtonThatInvokesCallbackWithTheReading() {
-        var playedReading: String? = null
+    fun vocabularyWithPronunciationAudio_showsPlayButtonThatPlaysTheSelectedClip() {
+        val audio = PronunciationAudio(
+            url = "https://example.com/mizu.mp3",
+            contentType = "audio/mpeg",
+            pronunciation = "みず",
+            gender = null,
+            voiceActorId = null,
+            voiceActorName = null,
+            voiceDescription = null
+        )
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            pronunciationAudios = listOf(audio)
+        )
+        val player = FakePronunciationAudioPlayer()
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalPronunciationAudioPlayer provides player) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                    restrictAudioToMp3 = false
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
+        assertThat(player.playedAudios).containsExactly(audio)
+    }
+
+    @Test
+    fun vocabularyWithPronunciationAudioAndMp3Restriction_hidesThePlayButtonWhenNoMp3Survives() {
         val vocabDetail = detail.copy(
             subjectType = SubjectType.VOCABULARY,
             readings = listOf("みず"),
             pronunciationAudios = listOf(
                 PronunciationAudio(
-                    url = "https://example.com/mizu.mp3",
-                    contentType = "audio/mpeg",
+                    url = "https://example.com/mizu.ogg",
+                    contentType = "audio/ogg",
                     pronunciation = "みず",
                     gender = null,
                     voiceActorId = null,
@@ -379,71 +450,77 @@ class SubjectDetailContentTest {
             )
         )
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = vocabDetail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                onPlayReading = { playedReading = it }
-            )
+            CompositionLocalProvider(LocalPronunciationAudioPlayer provides FakePronunciationAudioPlayer()) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                    restrictAudioToMp3 = true
+                )
+            }
         }
 
-        composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
-        assertThat(playedReading).isEqualTo("みず")
+        // The word has audio, but none of it is playable under the user's setting — showing a button
+        // here would be a button that plays nothing.
+        composeTestRule.onAllNodesWithContentDescription("Play pronunciation for みず").assertCountEquals(0)
     }
 
     @Test
     fun vocabularyWithPitchAccentAndAudio_showsBothTheDiagramAndThePlayButton() {
-        var playedReading: String? = null
+        val audio = PronunciationAudio(
+            url = "https://example.com/mizu.mp3",
+            contentType = "audio/mpeg",
+            pronunciation = "みず",
+            gender = null,
+            voiceActorId = null,
+            voiceActorName = null,
+            voiceDescription = null
+        )
         val vocabDetail = detail.copy(
             subjectType = SubjectType.VOCABULARY,
             readings = listOf("みず"),
             pitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))),
-            pronunciationAudios = listOf(
-                PronunciationAudio(
-                    url = "https://example.com/mizu.mp3",
-                    contentType = "audio/mpeg",
-                    pronunciation = "みず",
-                    gender = null,
-                    voiceActorId = null,
-                    voiceActorName = null,
-                    voiceDescription = null
-                )
-            )
+            pronunciationAudios = listOf(audio)
         )
+        val player = FakePronunciationAudioPlayer()
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = vocabDetail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                showPitchAccent = true,
-                onPlayReading = { playedReading = it }
-            )
+            CompositionLocalProvider(LocalPronunciationAudioPlayer provides player) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                    showPitchAccent = true,
+                    restrictAudioToMp3 = false
+                )
+            }
         }
 
         composeTestRule.onNodeWithTag(PitchAccentTestTags.DIAGRAM).assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
-        assertThat(playedReading).isEqualTo("みず")
+        assertThat(player.playedAudios).containsExactly(audio)
     }
 
     @Test
     fun vocabularyWithNoPronunciationAudio_showsNoPlayButton() {
         val vocabDetail = detail.copy(subjectType = SubjectType.VOCABULARY, readings = listOf("みず"), pronunciationAudios = emptyList())
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = vocabDetail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                onPlayReading = {}
-            )
+            CompositionLocalProvider(LocalPronunciationAudioPlayer provides FakePronunciationAudioPlayer()) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                    restrictAudioToMp3 = false
+                )
+            }
         }
 
         composeTestRule.onAllNodesWithContentDescription("Play pronunciation for みず").assertCountEquals(0)

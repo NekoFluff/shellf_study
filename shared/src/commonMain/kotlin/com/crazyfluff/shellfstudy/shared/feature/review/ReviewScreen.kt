@@ -110,7 +110,6 @@ object ReviewScreenTestTags {
     const val SUBJECT_TYPE_LABEL = "review_subject_type_label"
     const val TOTAL_TIMER_TEXT = "review_total_timer_text"
     const val QUESTION_TIMER_TEXT = "review_question_timer_text"
-    const val ANSWER_READING_PITCH_ACCENT = "review_answer_reading_pitch_accent"
     /** Unused by Review's own UI (a review queue *is* the session), but required by the shared
      *  [com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags]. */
     const val SESSION_CONTEXT_LABEL = "review_session_context_label"
@@ -122,7 +121,6 @@ sealed interface ReviewScreenEvent {
     data object DontKnow : ReviewScreenEvent
     data object Continue : ReviewScreenEvent
     data object Undo : ReviewScreenEvent
-    data class PlayReading(val item: ReviewItem, val reading: String) : ReviewScreenEvent
     data object ToggleDetails : ReviewScreenEvent
     data object CloseDetails : ReviewScreenEvent
     data object Retry : ReviewScreenEvent
@@ -142,7 +140,6 @@ fun ReviewRoute(
     searchViewModel: SearchViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val playbackState by viewModel.playbackState.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
 
     LaunchedEffect(uiState.isAbandoned) {
@@ -151,7 +148,6 @@ fun ReviewRoute(
 
     ReviewScreen(
         uiState = uiState,
-        playbackState = playbackState,
         onEvent = { event ->
             when (event) {
                 is ReviewScreenEvent.AnswerInputChange -> viewModel.onAnswerInputChange(event.value)
@@ -159,7 +155,6 @@ fun ReviewRoute(
                 ReviewScreenEvent.DontKnow -> viewModel.dontKnowAnswer()
                 ReviewScreenEvent.Continue -> viewModel.onContinue()
                 ReviewScreenEvent.Undo -> viewModel.undoLastAnswer()
-                is ReviewScreenEvent.PlayReading -> viewModel.playReading(event.item, event.reading)
                 ReviewScreenEvent.ToggleDetails -> viewModel.toggleDetails()
                 ReviewScreenEvent.CloseDetails -> viewModel.closeDetails()
                 ReviewScreenEvent.Retry -> viewModel.loadOrResume()
@@ -180,15 +175,13 @@ fun ReviewRoute(
 fun ReviewScreen(
     uiState: ReviewUiState,
     onEvent: (ReviewScreenEvent) -> Unit,
-    searchUiState: SearchUiState = SearchUiState(),
-    playbackState: com.crazyfluff.shellfstudy.shared.data.PlaybackState = com.crazyfluff.shellfstudy.shared.data.PlaybackState.IDLE
+    searchUiState: SearchUiState = SearchUiState()
 ) {
     val onAnswerInputChange: (String) -> Unit = { onEvent(ReviewScreenEvent.AnswerInputChange(it)) }
     val onSubmit = { onEvent(ReviewScreenEvent.Submit) }
     val onDontKnow = { onEvent(ReviewScreenEvent.DontKnow) }
     val onContinue = { onEvent(ReviewScreenEvent.Continue) }
     val onUndo = { onEvent(ReviewScreenEvent.Undo) }
-    val onPlayReading: (ReviewItem, String) -> Unit = { item, reading -> onEvent(ReviewScreenEvent.PlayReading(item, reading)) }
     val onToggleDetails = { onEvent(ReviewScreenEvent.ToggleDetails) }
     val onCloseDetails = { onEvent(ReviewScreenEvent.CloseDetails) }
     val onRetry = { onEvent(ReviewScreenEvent.Retry) }
@@ -379,17 +372,13 @@ fun ReviewScreen(
                             showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
                             answerReading = phase.answerReading,
                             answerPitchAccents = phase.answerPitchAccents,
-                            answerReadingHasAudio = phase.currentItem.pronunciationAudios.isNotEmpty()
+                            answerReadingAudio = phase.answerReadingAudio
                         ),
                         onAnswerInputChange = onAnswerInputChange,
                         onSubmit = onSubmit,
                         onDontKnow = onDontKnow,
                         onContinue = onContinue,
                         onUndo = onUndo,
-                        onPlayAnswerReading = {
-                            phase.answerReading?.let { reading -> onPlayReading(phase.currentItem, reading) }
-                        },
-                        audioPlaybackState = playbackState,
                         testTags = QuizQuestionTestTags(
                             progressCount = ReviewScreenTestTags.PROGRESS_COUNT,
                             questionTimerText = ReviewScreenTestTags.QUESTION_TIMER_TEXT,
@@ -406,7 +395,6 @@ fun ReviewScreen(
                             feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
                             answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
                             continueButton = ReviewScreenTestTags.CONTINUE_BUTTON,
-                            answerReadingPitchAccentHint = ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT,
                             // Review has no session context to name — its queue is the whole session.
                             sessionContextLabel = ReviewScreenTestTags.SESSION_CONTEXT_LABEL
                         )

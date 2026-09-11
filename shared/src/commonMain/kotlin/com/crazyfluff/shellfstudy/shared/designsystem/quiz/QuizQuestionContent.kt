@@ -32,12 +32,15 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
-import com.crazyfluff.shellfstudy.shared.data.PlaybackState
+import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.components.ExpandableAnswerListText
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentDiagram
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.ReadingRow
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.forReading
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailHandleHeight
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.CorrectAnswerColor
@@ -70,7 +73,6 @@ data class QuizQuestionTestTags(
     val feedbackText: String,
     val answerDetailText: String,
     val continueButton: String,
-    val answerReadingPitchAccentHint: String,
     /** The optional "Batch 2 of 4"-style label in the progress row. */
     val sessionContextLabel: String
 )
@@ -100,12 +102,14 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     // still be undone up to that point — Lesson has no such pending-submission window, so it leaves
     // this at the default and undo stays incorrect-only there.
     val allowUndoAfterCorrect: Boolean = false,
-    // Live setting gate, plus the reading/pitch-accent data for the just-graded reading question —
-    // null/empty unless that setting is on, the question type is READING, and feedback exists.
+    // Live setting gate, plus the reading/pitch-accent state for the just-graded reading question —
+    // "not checked yet" unless that setting is on, the question type is READING, and feedback exists.
     val showAnswerReadingPitchAccent: Boolean = false,
     val answerReading: String? = null,
-    val answerPitchAccents: List<PitchAccent> = emptyList(),
-    val answerReadingHasAudio: Boolean = false,
+    val answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
+    // The clip that survived the caller's own audio settings for [answerReading] — null whenever
+    // there is nothing to play, so the hint's row shows no button rather than a dead one.
+    val answerReadingAudio: PronunciationAudio? = null,
     // Which pass of the session this question belongs to ("Batch 2 of 4", "Extra practice") — null
     // when there's nothing worth saying, which is the case for every review question and for a lesson
     // session that fits in a single batch.
@@ -126,9 +130,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
     onDontKnow: () -> Unit,
     onContinue: () -> Unit,
     onUndo: () -> Unit,
-    onPlayAnswerReading: () -> Unit,
-    testTags: QuizQuestionTestTags,
-    audioPlaybackState: PlaybackState = PlaybackState.IDLE
+    testTags: QuizQuestionTestTags
 ) {
     val item = uiState.item
     val questionType = uiState.questionType
@@ -238,14 +240,11 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
         ) {
             if (answerReading != null) {
                 Column {
-                    AnswerReadingPitchAccentHint(
+                    ReadingRow(
                         reading = answerReading,
-                        pitchAccents = uiState.answerPitchAccents,
-                        modifier = Modifier.testTag(testTags.answerReadingPitchAccentHint),
-                        hasAudio = uiState.answerReadingHasAudio,
-                        playbackState = audioPlaybackState,
-                        onPlayReading = onPlayAnswerReading
+                        audio = uiState.answerReadingAudio
                     )
+                    PitchAccentDiagram(uiState.answerPitchAccents.forReading(answerReading))
                     Spacer(modifier = Modifier.height(2.dp))
                 }
             }

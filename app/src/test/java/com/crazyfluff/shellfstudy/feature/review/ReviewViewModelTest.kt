@@ -19,6 +19,7 @@ import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
@@ -693,34 +694,6 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `playReading manually plays the selected pronunciation audio`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-        var currentItem: ReviewItem? = null
-
-        pronunciationAudioPlayer.state.test {
-            assertThat(awaitItem()).isEqualTo(PlaybackState.IDLE)
-
-            viewModel.uiState.test {
-                var state = awaitItem()
-                while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-                currentItem = (state.phase as ReviewUiState.Phase.Active).currentItem
-            }
-
-            // A manual play doesn't require an answered question — unlike autoplay (gated on
-            // grading a reading question correctly), the reveal hint's play button works any time
-            // its reading/pitch-accent data is showing.
-            viewModel.playReading(requireNotNull(currentItem), "みず")
-
-            assertThat(awaitItem()).isEqualTo(PlaybackState.PLAYING)
-        }
-
-        assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
-        assertThat(pronunciationAudioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
-    }
-
-    @Test
     fun `undo reverts an incorrect answer so it doesn't count as a miss`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
@@ -963,9 +936,9 @@ class ReviewViewModelTest {
             assertThat(active.feedback?.isCorrect).isTrue()
             assertThat(active.answerReading).isEqualTo("けんあ")
             // "件亜" is a fabricated word — guaranteed absent from the real bundled pitch-accent
-            // dictionary, so this also covers the "no match" silent-empty case: the reading still
-            // surfaces, but with no pitch pattern to show alongside it.
-            assertThat(active.answerPitchAccents).isEmpty()
+            // dictionary, so the reading still surfaces but with no pitch pattern alongside it, and
+            // the state stays Loading ("not checked yet") rather than claiming a confirmed absence.
+            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 
@@ -994,7 +967,7 @@ class ReviewViewModelTest {
             val active = feedbackState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback?.isCorrect).isTrue()
             assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEmpty()
+            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 
@@ -1024,7 +997,7 @@ class ReviewViewModelTest {
             val active = feedbackState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback?.isCorrect).isTrue()
             assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEmpty()
+            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 
@@ -1056,7 +1029,7 @@ class ReviewViewModelTest {
             val active = feedbackState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback?.isCorrect).isTrue()
             assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEmpty()
+            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 
@@ -1092,7 +1065,7 @@ class ReviewViewModelTest {
             val active = undoneState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback).isNull()
             assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEmpty()
+            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
         }
     }
 

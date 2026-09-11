@@ -5,6 +5,7 @@ import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreen
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreenEvent
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreenTestTags
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -24,12 +25,17 @@ import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
+import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -76,7 +82,8 @@ class ReviewScreenTest {
         timing: QuizTimingUiState = QuizTimingUiState(),
         settings: ReviewUiState.DisplaySettings = ReviewUiState.DisplaySettings(),
         answerReading: String? = null,
-        answerPitchAccents: List<PitchAccent> = emptyList()
+        answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
+        answerReadingAudio: PronunciationAudio? = null
     ) = ReviewUiState(
         phase = ReviewUiState.Phase.Active(
             currentItem = item,
@@ -92,7 +99,8 @@ class ReviewScreenTest {
             isWrappingUp = isWrappingUp,
             timing = timing,
             answerReading = answerReading,
-            answerPitchAccents = answerPitchAccents
+            answerPitchAccents = answerPitchAccents,
+            answerReadingAudio = answerReadingAudio
         ),
         settings = settings
     )
@@ -123,7 +131,7 @@ class ReviewScreenTest {
         onDontKnow: () -> Unit = {},
         onContinue: () -> Unit = {},
         onUndo: () -> Unit = {},
-        onPlayReading: (ReviewItem, String) -> Unit = { _, _ -> },
+        audioPlayer: FakePronunciationAudioPlayer = FakePronunciationAudioPlayer(),
         onToggleDetails: () -> Unit = {},
         onCloseDetails: () -> Unit = {},
         onRetry: () -> Unit = {},
@@ -134,28 +142,29 @@ class ReviewScreenTest {
         onBack: () -> Unit = {}
     ) {
         composeTestRule.setContent {
-            ReviewScreen(
-                uiState = uiState,
-                onEvent = { event ->
-                    when (event) {
-                        is ReviewScreenEvent.AnswerInputChange -> onAnswerInputChange(event.value)
-                        ReviewScreenEvent.Submit -> onSubmit()
-                        ReviewScreenEvent.DontKnow -> onDontKnow()
-                        ReviewScreenEvent.Continue -> onContinue()
-                        ReviewScreenEvent.Undo -> onUndo()
-                        is ReviewScreenEvent.PlayReading -> onPlayReading(event.item, event.reading)
-                        ReviewScreenEvent.ToggleDetails -> onToggleDetails()
-                        ReviewScreenEvent.CloseDetails -> onCloseDetails()
-                        ReviewScreenEvent.Retry -> onRetry()
-                        ReviewScreenEvent.StudyOffline -> onStudyOffline()
-                        ReviewScreenEvent.WrapUp -> onWrapUp()
-                        ReviewScreenEvent.Abandon -> onAbandon()
-                        ReviewScreenEvent.Done -> onDone()
-                        ReviewScreenEvent.Back -> onBack()
-                        is ReviewScreenEvent.SearchQueryChange -> Unit
+            CompositionLocalProvider(LocalPronunciationAudioPlayer provides audioPlayer) {
+                ReviewScreen(
+                    uiState = uiState,
+                    onEvent = { event ->
+                        when (event) {
+                            is ReviewScreenEvent.AnswerInputChange -> onAnswerInputChange(event.value)
+                            ReviewScreenEvent.Submit -> onSubmit()
+                            ReviewScreenEvent.DontKnow -> onDontKnow()
+                            ReviewScreenEvent.Continue -> onContinue()
+                            ReviewScreenEvent.Undo -> onUndo()
+                            ReviewScreenEvent.ToggleDetails -> onToggleDetails()
+                            ReviewScreenEvent.CloseDetails -> onCloseDetails()
+                            ReviewScreenEvent.Retry -> onRetry()
+                            ReviewScreenEvent.StudyOffline -> onStudyOffline()
+                            ReviewScreenEvent.WrapUp -> onWrapUp()
+                            ReviewScreenEvent.Abandon -> onAbandon()
+                            ReviewScreenEvent.Done -> onDone()
+                            ReviewScreenEvent.Back -> onBack()
+                            is ReviewScreenEvent.SearchQueryChange -> Unit
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
@@ -251,11 +260,11 @@ class ReviewScreenTest {
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
                 settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
-                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+                answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
             )
         )
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.ROOT).assertIsDisplayed()
     }
 
     @Test
@@ -270,26 +279,22 @@ class ReviewScreenTest {
             )
         )
 
-        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
     }
 
     @Test
-    fun answerReadingPitchAccentHint_playButton_invokesOnPlayReadingWithCurrentItemAndAnswerReading() {
-        val itemWithAudio = sampleItem.copy(
-            pronunciationAudios = listOf(
-                PronunciationAudio(
-                    url = "https://api.wanikani.com/audio/mizu.mp3",
-                    contentType = "audio/mpeg",
-                    pronunciation = "みず",
-                    gender = null,
-                    voiceActorId = null,
-                    voiceActorName = null,
-                    voiceDescription = null
-                )
-            )
+    fun answerReadingPitchAccentHint_playButton_playsTheAnswerReadingClip() {
+        val audio = PronunciationAudio(
+            url = "https://api.wanikani.com/audio/mizu.mp3",
+            contentType = "audio/mpeg",
+            pronunciation = "みず",
+            gender = null,
+            voiceActorId = null,
+            voiceActorName = null,
+            voiceDescription = null
         )
-        var playedItem: ReviewItem? = null
-        var playedReading: String? = null
+        val itemWithAudio = sampleItem.copy(pronunciationAudios = listOf(audio))
+        val player = FakePronunciationAudioPlayer()
         setScreen(
             activeState(
                 item = itemWithAudio,
@@ -298,14 +303,14 @@ class ReviewScreenTest {
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
                 settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
-                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+                answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))),
+                answerReadingAudio = audio
             ),
-            onPlayReading = { item, reading -> playedItem = item; playedReading = reading }
+            audioPlayer = player
         )
 
         composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
-        assert(playedItem == itemWithAudio)
-        assert(playedReading == "みず")
+        assertThat(player.playedAudios).containsExactly(audio)
     }
 
     @Test
@@ -317,7 +322,8 @@ class ReviewScreenTest {
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
                 settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
-                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+                answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))),
+                answerReadingAudio = null
             )
         )
 
@@ -336,7 +342,7 @@ class ReviewScreenTest {
             )
         )
 
-        composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.ANSWER_READING_PITCH_ACCENT).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
     }
 
     @Test

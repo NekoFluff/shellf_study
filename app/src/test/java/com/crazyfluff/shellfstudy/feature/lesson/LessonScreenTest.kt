@@ -9,6 +9,7 @@ import android.content.pm.ActivityInfo
 import android.content.pm.ResolveInfo
 import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -28,6 +29,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
@@ -35,6 +37,9 @@ import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
@@ -167,7 +172,8 @@ class LessonScreenTest {
         timing: QuizTimingUiState = QuizTimingUiState(),
         settings: LessonUiState.DisplaySettings = LessonUiState.DisplaySettings(),
         answerReading: String? = null,
-        answerPitchAccents: List<PitchAccent> = emptyList()
+        answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
+        answerReadingAudio: PronunciationAudio? = null
     ) = LessonUiState(
         phase = LessonUiState.Phase.Quiz(
             currentItem = currentItem,
@@ -179,7 +185,8 @@ class LessonScreenTest {
             remainingQuizCount = remainingQuizCount,
             timing = timing,
             answerReading = answerReading,
-            answerPitchAccents = answerPitchAccents
+            answerPitchAccents = answerPitchAccents,
+            answerReadingAudio = answerReadingAudio
         ),
         settings = settings
     )
@@ -216,7 +223,7 @@ class LessonScreenTest {
         onSubmit: () -> Unit = {},
         onDontKnow: () -> Unit = {},
         onUndo: () -> Unit = {},
-        onPlayReading: (LessonItem, String) -> Unit = { _, _ -> },
+        audioPlayer: FakePronunciationAudioPlayer = FakePronunciationAudioPlayer(),
         onContinue: () -> Unit = {},
         onRetry: () -> Unit = {},
         onStudyOffline: () -> Unit = {},
@@ -229,39 +236,40 @@ class LessonScreenTest {
         onBack: () -> Unit = {}
     ) {
         composeTestRule.setContent {
-            LessonScreen(
-                uiState = uiState,
-                onEvent = { event ->
-                    when (event) {
-                        is LessonScreenEvent.ToggleLessonSelection -> onToggleLessonSelection(event.assignmentId)
-                        is LessonScreenEvent.SelectFirst -> onSelectFirst(event.count)
-                        LessonScreenEvent.SelectAll -> onSelectAll()
-                        LessonScreenEvent.SelectNone -> onSelectNone()
-                        LessonScreenEvent.StartSelectedLessons -> onStartSelectedLessons()
-                        is LessonScreenEvent.StudyCardSwiped -> onStudyCardSwiped(event.index)
-                        LessonScreenEvent.NextStudyCard -> onNextStudyCard()
-                        LessonScreenEvent.PreviousStudyCard -> onPreviousStudyCard()
-                        is LessonScreenEvent.AnswerInputChange -> onAnswerInputChange(event.value)
-                        LessonScreenEvent.Submit -> onSubmit()
-                        LessonScreenEvent.DontKnow -> onDontKnow()
-                        LessonScreenEvent.Undo -> onUndo()
-                        is LessonScreenEvent.PlayReading -> onPlayReading(event.item, event.reading)
-                        LessonScreenEvent.Continue -> onContinue()
-                        LessonScreenEvent.ToggleDetails -> {}
-                        LessonScreenEvent.CloseDetails -> {}
-                        LessonScreenEvent.Retry -> onRetry()
-                        LessonScreenEvent.StudyOffline -> onStudyOffline()
-                        LessonScreenEvent.Abandon -> onAbandon()
-                        LessonScreenEvent.ContinueSession -> onContinueSession()
-                        LessonScreenEvent.FinishForNow -> onFinishForNow()
-                        LessonScreenEvent.PracticeMissed -> onPracticeMissed()
-                        LessonScreenEvent.FinishSession -> onFinishSession()
-                        LessonScreenEvent.Done -> onDone()
-                        LessonScreenEvent.Back -> onBack()
-                        is LessonScreenEvent.SearchQueryChange -> {}
+            CompositionLocalProvider(LocalPronunciationAudioPlayer provides audioPlayer) {
+                LessonScreen(
+                    uiState = uiState,
+                    onEvent = { event ->
+                        when (event) {
+                            is LessonScreenEvent.ToggleLessonSelection -> onToggleLessonSelection(event.assignmentId)
+                            is LessonScreenEvent.SelectFirst -> onSelectFirst(event.count)
+                            LessonScreenEvent.SelectAll -> onSelectAll()
+                            LessonScreenEvent.SelectNone -> onSelectNone()
+                            LessonScreenEvent.StartSelectedLessons -> onStartSelectedLessons()
+                            is LessonScreenEvent.StudyCardSwiped -> onStudyCardSwiped(event.index)
+                            LessonScreenEvent.NextStudyCard -> onNextStudyCard()
+                            LessonScreenEvent.PreviousStudyCard -> onPreviousStudyCard()
+                            is LessonScreenEvent.AnswerInputChange -> onAnswerInputChange(event.value)
+                            LessonScreenEvent.Submit -> onSubmit()
+                            LessonScreenEvent.DontKnow -> onDontKnow()
+                            LessonScreenEvent.Undo -> onUndo()
+                            LessonScreenEvent.Continue -> onContinue()
+                            LessonScreenEvent.ToggleDetails -> {}
+                            LessonScreenEvent.CloseDetails -> {}
+                            LessonScreenEvent.Retry -> onRetry()
+                            LessonScreenEvent.StudyOffline -> onStudyOffline()
+                            LessonScreenEvent.Abandon -> onAbandon()
+                            LessonScreenEvent.ContinueSession -> onContinueSession()
+                            LessonScreenEvent.FinishForNow -> onFinishForNow()
+                            LessonScreenEvent.PracticeMissed -> onPracticeMissed()
+                            LessonScreenEvent.FinishSession -> onFinishSession()
+                            LessonScreenEvent.Done -> onDone()
+                            LessonScreenEvent.Back -> onBack()
+                            is LessonScreenEvent.SearchQueryChange -> {}
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
@@ -961,11 +969,11 @@ class LessonScreenTest {
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
                 settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
-                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+                answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
             )
         )
 
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.ROOT).assertIsDisplayed()
     }
 
     @Test
@@ -980,7 +988,7 @@ class LessonScreenTest {
             )
         )
 
-        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
     }
 
     @Test
@@ -995,26 +1003,22 @@ class LessonScreenTest {
             )
         )
 
-        composeTestRule.onAllNodesWithTag(LessonScreenTestTags.QUIZ_ANSWER_READING_PITCH_ACCENT).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
     }
 
     @Test
-    fun quizPhase_answerReadingPitchAccentHint_playButton_invokesOnPlayReadingWithCurrentItemAndAnswerReading() {
-        val itemWithAudio = radicalItem.copy(
-            pronunciationAudios = listOf(
-                PronunciationAudio(
-                    url = "https://api.wanikani.com/audio/mizu.mp3",
-                    contentType = "audio/mpeg",
-                    pronunciation = "みず",
-                    gender = null,
-                    voiceActorId = null,
-                    voiceActorName = null,
-                    voiceDescription = null
-                )
-            )
+    fun quizPhase_answerReadingPitchAccentHint_playButton_playsTheAnswerReadingClip() {
+        val audio = PronunciationAudio(
+            url = "https://api.wanikani.com/audio/mizu.mp3",
+            contentType = "audio/mpeg",
+            pronunciation = "みず",
+            gender = null,
+            voiceActorId = null,
+            voiceActorName = null,
+            voiceDescription = null
         )
-        var playedItem: LessonItem? = null
-        var playedReading: String? = null
+        val itemWithAudio = radicalItem.copy(pronunciationAudios = listOf(audio))
+        val player = FakePronunciationAudioPlayer()
         setScreen(
             quizState(
                 currentItem = itemWithAudio, currentQuestionType = QuestionType.READING,
@@ -1022,14 +1026,14 @@ class LessonScreenTest {
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
                 settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
-                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+                answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))),
+                answerReadingAudio = audio
             ),
-            onPlayReading = { item, reading -> playedItem = item; playedReading = reading }
+            audioPlayer = player
         )
 
         composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
-        assert(playedItem == itemWithAudio)
-        assert(playedReading == "みず")
+        assertThat(player.playedAudios).containsExactly(audio)
     }
 
     @Test
@@ -1041,7 +1045,8 @@ class LessonScreenTest {
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
                 settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
-                answerPitchAccents = listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
+                answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))),
+                answerReadingAudio = null
             )
         )
 

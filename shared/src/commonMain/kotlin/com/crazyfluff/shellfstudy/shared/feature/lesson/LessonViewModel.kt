@@ -2,9 +2,9 @@ package com.crazyfluff.shellfstudy.shared.feature.lesson
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
+import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
@@ -26,12 +26,12 @@ import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
-import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.availableOrEmpty
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord
 import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
@@ -103,7 +103,10 @@ data class LessonUiState(
         val showTotalTimer: Boolean = false,
         val showQuestionTimer: Boolean = false,
         val useJapaneseKeyboard: Boolean = false,
-        val showAnswerReadingPitchAccent: Boolean = false
+        val showAnswerReadingPitchAccent: Boolean = false,
+        // Carried into the UI so reading rows can select their own clip the same way playback
+        // autoplay does, instead of the screen having to know which of a word's clips are eligible.
+        val restrictAudioToMp3: Boolean = false
     )
 
     sealed interface Phase {
@@ -136,7 +139,7 @@ data class LessonUiState(
             val studyIndex: Int = 0,
             val batchIndex: Int = 0,
             val batchCount: Int = 1,
-            val pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap(),
+            val pitchAccentsBySubjectId: Map<Long, PitchAccentUiState> = emptyMap(),
             val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
             val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
         ) : Phase {
@@ -166,7 +169,8 @@ data class LessonUiState(
             val remainingQuizCount: Int = 0,
             val timing: QuizTimingUiState = QuizTimingUiState(),
             val answerReading: String? = null,
-            val answerPitchAccents: List<PitchAccent> = emptyList()
+            val answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
+            val answerReadingAudio: PronunciationAudio? = null
         ) : Phase
 
         /** The end of a batch — where a session pauses instead of running every selected item's
@@ -243,7 +247,6 @@ class LessonViewModel(
 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
-    val playbackState: StateFlow<PlaybackState> = pronunciationAudioPlayer.state
 
     // The frozen plan for the session in progress: the ordered assignment ids the learner committed to
     // at "Start session", sliced into batches by batchSize (see LessonSessionPlanner). Held as ids
@@ -281,7 +284,7 @@ class LessonViewModel(
     // kept alive here rather than scoped to Phase.Study so Quiz-phase grading can look a subject's
     // pitch accents up for free (a plain map read, no suspend call) instead of re-fetching per answer
     // the way Review has to, including during the cleanup pass, which reaches across every batch.
-    private var pitchAccentsBySubjectId: Map<Long, List<PitchAccent>> = emptyMap()
+    private var pitchAccentsBySubjectId: Map<Long, PitchAccentUiState> = emptyMap()
     // Individual per-answer records, used for the "slowest answers" summary — persisted and
     // restored across a resume just like progressByAssignmentId (see resumeQuizPhase), so the
     // summary reflects the whole session, not just the segment since the most recent resume.
@@ -340,7 +343,8 @@ class LessonViewModel(
                             showTotalTimer = settings.showTotalTimer,
                             showQuestionTimer = settings.showQuestionTimer,
                             useJapaneseKeyboard = settings.useJapaneseKeyboard,
-                            showAnswerReadingPitchAccent = settings.showAnswerReadingPitchAccent
+                            showAnswerReadingPitchAccent = settings.showAnswerReadingPitchAccent,
+                            restrictAudioToMp3 = settings.restrictAudioToMp3
                         )
                     )
                 }
@@ -746,16 +750,16 @@ class LessonViewModel(
     }
 
     /** Fanned out in parallel rather than sequentially, so a large "Select All" batch of vocabulary
-     * items doesn't serialize dozens of individual pitch-accent lookups one after another. The three
-     * pitch-accent states collapse to a plain list here: mid-lesson, "pending" and "confirmed
-     * absent" both just mean no diagram to draw (only the subject detail sheet shows the difference). */
-    private suspend fun fetchPitchAccents(items: List<LessonItem>): Map<Long, List<PitchAccent>> = coroutineScope {
+     * items doesn't serialize dozens of individual pitch-accent lookups one after another. The
+     * lookups stay one-shot reads (`.first()`), so a word whose data arrives later shows its updated
+     * state on the next answer rather than mid-question. */
+    private suspend fun fetchPitchAccents(items: List<LessonItem>): Map<Long, PitchAccentUiState> = coroutineScope {
         items
             .filter { isPitchAccentEligible(it.subjectType) }
             .mapNotNull { item -> item.characters?.let { item.subjectId to it } }
             .map { (subjectId, characters) ->
                 subjectId to async {
-                    pitchAccentRepository.observePitchAccents(characters).first().availableOrEmpty()
+                    pitchAccentRepository.observePitchAccents(characters).first()
                 }
             }
             .associate { (subjectId, deferred) -> subjectId to deferred.await() }
@@ -958,7 +962,8 @@ class LessonViewModel(
                 it.copy(
                     feedback = null,
                     answerReading = null,
-                    answerPitchAccents = emptyList(),
+                    answerPitchAccents = PitchAccentUiState.Loading,
+                    answerReadingAudio = null,
                     answerInput = "",
                     remainingQuizCount = quizQueue.size,
                     undoCounter = it.undoCounter + 1,
@@ -1040,7 +1045,20 @@ class LessonViewModel(
         } else {
             null
         }
-        val answerPitchAccents = if (answerReading != null) pitchAccentsBySubjectId[item.subjectId].orEmpty() else emptyList()
+        // Set only alongside answerReading (the hint renders on both): the state is carried through
+        // rather than collapsed to a list, so the hint can say whether a word's pitch accent is
+        // pending or confirmed absent. A missing map entry means the prefetch never covered this
+        // item, which is precisely "not checked yet".
+        val answerPitchAccents = if (answerReading == null) {
+            PitchAccentUiState.Loading
+        } else {
+            pitchAccentsBySubjectId[item.subjectId] ?: PitchAccentUiState.Loading
+        }
+        // Selected here, where the item and the settings are already in hand, so the hint's row only
+        // has to render whatever clip this produced — null when none survives the mp3-only filter.
+        val answerReadingAudio = answerReading?.let { reading ->
+            selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
+        }
 
         updateQuiz {
             it.copy(
@@ -1053,7 +1071,8 @@ class LessonViewModel(
                 // same moment.
                 timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null),
                 answerReading = answerReading,
-                answerPitchAccents = answerPitchAccents
+                answerPitchAccents = answerPitchAccents,
+                answerReadingAudio = answerReadingAudio
             )
         }
 
@@ -1064,14 +1083,6 @@ class LessonViewModel(
         }
 
         commitGradeDurably(isNewlyStarted, item, snapshot, queueIsEmpty)
-    }
-
-    /** Manual play from the study card's reading row, or the quiz answer-reveal hint's play
-     *  button — mirrors SubjectDetailViewModel.playReading. */
-    fun playReading(item: LessonItem, reading: String) {
-        viewModelScope.launch {
-            pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = latestSettings.restrictAudioToMp3)
-        }
     }
 
     /** Captures the current quiz queue as an immutable, ready-to-persist value — safe to hold
@@ -1375,7 +1386,8 @@ class LessonViewModel(
                     feedback = null,
                     rankChange = null,
                     answerReading = null,
-                    answerPitchAccents = emptyList(),
+                    answerPitchAccents = PitchAccentUiState.Loading,
+                    answerReadingAudio = null,
                     isDetailsExpanded = false,
                     remainingQuizCount = quizQueue.size,
                     timing = it.timing.copy(

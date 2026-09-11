@@ -2,9 +2,9 @@ package com.crazyfluff.shellfstudy.shared.feature.review
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
+import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
@@ -43,11 +43,11 @@ import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
-import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.availableOrEmpty
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlin.time.Clock
@@ -103,7 +103,10 @@ data class ReviewUiState(
             // the same synchronous block that builds feedback/rankChange, whose timing is
             // deliberately protected (see latestSettings's doc comment above).
             val answerReading: String? = null,
-            val answerPitchAccents: List<PitchAccent> = emptyList()
+            val answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
+            // The clip that survived the user's own audio settings for [answerReading] — null when
+            // there is nothing to play, so the hint shows no button rather than a dead one.
+            val answerReadingAudio: PronunciationAudio? = null
         ) : Phase
 
         data class Complete(
@@ -149,7 +152,6 @@ class ReviewViewModel(
 
     private val _uiState = MutableStateFlow(ReviewUiState())
     val uiState: StateFlow<ReviewUiState> = _uiState.asStateFlow()
-    val playbackState: StateFlow<PlaybackState> = pronunciationAudioPlayer.state
 
     private val queue = QuizQueue<ReviewItem>()
     private val progressByAssignmentId = mutableMapOf<Long, ItemProgress>()
@@ -395,14 +397,6 @@ class ReviewViewModel(
         }
     }
 
-    /** Manual play from the answer-reveal reading/pitch-accent hint — mirrors
-     *  LessonViewModel.playReading/SubjectDetailViewModel.playReading. */
-    fun playReading(item: ReviewItem, reading: String) {
-        viewModelScope.launch {
-            pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = latestSettings.restrictAudioToMp3)
-        }
-    }
-
     /** Gives up on the current question — grades it as a miss without requiring a typed guess. */
     fun dontKnowAnswer() {
         val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
@@ -498,17 +492,20 @@ class ReviewViewModel(
         // Deliberately outside the synchronous `run` block above (and its own updateActive call),
         // for the same reason `latestSettings` exists at all — see its doc comment. A cache/bundled
         // read here is cheap but still a suspend hop; keeping it off that already-jank-sensitive
-        // path costs one extra recomposition, which AnswerReadingPitchAccentHint's own entrance
-        // animation absorbs gracefully.
+        // path costs one extra recomposition, which the answer hint's own entrance animation
+        // absorbs gracefully.
         val characters = item.characters
         if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType) && characters != null) {
             val answerReading = item.readings.firstOrNull()
             val answerPitchAccents = if (answerReading != null) {
-                // Collapsed to a list on purpose: during a quiz, "pending" and "confirmed absent"
-                // both just mean no hint to show right now.
-                pitchAccentRepository.observePitchAccents(characters).first().availableOrEmpty()
+                pitchAccentRepository.observePitchAccents(characters).first()
             } else {
-                emptyList()
+                PitchAccentUiState.Loading
+            }
+            // Selected here, where the item and the settings are already in hand, so the hint's row
+            // only has to render whatever clip this produced — null when none survives the filter.
+            val answerReadingAudio = answerReading?.let { reading ->
+                selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
             }
             // Guarded against still-showing-feedback-for-this-same-question, not applied
             // unconditionally — by the time this suspend fetch resolves, the user may have already
@@ -516,7 +513,11 @@ class ReviewViewModel(
             // type), and this arriving late must not resurrect stale hint data over either.
             updateActive {
                 if (it.currentItem.assignmentId == item.assignmentId && it.currentQuestionType == type && it.feedback != null) {
-                    it.copy(answerReading = answerReading, answerPitchAccents = answerPitchAccents)
+                    it.copy(
+                        answerReading = answerReading,
+                        answerPitchAccents = answerPitchAccents,
+                        answerReadingAudio = answerReadingAudio
+                    )
                 } else {
                     it
                 }
@@ -574,7 +575,8 @@ class ReviewViewModel(
                     // answer never had one, so this is a no-op in that branch.
                     rankChange = if (feedback.isCorrect) null else it.rankChange,
                     answerReading = null,
-                    answerPitchAccents = emptyList(),
+                    answerPitchAccents = PitchAccentUiState.Loading,
+                    answerReadingAudio = null,
                     answerInput = "",
                     remainingCount = queue.size,
                     undoCounter = it.undoCounter + 1,

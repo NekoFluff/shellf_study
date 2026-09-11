@@ -6,6 +6,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,8 +25,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
-import com.crazyfluff.shellfstudy.shared.data.model.allForReading
 import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalJapaneseFontFamily
@@ -30,6 +35,13 @@ import kotlin.math.hypot
 
 object PitchAccentTestTags {
     const val DIAGRAM = "pitch_accent_diagram"
+
+    /** The "not checked yet" / "not available" caption every pitch-accent renderer shows in place of a diagram. */
+    const val MESSAGE = "pitch_accent_message"
+
+    /** The whole row — reading, play button, and whatever pitch section applies. Tags itself, so
+     *  callers don't have to pass one in just to make the block findable from a test. */
+    const val ROOT = "pitch_accent_root"
 }
 
 private val COMBINING_SMALL_KANA =
@@ -68,19 +80,85 @@ internal fun pitchPatternColor(pitchNumber: Int, moraCount: Int): Color {
     }
 }
 
+
+/**
+ * The style the reading is drawn in and the diagrams measure their morae with. Those two have to
+ * agree — the dots' x-positions come from glyph advance widths measured in this style — so both read
+ * it from here rather than looking it up separately and silently drifting apart. bodyLarge because
+ * this is body copy in a detail column or a study card, not furigana scale.
+ *
+ * Internal rather than private because the two halves now live in separate composables: [ReadingRow]
+ * draws the reading, this file's diagram measures it.
+ */
+@Composable
+internal fun pitchAccentTextStyle(): TextStyle = MaterialTheme.typography.bodyLarge
+
+/**
+ * The pitch-accent patterns for one reading — the diagrams, or a caption saying why there are none.
+ * Renders nothing but that: the reading itself is [ReadingRow]'s job, so a caller that doesn't want
+ * diagrams (see the "show pitch accent" preference) simply doesn't call this.
+ *
+ * Takes the reading and its pitch data as one value ([ReadingPitchAccent]) rather than as two
+ * arguments: they are only meaningful together, and pairing them is
+ * [com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.forReading]'s job, not a renderer's.
+ * [ReadingPitchAccent.Patterns] stacks one diagram per pattern, labeled by part of speech when there
+ * is more than one; [ReadingPitchAccent.NoPatterns] render their message.
+ *
+ * Knows nothing about *why* it is being shown or hidden — preferences stay with the caller — and takes
+ * no `modifier`: it sizes itself to its content and tags its own root
+ * ([PitchAccentTestTags.ROOT]).
+ */
+@Composable
+fun PitchAccentDiagram(readingPitchAccent: ReadingPitchAccent) {
+    Column(modifier = Modifier.testTag(PitchAccentTestTags.ROOT)) {
+        PitchAccentPatterns(readingPitchAccent)
+    }
+}
+
+/**
+ * The diagrams for [readingPitchAccent]'s own patterns, labeled by part of speech when there is more
+ * than one — or, when it has none, the caption saying which kind of "none" it is. Both are answers to
+ * the same question, so neither is left blank: "not checked yet" and "not available" mean different
+ * things, and silence would leave the user unable to tell them apart.
+ */
+@Composable
+private fun PitchAccentPatterns(readingPitchAccent: ReadingPitchAccent) {
+    when (readingPitchAccent) {
+        is ReadingPitchAccent.Patterns -> readingPitchAccent.patterns.forEach { match ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PitchAccentPattern(reading = readingPitchAccent.reading, pitchAccent = match)
+                if (readingPitchAccent.patterns.size > 1 && match.partOfSpeech != null) {
+                    Text(match.partOfSpeech, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+        is ReadingPitchAccent.NoPatterns -> Text(
+            text = readingPitchAccent.message,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag(PitchAccentTestTags.MESSAGE)
+        )
+    }
+}
+
+
 /**
  * Replicates the NHK pitch-accent dictionary style: one filled dot per mora, connected by lines,
  * high/low position derived from [pitchAccent]'s pitch number, color-coded by pattern
  * (heiban/atamadaka/nakadaka/odaka), plus a trailing open dot (hollow circle) after the last mora
  * representing the following particle — shown for every pattern, at whatever height that pattern's
  * particle is actually pronounced (high for heiban, low otherwise).
+ *
+ * Private drawing primitive for one pattern: [PitchAccentPatterns] is the only caller, and it decides
+ * which patterns exist and at what scale, so this never has to know what a state is. Kept out of
+ * [PitchAccentDiagram] rather than inlined because it is pure canvas geometry — mora measurement, dot
+ * positions, the particle ring — invoked once per matching pattern, and inlining it would put those
+ * `remember`s inside a data-driven loop.
  */
 @Composable
-fun PitchAccentDiagram(
+private fun PitchAccentPattern(
     reading: String,
-    pitchAccent: PitchAccent,
-    modifier: Modifier = Modifier,
-    textStyle: TextStyle = MaterialTheme.typography.bodyLarge
+    pitchAccent: PitchAccent
 ) {
     val morae = remember(reading) { splitIntoMorae(reading) }
     if (morae.isEmpty()) return
@@ -88,11 +166,10 @@ fun PitchAccentDiagram(
     val moraCount = morae.size
     val pitchNumber = pitchAccent.pitchNumber
     val color = pitchPatternColor(pitchNumber, moraCount)
-    // Matches the font the caller actually renders the reading in (bodyLarge for
-    // PitchAccentReadingRow, smaller for a furigana-scale caller) — otherwise the per-mora widths
+    // Same style the reading is drawn in (see pitchAccentTextStyle) — otherwise the per-mora widths
     // measured here (and thus the dots' horizontal spacing) drift from the real glyph widths above
-    // them, and from MoraReadingText's own per-mora widths below them.
-    val measuredTextStyle = textStyle.copy(fontFamily = LocalJapaneseFontFamily.current)
+    // them in the reading line.
+    val measuredTextStyle = pitchAccentTextStyle().copy(fontFamily = LocalJapaneseFontFamily.current)
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
@@ -114,7 +191,7 @@ fun PitchAccentDiagram(
         (moraWidths.sum() + particleWidth + dotRadiusPx).toDp()
     }
     Canvas(
-        modifier = modifier
+        modifier = Modifier
             .width(contentWidthDp)
             .height(diagramHeightDp)
             .testTag(PitchAccentTestTags.DIAGRAM)
@@ -147,75 +224,5 @@ fun PitchAccentDiagram(
         drawLine(color = color, start = points.last(), end = particleEdge, strokeWidth = strokeWidth)
         points.forEach { point -> drawCircle(color = color, radius = dotRadius, center = point) }
         drawCircle(color = color, radius = dotRadius, center = particleCenter, style = Stroke(width = strokeWidth))
-    }
-}
-
-/**
- * A reading's characters, one [JapaneseText] per mora with no inter-item spacing — each mora is
- * exactly as wide as [PitchAccentDiagram] measures it to be (both use the same [textStyle]), so a
- * row of these lands flush under the dots of any [PitchAccentDiagram] drawn above it for the same
- * [reading], with no extra alignment math needed. Deliberately separate from [PitchAccentDiagram]
- * itself: when a reading has more than one accepted pitch pattern, every diagram shares the exact
- * same per-mora widths (only the dots' high/low positions differ), so one of these below the whole
- * stack aligns with all of them — there's no need to (and no good reason to) repeat it per diagram.
- */
-@Composable
-fun MoraReadingText(reading: String, modifier: Modifier = Modifier, textStyle: TextStyle = MaterialTheme.typography.bodyLarge) {
-    val morae = remember(reading) { splitIntoMorae(reading) }
-    Row(modifier = modifier) {
-        morae.forEach { mora -> JapaneseText(mora, style = textStyle) }
-    }
-}
-
-/**
- * A reading, with a slot for trailing content (e.g. a play button) that always sits next to the
- * reading text no matter how many pitch patterns render below — and every matching pitch pattern
- * stacked underneath it, one per line. A reading can have more than one accepted pitch pattern
- * (e.g. one per part of speech); stacking rather than placing them side by side means any number
- * of patterns stay fully visible without needing horizontal scrolling. Each pattern is labeled by
- * its part of speech when more than one pattern is shown and that label is available.
- *
- * [pitchAccentState] carries the difference between "we haven't looked this word up yet" and "we
- * looked, and there's no documented pitch accent for it" — the first renders nothing (the caller is
- * Flow-based, so it resolves live once a scrape or bundled lookup completes), the second a muted
- * caption saying so. Only the subject detail sheet asks for that distinction; the quiz-time
- * [com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingPitchAccentHint] collapses both
- * to "no hint" instead.
- */
-@Composable
-fun PitchAccentReadingRow(
-    reading: String,
-    pitchAccentState: PitchAccentUiState,
-    modifier: Modifier = Modifier,
-    trailingContent: @Composable () -> Unit = {}
-) {
-    Column(modifier = modifier) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            JapaneseText(reading, style = MaterialTheme.typography.bodyLarge)
-            trailingContent()
-        }
-        when (pitchAccentState) {
-            is PitchAccentUiState.Available -> {
-                val matches = remember(reading, pitchAccentState) {
-                    pitchAccentState.pitchAccents.allForReading(reading)
-                }
-                matches.forEach { match ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PitchAccentDiagram(reading = reading, pitchAccent = match)
-                        if (matches.size > 1 && match.partOfSpeech != null) {
-                            Text(match.partOfSpeech, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-            }
-            PitchAccentUiState.Unavailable -> Text(
-                text = "Pitch accent not available",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            // Still pending a scrape/bundled lookup — same "render nothing" convention as
-            // StrokeOrderSection/WritingPracticeSection for their own Loading state.
-            PitchAccentUiState.Loading -> Unit
-        }
     }
 }

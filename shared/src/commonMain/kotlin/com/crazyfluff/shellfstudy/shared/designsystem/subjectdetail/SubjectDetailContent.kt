@@ -8,14 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +22,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
@@ -98,8 +93,7 @@ fun SubjectDetailContent(
     onRelatedSubjectClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
     showPitchAccent: Boolean = true,
-    onPlayReading: ((String) -> Unit)? = null,
-    audioPlaybackState: PlaybackState = PlaybackState.IDLE,
+    restrictAudioToMp3: Boolean = false,
     strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
     autoPlayStrokeOrder: Boolean = true,
     showStrokeOrder: Boolean = true,
@@ -145,9 +139,8 @@ fun SubjectDetailContent(
             hasReadings = hasReadings,
             isVocabulary = isVocabulary,
             showPitchAccent = showPitchAccent,
-            onPlayReading = onPlayReading,
-            showDividerAbove = revealMeaning,
-            playbackState = audioPlaybackState
+            restrictAudioToMp3 = restrictAudioToMp3,
+            showDividerAbove = revealMeaning
         )
         SubjectContextSentencesSection(detail, isVocabulary)
         SubjectVisuallySimilarSection(detail, relatedSubjects, onRelatedSubjectClick)
@@ -280,19 +273,24 @@ private fun KanjiReadingBreakdown(detail: SubjectDetail) {
 private fun VocabularyReadingList(
     detail: SubjectDetail,
     showPitchAccent: Boolean,
-    onPlayReading: ((String) -> Unit)?,
-    playbackState: PlaybackState = PlaybackState.IDLE
+    restrictAudioToMp3: Boolean
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         detail.readings.forEach { reading ->
-            VocabReadingRow(
-                reading = reading,
-                pitchAccentState = detail.pitchAccents,
-                showPitchAccent = showPitchAccent,
-                hasAudio = detail.pronunciationAudios.isNotEmpty(),
-                onPlayReading = onPlayReading,
-                playbackState = playbackState
-            )
+            Column {
+                // The clip is selected here, through the caller's own settings, so a reading whose
+                // every clip the mp3-only filter drops gets no button at all rather than one that
+                // plays nothing.
+                ReadingRow(
+                    reading = reading,
+                    audio = selectAudioFor(detail.pronunciationAudios, reading, mp3Only = restrictAudioToMp3)
+                )
+                // The setting controls the markers, not the reading: switched off, the row above is
+                // all there is.
+                if (showPitchAccent) {
+                    PitchAccentDiagram(detail.pitchAccents.forReading(reading))
+                }
+            }
         }
     }
 }
@@ -304,9 +302,8 @@ private fun SubjectReadingZone(
     hasReadings: Boolean,
     isVocabulary: Boolean,
     showPitchAccent: Boolean,
-    onPlayReading: ((String) -> Unit)?,
-    showDividerAbove: Boolean,
-    playbackState: PlaybackState = PlaybackState.IDLE
+    restrictAudioToMp3: Boolean,
+    showDividerAbove: Boolean
 ) {
     if (!(revealReading && hasReadings)) return
     val hasReadingBreakdown =
@@ -325,7 +322,7 @@ private fun SubjectReadingZone(
             )
             when (readingDisplayStyle(detail.subjectType, hasReadingBreakdown, isVocabulary)) {
                 ReadingDisplayStyle.KANJI_BREAKDOWN -> KanjiReadingBreakdown(detail)
-                ReadingDisplayStyle.VOCABULARY -> VocabularyReadingList(detail, showPitchAccent, onPlayReading, playbackState)
+                ReadingDisplayStyle.VOCABULARY -> VocabularyReadingList(detail, showPitchAccent, restrictAudioToMp3)
                 ReadingDisplayStyle.PLAIN -> JapaneseText(detail.readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
             }
         }
@@ -409,34 +406,6 @@ fun SectionEyebrow(text: String) {
         style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.8.sp),
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-}
-
-@Composable
-fun VocabReadingRow(
-    reading: String,
-    pitchAccentState: PitchAccentUiState,
-    showPitchAccent: Boolean,
-    hasAudio: Boolean,
-    onPlayReading: ((String) -> Unit)?,
-    playbackState: PlaybackState = PlaybackState.IDLE
-) {
-    PitchAccentReadingRow(
-        reading = reading,
-        // Hidden by preference renders exactly like "not resolved yet": the reading plus its play
-        // button, with no pitch section at all — the same early-out shape showStrokeOrder uses in
-        // SubjectWritingZone, collapsed to the one state that draws nothing.
-        pitchAccentState = if (showPitchAccent) pitchAccentState else PitchAccentUiState.Loading
-    ) {
-        if (onPlayReading != null && hasAudio) {
-            IconButton(onClick = { onPlayReading(reading) }) {
-                if (playbackState == PlaybackState.ERROR) {
-                    Icon(Icons.AutoMirrored.Filled.VolumeOff, contentDescription = "Audio unavailable for $reading")
-                } else {
-                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Play pronunciation for $reading")
-                }
-            }
-        }
-    }
 }
 
 @Composable

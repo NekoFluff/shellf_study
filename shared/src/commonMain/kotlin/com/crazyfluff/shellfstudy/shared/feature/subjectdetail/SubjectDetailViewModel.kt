@@ -2,9 +2,7 @@ package com.crazyfluff.shellfstudy.shared.feature.subjectdetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
@@ -99,8 +97,6 @@ class SubjectDetailViewModel(
 
     private val _uiState = MutableStateFlow(SubjectDetailUiState())
     val uiState: StateFlow<SubjectDetailUiState> = _uiState.asStateFlow()
-
-    val playbackState: StateFlow<PlaybackState> = audioPlayer.state
 
     init {
         viewModelScope.launch {
@@ -205,12 +201,6 @@ class SubjectDetailViewModel(
     /** Records the live scroll offset (px) for [subjectId] so [goBack] can restore it later. */
     fun recordScrollOffset(subjectId: Long, offset: Int) {
         scrollOffsets[subjectId] = offset
-    }
-
-    fun playReading(reading: String) {
-        val state = _uiState.value
-        val detail = state.detail ?: return
-        audioPlayer.playMatchingReading(detail.pronunciationAudios, reading, mp3Only = state.restrictAudioToMp3)
     }
 
     fun stopPlayback() {
