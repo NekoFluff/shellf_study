@@ -73,6 +73,9 @@ class TestRepositories(
     val reviewStatisticDao: FakeReviewStatisticDao,
     val subjectRepository: SubjectRepository,
     val assignmentRepository: AssignmentRepository,
+    /** Exposed so a test can build its own [PitchAccentRepository] over the same cache the
+     *  already-wired [subjectRepository] observes — a scrape through one then re-emits through the other. */
+    val pitchAccentCacheDao: FakePitchAccentCacheDao,
     val pitchAccentRepository: PitchAccentRepository,
     val statsRepository: StatsRepository,
     val waniKaniRepository: WaniKaniRepository,
@@ -102,8 +105,9 @@ fun buildTestRepositories(
     val outboxSyncScheduler = FakeOutboxSyncScheduler()
     val reviewStatisticDao = FakeReviewStatisticDao()
 
+    val pitchAccentCacheDao = FakePitchAccentCacheDao()
     val pitchAccentRepository = PitchAccentRepository(
-        FakePitchAccentBundledSource(pitchAccentEntries), FakePitchAccentCacheDao(), FakeWeblioApi(), WeblioPitchAccentParser()
+        FakePitchAccentBundledSource(pitchAccentEntries), pitchAccentCacheDao, FakeWeblioApi(), WeblioPitchAccentParser()
     )
     val subjectRepository =
         SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository, defaultDispatcher)
@@ -114,7 +118,7 @@ fun buildTestRepositories(
 
     return TestRepositories(
         api, subjectDao, assignmentDao, srsSystemDao, syncStateDao, studyActivityDao, outboxDao, outboxSyncScheduler,
-        reviewStatisticDao, subjectRepository, assignmentRepository, pitchAccentRepository, statsRepository, waniKaniRepository,
-        syncOrchestrator
+        reviewStatisticDao, subjectRepository, assignmentRepository, pitchAccentCacheDao, pitchAccentRepository,
+        statsRepository, waniKaniRepository, syncOrchestrator
     )
 }

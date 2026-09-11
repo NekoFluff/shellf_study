@@ -8,19 +8,25 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
+import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioMetadataData
 import com.crazyfluff.shellfstudy.shared.network.ReadingData
+import com.crazyfluff.shellfstudy.fakes.FakePitchAccentBundledSource
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.FakeStrokeOrderRepository
+import com.crazyfluff.shellfstudy.fakes.FakeWeblioApi
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.google.common.truth.Truth.assertThat
@@ -112,7 +118,7 @@ class SubjectDetailViewModelTest {
         )
         viewModel = SubjectDetailViewModel(
             repositories.subjectRepository, repositories.assignmentRepository, settingsRepository, audioPlayer, strokeOrderRepository,
-            repositories.statsRepository
+            repositories.statsRepository, repositories.pitchAccentRepository
         )
     }
 
@@ -336,15 +342,17 @@ class SubjectDetailViewModelTest {
         characters: String,
         meaning: String,
         componentIds: List<Long> = emptyList(),
-        pronunciationAudios: List<PronunciationAudioData> = emptyList()
+        pronunciationAudios: List<PronunciationAudioData> = emptyList(),
+        subjectType: String = "kanji",
+        readings: List<String> = listOf("みず")
     ): SubjectEntity = SubjectEntity(
         id = id,
-        subjectType = "kanji",
+        subjectType = subjectType,
         level = 1,
         slug = characters,
         characters = characters,
         meanings = listOf(MeaningData(meaning = meaning, primary = true)),
-        readings = listOf(ReadingData(reading = "みず", primary = true)),
+        readings = readings.map { ReadingData(reading = it, primary = true) },
         documentUrl = null,
         componentSubjectIds = componentIds,
         pronunciationAudios = pronunciationAudios,
@@ -430,5 +438,59 @@ class SubjectDetailViewModelTest {
             assertThat(loaded.reviewStats?.meaningAccuracyPercent).isEqualTo(90)
             assertThat(loaded.reviewStats?.hasBeenReviewed).isTrue()
         }
+    }
+
+    @Test
+    fun `checkPitchAccent fetches an unfetched word and the detail flow re-emits it as Available`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // The scrape is written through the same cache the already-wired SubjectRepository
+            // observes, which is what makes the open sheet re-emit without being reopened — so this
+            // test builds its repository over repositories.pitchAccentCacheDao rather than a fresh one.
+            val characters = "お土産"
+            val html = """<div class="NetDicHead">オミヤゲ<span style="font-size:75%;">［0］</span></div>"""
+            val scraped = PitchAccentUiState.Available(
+                listOf(PitchAccent(reading = "オミヤゲ", partOfSpeech = null, pitchNumber = 0))
+            )
+            val pitchAccentRepository = PitchAccentRepository(
+                FakePitchAccentBundledSource(),
+                repositories.pitchAccentCacheDao,
+                FakeWeblioApi(mapOf(characters to html)),
+                WeblioPitchAccentParser()
+            )
+            val subjectDetailViewModel = SubjectDetailViewModel(
+                repositories.subjectRepository, repositories.assignmentRepository, settingsRepository,
+                audioPlayer, strokeOrderRepository, repositories.statsRepository, pitchAccentRepository
+            )
+            repositories.subjectDao.upsertAll(
+                listOf(
+                    subjectEntity(
+                        id = 6,
+                        characters = characters,
+                        meaning = "Souvenir",
+                        subjectType = "vocabulary",
+                        readings = listOf("おみやげ")
+                    )
+                )
+            )
+
+            subjectDetailViewModel.uiState.test {
+                awaitNotLoading()
+
+                subjectDetailViewModel.open(6)
+                assertThat(awaitSettled(6).detail?.pitchAccents).isEqualTo(PitchAccentUiState.Loading)
+
+                subjectDetailViewModel.checkPitchAccent()
+
+                var state = awaitItem()
+                while (state.detail?.pitchAccents != scraped) state = awaitItem()
+                assertThat(state.detail?.pitchAccents).isEqualTo(scraped)
+            }
+        }
+
+    @Test
+    fun `checkPitchAccent before any detail is loaded is a no-op`() = runTest(mainDispatcherRule.dispatcher) {
+        viewModel.checkPitchAccent()
+
+        assertThat(viewModel.uiState.value.detail).isNull()
     }
 }

@@ -197,7 +197,8 @@ val viewModelModule = module {
             settingsRepository = get(),
             audioPlayer = get(),
             strokeOrderRepository = get(),
-            statsRepository = get()
+            statsRepository = get(),
+            pitchAccentRepository = get()
         )
     }
 

@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -15,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -22,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -38,6 +41,9 @@ object PitchAccentTestTags {
 
     /** The "not checked yet" / "not available" caption every pitch-accent renderer shows in place of a diagram. */
     const val MESSAGE = "pitch_accent_message"
+
+    /** The "Check now" button offered under the "not checked yet" caption — see [PitchAccentDiagram]. */
+    const val CHECK = "pitch_accent_check"
 
     /** The whole row — reading, play button, and whatever pitch section applies. Tags itself, so
      *  callers don't have to pass one in just to make the block findable from a test. */
@@ -94,6 +100,16 @@ internal fun pitchPatternColor(pitchNumber: Int, moraCount: Int): Color {
 internal fun pitchAccentTextStyle(): TextStyle = MaterialTheme.typography.bodyLarge
 
 /**
+ * The check a "not checked yet" reading offers its reader, provided around the content that shows
+ * readings (currently the subject detail sheet) rather than handed down through intermediate
+ * composables — a row knows which reading it draws, but has no business owning the fetch. Nullable
+ * on purpose: surfaces whose state a fetch cannot update (the quiz hint, the lesson study card)
+ * simply leave it unprovided, so they show no "Check now" link at all instead of one that looks
+ * tappable and does nothing. Offering the value *is* the affordance.
+ */
+val LocalPitchAccentCheck = staticCompositionLocalOf<(() -> Unit)?> { null }
+
+/**
  * The pitch-accent patterns for one reading — the diagrams, or a caption saying why there are none.
  * Renders nothing but that: the reading itself is [ReadingRow]'s job, so a caller that doesn't want
  * diagrams (see the "show pitch accent" preference) simply doesn't call this.
@@ -102,42 +118,58 @@ internal fun pitchAccentTextStyle(): TextStyle = MaterialTheme.typography.bodyLa
  * arguments: they are only meaningful together, and pairing them is
  * [com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.forReading]'s job, not a renderer's.
  * [ReadingPitchAccent.Patterns] stacks one diagram per pattern, labeled by part of speech when there
- * is more than one; [ReadingPitchAccent.NoPatterns] render their message.
+ * is more than one; [ReadingPitchAccent.NoPatterns] render their message. Both are answers to the same
+ * question, so neither is left blank: "not checked yet" and "not available" mean different things, and
+ * silence would leave the user unable to tell them apart.
  *
  * Knows nothing about *why* it is being shown or hidden — preferences stay with the caller — and takes
  * no `modifier`: it sizes itself to its content and tags its own root
  * ([PitchAccentTestTags.ROOT]).
+ *
+ * Reads [LocalPitchAccentCheck] rather than taking it as an argument, since this is where it is
+ * consumed. Offering it is what shows the "Check now" link, and only under
+ * [ReadingPitchAccent.Pending] — the one state a fetch can still resolve. [ReadingPitchAccent.NoEntry]
+ * renders its caption alone, since a confirmed absence is an answer rather than something to retry.
  */
 @Composable
 fun PitchAccentDiagram(readingPitchAccent: ReadingPitchAccent) {
-    Column(modifier = Modifier.testTag(PitchAccentTestTags.ROOT)) {
-        PitchAccentPatterns(readingPitchAccent)
-    }
-}
+    val onCheckPitchAccent = LocalPitchAccentCheck.current
 
-/**
- * The diagrams for [readingPitchAccent]'s own patterns, labeled by part of speech when there is more
- * than one — or, when it has none, the caption saying which kind of "none" it is. Both are answers to
- * the same question, so neither is left blank: "not checked yet" and "not available" mean different
- * things, and silence would leave the user unable to tell them apart.
- */
-@Composable
-private fun PitchAccentPatterns(readingPitchAccent: ReadingPitchAccent) {
-    when (readingPitchAccent) {
-        is ReadingPitchAccent.Patterns -> readingPitchAccent.patterns.forEach { match ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PitchAccentPattern(reading = readingPitchAccent.reading, pitchAccent = match)
-                if (readingPitchAccent.patterns.size > 1 && match.partOfSpeech != null) {
-                    Text(match.partOfSpeech, style = MaterialTheme.typography.labelSmall)
+    Column(modifier = Modifier.testTag(PitchAccentTestTags.ROOT)) {
+        when (readingPitchAccent) {
+            is ReadingPitchAccent.Patterns -> readingPitchAccent.patterns.forEach { match ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PitchAccentPattern(reading = readingPitchAccent.reading, pitchAccent = match)
+                    if (readingPitchAccent.patterns.size > 1 && match.partOfSpeech != null) {
+                        Text(match.partOfSpeech, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+            is ReadingPitchAccent.NoPatterns -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = readingPitchAccent.message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(PitchAccentTestTags.MESSAGE)
+                )
+                // Pending is the only "no patterns" state a fetch can still turn into an answer;
+                // NoEntry has already been looked up, so offering a retry there would be noise. Set in
+                // the caption's own size beside it — an inline link, not a button with its own weight.
+                if (readingPitchAccent is ReadingPitchAccent.Pending && onCheckPitchAccent != null) {
+                    Text(
+                        text = "Check now",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clickable(role = Role.Button, onClickLabel = "Check pitch accent now", onClick = onCheckPitchAccent)
+                            .testTag(PitchAccentTestTags.CHECK)
+                    )
                 }
             }
         }
-        is ReadingPitchAccent.NoPatterns -> Text(
-            text = readingPitchAccent.message,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.testTag(PitchAccentTestTags.MESSAGE)
-        )
     }
 }
 

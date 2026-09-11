@@ -115,11 +115,12 @@ class LastSessionSummaryScreenTest {
                     single { repositories.subjectRepository }
                     single { repositories.assignmentRepository }
                     single { repositories.statsRepository }
+                    single { repositories.pitchAccentRepository }
                     single { SettingsRepository(dataStore) }
                     single<PronunciationAudioPlayer> { FakePronunciationAudioPlayer() }
                     single<StrokeOrderRepository> { FakeStrokeOrderRepository(emptyMap()) }
                     viewModel {
-                        SubjectDetailViewModel(get(), get(), get(), get(), get(), get())
+                        SubjectDetailViewModel(get(), get(), get(), get(), get(), get(), get())
                     }
                 }
             )

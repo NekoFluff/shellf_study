@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
 
 data class SubjectDetailUiState(
     val isLoading: Boolean = true,
@@ -86,7 +88,8 @@ class SubjectDetailViewModel(
     private val settingsRepository: SettingsRepository,
     private val audioPlayer: PronunciationAudioPlayer,
     private val strokeOrderRepository: StrokeOrderRepository,
-    private val statsRepository: StatsRepository
+    private val statsRepository: StatsRepository,
+    private val pitchAccentRepository: PitchAccentRepository
 ) : ViewModel() {
 
     private val navState = MutableStateFlow(NavState())
@@ -205,6 +208,13 @@ class SubjectDetailViewModel(
 
     fun stopPlayback() {
         audioPlayer.stop()
+    }
+
+    /** Fetches this subject's pitch accent now, for a word the background scrape hasn't reached; the
+     *  detail flow re-emits when the result lands, replacing the caption in place. */
+    fun checkPitchAccent() {
+        val characters = _uiState.value.detail?.characters ?: return
+        viewModelScope.launch { pitchAccentRepository.scrapeAndCache(characters, Clock.System.now().toEpochMilliseconds()) }
     }
 
     /** Stroke data is keyed purely by character, so only single-glyph subjects (kanji, and any

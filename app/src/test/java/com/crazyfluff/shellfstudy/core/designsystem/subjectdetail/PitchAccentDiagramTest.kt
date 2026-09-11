@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -12,9 +13,11 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPitchAccentCheck
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentDiagram
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.ReadingPitchAccent
@@ -160,6 +163,44 @@ class PitchAccentDiagramTest {
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
         composeTestRule.onNodeWithTag(PitchAccentTestTags.MESSAGE).assertIsDisplayed()
         composeTestRule.onNodeWithText("Pitch accent not available").assertIsDisplayed()
+    }
+
+    @Test
+    fun `offers a check button under the not-checked-yet caption when the caller can fetch it`() {
+        var checks = 0
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalPitchAccentCheck provides { checks++ }) {
+                PitchAccentDiagram(readingPitchAccent = ReadingPitchAccent.Pending("みず"))
+            }
+        }
+
+        composeTestRule.onNodeWithText("Pitch accent not checked yet").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(PitchAccentTestTags.CHECK).assertIsDisplayed().performClick()
+        assertThat(checks).isEqualTo(1)
+    }
+
+    @Test
+    fun `offers no check button when the caller has nothing to fetch with`() {
+        composeTestRule.setContent {
+            PitchAccentDiagram(readingPitchAccent = ReadingPitchAccent.Pending("みず"))
+        }
+
+        composeTestRule.onNodeWithText("Pitch accent not checked yet").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.CHECK).assertCountEquals(0)
+    }
+
+    @Test
+    fun `offers no check button for a confirmed absence even when the caller could fetch`() {
+        // NoEntry has already been looked up — a retry there would be offering to repeat a
+        // question that already has its answer.
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalPitchAccentCheck provides {}) {
+                PitchAccentDiagram(readingPitchAccent = ReadingPitchAccent.NoEntry("みず"))
+            }
+        }
+
+        composeTestRule.onNodeWithText("Pitch accent not available").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.CHECK).assertCountEquals(0)
     }
 
 }

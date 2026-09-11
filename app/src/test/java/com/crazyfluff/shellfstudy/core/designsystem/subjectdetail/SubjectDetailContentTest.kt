@@ -24,6 +24,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPitchAccentCheck
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
@@ -372,6 +373,61 @@ class SubjectDetailContentTest {
         composeTestRule.onNodeWithText("Pitch accent not checked yet").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Pitch accent not available").assertCountEquals(0)
         composeTestRule.onNodeWithText("みず").assertIsDisplayed()
+    }
+
+    @Test
+    fun vocabularyWithPendingPitchAccent_offersACheckButtonOnEveryUncheckedReading() {
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず", "スイ"),
+            pitchAccents = PitchAccentUiState.Loading
+        )
+        var checks = 0
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalPitchAccentCheck provides { checks++ }) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                    showPitchAccent = true
+                )
+            }
+        }
+
+        // Both rows caption the word-level pending state, and either link can resolve it — the
+        // action is idempotent, so repeating it under every unchecked reading hides no rule.
+        composeTestRule.onAllNodesWithText("Pitch accent not checked yet").assertCountEquals(2)
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.CHECK).assertCountEquals(2)
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.CHECK)[0].performScrollTo().performClick()
+        assertThat(checks).isEqualTo(1)
+    }
+
+    @Test
+    fun vocabularyWithUnavailablePitchAccent_offersNoCheckButton() {
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            pitchAccents = PitchAccentUiState.Unavailable
+        )
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalPitchAccentCheck provides {}) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                    showPitchAccent = true
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Pitch accent not available").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.CHECK).assertCountEquals(0)
     }
 
     @Test

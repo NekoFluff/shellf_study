@@ -39,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -60,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.designsystem.PlatformBackHandler
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPitchAccentCheck
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.canOfferForceReveal
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.resolveEffectiveRevealMode
@@ -290,26 +292,28 @@ private fun ColumnScope.SubjectDetailBody(
             CircularProgressIndicator()
         }
     } else {
-        SubjectDetailContent(
-            detail = detail,
-            relatedSubjects = uiState.relatedSubjects,
-            revealMode = effectiveRevealMode,
-            isAnswered = isAnswered,
-            questionType = questionType,
-            onRelatedSubjectClick = viewModel::navigateToRelated,
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
-            showPitchAccent = uiState.showPitchAccent,
-            restrictAudioToMp3 = uiState.restrictAudioToMp3,
-            strokeOrder = uiState.strokeOrder,
-            autoPlayStrokeOrder = autoPlayStrokeOrder,
-            showStrokeOrder = uiState.showStrokeOrder,
-            assignmentStats = uiState.assignmentStats,
-            reviewStats = uiState.reviewStats,
-            initialScrollOffset = uiState.pendingScrollOffset,
-            onScrollPositionChanged = { viewModel.recordScrollOffset(detail.subjectId, it) }
-        )
+        CompositionLocalProvider(LocalPitchAccentCheck provides viewModel::checkPitchAccent) {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = uiState.relatedSubjects,
+                revealMode = effectiveRevealMode,
+                isAnswered = isAnswered,
+                questionType = questionType,
+                onRelatedSubjectClick = viewModel::navigateToRelated,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
+                showPitchAccent = uiState.showPitchAccent,
+                restrictAudioToMp3 = uiState.restrictAudioToMp3,
+                strokeOrder = uiState.strokeOrder,
+                autoPlayStrokeOrder = autoPlayStrokeOrder,
+                showStrokeOrder = uiState.showStrokeOrder,
+                assignmentStats = uiState.assignmentStats,
+                reviewStats = uiState.reviewStats,
+                initialScrollOffset = uiState.pendingScrollOffset,
+                onScrollPositionChanged = { viewModel.recordScrollOffset(detail.subjectId, it) }
+            )
+        }
     }
 }
 
