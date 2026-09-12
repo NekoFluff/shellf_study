@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.feature.dashboard
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -71,7 +72,10 @@ class LevelProgressCardTest {
     fun tappingExpandToggle_revealsItemChipsInsteadOfRemainingCount() {
         composeTestRule.setContent { LevelProgressCard(progress = sampleProgress) }
 
-        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.DETAIL_PREFIX + "KANJI").assertCountEquals(0)
+        // The detail grid is now pre-warmed (composed ahead of the tap so its glyph/image work
+        // doesn't land on the tap frame) rather than absent — collapsed means clipped to zero
+        // height, not un-composed.
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.DETAIL_PREFIX + "KANJI").assertIsNotDisplayed()
 
         composeTestRule.onNodeWithTag(LevelProgressTestTags.EXPAND_TOGGLE_BUTTON).performClick()
 
@@ -94,6 +98,21 @@ class LevelProgressCardTest {
         composeTestRule.onNodeWithText("KANJI1").performClick()
 
         assert(clickedSubjectId == SubjectType.KANJI.ordinal * 1000L + 1)
+    }
+
+    @Test
+    fun itemChip_notClickable_whileCollapsed() {
+        // Chips are always composed (pre-warmed) even while collapsed, so the click guard has to be
+        // explicit rather than relying on zero-height chips being unhittable.
+        var clickedSubjectId: Long? = null
+        composeTestRule.setContent {
+            LevelProgressCard(progress = sampleProgress, onSubjectClick = { clickedSubjectId = it })
+        }
+
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + (SubjectType.KANJI.ordinal * 1000L + 1))
+            .assertIsNotDisplayed()
+
+        assert(clickedSubjectId == null)
     }
 
     @Test

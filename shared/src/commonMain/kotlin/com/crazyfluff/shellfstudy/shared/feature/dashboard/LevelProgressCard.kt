@@ -1,10 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.feature.dashboard
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,13 +31,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.LevelItem
@@ -182,19 +187,45 @@ private fun SubjectTypeProgressRow(
                 modifier = Modifier.testTag(LevelProgressTestTags.LEVEL_UP_INDICATOR)
             )
         }
-        AnimatedVisibility(
-            visible = showDetail && entry.items.isNotEmpty(),
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            Column {
-                Spacer(modifier = Modifier.height(8.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth().testTag(LevelProgressTestTags.DETAIL_PREFIX + entry.subjectType.name)
+        if (entry.items.isNotEmpty()) {
+            // Deliberately not AnimatedVisibility: that composes this subtree (every chip's glyph
+            // autosize measurement, plus a network fetch+decode for each glyph-less radical's SVG)
+            // for the first time exactly on the tap that reveals it, and disposes it again on
+            // collapse, so the same burst repeats on every single expand. Composing it unconditionally
+            // instead lets all of that land during the row's normal data-driven recomposition, well
+            // before the user ever taps the chevron; the animation below only ever clips/fades an
+            // already-built subtree, so the tap itself stays cheap. Trade-off: paging levels via the
+            // arrows now pre-warms the newly-shown level's grid too, even while collapsed.
+            val density = LocalDensity.current
+            var naturalHeightPx by remember { mutableIntStateOf(0) }
+            val animatedHeightPx by animateIntAsState(if (showDetail) naturalHeightPx else 0)
+            val animatedAlpha by animateFloatAsState(if (showDetail) 1f else 0f)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(with(density) { animatedHeightPx.toDp() })
+                    .clipToBounds()
+                    .alpha(animatedAlpha)
+                    .semantics { if (!showDetail) hideFromAccessibility() }
+            ) {
+                // wrapContentHeight(unbounded = true) measures this Column at its natural height
+                // regardless of the Box's own animated (and often zero) height above, so the burst of
+                // chip layout/measurement always happens — the Box just clips the drawn result.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(unbounded = true, align = Alignment.Top)
+                        .onSizeChanged { size -> naturalHeightPx = size.height }
                 ) {
-                    entry.items.forEach { item -> LevelItemChip(item, onClick = onSubjectClick) }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth().testTag(LevelProgressTestTags.DETAIL_PREFIX + entry.subjectType.name)
+                    ) {
+                        entry.items.forEach { item -> LevelItemChip(item, enabled = showDetail, onClick = onSubjectClick) }
+                    }
                 }
             }
         }
@@ -215,7 +246,7 @@ private fun SubjectTypeProgressRow(
  *  *alongside* a real glyph, not only for glyph-less radicals, so characterImageUrl alone isn't a
  *  reliable "no real character" signal. */
 @Composable
-private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
+private fun LevelItemChip(item: LevelItem, enabled: Boolean, onClick: (Long) -> Unit) {
     val accent = subjectColor(item.subjectType)
     val backgroundModifier = if (item.passed) {
         Modifier.background(accent, RoundedCornerShape(8.dp))
@@ -230,7 +261,10 @@ private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
         // wedged above the dots pinned to the bottom edge, leaving a big hollow gap above it.
         .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
         .then(backgroundModifier)
-        .clickable { onClick(item.subjectId) }
+        // This chip is always composed (even while the detail area is clipped to zero height, see
+        // SubjectTypeProgressRow), so clicks must be gated explicitly rather than relying on the
+        // chip being unhittable while invisible.
+        .clickable(enabled = enabled) { onClick(item.subjectId) }
         .testTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + item.subjectId)
 
     // Glyph and its sub-stage dots are one centered block, so the glyph is genuinely vertical-
