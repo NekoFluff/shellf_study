@@ -14,6 +14,7 @@ import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SvgCssVariable
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.notifications.AndroidNotificationChannels
 import com.crazyfluff.shellfstudy.di.appModules
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -68,5 +69,9 @@ class ShellfStudyApplication : Application(), Configuration.Provider, SingletonI
         val applicationScope: CoroutineScope = get(APPLICATION_SCOPE)
         val strokeOrderRepository: StrokeOrderRepository = get()
         applicationScope.launch { strokeOrderRepository.preload() }
+        // Parses the ~1MB bundled pitch-accent dictionary ahead of the first reading answer, so
+        // grading that answer doesn't pay the parse cost inline (see PitchAccentBundledSource).
+        val pitchAccentBundledSource: PitchAccentBundledSource = get()
+        applicationScope.launch { pitchAccentBundledSource.preload() }
     }
 }

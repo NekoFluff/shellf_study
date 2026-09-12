@@ -2,8 +2,10 @@ package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.generated.resources.Res
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -25,10 +27,14 @@ class CmpPitchAccentBundledSource : PitchAccentBundledSource {
     override suspend fun get(characters: String): List<PitchAccent> =
         loadAll()[characters].orEmpty()
 
+    override suspend fun preload() {
+        loadAll()
+    }
+
     private suspend fun loadAll(): Map<String, List<PitchAccent>> {
         cache?.let { return it }
         return mutex.withLock {
-            cache ?: run {
+            cache ?: withContext(Dispatchers.Default) {
                 val bytes = Res.readBytes("files/pitch_info.json")
                 val root = Json.parseToJsonElement(bytes.decodeToString()).jsonObject
                 root.mapValues { (_, value) -> value.jsonArray.map { it.jsonArray.toPitchAccent() } }

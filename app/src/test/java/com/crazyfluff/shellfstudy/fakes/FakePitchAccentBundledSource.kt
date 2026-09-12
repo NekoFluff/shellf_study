@@ -8,4 +8,5 @@ class FakePitchAccentBundledSource(
     private val entries: Map<String, List<PitchAccent>> = emptyMap()
 ) : PitchAccentBundledSource {
     override suspend fun get(characters: String): List<PitchAccent> = entries[characters].orEmpty()
+    override suspend fun preload() = Unit
 }
