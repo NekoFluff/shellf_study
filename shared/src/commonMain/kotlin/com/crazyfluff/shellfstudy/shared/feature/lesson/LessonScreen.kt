@@ -991,11 +991,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
             // them again), which is the fastest route to a kanji-only session. A chip is filled in
             // only while *all* of that type is selected, so a partial selection reads as "tap to
             // complete" rather than as done.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 select.availableTypes.forEach { type ->
                     val allSelected = select.isTypeFullySelected(type)
