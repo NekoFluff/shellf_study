@@ -15,14 +15,6 @@ class ReadingPitchAccentTest {
     private val sui = PitchAccent(reading = "スイ", partOfSpeech = null, pitchNumber = 1)
 
     @Test
-    fun anUncheckedWordIsPendingForEveryReading() {
-        val projected = PitchAccentUiState.Loading.forReading("みず")
-
-        assertEquals(ReadingPitchAccent.Pending("みず"), projected)
-        assertEquals("Pitch accent not checked yet", (projected as ReadingPitchAccent.NoPatterns).message)
-    }
-
-    @Test
     fun aWordWithNoDocumentedPitchAccentHasNoEntryForEveryReading() {
         val projected = PitchAccentUiState.Unavailable.forReading("みず")
 
@@ -48,7 +40,7 @@ class ReadingPitchAccentTest {
 
     @Test
     fun aReadingWithNoEntryOfItsOwnIsLabelledRatherThanLeftBlank() {
-        // The word has data, but for a different reading — weblio keys an entry by one canonical
+        // The word has data, but for a different reading — the dictionary keys an entry by one canonical
         // reading, so this used to render silently while the sibling row drew a diagram.
         val projected = PitchAccentUiState.Available(listOf(sui)).forReading("みず")
 

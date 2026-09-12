@@ -4,10 +4,8 @@ import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.allForReading
 
 /**
- * What we know about a *word's* pitch accent right now. [Unavailable] is a confirmed answer: the word
- * has been looked up and neither weblio nor the bundled dictionary documents a pitch accent for it.
- * [Loading] means no lookup has produced a confirmed result yet (no scrape has run, or the last one
- * failed); the background PitchAccentScrapeWorker retries it.
+ * What we know about a *word's* pitch accent right now. [Unavailable] is a confirmed answer: the
+ * bundled dictionary documents no pitch accent for it.
  *
  * This is the word-level answer the repository produces, keyed by the word's characters. What a
  * surface renders is [ReadingPitchAccent] — this answer projected onto one specific reading by
@@ -15,7 +13,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.allForReading
  * this type.
  */
 sealed interface PitchAccentUiState {
-    data object Loading : PitchAccentUiState
     data object Unavailable : PitchAccentUiState
     data class Available(val pitchAccents: List<PitchAccent>) : PitchAccentUiState
 }
@@ -36,11 +33,6 @@ sealed interface ReadingPitchAccent {
         val message: String
     }
 
-    /** No lookup has produced a confirmed result for this word yet. */
-    data class Pending(override val reading: String) : NoPatterns {
-        override val message: String get() = "Pitch accent not checked yet"
-    }
-
     /** The word has been checked and this reading has no documented pitch accent. */
     data class NoEntry(override val reading: String) : NoPatterns {
         override val message: String get() = "Pitch accent not available"
@@ -59,7 +51,6 @@ sealed interface ReadingPitchAccent {
  * to whoever is composing the screen, and it decides by rendering a diagram or not.
  */
 fun PitchAccentUiState.forReading(reading: String): ReadingPitchAccent = when (this) {
-    PitchAccentUiState.Loading -> ReadingPitchAccent.Pending(reading)
     PitchAccentUiState.Unavailable -> ReadingPitchAccent.NoEntry(reading)
     is PitchAccentUiState.Available -> pitchAccents.allForReading(reading)
         .takeIf { it.isNotEmpty() }

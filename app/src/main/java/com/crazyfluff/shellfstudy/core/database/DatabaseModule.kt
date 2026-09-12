@@ -9,9 +9,6 @@ import com.crazyfluff.shellfstudy.shared.database.friends.getFriendsDatabaseBuil
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.buildOutboxDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.getOutboxDatabaseBuilder
-import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentDatabase
-import com.crazyfluff.shellfstudy.shared.database.pitchaccent.buildPitchAccentDatabase
-import com.crazyfluff.shellfstudy.shared.database.pitchaccent.getPitchAccentDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.buildStudyActivityDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.getStudyActivityDatabaseBuilder
@@ -38,11 +35,6 @@ val databaseModule = module {
     // comment). Version 1 has no back-compat burden yet, so no Migration is needed.
     single { buildOutboxDatabase(getOutboxDatabaseBuilder(androidContext())) }
     single { get<OutboxDatabase>().outboxDao() }
-
-    // Re-derivable by re-scraping weblio.jp (see PitchAccentDatabase's doc comment), but a
-    // destructive migration would force needless re-scraping, so this uses normal migrations.
-    single { buildPitchAccentDatabase(getPitchAccentDatabaseBuilder(androidContext())) }
-    single { get<PitchAccentDatabase>().pitchAccentCacheDao() }
 
     // Pure cache — always re-fetchable from the WaniKani API.
     single { buildFriendsDatabase(getFriendsDatabaseBuilder(androidContext())) }

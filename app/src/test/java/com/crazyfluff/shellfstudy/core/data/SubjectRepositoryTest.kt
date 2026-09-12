@@ -83,7 +83,7 @@ class SubjectRepositoryTest {
     }
 
     @Test
-    fun `observeSubjectDetail reports Loading for a vocabulary subject with no cached or bundled pitch data`() = runTest {
+    fun `observeSubjectDetail reports Unavailable for a vocabulary subject with no bundled pitch data`() = runTest {
         repositories.subjectDao.upsertAll(
             listOf(
                 SubjectEntity(
@@ -101,7 +101,7 @@ class SubjectRepositoryTest {
         )
 
         repository.observeSubjectDetail(901).test {
-            assertThat(awaitItem()?.pitchAccents).isEqualTo(PitchAccentUiState.Loading)
+            assertThat(awaitItem()?.pitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
         }
     }
 

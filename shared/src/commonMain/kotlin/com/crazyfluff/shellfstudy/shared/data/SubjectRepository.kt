@@ -119,8 +119,7 @@ class SubjectRepository(
         subjectDao.observeByIds(ids).map { entities -> entities.map { it.toSubjectSummary() } }
 
     /**
-     * Flow-based so an open detail sheet live-updates if a background sync refreshes this subject
-     * or a background pitch-accent scrape fills in data for it.
+     * Flow-based so an open detail sheet live-updates if a background sync refreshes this subject.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeSubjectDetail(subjectId: Long): Flow<SubjectDetail?> =
@@ -157,7 +156,7 @@ private fun SubjectEntity.toSubjectSummary(): SubjectSummary = SubjectSummary(
     readings = readings.map { it.reading }
 )
 
-private fun SubjectEntity.toSubjectDetail(pitchAccents: PitchAccentUiState = PitchAccentUiState.Loading): SubjectDetail {
+private fun SubjectEntity.toSubjectDetail(pitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable): SubjectDetail {
     val readingsByType = readings.groupBy { it.type }
     return SubjectDetail(
         subjectId = id,

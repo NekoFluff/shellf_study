@@ -64,7 +64,6 @@ kotlin {
             implementation(libs.androidx.sqlite.bundled)
             api(libs.androidx.datastore.preferences.core)
             implementation(libs.okio)
-            implementation(libs.ksoup)
             api(libs.androidx.lifecycle.viewmodel)
             implementation(compose.runtime)
             implementation(compose.foundation)

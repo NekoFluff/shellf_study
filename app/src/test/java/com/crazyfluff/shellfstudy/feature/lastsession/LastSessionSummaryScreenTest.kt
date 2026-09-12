@@ -120,7 +120,7 @@ class LastSessionSummaryScreenTest {
                     single<PronunciationAudioPlayer> { FakePronunciationAudioPlayer() }
                     single<StrokeOrderRepository> { FakeStrokeOrderRepository(emptyMap()) }
                     viewModel {
-                        SubjectDetailViewModel(get(), get(), get(), get(), get(), get(), get())
+                        SubjectDetailViewModel(get(), get(), get(), get(), get(), get())
                     }
                 }
             )

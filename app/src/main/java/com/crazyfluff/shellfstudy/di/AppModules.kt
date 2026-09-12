@@ -11,11 +11,9 @@ import com.crazyfluff.shellfstudy.shared.di.networkModule
 import com.crazyfluff.shellfstudy.shared.di.repositoryModule
 import com.crazyfluff.shellfstudy.shared.di.strokeOrderModule
 import com.crazyfluff.shellfstudy.shared.di.viewModelModule
-import com.crazyfluff.shellfstudy.shared.di.weblioNetworkModule
 
 val appModules = listOf(
     networkModule,
-    weblioNetworkModule,
     databaseModule,
     dataStoreModule,
     repositoryModule,

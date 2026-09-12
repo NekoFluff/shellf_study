@@ -60,7 +60,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -114,8 +113,6 @@ import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.toDetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPitchAccentCheck
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentCheck
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
@@ -211,8 +208,6 @@ sealed interface LessonScreenEvent {
     data object Continue : LessonScreenEvent
     data object ToggleDetails : LessonScreenEvent
     data object CloseDetails : LessonScreenEvent
-    /** The quiz hint's "Check now"/"Try again" link — carries the question it was offered on. */
-    data class CheckPitchAccent(val item: LessonItem) : LessonScreenEvent
     data object Retry : LessonScreenEvent
     data object StudyOffline : LessonScreenEvent
     data object Abandon : LessonScreenEvent
@@ -267,7 +262,6 @@ fun LessonRoute(
                 LessonScreenEvent.Continue -> viewModel.onContinue()
                 LessonScreenEvent.ToggleDetails -> viewModel.toggleDetails()
                 LessonScreenEvent.CloseDetails -> viewModel.closeDetails()
-                is LessonScreenEvent.CheckPitchAccent -> viewModel.checkPitchAccent(event.item)
                 LessonScreenEvent.Retry -> viewModel.load()
                 LessonScreenEvent.StudyOffline -> viewModel.studyOffline()
                 LessonScreenEvent.Abandon -> viewModel.abandonSession()
@@ -503,80 +497,66 @@ fun LessonScreen(
                 }
 
                 is LessonUiState.Phase.Quiz -> {
-                    // Remembered so a reading only recomposes when the check state flips, not on every
-                    // unrelated uiState change (the timers tick through here), exactly as
-                    // SubjectDetailSheet hands it to the detail content. Keyed on the current item too,
-                    // so the lambda can't capture a previous question's item.
-                    val currentItem = phase.currentItem
-                    val pitchAccentCheck = remember(uiState.isCheckingPitchAccent, uiState.pitchAccentCheckFailed, currentItem) {
-                        PitchAccentCheck(
-                            inProgress = uiState.isCheckingPitchAccent,
-                            failed = uiState.pitchAccentCheckFailed,
-                            onClick = { onEvent(LessonScreenEvent.CheckPitchAccent(currentItem)) }
+                    QuizQuestionContent(
+                        uiState = QuizQuestionUiState(
+                            item = phase.currentItem,
+                            questionType = phase.currentQuestionType,
+                            totalCount = phase.totalQuizCount,
+                            remainingCount = phase.remainingQuizCount,
+                            // Which pass of the session this question belongs to: a plan of several
+                            // batches needs saying out loud, or "3 / 10" reads as the whole session.
+                            sessionContextLabel = when {
+                                phase.round == QuizRound.CLEANUP -> "Extra practice"
+                                phase.batchCount > 1 -> "Batch ${phase.batchIndex + 1} of ${phase.batchCount}"
+                                else -> null
+                            },
+                            answerInput = phase.answerInput,
+                            feedback = phase.feedback,
+                            rankChange = phase.rankChange,
+                            undoCounter = phase.undoCounter,
+                            answerTypeMismatchCount = phase.answerTypeMismatchCount,
+                            showSubjectTypeLabel = uiState.settings.showSubjectTypeLabel,
+                            showQuestionTimer = uiState.settings.showQuestionTimer,
+                            showTotalTimer = uiState.settings.showTotalTimer,
+                            questionElapsedMs = phase.timing.questionElapsedMs,
+                            questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
+                            questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
+                            sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
+                            sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
+                            useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
+                            showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
+                            answerReading = phase.answerReading,
+                            // Read from the live map rather than a copy taken at grading time — a
+                            // batch's own quiz needs the same up-to-the-moment knowledge its study
+                            // cards showed. An absent entry has not been looked up yet.
+                            answerPitchAccents = uiState.pitchAccentsBySubjectId[phase.currentItem.subjectId]
+                                ?: PitchAccentUiState.Unavailable,
+                            answerReadingAudio = phase.answerReadingAudio
+                        ),
+                        onAnswerInputChange = onAnswerInputChange,
+                        onSubmit = onSubmit,
+                        onDontKnow = onDontKnow,
+                        onContinue = onContinue,
+                        onUndo = onUndo,
+                        testTags = QuizQuestionTestTags(
+                            progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
+                            questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,
+                            totalTimerText = LessonScreenTestTags.TOTAL_TIMER_TEXT,
+                            characters = LessonScreenTestTags.QUIZ_CHARACTERS,
+                            subjectTypeLabel = LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL,
+                            rankChangeText = LessonScreenTestTags.RANK_CHANGE_TEXT,
+                            questionLabel = LessonScreenTestTags.QUESTION_LABEL,
+                            answerField = LessonScreenTestTags.ANSWER_FIELD,
+                            typeMismatchText = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
+                            dontKnowButton = LessonScreenTestTags.DONT_KNOW_BUTTON,
+                            submitButton = LessonScreenTestTags.SUBMIT_BUTTON,
+                            undoButton = LessonScreenTestTags.UNDO_BUTTON,
+                            feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
+                            answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
+                            continueButton = LessonScreenTestTags.CONTINUE_BUTTON,
+                            sessionContextLabel = LessonScreenTestTags.QUIZ_SESSION_CONTEXT_LABEL
                         )
-                    }
-                    CompositionLocalProvider(LocalPitchAccentCheck provides pitchAccentCheck) {
-                        QuizQuestionContent(
-                            uiState = QuizQuestionUiState(
-                                item = phase.currentItem,
-                                questionType = phase.currentQuestionType,
-                                totalCount = phase.totalQuizCount,
-                                remainingCount = phase.remainingQuizCount,
-                                // Which pass of the session this question belongs to: a plan of several
-                                // batches needs saying out loud, or "3 / 10" reads as the whole session.
-                                sessionContextLabel = when {
-                                    phase.round == QuizRound.CLEANUP -> "Extra practice"
-                                    phase.batchCount > 1 -> "Batch ${phase.batchIndex + 1} of ${phase.batchCount}"
-                                    else -> null
-                                },
-                                answerInput = phase.answerInput,
-                                feedback = phase.feedback,
-                                rankChange = phase.rankChange,
-                                undoCounter = phase.undoCounter,
-                                answerTypeMismatchCount = phase.answerTypeMismatchCount,
-                                showSubjectTypeLabel = uiState.settings.showSubjectTypeLabel,
-                                showQuestionTimer = uiState.settings.showQuestionTimer,
-                                showTotalTimer = uiState.settings.showTotalTimer,
-                                questionElapsedMs = phase.timing.questionElapsedMs,
-                                questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
-                                questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
-                                sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
-                                sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
-                                useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
-                                showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
-                                answerReading = phase.answerReading,
-                                // Read from the live map rather than a copy taken at grading time — a
-                                // batch's own quiz needs the same up-to-the-moment knowledge its study
-                                // cards showed. An absent entry is "not checked yet".
-                                answerPitchAccents = uiState.pitchAccentsBySubjectId[phase.currentItem.subjectId]
-                                    ?: PitchAccentUiState.Loading,
-                                answerReadingAudio = phase.answerReadingAudio
-                            ),
-                            onAnswerInputChange = onAnswerInputChange,
-                            onSubmit = onSubmit,
-                            onDontKnow = onDontKnow,
-                            onContinue = onContinue,
-                            onUndo = onUndo,
-                            testTags = QuizQuestionTestTags(
-                                progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
-                                questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,
-                                totalTimerText = LessonScreenTestTags.TOTAL_TIMER_TEXT,
-                                characters = LessonScreenTestTags.QUIZ_CHARACTERS,
-                                subjectTypeLabel = LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL,
-                                rankChangeText = LessonScreenTestTags.RANK_CHANGE_TEXT,
-                                questionLabel = LessonScreenTestTags.QUESTION_LABEL,
-                                answerField = LessonScreenTestTags.ANSWER_FIELD,
-                                typeMismatchText = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
-                                dontKnowButton = LessonScreenTestTags.DONT_KNOW_BUTTON,
-                                submitButton = LessonScreenTestTags.SUBMIT_BUTTON,
-                                undoButton = LessonScreenTestTags.UNDO_BUTTON,
-                                feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
-                                answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
-                                continueButton = LessonScreenTestTags.CONTINUE_BUTTON,
-                                sessionContextLabel = LessonScreenTestTags.QUIZ_SESSION_CONTEXT_LABEL
-                            )
-                        )
-                    }
+                    )
                 }
 
                 is LessonUiState.Phase.BatchComplete -> {
@@ -738,7 +718,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                     kunyomiReadings = item.kunyomiReadings,
                     nanoriReadings = item.nanoriReadings,
                     pronunciationAudios = item.pronunciationAudios,
-                    pitchAccents = pitchAccentsBySubjectId[item.subjectId] ?: PitchAccentUiState.Loading,
+                    pitchAccents = pitchAccentsBySubjectId[item.subjectId] ?: PitchAccentUiState.Unavailable,
                     showPitchAccent = settings.showPitchAccent,
                     restrictAudioToMp3 = settings.restrictAudioToMp3
                 )

@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * One pitch-accent entry for a vocabulary word. [reading] is katakana (matches the bundled
- * dictionary/weblio scrape convention) and is null for wildcard entries that apply regardless of
+ * dictionary convention) and is null for wildcard entries that apply regardless of
  * which reading matched — e.g. the bundled data has `"ふじ山": [[null, null, 1]]`.
  */
 @Serializable

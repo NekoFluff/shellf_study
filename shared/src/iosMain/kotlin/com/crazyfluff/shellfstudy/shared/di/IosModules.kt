@@ -20,9 +20,6 @@ import com.crazyfluff.shellfstudy.shared.database.friends.getFriendsDatabaseBuil
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.buildOutboxDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.getOutboxDatabaseBuilder
-import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentDatabase
-import com.crazyfluff.shellfstudy.shared.database.pitchaccent.buildPitchAccentDatabase
-import com.crazyfluff.shellfstudy.shared.database.pitchaccent.getPitchAccentDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.buildStudyActivityDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.getStudyActivityDatabaseBuilder
@@ -31,7 +28,6 @@ import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationPoster
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationStateRepository
-import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.DrainOutcome
@@ -59,9 +55,6 @@ private val iosDatabaseModule = module {
     single { buildOutboxDatabase(getOutboxDatabaseBuilder()) }
     single { get<OutboxDatabase>().outboxDao() }
 
-    single { buildPitchAccentDatabase(getPitchAccentDatabaseBuilder()) }
-    single { get<PitchAccentDatabase>().pitchAccentCacheDao() }
-
     single { buildFriendsDatabase(getFriendsDatabaseBuilder()) }
     single { get<FriendsDatabase>().friendStatsDao() }
 }
@@ -77,19 +70,15 @@ private val iosAudioModule = module {
     single { IosPronunciationAudioPlayer(get()) } bind PronunciationAudioPlayer::class
 }
 
-/** Periodic background sync (BGTaskScheduler) and pitch-accent scraping are stubbed — they fire
- *  opportunistically from the Dashboard instead. The outbox scheduler, however, needs to actually
- *  drain, so it launches the drainer in the app-level coroutine scope whenever called. Network
- *  errors are handled inside OutboxDrainer; the launch is fire-and-forget (duplicates are harmless,
- *  the drainer is idempotent). */
+/** Periodic background sync (BGTaskScheduler) is stubbed — it fires opportunistically from the
+ *  Dashboard instead. The outbox scheduler, however, needs to actually drain, so it launches the
+ *  drainer in the app-level coroutine scope whenever called. Network errors are handled inside
+ *  OutboxDrainer; the launch is fire-and-forget (duplicates are harmless, the drainer is
+ *  idempotent). */
 private val iosSyncModule = module {
     single<SyncScheduler> { object : SyncScheduler {
         override fun schedulePeriodicSync() = Unit
         override fun cancelPeriodicSync() = Unit
-    }}
-    single<PitchAccentScrapeScheduler> { object : PitchAccentScrapeScheduler {
-        override fun schedulePeriodicScrape() = Unit
-        override fun cancelPeriodicScrape() = Unit
     }}
     single<OutboxSyncScheduler> {
         val appScope = get<CoroutineScope>(APPLICATION_SCOPE)
@@ -146,7 +135,6 @@ val iosAppModules = listOf(
     iosDataStoreModule,
     iosAudioModule,
     networkModule,
-    weblioNetworkModule,
     repositoryModule,
     strokeOrderModule,
     coroutineScopeModule,

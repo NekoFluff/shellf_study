@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
-import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +19,6 @@ data class SplashUiState(val destination: SplashDestination? = null)
 class SplashViewModel(
     private val tokenRepository: TokenRepository,
     private val syncScheduler: SyncScheduler,
-    private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,
     private val notificationCoordinator: NotificationCoordinator
 ) : ViewModel() {
 
@@ -34,7 +32,6 @@ class SplashViewModel(
                 _uiState.update { it.copy(destination = SplashDestination.AUTH) }
             } else {
                 syncScheduler.schedulePeriodicSync()
-                pitchAccentScrapeScheduler.schedulePeriodicScrape()
                 notificationCoordinator.onLogin()
                 _uiState.update { it.copy(destination = SplashDestination.DASHBOARD) }
             }

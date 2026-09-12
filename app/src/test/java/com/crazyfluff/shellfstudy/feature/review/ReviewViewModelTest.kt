@@ -18,29 +18,21 @@ import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
-import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
-import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
-import com.crazyfluff.shellfstudy.shared.database.pitchaccent.PitchAccentCacheEntity
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi
-import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioEntry
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
-import com.crazyfluff.shellfstudy.fakes.FakePitchAccentBundledSource
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.fakes.FakeWeblioApi
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -56,7 +48,6 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.IOException
 
 class ReviewViewModelTest {
 
@@ -992,9 +983,8 @@ class ReviewViewModelTest {
             assertThat(active.feedback?.isCorrect).isTrue()
             assertThat(active.answerReading).isEqualTo("けんあ")
             // "件亜" is a fabricated word — guaranteed absent from the real bundled pitch-accent
-            // dictionary, so the reading still surfaces but with no pitch pattern alongside it, and
-            // the state stays Loading ("not checked yet") rather than claiming a confirmed absence.
-            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
+            // dictionary, so the reading still surfaces but with no pitch pattern alongside it.
+            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
         }
     }
 
@@ -1023,7 +1013,7 @@ class ReviewViewModelTest {
             val active = feedbackState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback?.isCorrect).isTrue()
             assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
+            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
         }
     }
 
@@ -1053,13 +1043,13 @@ class ReviewViewModelTest {
             val active = feedbackState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback?.isCorrect).isTrue()
             assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
+            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
         }
     }
 
     @Test
     fun `a kanji reading question never surfaces the hint even with the setting on`() = runTest(mainDispatcherRule.dispatcher) {
-        // Vocabulary-only scoping: pitch accent is a word-level concept, and the bundled/Weblio
+        // Vocabulary-only scoping: pitch accent is a word-level concept, and the bundled
         // source is keyed by whole dictionary headwords, not single kanji.
         settingsRepository.setShowAnswerReadingPitchAccent(true)
         dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
@@ -1085,7 +1075,7 @@ class ReviewViewModelTest {
             val active = feedbackState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback?.isCorrect).isTrue()
             assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
+            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
         }
     }
 
@@ -1121,242 +1111,7 @@ class ReviewViewModelTest {
             val active = undoneState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback).isNull()
             assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
-        }
-    }
-
-    @Test
-    fun `a cache write while a reading question is graded updates the live hint without a new question`() =
-        runTest(mainDispatcherRule.dispatcher) {
-            // The whole point of observing rather than snapshotting: any writer that resolves the
-            // word — the detail sheet's check, the background scrape worker, this screen's own check —
-            // reaches the hint with no propagation code anywhere.
-            settingsRepository.setShowAnswerReadingPitchAccent(true)
-            dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-            val viewModel = createViewModel()
-
-            viewModel.uiState.test {
-                var state = awaitItem()
-                while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
-                val graded = gradeReadingQuestionCorrectly(viewModel, state)
-                assertThat(graded.answerReading).isEqualTo("けんあ")
-                assertThat(graded.answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
-
-                val characters = requireNotNull(graded.currentItem.characters) { "the vocab fixture always has characters" }
-                val scraped = PitchAccentUiState.Available(
-                    listOf(PitchAccent(reading = "ケンア", partOfSpeech = null, pitchNumber = 0))
-                )
-                repositories.pitchAccentCacheDao.upsert(
-                    PitchAccentCacheEntity(
-                        characters = characters,
-                        pitchAccents = scraped.pitchAccents,
-                        fetchedAt = 1L,
-                        lastAttemptedAt = 1L
-                    )
-                )
-
-                var updated = awaitItem()
-                while ((updated.phase as ReviewUiState.Phase.Active).answerPitchAccents != scraped) updated = awaitItem()
-                val stillActive = updated.phase as ReviewUiState.Phase.Active
-                // Same question, same feedback — nothing was re-asked for the hint to update.
-                assertThat(stillActive.currentItem.assignmentId).isEqualTo(graded.currentItem.assignmentId)
-                assertThat(stillActive.currentQuestionType).isEqualTo(QuestionType.READING)
-                assertThat(stillActive.feedback).isEqualTo(graded.feedback)
-            }
-        }
-
-    @Test
-    fun `checkPitchAccent shows progress, then clears it and the hint picks up the scrape`() =
-        runTest(mainDispatcherRule.dispatcher) {
-            settingsRepository.setShowAnswerReadingPitchAccent(true)
-            val characters = "件亜"
-            val html = """<div class="NetDicHead">ケンア<span style="font-size:75%;">［0］</span></div>"""
-            // Held shut until the test releases it, so the state *during* the fetch is observable —
-            // which is the whole point of the progress flag.
-            val gate = CompletableDeferred<Unit>()
-            val pitchAccentRepository = PitchAccentRepository(
-                FakePitchAccentBundledSource(),
-                repositories.pitchAccentCacheDao,
-                FakeWeblioApi(mapOf(characters to html), gate),
-                WeblioPitchAccentParser()
-            )
-            dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-            val viewModel = createViewModel(pitchAccentRepository)
-
-            viewModel.uiState.test {
-                var state = awaitItem()
-                while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
-                val graded = gradeReadingQuestionCorrectly(viewModel, state)
-
-                viewModel.checkPitchAccent(graded.currentItem)
-
-                var checking = awaitItem()
-                while (!checking.isCheckingPitchAccent) checking = awaitItem()
-                assertThat(checking.pitchAccentCheckFailed).isFalse()
-
-                gate.complete(Unit)
-
-                val expected = PitchAccentUiState.Available(
-                    listOf(PitchAccent(reading = "ケンア", partOfSpeech = null, pitchNumber = 0))
-                )
-                var settled = awaitItem()
-                // The new value arrives purely through the observed flow — checkPitchAccent copies
-                // nothing back itself — and the completion clears the progress flag.
-                while ((settled.phase as ReviewUiState.Phase.Active).answerPitchAccents != expected || settled.isCheckingPitchAccent) {
-                    settled = awaitItem()
-                }
-                assertThat(settled.pitchAccentCheckFailed).isFalse()
-            }
-        }
-
-    @Test
-    fun `checkPitchAccent reports a failed fetch instead of silently leaving the word unchecked`() =
-        runTest(mainDispatcherRule.dispatcher) {
-            settingsRepository.setShowAnswerReadingPitchAccent(true)
-            // No page configured for the query, so the fake throws exactly where a real network error
-            // or a weblio 404 would — the path that writes a null fetchedAt and leaves the word
-            // classified as still-unchecked.
-            val pitchAccentRepository = PitchAccentRepository(
-                FakePitchAccentBundledSource(),
-                repositories.pitchAccentCacheDao,
-                FakeWeblioApi(),
-                WeblioPitchAccentParser()
-            )
-            dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-            val viewModel = createViewModel(pitchAccentRepository)
-
-            viewModel.uiState.test {
-                var state = awaitItem()
-                while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
-                val graded = gradeReadingQuestionCorrectly(viewModel, state)
-
-                viewModel.checkPitchAccent(graded.currentItem)
-
-                var failed = awaitItem()
-                while (!failed.pitchAccentCheckFailed) failed = awaitItem()
-                assertThat(failed.isCheckingPitchAccent).isFalse()
-                // The failure is an extra fact, not a different pitch state: the word really is still
-                // unchecked, which is exactly why the flag has to carry the news.
-                assertThat((failed.phase as ReviewUiState.Phase.Active).answerPitchAccents).isEqualTo(PitchAccentUiState.Loading)
-            }
-        }
-
-    @Test
-    fun `checkPitchAccent is a no-op while a check is already running`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        val characters = "件亜"
-        val html = """<div class="NetDicHead">ケンア<span style="font-size:75%;">［0］</span></div>"""
-        val gate = CompletableDeferred<Unit>()
-        var scrapeCalls = 0
-        val api = object : WeblioApi {
-            override suspend fun getEntry(query: String): WeblioEntry {
-                scrapeCalls++
-                gate.await()
-                return WeblioEntry.Page(html)
-            }
-        }
-        val pitchAccentRepository = PitchAccentRepository(
-            FakePitchAccentBundledSource(), repositories.pitchAccentCacheDao, api, WeblioPitchAccentParser()
-        )
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel(pitchAccentRepository)
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
-            val graded = gradeReadingQuestionCorrectly(viewModel, state)
-
-            viewModel.checkPitchAccent(graded.currentItem)
-            var checking = awaitItem()
-            while (!checking.isCheckingPitchAccent) checking = awaitItem()
-
-            // A second tap while the first is still in flight must not start another scrape.
-            viewModel.checkPitchAccent(graded.currentItem)
-
-            val expected = PitchAccentUiState.Available(
-                listOf(PitchAccent(reading = "ケンア", partOfSpeech = null, pitchNumber = 0))
-            )
-            gate.complete(Unit)
-            var settled = awaitItem()
-            while (settled.isCheckingPitchAccent || (settled.phase as ReviewUiState.Phase.Active).answerPitchAccents != expected) {
-                settled = awaitItem()
-            }
-            assertThat(scrapeCalls).isEqualTo(1)
-        }
-    }
-
-    @Test
-    fun `checkPitchAccent on an item with no characters is a no-op`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.checkPitchAccent(
-                ReviewItem(
-                    assignmentId = 1, subjectId = 1, subjectType = SubjectType.VOCABULARY, characters = null,
-                    level = 1, srsStage = 1, meanings = listOf("Testword"), readings = listOf("けんあ")
-                )
-            )
-
-            assertThat(viewModel.uiState.value.isCheckingPitchAccent).isFalse()
-            assertThat(viewModel.uiState.value.pitchAccentCheckFailed).isFalse()
-        }
-    }
-
-    @Test
-    fun `a failed check is not carried over to the next question`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        // Parks the failing scrape so the advance happens while it is still in flight — the window in
-        // which a stale failure could otherwise land on the next word.
-        val gate = CompletableDeferred<Unit>()
-        val api = object : WeblioApi {
-            override suspend fun getEntry(query: String): WeblioEntry {
-                gate.await()
-                throw IOException("no fake response configured")
-            }
-        }
-        val pitchAccentRepository = PitchAccentRepository(
-            FakePitchAccentBundledSource(), repositories.pitchAccentCacheDao, api, WeblioPitchAccentParser()
-        )
-        dispatch(jsonResponse(twoVocabAssignmentsJson()), jsonResponse(twoVocabSubjectsJson()))
-
-        val viewModel = createViewModel(pitchAccentRepository)
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
-            val graded = gradeReadingQuestionCorrectly(viewModel, state)
-            val checkedAssignmentId = graded.currentItem.assignmentId
-
-            viewModel.checkPitchAccent(graded.currentItem)
-            var current = awaitItem()
-            while (!current.isCheckingPitchAccent) current = awaitItem()
-
-            // Move on to a genuinely different item while the check is still parked. The graded
-            // question is already answered, so Continue leads straight to the next one.
-            viewModel.onContinue()
-            current = awaitItem()
-            while ((current.phase as ReviewUiState.Phase.Active).currentItem.assignmentId == checkedAssignmentId) {
-                answerCurrentQuestionCorrectly(viewModel)
-                current = awaitItem()
-            }
-            assertThat(current.isCheckingPitchAccent).isFalse()
-
-            gate.complete(Unit)
-            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
-
-            // The failure belonged to the previous word — it must not caption the new one's own
-            // "not checked yet".
-            assertThat(viewModel.uiState.value.pitchAccentCheckFailed).isFalse()
-            assertThat(viewModel.uiState.value.isCheckingPitchAccent).isFalse()
+            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
         }
     }
 

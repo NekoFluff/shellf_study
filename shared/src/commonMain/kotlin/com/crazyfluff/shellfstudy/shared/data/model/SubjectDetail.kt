@@ -35,11 +35,12 @@ data class SubjectDetail(
     val visuallySimilarSubjectIds: List<Long>,
     /**
      * Vocabulary/kana-vocabulary only — kanji/radicals, which don't have pitch accent at all,
-     * resolve to [PitchAccentUiState.Unavailable]. Defaults to [PitchAccentUiState.Loading]: only
-     * [com.crazyfluff.shellfstudy.shared.data.SubjectRepository.observeSubjectDetail] can say whether
-     * a word's pitch accent is known, pending, or confirmed absent.
+     * resolve to [PitchAccentUiState.Unavailable] just like a word absent from the bundled
+     * dictionary. Only
+     * [com.crazyfluff.shellfstudy.shared.data.SubjectRepository.observeSubjectDetail] can say
+     * whether a word's pitch accent is known or confirmed absent.
      */
-    val pitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
+    val pitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
     /** Vocabulary/kana-vocabulary only — kanji/radicals don't have spoken pronunciation clips. */
     val pronunciationAudios: List<PronunciationAudio> = emptyList()
 )

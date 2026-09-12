@@ -89,19 +89,11 @@ data class LessonUiState(
     val exit: ExitRequest = ExitRequest.None,
     /** The pitch-accent knowledge for every item currently in play (this batch's study cards and its
      *  quiz), keyed by subject id. Hoisted to the top level rather than carried per-phase because the
-     *  study card and the quiz hint are two views of the *same* live observation — the repository's
-     *  Room flow is the single source of truth, so a scrape from any writer (the detail sheet, the
-     *  background worker, this screen's own check) reaches both without a refetch or any propagation
-     *  code. A subject absent from the map is "not checked yet". */
-    val pitchAccentsBySubjectId: Map<Long, PitchAccentUiState> = emptyMap(),
-    /** True while [LessonViewModel.checkPitchAccent]'s on-demand scrape is in flight, so the quiz
-     *  hint's "not checked yet" caption can show progress instead of looking like a dead tap. */
-    val isCheckingPitchAccent: Boolean = false,
-    /** True when the last on-demand check failed. A failed scrape leaves the word classified as
-     *  still-unknown (see [PitchAccentRepository.scrapeAndCache]), i.e. indistinguishable from an
-     *  untried one, so the UI has to say the check failed itself. Cleared when a new check starts and
-     *  when the current question changes. */
-    val pitchAccentCheckFailed: Boolean = false
+     *  study card and the quiz hint are two views of the *same* live observation off the bundled
+     *  dictionary's Room flow, the single source of truth. A subject absent from the map has not been
+     *  looked up yet this session; [PitchAccentUiState.Unavailable] means it was looked up and has no
+     *  documented pitch accent. */
+    val pitchAccentsBySubjectId: Map<Long, PitchAccentUiState> = emptyMap()
 ) {
     /** Why the learner is leaving the lesson screen, if they are. */
     sealed interface ExitRequest {
@@ -953,8 +945,6 @@ class LessonViewModel(
         val questionStartedAt = questionTiming.restart()
         _uiState.update {
             it.copy(
-                isCheckingPitchAccent = false,
-                pitchAccentCheckFailed = false,
                 phase = LessonUiState.Phase.Quiz(
                     currentItem = next.item,
                     currentQuestionType = next.type,
@@ -1259,40 +1249,6 @@ class LessonViewModel(
         updateQuiz { it.copy(isDetailsExpanded = false) }
     }
 
-    /** Fetches [item]'s pitch accent now, for a word the background scrape hasn't reached — the same
-     *  on-demand check the subject detail sheet offers, mirrored onto the quiz hint.
-     *
-     *  The hint already observes the cache (see the collector in init), so this only has to cause the
-     *  write: nothing is copied back into [LessonUiState.pitchAccentsBySubjectId] here, the new value
-     *  arrives through the flow. A fetch takes real network time, so the tap is acknowledged
-     *  immediately by flipping [LessonUiState.isCheckingPitchAccent] (the caption becomes a progress
-     *  row) and a fetch that fails — a word weblio doesn't answer for, a network error — is reported
-     *  through [LessonUiState.pitchAccentCheckFailed]: the word stays "not checked yet" either way, so
-     *  without that flag a failed check would look exactly like no check at all. A second tap while
-     *  one is already running is ignored.
-     *
-     *  No-ops for an item with no [LessonItem.characters] — there is nothing to look up, and an empty
-     *  query would only cache a meaningless row. */
-    fun checkPitchAccent(item: LessonItem) {
-        val characters = item.characters ?: return
-        if (_uiState.value.isCheckingPitchAccent) return
-        _uiState.update { it.copy(isCheckingPitchAccent = true, pitchAccentCheckFailed = false) }
-        viewModelScope.launch {
-            val scraped = pitchAccentRepository.scrapeAndCache(characters, Clock.System.now().toEpochMilliseconds())
-            // Only publish for the subject that started the check: advancing mid-fetch resets the
-            // flags, and this completion must not raise them against whatever question is current by
-            // then.
-            _uiState.update {
-                val quiz = it.phase as? LessonUiState.Phase.Quiz
-                if (quiz?.currentItem?.subjectId != item.subjectId) {
-                    it
-                } else {
-                    it.copy(isCheckingPitchAccent = false, pitchAccentCheckFailed = !scraped)
-                }
-            }
-        }
-    }
-
     /** Walks from a just-finished batch into the next one — the checkpoint's primary action. */
     fun continueSession() {
         val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
@@ -1353,8 +1309,6 @@ class LessonViewModel(
             val questionStartedAt = questionTiming.restart()
             _uiState.update {
                 it.copy(
-                    isCheckingPitchAccent = false,
-                    pitchAccentCheckFailed = false,
                     phase = LessonUiState.Phase.Quiz(
                         currentItem = next.item,
                         currentQuestionType = next.type,
@@ -1434,15 +1388,13 @@ class LessonViewModel(
         outboxRepository.requestSyncNow()
         val summary = sessionSummary()
         persistLastSessionSummary(summary)
-        // The summary has no pitch accents to show, so the live observation and the check state that
-        // belonged to the pass just finished are done with.
+        // The summary has no pitch accents to show, so the live observation that belonged to the
+        // pass just finished is done with.
         pitchAccentItems.value = emptyList()
         _uiState.update {
             it.copy(
                 phase = summary.toCompletePhase(),
-                pitchAccentsBySubjectId = emptyMap(),
-                isCheckingPitchAccent = false,
-                pitchAccentCheckFailed = false
+                pitchAccentsBySubjectId = emptyMap()
             )
         }
     }
@@ -1483,10 +1435,8 @@ class LessonViewModel(
         _uiState.update {
             it.copy(
                 // Nothing pitch-related is on screen at a checkpoint any more, so drop the
-                // observation's items and the check state that belonged to the pass just finished.
+                // observation's items that belonged to the pass just finished.
                 pitchAccentsBySubjectId = emptyMap(),
-                isCheckingPitchAccent = false,
-                pitchAccentCheckFailed = false,
                 phase = LessonUiState.Phase.BatchComplete(
                     batchIndex = completedBatchIndex,
                     batchCount = batchCount,
@@ -1505,9 +1455,8 @@ class LessonViewModel(
         val next = quizQueue.current
         if (next != null) {
             val questionStartedAt = questionTiming.restart()
-            // The new question owns neither the previous one's hint nor its check's
-            // progress/outcome — a failure on one word must not caption the next one's "not checked
-            // yet". Its completion is dropped later by checkPitchAccent's own subject-id guard.
+            // The new question owns neither the previous one's hint — a stale word's patterns must
+            // not leak into this question's caption.
             updateQuiz {
                 it.copy(
                     currentItem = next.item,
@@ -1526,7 +1475,6 @@ class LessonViewModel(
                     )
                 )
             }
-            _uiState.update { it.copy(isCheckingPitchAccent = false, pitchAccentCheckFailed = false) }
             return
         }
 

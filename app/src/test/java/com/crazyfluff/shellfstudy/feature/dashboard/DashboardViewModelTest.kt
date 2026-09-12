@@ -33,7 +33,6 @@ import com.crazyfluff.shellfstudy.fakes.FakeFriendStatsDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
-import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
@@ -81,7 +80,6 @@ class DashboardViewModelTest {
     private lateinit var dashboardCacheRepository: DashboardCacheRepository
     private lateinit var outboxRepository: OutboxRepository
     private lateinit var syncScheduler: FakeSyncScheduler
-    private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
     private lateinit var notificationCoordinator: FakeNotificationCoordinator
     private lateinit var appForegroundTracker: AppForegroundTracker
 
@@ -104,7 +102,6 @@ class DashboardViewModelTest {
         settingsRepository = SettingsRepository(dataStore)
         dashboardCacheRepository = DashboardCacheRepository(dataStore)
         syncScheduler = FakeSyncScheduler()
-        pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
         notificationCoordinator = FakeNotificationCoordinator()
         appForegroundTracker = AppForegroundTracker()
     }
@@ -157,7 +154,6 @@ class DashboardViewModelTest {
         val logoutCoordinator = LogoutCoordinator(
             tokenRepository = tokenRepository,
             syncScheduler = syncScheduler,
-            pitchAccentScrapeScheduler = pitchAccentScrapeScheduler,
             notificationCoordinator = notificationCoordinator,
             accountDataCleaner = accountDataCleaner
         )
@@ -486,7 +482,6 @@ class DashboardViewModelTest {
 
         tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
         assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
-        assertThat(pitchAccentScrapeScheduler.cancelCallCount).isEqualTo(1)
         assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
     }
 
@@ -518,7 +513,6 @@ class DashboardViewModelTest {
 
         tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
         assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
-        assertThat(pitchAccentScrapeScheduler.cancelCallCount).isEqualTo(1)
         assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
     }
 

@@ -9,7 +9,6 @@ import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakeOutboxDao
 import com.crazyfluff.shellfstudy.fakes.FakeOutboxSyncScheduler
-import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeSrsSystemDao
 import com.crazyfluff.shellfstudy.fakes.FakeStudyActivityDao
@@ -60,7 +59,6 @@ class LogoutCoordinatorTest {
     private lateinit var json: Json
     private lateinit var tokenRepository: TokenRepository
     private lateinit var syncScheduler: FakeSyncScheduler
-    private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
     private lateinit var notificationCoordinator: FakeNotificationCoordinator
     private lateinit var assignmentDao: FakeAssignmentDao
     private lateinit var syncStateDao: FakeSyncStateDao
@@ -86,7 +84,6 @@ class LogoutCoordinatorTest {
         json = Json { ignoreUnknownKeys = true }
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
         syncScheduler = FakeSyncScheduler()
-        pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
         notificationCoordinator = FakeNotificationCoordinator()
 
         assignmentDao = FakeAssignmentDao()
@@ -120,7 +117,6 @@ class LogoutCoordinatorTest {
         logoutCoordinator = LogoutCoordinator(
             tokenRepository = tokenRepository,
             syncScheduler = syncScheduler,
-            pitchAccentScrapeScheduler = pitchAccentScrapeScheduler,
             notificationCoordinator = notificationCoordinator,
             accountDataCleaner = accountDataCleaner
         )
@@ -141,7 +137,6 @@ class LogoutCoordinatorTest {
 
         tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
         assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
-        assertThat(pitchAccentScrapeScheduler.cancelCallCount).isEqualTo(1)
         assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
         assertThat(assignmentDao.getById(1)).isNull()
         assertThat(reviewSessionRepository.load()).isNull()

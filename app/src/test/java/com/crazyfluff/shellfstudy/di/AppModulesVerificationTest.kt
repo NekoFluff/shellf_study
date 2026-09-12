@@ -11,7 +11,6 @@ import com.crazyfluff.shellfstudy.shared.di.networkModule
 import com.crazyfluff.shellfstudy.shared.di.repositoryModule
 import com.crazyfluff.shellfstudy.shared.di.strokeOrderModule
 import com.crazyfluff.shellfstudy.shared.di.viewModelModule
-import com.crazyfluff.shellfstudy.shared.di.weblioNetworkModule
 import com.crazyfluff.shellfstudy.core.data.dataStoreModule
 import com.crazyfluff.shellfstudy.core.database.databaseModule
 import com.crazyfluff.shellfstudy.core.notifications.notificationModule
@@ -45,7 +44,6 @@ class AppModulesVerificationTest {
         val allModules = module {
             includes(
                 networkModule,
-                weblioNetworkModule,
                 databaseModule,
                 dataStoreModule,
                 repositoryModule,

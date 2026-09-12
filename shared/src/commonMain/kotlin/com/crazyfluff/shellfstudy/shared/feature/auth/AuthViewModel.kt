@@ -8,7 +8,6 @@ import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
-import com.crazyfluff.shellfstudy.shared.sync.PitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +27,6 @@ class AuthViewModel(
     private val tokenRepository: TokenRepository,
     private val waniKaniRepository: WaniKaniRepository,
     private val syncScheduler: SyncScheduler,
-    private val pitchAccentScrapeScheduler: PitchAccentScrapeScheduler,
     private val notificationCoordinator: NotificationCoordinator,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
@@ -52,7 +50,6 @@ class AuthViewModel(
             when (val result = waniKaniRepository.fetchUser()) {
                 is ApiResult.Success -> {
                     syncScheduler.schedulePeriodicSync()
-                    pitchAccentScrapeScheduler.schedulePeriodicScrape()
                     notificationCoordinator.onLogin()
                     _uiState.update { it.copy(isSubmitting = false, pendingNotificationRequest = true) }
                 }

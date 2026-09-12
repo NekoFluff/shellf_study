@@ -103,10 +103,10 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     // this at the default and undo stays incorrect-only there.
     val allowUndoAfterCorrect: Boolean = false,
     // Live setting gate, plus the reading/pitch-accent state for the just-graded reading question —
-    // "not checked yet" unless that setting is on, the question type is READING, and feedback exists.
+    // no reading to show unless that setting is on, the question type is READING, and feedback exists.
     val showAnswerReadingPitchAccent: Boolean = false,
     val answerReading: String? = null,
-    val answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
+    val answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
     // The clip that survived the caller's own audio settings for [answerReading] — null whenever
     // there is nothing to play, so the hint's row shows no button rather than a dead one.
     val answerReadingAudio: PronunciationAudio? = null,

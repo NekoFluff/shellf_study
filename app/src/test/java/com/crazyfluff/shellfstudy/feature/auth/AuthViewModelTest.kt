@@ -9,7 +9,6 @@ import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
-import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
@@ -40,7 +39,6 @@ class AuthViewModelTest {
     private lateinit var tokenRepository: TokenRepository
     private lateinit var waniKaniRepository: WaniKaniRepository
     private lateinit var syncScheduler: FakeSyncScheduler
-    private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
     private lateinit var notificationCoordinator: FakeNotificationCoordinator
     private lateinit var settingsRepository: SettingsRepository
 
@@ -62,7 +60,6 @@ class AuthViewModelTest {
         settingsRepository = SettingsRepository(settingsDataStore)
         waniKaniRepository = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher).waniKaniRepository
         syncScheduler = FakeSyncScheduler()
-        pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
         notificationCoordinator = FakeNotificationCoordinator()
     }
 
@@ -72,7 +69,7 @@ class AuthViewModelTest {
     }
 
     private fun createViewModel() =
-        AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler, pitchAccentScrapeScheduler, notificationCoordinator, settingsRepository)
+        AuthViewModel(tokenRepository, waniKaniRepository, syncScheduler, notificationCoordinator, settingsRepository)
 
     @Test
     fun `submitting a blank token shows a validation error and makes no request`() = runTest(mainDispatcherRule.dispatcher) {

@@ -39,7 +39,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -61,8 +60,6 @@ import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.designsystem.PlatformBackHandler
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPitchAccentCheck
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentCheck
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.canOfferForceReveal
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.resolveEffectiveRevealMode
@@ -287,38 +284,27 @@ private fun ColumnScope.SubjectDetailBody(
             CircularProgressIndicator()
         }
     } else {
-        // Remembered so a reading only recomposes when the check state flips, not on every unrelated
-        // uiState change (the detail flow re-emits for settings, scroll offsets, stats, ...).
-        val pitchAccentCheck = remember(uiState.isCheckingPitchAccent, uiState.pitchAccentCheckFailed, viewModel) {
-            PitchAccentCheck(
-                inProgress = uiState.isCheckingPitchAccent,
-                failed = uiState.pitchAccentCheckFailed,
-                onClick = viewModel::checkPitchAccent
-            )
-        }
-        CompositionLocalProvider(LocalPitchAccentCheck provides pitchAccentCheck) {
-            SubjectDetailContent(
-                detail = detail,
-                relatedSubjects = uiState.relatedSubjects,
-                revealMode = effectiveRevealMode,
-                isAnswered = isAnswered,
-                questionType = questionType,
-                onRelatedSubjectClick = viewModel::navigateToRelated,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
-                showPitchAccent = uiState.showPitchAccent,
-                restrictAudioToMp3 = uiState.restrictAudioToMp3,
-                strokeOrder = uiState.strokeOrder,
-                autoPlayStrokeOrder = autoPlayStrokeOrder,
-                showStrokeOrder = uiState.showStrokeOrder,
-                hideContextSentenceTranslations = uiState.hideContextSentenceTranslations,
-                assignmentStats = uiState.assignmentStats,
-                reviewStats = uiState.reviewStats,
-                initialScrollOffset = uiState.pendingScrollOffset,
-                onScrollPositionChanged = { viewModel.recordScrollOffset(detail.subjectId, it) }
-            )
-        }
+        SubjectDetailContent(
+            detail = detail,
+            relatedSubjects = uiState.relatedSubjects,
+            revealMode = effectiveRevealMode,
+            isAnswered = isAnswered,
+            questionType = questionType,
+            onRelatedSubjectClick = viewModel::navigateToRelated,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
+            showPitchAccent = uiState.showPitchAccent,
+            restrictAudioToMp3 = uiState.restrictAudioToMp3,
+            strokeOrder = uiState.strokeOrder,
+            autoPlayStrokeOrder = autoPlayStrokeOrder,
+            showStrokeOrder = uiState.showStrokeOrder,
+            hideContextSentenceTranslations = uiState.hideContextSentenceTranslations,
+            assignmentStats = uiState.assignmentStats,
+            reviewStats = uiState.reviewStats,
+            initialScrollOffset = uiState.pendingScrollOffset,
+            onScrollPositionChanged = { viewModel.recordScrollOffset(detail.subjectId, it) }
+        )
     }
 }
 

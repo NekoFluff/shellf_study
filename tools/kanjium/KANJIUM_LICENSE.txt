@@ -1,0 +1,14 @@
+accents.txt in this directory is Kanjium's data/source_files/raw/accents.txt
+(https://github.com/mifunetoshiro/kanjium), compiled by Uros O.
+
+Licensed under Creative Commons Attribution-ShareAlike 4.0 International
+(https://creativecommons.org/licenses/by-sa/4.0/). Per Kanjium's README, credit its additions as:
+
+  "The pitch accent notation, verb particle data, phonetics, homonyms and other additions or
+  modifications to EDICT, KANJIDIC or KRADFILE were provided by Uros O. through his free
+  database."
+
+This file is a vendored input to tools/kanjium/fill_pitch_gaps.py, which regenerates
+shared/src/commonMain/composeResources/files/pitch_info.json — see
+shared/src/commonMain/composeResources/files/PITCH_ACCENT_LICENSE.txt for the license text
+that ships with the app alongside the derived data.

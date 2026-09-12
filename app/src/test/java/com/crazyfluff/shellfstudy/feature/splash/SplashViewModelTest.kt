@@ -7,7 +7,6 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
-import com.crazyfluff.shellfstudy.fakes.FakePitchAccentScrapeScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.crazyfluff.shellfstudy.shared.feature.splash.SplashDestination
@@ -31,7 +30,6 @@ class SplashViewModelTest {
 
     private lateinit var tokenRepository: TokenRepository
     private lateinit var syncScheduler: FakeSyncScheduler
-    private lateinit var pitchAccentScrapeScheduler: FakePitchAccentScrapeScheduler
     private lateinit var notificationCoordinator: FakeNotificationCoordinator
 
     @Before
@@ -42,12 +40,11 @@ class SplashViewModelTest {
         )
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
         syncScheduler = FakeSyncScheduler()
-        pitchAccentScrapeScheduler = FakePitchAccentScrapeScheduler()
         notificationCoordinator = FakeNotificationCoordinator()
     }
 
     private fun createViewModel() =
-        SplashViewModel(tokenRepository, syncScheduler, pitchAccentScrapeScheduler, notificationCoordinator)
+        SplashViewModel(tokenRepository, syncScheduler, notificationCoordinator)
 
     @Test
     fun `with no stored token, routes to auth without touching background sync`() = runTest(mainDispatcherRule.dispatcher) {
@@ -73,7 +70,6 @@ class SplashViewModelTest {
             assertThat(state.destination).isEqualTo(SplashDestination.DASHBOARD)
         }
         assertThat(syncScheduler.scheduleCallCount).isEqualTo(1)
-        assertThat(pitchAccentScrapeScheduler.scheduleCallCount).isEqualTo(1)
         assertThat(notificationCoordinator.onLoginCallCount).isEqualTo(1)
     }
 }

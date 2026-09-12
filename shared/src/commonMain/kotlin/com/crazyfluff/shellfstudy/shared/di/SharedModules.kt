@@ -19,7 +19,6 @@ import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
-import com.crazyfluff.shellfstudy.shared.data.WeblioPitchAccentParser
 import com.crazyfluff.shellfstudy.shared.data.strokeorder.CmpStrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthViewModel
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
@@ -36,9 +35,6 @@ import com.crazyfluff.shellfstudy.shared.network.AuthTokenProvider
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient
 import com.crazyfluff.shellfstudy.shared.network.waniKaniJson
-import com.crazyfluff.shellfstudy.shared.network.weblio.KtorWeblioApi
-import com.crazyfluff.shellfstudy.shared.network.weblio.WeblioApi
-import com.crazyfluff.shellfstudy.shared.network.weblio.createWeblioHttpClient
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlinx.coroutines.CoroutineScope
@@ -69,10 +65,6 @@ val networkModule = module {
     single { AuthTokenProvider { get<TokenRepository>().tokenFlow.firstOrNull() } }
     single { createWaniKaniHttpClient(tokenProvider = get(), json = get()) }
     single { WaniKaniApi(get()) }
-}
-
-val weblioNetworkModule = module {
-    single<WeblioApi> { KtorWeblioApi(createWeblioHttpClient()) }
 }
 
 val repositoryModule = module {
@@ -112,7 +104,6 @@ val repositoryModule = module {
     single { SettingsRepository(get()) }
     single { TokenRepository(get(), get()) }
     single { OutboxRepository(outboxDao = get(), outboxSyncScheduler = get(), dataStore = get()) }
-    single { WeblioPitchAccentParser() }
     single { DashboardCacheRepository(get()) }
     single {
         AccountDataCleaner(
@@ -133,7 +124,6 @@ val repositoryModule = module {
         LogoutCoordinator(
             tokenRepository = get(),
             syncScheduler = get(),
-            pitchAccentScrapeScheduler = get(),
             notificationCoordinator = get(),
             accountDataCleaner = get()
         )
@@ -174,21 +164,14 @@ val repositoryModule = module {
         )
     }
 
-    single {
-        PitchAccentRepository(
-            bundledSource = get(),
-            cacheDao = get(),
-            weblioApi = get(),
-            parser = get()
-        )
-    }
+    single { PitchAccentRepository(bundledSource = get()) }
 }
 
 val viewModelModule = module {
     viewModel { ThemeViewModel(get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get()) }
-    viewModel { AuthViewModel(get(), get(), get(), get(), get(), get()) }
-    viewModel { SplashViewModel(get(), get(), get(), get()) }
+    viewModel { AuthViewModel(get(), get(), get(), get(), get()) }
+    viewModel { SplashViewModel(get(), get(), get()) }
 
     viewModel {
         SubjectDetailViewModel(
@@ -197,8 +180,7 @@ val viewModelModule = module {
             settingsRepository = get(),
             audioPlayer = get(),
             strokeOrderRepository = get(),
-            statsRepository = get(),
-            pitchAccentRepository = get()
+            statsRepository = get()
         )
     }
 

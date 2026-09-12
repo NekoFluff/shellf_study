@@ -199,10 +199,8 @@ class LessonScreenTest {
         timing: QuizTimingUiState = QuizTimingUiState(),
         settings: LessonUiState.DisplaySettings = LessonUiState.DisplaySettings(),
         answerReading: String? = null,
-        answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Loading,
-        answerReadingAudio: PronunciationAudio? = null,
-        isCheckingPitchAccent: Boolean = false,
-        pitchAccentCheckFailed: Boolean = false
+        answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
+        answerReadingAudio: PronunciationAudio? = null
     ) = LessonUiState(
         phase = LessonUiState.Phase.Quiz(
             currentItem = currentItem,
@@ -218,10 +216,8 @@ class LessonScreenTest {
         ),
         settings = settings,
         // The quiz hint reads the live map for the current item — spelled out here so a fixture can
-        // still express "this word's pitch accent is Available/Loading" in one line.
-        pitchAccentsBySubjectId = mapOf(currentItem.subjectId to answerPitchAccents),
-        isCheckingPitchAccent = isCheckingPitchAccent,
-        pitchAccentCheckFailed = pitchAccentCheckFailed
+        // still express "this word's pitch accent is Available/Unavailable" in one line.
+        pitchAccentsBySubjectId = mapOf(currentItem.subjectId to answerPitchAccents)
     )
 
     private fun completeState(
@@ -267,7 +263,6 @@ class LessonScreenTest {
         onFinishForNow: () -> Unit = {},
         onPracticeMissed: () -> Unit = {},
         onFinishSession: () -> Unit = {},
-        onCheckPitchAccent: (LessonItem) -> Unit = {},
         onDone: () -> Unit = {},
         onBack: () -> Unit = {}
     ) {
@@ -294,7 +289,6 @@ class LessonScreenTest {
                             LessonScreenEvent.Continue -> onContinue()
                             LessonScreenEvent.ToggleDetails -> {}
                             LessonScreenEvent.CloseDetails -> {}
-                            is LessonScreenEvent.CheckPitchAccent -> onCheckPitchAccent(event.item)
                             LessonScreenEvent.Retry -> onRetry()
                             LessonScreenEvent.StudyOffline -> onStudyOffline()
                             LessonScreenEvent.Abandon -> onAbandon()
@@ -1164,74 +1158,6 @@ class LessonScreenTest {
         )
 
         composeTestRule.onAllNodesWithContentDescription("Play pronunciation for みず").assertCountEquals(0)
-    }
-
-    @Test
-    fun quizPhase_answerReadingPitchAccentHint_offersCheckNowForAPendingReadingAndInvokesTheViewModel() {
-        // The hint observes the cache live now, so a "not checked yet" reading is exactly the state a
-        // check can still resolve — the screen must offer the link and route the tap to the ViewModel.
-        var checkedItem: LessonItem? = null
-        setScreen(
-            quizState(
-                currentItem = radicalItem, currentQuestionType = QuestionType.READING,
-                totalQuizCount = 1, remainingQuizCount = 1,
-                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
-                answerReading = "みず",
-                answerPitchAccents = PitchAccentUiState.Loading
-            ),
-            onCheckPitchAccent = { checkedItem = it }
-        )
-
-        composeTestRule.onNodeWithTag(PitchAccentTestTags.CHECK).assertIsDisplayed().performClick()
-        assertThat(checkedItem).isEqualTo(radicalItem)
-    }
-
-    @Test
-    fun quizPhase_answerReadingPitchAccentHint_showsProgressInsteadOfTheLinkWhileChecking() {
-        setScreen(
-            quizState(
-                currentItem = radicalItem, currentQuestionType = QuestionType.READING,
-                totalQuizCount = 1, remainingQuizCount = 1,
-                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
-                answerReading = "みず",
-                answerPitchAccents = PitchAccentUiState.Loading,
-                isCheckingPitchAccent = true
-            )
-        )
-
-        composeTestRule.onNodeWithTag(PitchAccentTestTags.CHECKING).assertIsDisplayed()
-        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.CHECK).assertCountEquals(0)
-    }
-
-    @Test
-    fun quizPhase_answerReadingPitchAccentHint_offersTryAgainUnderAFailedCheckCaption() {
-        setScreen(
-            quizState(
-                currentItem = radicalItem, currentQuestionType = QuestionType.READING,
-                totalQuizCount = 1, remainingQuizCount = 1,
-                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
-                answerReading = "みず",
-                answerPitchAccents = PitchAccentUiState.Loading,
-                pitchAccentCheckFailed = true
-            )
-        )
-
-        composeTestRule.onNodeWithText("Couldn't check pitch accent").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Try again").assertIsDisplayed()
-    }
-
-    @Test
-    fun quizPhase_offersNoCheckLinkOnTheStudyCard() {
-        // The study card is reference material rather than a just-graded answer, so it deliberately
-        // gets no check affordance — it must not inherit one just because the quiz hint now offers it.
-        setScreen(
-            studyState(studyItems = listOf(radicalItem))
-        )
-
-        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.CHECK).assertCountEquals(0)
     }
 
     @Test

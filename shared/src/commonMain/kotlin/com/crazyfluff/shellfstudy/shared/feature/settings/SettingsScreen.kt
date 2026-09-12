@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Quiz
@@ -537,6 +538,10 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            ThirdPartyCreditsCard()
         }
     }
 
@@ -577,6 +582,49 @@ private fun SectionCard(
             }
             Spacer(modifier = Modifier.height(12.dp))
             content()
+        }
+    }
+}
+
+private data class ThirdPartyCredit(val source: String, val usedFor: String, val license: String)
+
+private val THIRD_PARTY_CREDITS = listOf(
+    ThirdPartyCredit(
+        source = "KanjiVG",
+        usedFor = "Kanji stroke-order diagrams",
+        license = "CC BY-SA 3.0"
+    ),
+    ThirdPartyCredit(
+        source = "Noto Sans JP",
+        usedFor = "Japanese text rendering",
+        license = "SIL Open Font License 1.1"
+    ),
+    ThirdPartyCredit(
+        source = "Kanjium",
+        usedFor = "Pitch-accent dictionary (additions by Uros O.)",
+        license = "CC BY-SA 4.0"
+    )
+)
+
+/** Static attribution list for bundled third-party data this app ships with — required by the
+ *  CC BY-SA licenses covering the KanjiVG and Kanjium data files. Not a general licenses browser:
+ *  just the small fixed set of sources bundled today. */
+@Composable
+private fun ThirdPartyCreditsCard(modifier: Modifier = Modifier) {
+    SectionCard(title = "Open source & data credits", icon = Icons.Default.Info, modifier = modifier) {
+        THIRD_PARTY_CREDITS.forEachIndexed { index, credit ->
+            if (index > 0) Spacer(modifier = Modifier.height(8.dp))
+            Column {
+                Text(
+                    text = "${credit.source} — ${credit.license}",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = credit.usedFor,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
