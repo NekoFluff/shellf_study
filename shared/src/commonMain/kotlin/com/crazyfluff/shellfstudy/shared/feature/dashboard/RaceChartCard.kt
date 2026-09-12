@@ -3,10 +3,12 @@ package com.crazyfluff.shellfstudy.shared.feature.dashboard
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -206,10 +208,10 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
 
                 Spacer(Modifier.width(8.dp))
 
+                Box(Modifier.weight(1f).fillMaxHeight()) {
                 Canvas(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
+                        .fillMaxSize()
                         .clipToBounds()
                         .onSizeChanged { viewportWPx = it.width.toFloat() }
                         .pointerInput(leaderboard.window) {
@@ -244,21 +246,6 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                     // Horizontal grid lines
                     for (lvl in listOf(10, 20, 30, 40, 50)) {
                         drawLine(gridColor, Offset(0f, yOf(lvl)), Offset(w, yOf(lvl)), 1.dp.toPx())
-                    }
-
-                    // X-axis date labels — 4 evenly spaced across the currently visible range
-                    val visStartMs = (globalMinMs + ((0f - offsetX) / contentW * timeRange).toLong()).coerceIn(globalMinMs, nowMillis)
-                    val visEndMs = (globalMinMs + ((w - offsetX) / contentW * timeRange).toLong()).coerceIn(globalMinMs, nowMillis)
-                    val visRange = (visEndMs - visStartMs).coerceAtLeast(1L)
-                    for (i in 0..3) {
-                        val ms = visStartMs + (i.toFloat() / 3f * visRange).toLong()
-                        val x = xOf(ms)
-                        val label = when (window) {
-                            LeaderboardWindow.WEEK, LeaderboardWindow.MONTH -> formatShortDate(ms)
-                            else -> formatMonthYear(ms)
-                        }
-                        val lr = textMeasurer.measure(label, labelStyle)
-                        drawText(lr, labelColor, Offset((x - lr.size.width / 2f).coerceIn(0f, w - lr.size.width), plotH + 4.dp.toPx()))
                     }
 
                     // User lines
@@ -320,6 +307,33 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                         bg = tooltipBg,
                         fg = tooltipFg
                     )
+                }
+
+                // Drawn in an unclipped sibling Canvas — overlapping the clipped plot above — so
+                // the first/last labels can stay centered on their tick and overflow the plot edge
+                // slightly instead of being clipped or snapped inward against it.
+                Canvas(Modifier.fillMaxSize()) {
+                    val w = size.width
+                    val plotH = size.height - 20.dp.toPx()
+                    val contentW = w * scale
+
+                    fun xOf(ms: Long) = (ms - globalMinMs).toFloat() / timeRange * contentW + offsetX
+
+                    // X-axis date labels — 4 evenly spaced across the currently visible range
+                    val visStartMs = (globalMinMs + ((0f - offsetX) / contentW * timeRange).toLong()).coerceIn(globalMinMs, nowMillis)
+                    val visEndMs = (globalMinMs + ((w - offsetX) / contentW * timeRange).toLong()).coerceIn(globalMinMs, nowMillis)
+                    val visRange = (visEndMs - visStartMs).coerceAtLeast(1L)
+                    for (i in 0..3) {
+                        val ms = visStartMs + (i.toFloat() / 3f * visRange).toLong()
+                        val x = xOf(ms)
+                        val label = when (window) {
+                            LeaderboardWindow.WEEK, LeaderboardWindow.MONTH -> formatShortDate(ms)
+                            else -> formatMonthYear(ms)
+                        }
+                        val lr = textMeasurer.measure(label, labelStyle)
+                        drawText(lr, labelColor, Offset(x - lr.size.width / 2f, plotH + 4.dp.toPx()))
+                    }
+                }
                 }
             }
 
@@ -407,10 +421,10 @@ private fun ActivityWindowChart(
 
                 Spacer(Modifier.width(8.dp))
 
+                Box(Modifier.weight(1f).fillMaxHeight()) {
                 Canvas(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
+                        .fillMaxSize()
                         .clipToBounds()
                         .onSizeChanged { viewportWPx = it.width.toFloat() }
                         .pointerInput(numPoints) {
@@ -446,21 +460,6 @@ private fun ActivityWindowChart(
                     for (frac in listOf(0.25f, 0.5f, 0.75f, 1f)) {
                         val y = plotH * (1f - frac)
                         drawLine(gridColor, Offset(0f, y), Offset(w, y), 1.dp.toPx())
-                    }
-
-                    // X-axis labels — evenly distributed across the currently *visible* bars, so
-                    // they stay relevant instead of clumping together once you've zoomed in.
-                    val visStart = (((0f - offsetX) / contentW) * (numPoints - 1)).roundToInt().coerceIn(0, numPoints - 1)
-                    val visEnd = (((w - offsetX) / contentW) * (numPoints - 1)).roundToInt().coerceIn(0, numPoints - 1)
-                    val labelIndices = if (visEnd - visStart <= 7) {
-                        (visStart..visEnd).toList()
-                    } else {
-                        List(4) { i -> visStart + (i.toFloat() / 3f * (visEnd - visStart)).roundToInt() }.distinct()
-                    }
-                    labelIndices.forEach { bi ->
-                        val x = xOf(bi)
-                        val lr = textMeasurer.measure(bars[bi].label, labelStyle)
-                        drawText(lr, labelColor, Offset((x - lr.size.width / 2f).coerceIn(0f, w - lr.size.width), plotH + 4.dp.toPx()))
                     }
 
                     // Lines per user
@@ -509,6 +508,33 @@ private fun ActivityWindowChart(
                         bg = tooltipBg,
                         fg = tooltipFg
                     )
+                }
+
+                // Drawn in an unclipped sibling Canvas — overlapping the clipped plot above — so
+                // the first/last labels can stay centered on their tick and overflow the plot edge
+                // slightly instead of being clipped or snapped inward against it.
+                Canvas(Modifier.fillMaxSize()) {
+                    val w = size.width
+                    val plotH = size.height - 20.dp.toPx()
+                    val contentW = w * scale
+
+                    fun xOf(i: Int): Float = i.toFloat() / (numPoints - 1).coerceAtLeast(1) * contentW + offsetX
+
+                    // X-axis labels — evenly distributed across the currently *visible* bars, so
+                    // they stay relevant instead of clumping together once you've zoomed in.
+                    val visStart = (((0f - offsetX) / contentW) * (numPoints - 1)).roundToInt().coerceIn(0, numPoints - 1)
+                    val visEnd = (((w - offsetX) / contentW) * (numPoints - 1)).roundToInt().coerceIn(0, numPoints - 1)
+                    val labelIndices = if (visEnd - visStart <= 7) {
+                        (visStart..visEnd).toList()
+                    } else {
+                        List(4) { i -> visStart + (i.toFloat() / 3f * (visEnd - visStart)).roundToInt() }.distinct()
+                    }
+                    labelIndices.forEach { bi ->
+                        val x = xOf(bi)
+                        val lr = textMeasurer.measure(bars[bi].label, labelStyle)
+                        drawText(lr, labelColor, Offset(x - lr.size.width / 2f, plotH + 4.dp.toPx()))
+                    }
+                }
                 }
             }
 
