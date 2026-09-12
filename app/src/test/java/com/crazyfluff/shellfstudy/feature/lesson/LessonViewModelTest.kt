@@ -29,8 +29,10 @@ import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
+import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
+import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
@@ -251,7 +253,7 @@ class LessonViewModelTest {
             val graded = awaitItem()
             val feedbackState = graded.phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            assertThat(feedbackState.answerReading).isEqualTo("けんあ")
+            assertThat(feedbackState.answerHint?.reading).isEqualTo("けんあ")
             // "件亜" is a fabricated word — guaranteed absent from the real bundled pitch-accent
             // dictionary, so the reading still surfaces but with no pitch pattern alongside it.
             assertThat(graded.pitchAccentsBySubjectId[feedbackState.currentItem.subjectId])
@@ -288,7 +290,7 @@ class LessonViewModelTest {
             viewModel.submitAnswer()
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            assertThat(feedbackState.answerReading).isNull()
+            assertThat(feedbackState.answerHint).isNull()
         }
     }
 
@@ -322,7 +324,7 @@ class LessonViewModelTest {
             viewModel.submitAnswer()
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            assertThat(feedbackState.answerReading).isNull()
+            assertThat(feedbackState.answerHint).isNull()
         }
     }
 
@@ -358,7 +360,7 @@ class LessonViewModelTest {
             viewModel.submitAnswer()
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            assertThat(feedbackState.answerReading).isNull()
+            assertThat(feedbackState.answerHint).isNull()
         }
     }
 
@@ -397,7 +399,7 @@ class LessonViewModelTest {
             viewModel.undoLastAnswer()
             val undoneState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(undoneState.feedback).isNull()
-            assertThat(undoneState.answerReading).isNull()
+            assertThat(undoneState.answerHint).isNull()
         }
     }
 
@@ -448,7 +450,7 @@ class LessonViewModelTest {
             var graded = awaitItem()
             val feedbackState = graded.phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            assertThat(feedbackState.answerReading).isEqualTo("みず")
+            assertThat(feedbackState.answerHint?.reading).isEqualTo("みず")
             // Only comes back populated if resumeQuizPhase pointed the observation at the seeded
             // item, since this ViewModel instance never went through Phase.Study.
             val expected = PitchAccentUiState.Available(
@@ -569,6 +571,62 @@ class LessonViewModelTest {
             assertThat(study.strokeOrderBySubjectId[2L]).isEqualTo(StrokeOrderUiState.Unavailable)
         }
     }
+
+    @Test
+    fun `related subjects are observed live — a cache write reaches the study card with no new batch`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabWithAmalgamationSubjectJson()))
+
+            val viewModel = createViewModel()
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+                viewModel.startSelectedLessons()
+                state = awaitItem()
+                // Not cached yet — the related word (id 9001) was never synced, only referenced.
+                assertThat(state.relatedSubjectsById[9001L]).isNull()
+
+                repositories.subjectDao.upsertAll(
+                    listOf(
+                        SubjectEntity(
+                            id = 9001L,
+                            subjectType = "vocabulary",
+                            level = 1,
+                            slug = "otherword",
+                            characters = "他語",
+                            meanings = listOf(MeaningData(meaning = "Other word", primary = true)),
+                            readings = emptyList(),
+                            documentUrl = null
+                        )
+                    )
+                )
+
+                while (state.relatedSubjectsById[9001L] == null) state = awaitItem()
+                assertThat(state.relatedSubjectsById[9001L]?.meanings).containsExactly("Other word")
+                assertThat((state.phase as LessonUiState.Phase.Study).batchIndex).isEqualTo(0)
+            }
+        }
+
+    // Same word as vocabSubjectsJson(), but "used in" a second, uncached word (9001) — so a later
+    // cache write for that id can be observed reaching the study card live.
+    private fun vocabWithAmalgamationSubjectJson() = """
+        {
+          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
+          "data": [{
+            "id": 8001, "object": "vocabulary", "url": "https://api.wanikani.com/v2/subjects/8001",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "testword",
+              "characters": "件亜",
+              "meanings": [{"meaning": "Testword", "primary": true, "accepted_meaning": true}],
+              "readings": [{"reading": "けんあ", "primary": true, "accepted_reading": true}],
+              "amalgamation_subject_ids": [9001]
+            }
+          }]
+        }
+    """.trimIndent()
 
     @Test
     fun `advancing past the last study card starts the quiz`() = runTest(mainDispatcherRule.dispatcher) {

@@ -77,6 +77,15 @@ data class QuizQuestionTestTags(
     val sessionContextLabel: String
 )
 
+/** The reading, its live pitch-accent answer, and the audio clip that survived the caller's own
+ *  audio settings — always produced/cleared together, so callers carry one value instead of three
+ *  fields that only make sense in combination. */
+data class AnswerReadingHint(
+    val reading: String,
+    val pitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
+    val audio: PronunciationAudio? = null
+)
+
 /** Everything [QuizQuestionContent] needs to render one quiz question — a read-only projection
  *  each feature's own (differently-shaped) UI state builds right before rendering. */
 data class QuizQuestionUiState<T : QuizDisplayItem>(
@@ -102,14 +111,11 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     // still be undone up to that point — Lesson has no such pending-submission window, so it leaves
     // this at the default and undo stays incorrect-only there.
     val allowUndoAfterCorrect: Boolean = false,
-    // Live setting gate, plus the reading/pitch-accent state for the just-graded reading question —
-    // no reading to show unless that setting is on, the question type is READING, and feedback exists.
+    // Live setting gate, plus the reading/pitch-accent/audio hint for the just-graded reading
+    // question — no reading to show unless that setting is on, the question type is READING, and
+    // feedback exists.
     val showAnswerReadingPitchAccent: Boolean = false,
-    val answerReading: String? = null,
-    val answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
-    // The clip that survived the caller's own audio settings for [answerReading] — null whenever
-    // there is nothing to play, so the hint's row shows no button rather than a dead one.
-    val answerReadingAudio: PronunciationAudio? = null,
+    val answerHint: AnswerReadingHint? = null,
     // Which pass of the session this question belongs to ("Batch 2 of 4", "Extra practice") — null
     // when there's nothing worth saying, which is the case for every review question and for a lesson
     // session that fits in a single batch.
@@ -218,10 +224,10 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
         modifier = Modifier.weight(1f, fill = false).fillMaxWidth().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        val answerReading = uiState.answerReading
+        val answerHint = uiState.answerHint
         val showAnswerHint = uiState.showAnswerReadingPitchAccent &&
             questionType == QuestionType.READING &&
-            answerReading != null
+            answerHint != null
         AnimatedVisibility(
             visible = showAnswerHint,
             // Slides down from above (unlike RankChangeChip's slide-up-from-below below the glyph)
@@ -238,13 +244,13 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
                     animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
                 )
         ) {
-            if (answerReading != null) {
+            if (answerHint != null) {
                 Column {
                     ReadingRow(
-                        reading = answerReading,
-                        audio = { uiState.answerReadingAudio }
+                        reading = answerHint.reading,
+                        audio = { answerHint.audio }
                     )
-                    PitchAccentDiagram(uiState.answerPitchAccents.forReading(answerReading))
+                    PitchAccentDiagram(answerHint.pitchAccents.forReading(answerHint.reading))
                     Spacer(modifier = Modifier.height(2.dp))
                 }
             }

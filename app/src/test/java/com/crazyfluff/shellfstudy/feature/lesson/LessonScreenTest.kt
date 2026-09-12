@@ -41,6 +41,8 @@ import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.StrokeOrderStroke
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingHint
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
@@ -158,6 +160,7 @@ class LessonScreenTest {
         studyItems: List<LessonItem>,
         studyIndex: Int = 0,
         strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap(),
+        relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
         batchIndex: Int = 0,
         batchCount: Int = 1
     ) = LessonUiState(
@@ -167,7 +170,8 @@ class LessonScreenTest {
             strokeOrderBySubjectId = strokeOrderBySubjectId,
             batchIndex = batchIndex,
             batchCount = batchCount
-        )
+        ),
+        relatedSubjectsById = relatedSubjectsById
     )
 
     private fun batchCompleteState(
@@ -211,8 +215,9 @@ class LessonScreenTest {
             totalQuizCount = totalQuizCount,
             remainingQuizCount = remainingQuizCount,
             timing = timing,
-            answerReading = answerReading,
-            answerReadingAudio = answerReadingAudio
+            answerHint = answerReading?.let {
+                AnswerReadingHint(reading = it, audio = answerReadingAudio)
+            }
         ),
         settings = settings,
         // The quiz hint reads the live map for the current item — spelled out here so a fixture can
@@ -618,6 +623,28 @@ class LessonScreenTest {
         setScreen(studyState(studyItems = listOf(radicalItem), studyIndex = 0))
 
         composeTestRule.onAllNodesWithTag(StrokeOrderTestTags.SECTION).assertCountEquals(0)
+    }
+
+    @Test
+    fun studyPhase_relatedSubjectIdsNotYetCached_showsNotLoadedCaption() {
+        // amalgamationSubjectIds = [99] but relatedSubjectsById has no entry for it — distinct from
+        // "this item is used in nothing" (the default empty list on radicalItem/etc.).
+        setScreen(
+            studyState(
+                studyItems = listOf(radicalItem.copy(amalgamationSubjectIds = listOf(99))),
+                studyIndex = 0
+            )
+        )
+
+        composeTestRule.onNodeWithText("Not loaded yet").assertIsDisplayed()
+    }
+
+    @Test
+    fun studyPhase_noRelatedSubjectIds_showsNoRelatedSubjectsSection() {
+        setScreen(studyState(studyItems = listOf(radicalItem), studyIndex = 0))
+
+        composeTestRule.onAllNodesWithText("Not loaded yet").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Used in").assertCountEquals(0)
     }
 
     @Test

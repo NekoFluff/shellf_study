@@ -978,13 +978,13 @@ class ReviewViewModelTest {
             awaitItem()
             viewModel.submitAnswer()
             var settled = awaitItem()
-            while ((settled.phase as ReviewUiState.Phase.Active).answerReading == null) settled = awaitItem()
+            while ((settled.phase as ReviewUiState.Phase.Active).answerHint == null) settled = awaitItem()
             val active = settled.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback?.isCorrect).isTrue()
-            assertThat(active.answerReading).isEqualTo("けんあ")
+            assertThat(active.answerHint?.reading).isEqualTo("けんあ")
             // "件亜" is a fabricated word — guaranteed absent from the real bundled pitch-accent
             // dictionary, so the reading still surfaces but with no pitch pattern alongside it.
-            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
+            assertThat(active.answerHint?.pitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
         }
     }
 
@@ -1012,8 +1012,7 @@ class ReviewViewModelTest {
             val feedbackState = awaitItem()
             val active = feedbackState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback?.isCorrect).isTrue()
-            assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
+            assertThat(active.answerHint).isNull()
         }
     }
 
@@ -1042,8 +1041,7 @@ class ReviewViewModelTest {
             val feedbackState = awaitItem()
             val active = feedbackState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback?.isCorrect).isTrue()
-            assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
+            assertThat(active.answerHint).isNull()
         }
     }
 
@@ -1074,8 +1072,7 @@ class ReviewViewModelTest {
             val feedbackState = awaitItem()
             val active = feedbackState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback?.isCorrect).isTrue()
-            assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
+            assertThat(active.answerHint).isNull()
         }
     }
 
@@ -1110,8 +1107,7 @@ class ReviewViewModelTest {
             val undoneState = awaitItem()
             val active = undoneState.phase as ReviewUiState.Phase.Active
             assertThat(active.feedback).isNull()
-            assertThat(active.answerReading).isNull()
-            assertThat(active.answerPitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
+            assertThat(active.answerHint).isNull()
         }
     }
 

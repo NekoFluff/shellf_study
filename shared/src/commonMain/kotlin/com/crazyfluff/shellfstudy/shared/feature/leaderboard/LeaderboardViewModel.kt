@@ -28,15 +28,22 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
+/** The "add a friend" dialog's form — one value rather than five separate fields, since every
+ *  mutator writes and clears them together (see [LeaderboardViewModel.onAddFriendNicknameChange]
+ *  et al.); a field-by-field reset was easy to get half-right as the flow grew. */
+data class AddFriendFormState(
+    val nickname: String = "",
+    val token: String = "",
+    val isValidating: Boolean = false,
+    val error: String? = null,
+    val success: Boolean = false
+)
+
 data class LeaderboardUiState(
     val leaderboard: Leaderboard? = null,
     val friends: List<FriendEntry> = emptyList(),
     val isRefreshing: Boolean = false,
-    val addFriendNickname: String = "",
-    val addFriendToken: String = "",
-    val addFriendValidating: Boolean = false,
-    val addFriendError: String? = null,
-    val addFriendSuccess: Boolean = false,
+    val addFriendForm: AddFriendFormState = AddFriendFormState(),
     val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
     val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK,
     val refreshErrorMessage: String? = null
@@ -96,26 +103,26 @@ class LeaderboardViewModel(
     }
 
     fun onAddFriendNicknameChange(value: String) {
-        _uiState.update { it.copy(addFriendNickname = value, addFriendError = null, addFriendSuccess = false) }
+        _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(nickname = value, error = null, success = false)) }
     }
 
     fun onAddFriendTokenChange(value: String) {
-        _uiState.update { it.copy(addFriendToken = value, addFriendError = null) }
+        _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(token = value, error = null)) }
     }
 
     fun onAddFriendConfirm() {
-        val nickname = _uiState.value.addFriendNickname.trim()
-        val token = _uiState.value.addFriendToken.trim()
+        val nickname = _uiState.value.addFriendForm.nickname.trim()
+        val token = _uiState.value.addFriendForm.token.trim()
         if (nickname.isBlank()) {
-            _uiState.update { it.copy(addFriendError = "Please enter a nickname.") }
+            _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(error = "Please enter a nickname.")) }
             return
         }
         if (token.isBlank()) {
-            _uiState.update { it.copy(addFriendError = "Please enter an API token.") }
+            _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(error = "Please enter an API token.")) }
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(addFriendValidating = true, addFriendError = null) }
+            _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(isValidating = true, error = null)) }
             val api = createFriendWaniKaniApi(token, json)
             val result = safeApiCall { api.getUser() }
             when (result) {
@@ -124,11 +131,7 @@ class LeaderboardViewModel(
                     val refreshResult = friendStatsRepository.refreshFriend(entry)
                     _uiState.update {
                         it.copy(
-                            addFriendValidating = false,
-                            addFriendNickname = "",
-                            addFriendToken = "",
-                            addFriendError = null,
-                            addFriendSuccess = true,
+                            addFriendForm = AddFriendFormState(isValidating = false, success = true),
                             refreshErrorMessage = if (refreshResult is ApiResult.Error) {
                                 "Added $nickname, but couldn't fetch their stats yet."
                             } else {
@@ -139,7 +142,7 @@ class LeaderboardViewModel(
                 }
                 is ApiResult.Error -> {
                     _uiState.update {
-                        it.copy(addFriendValidating = false, addFriendError = result.message)
+                        it.copy(addFriendForm = it.addFriendForm.copy(isValidating = false, error = result.message))
                     }
                 }
             }

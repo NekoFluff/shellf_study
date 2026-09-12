@@ -43,10 +43,10 @@ import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
-import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingHint
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
@@ -102,15 +102,12 @@ data class ReviewUiState(
             // really are different rendering modes).
             val isWrappingUp: Boolean = false,
             val timing: QuizTimingUiState = QuizTimingUiState(),
-            // The reading + pitch-accent patterns for the just-graded reading question. The reading
-            // is published with the feedback (see gradeAnswer); the patterns are *observed* live for
-            // as long as this question is the current one (see pitchAccentHintKey/init), so an update
-            // from any writer to the bundled dictionary's cache lands here without a refetch.
-            val answerReading: String? = null,
-            val answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
-            // The clip that survived the user's own audio settings for [answerReading] — null when
-            // there is nothing to play, so the hint shows no button rather than a dead one.
-            val answerReadingAudio: PronunciationAudio? = null
+            // The reading + pitch-accent patterns + audio for the just-graded reading question. The
+            // reading/audio are published with the feedback (see gradeAnswer); the pitch patterns are
+            // *observed* live for as long as this question is the current one (see
+            // pitchAccentHintKey/init), so an update from any writer to the bundled dictionary's
+            // cache lands here without a refetch.
+            val answerHint: AnswerReadingHint? = null
         ) : Phase
 
         data class Complete(
@@ -245,9 +242,9 @@ class ReviewViewModel(
         }
         // The hint's pitch patterns are followed live rather than fetched once at grading time: the
         // repository's Room flow is the single source of truth, so whichever writer resolves the word
-        // (this screen's own check, the detail sheet's, the background scrape worker) the hint
-        // updates in place with no propagation code anywhere. flatMapLatest swaps the observation
-        // when the question changes, which also cancels it outright when the key goes null.
+        // (this screen's own check, the detail sheet's) the hint updates in place with no propagation
+        // code anywhere. flatMapLatest swaps the observation when the question changes, which also
+        // cancels it outright when the key goes null.
         viewModelScope.launch {
             pitchAccentHintKey
                 .flatMapLatest { key ->
@@ -256,15 +253,16 @@ class ReviewViewModel(
                 }
                 .collect { hint ->
                     updateActive {
+                        val current = it.answerHint
                         // Drop anything that doesn't belong to the hint on screen right now — an
                         // emission can land after an undo or an advance, and must neither resurrect a
                         // stale word's patterns nor overwrite the next question's.
                         if (hint == null || it.currentItem.assignmentId != hint.first.assignmentId ||
-                            it.answerReading != hint.first.reading || it.feedback == null
+                            current == null || current.reading != hint.first.reading || it.feedback == null
                         ) {
-                            it.copy(answerPitchAccents = PitchAccentUiState.Unavailable)
+                            it.copy(answerHint = current?.copy(pitchAccents = PitchAccentUiState.Unavailable))
                         } else {
-                            it.copy(answerPitchAccents = hint.second)
+                            it.copy(answerHint = current.copy(pitchAccents = hint.second))
                         }
                     }
                 }
@@ -550,7 +548,11 @@ class ReviewViewModel(
             val answerReadingAudio = answerReading?.let { reading ->
                 selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
             }
-            updateActive { it.copy(answerReading = answerReading, answerReadingAudio = answerReadingAudio) }
+            updateActive {
+                it.copy(
+                    answerHint = answerReading?.let { reading -> AnswerReadingHint(reading = reading, audio = answerReadingAudio) }
+                )
+            }
             pitchAccentHintKey.value = answerReading?.let { PitchAccentHintKey(item.assignmentId, characters, it) }
         }
 
@@ -604,9 +606,7 @@ class ReviewViewModel(
                     // Undoing a correct answer retracts the rank change it predicted; an incorrect
                     // answer never had one, so this is a no-op in that branch.
                     rankChange = if (feedback.isCorrect) null else it.rankChange,
-                    answerReading = null,
-                    answerPitchAccents = PitchAccentUiState.Unavailable,
-                    answerReadingAudio = null,
+                    answerHint = null,
                     answerInput = "",
                     remainingCount = queue.size,
                     undoCounter = it.undoCounter + 1,

@@ -24,6 +24,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingHint
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.formatElapsedClock
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
@@ -98,9 +99,9 @@ class ReviewScreenTest {
             remainingCount = remainingCount,
             isWrappingUp = isWrappingUp,
             timing = timing,
-            answerReading = answerReading,
-            answerPitchAccents = answerPitchAccents,
-            answerReadingAudio = answerReadingAudio
+            answerHint = answerReading?.let {
+                AnswerReadingHint(reading = it, pitchAccents = answerPitchAccents, audio = answerReadingAudio)
+            }
         ),
         settings = settings
     )

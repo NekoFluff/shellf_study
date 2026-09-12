@@ -735,6 +735,41 @@ class SubjectDetailContentTest {
         assert(clicked == 1L)
     }
 
+    @Test
+    fun relatedSubjectIdsNotYetCached_showsNotLoadedCaptionInsteadOfNothing() {
+        // componentSubjectIds = [1] but the cache map below has no entry for it — distinct from
+        // "this item has no components at all" (relatedSubjectIdsAbsent_rendersNoSectionAtAll below).
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        composeTestRule.onNodeWithText("Not loaded yet").assertIsDisplayed()
+    }
+
+    @Test
+    fun relatedSubjectIdsAbsent_rendersNoSectionAtAll() {
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = detail.copy(componentSubjectIds = emptyList()),
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {}
+            )
+        }
+
+        composeTestRule.onAllNodesWithText("Not loaded yet").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Radicals").assertCountEquals(0)
+    }
+
     private val lessonedAssignmentStats = SubjectAssignmentStats(
         srsStage = SrsStage.GURU_1,
         nextReviewAt = Clock.System.now() + 3.hours,

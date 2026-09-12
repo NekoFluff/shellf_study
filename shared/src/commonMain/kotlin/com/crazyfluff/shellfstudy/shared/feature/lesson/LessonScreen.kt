@@ -43,7 +43,6 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -79,9 +78,15 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SectionTitle
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizEmptyQueueContent
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizEmptyQueueTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizErrorContent
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizErrorTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizLoadingContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionUiState
@@ -99,8 +104,10 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectGlyph
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectMeaningAnswer
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectMnemonicZone
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectReadingAnswer
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.componentsLabel
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.componentsGroup
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.headlineGlyphBoxHeight
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.usedInGroup
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.visuallySimilarGroup
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
@@ -394,52 +401,31 @@ fun LessonScreen(
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             when (val phase = uiState.phase) {
                 LessonUiState.Phase.Loading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(modifier = Modifier.testTag(LessonScreenTestTags.LOADING_INDICATOR))
-                    }
+                    QuizLoadingContent(loadingIndicatorTestTag = LessonScreenTestTags.LOADING_INDICATOR)
                 }
 
                 is LessonUiState.Phase.Error -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = phase.message,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.testTag(LessonScreenTestTags.ERROR_TEXT)
+                    QuizErrorContent(
+                        message = phase.message,
+                        onRetry = onRetry,
+                        onStudyOffline = onStudyOffline,
+                        testTags = QuizErrorTestTags(
+                            errorText = LessonScreenTestTags.ERROR_TEXT,
+                            retryButton = LessonScreenTestTags.RETRY_BUTTON,
+                            studyOfflineButton = LessonScreenTestTags.STUDY_OFFLINE_BUTTON
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        OutlinedButton(
-                            onClick = onRetry,
-                            modifier = Modifier.testTag(LessonScreenTestTags.RETRY_BUTTON)
-                        ) { Text("Retry") }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(
-                            onClick = onStudyOffline,
-                            modifier = Modifier.testTag(LessonScreenTestTags.STUDY_OFFLINE_BUTTON)
-                        ) { Text("Study offline with cached data") }
-                    }
+                    )
                 }
 
                 LessonUiState.Phase.NoLessonsAvailable -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "No lessons available right now.",
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.testTag(LessonScreenTestTags.NO_LESSONS_TEXT)
+                    QuizEmptyQueueContent(
+                        message = "No lessons available right now.",
+                        onDone = onDone,
+                        testTags = QuizEmptyQueueTestTags(
+                            messageText = LessonScreenTestTags.NO_LESSONS_TEXT,
+                            doneButton = LessonScreenTestTags.NO_LESSONS_DONE_BUTTON
                         )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(
-                            onClick = onDone,
-                            modifier = Modifier.testTag(LessonScreenTestTags.NO_LESSONS_DONE_BUTTON)
-                        ) { Text("Back to dashboard") }
-                    }
+                    )
                 }
 
                 is LessonUiState.Phase.Complete -> {
@@ -489,6 +475,7 @@ fun LessonScreen(
                         study = phase,
                         settings = uiState.settings,
                         pitchAccentsBySubjectId = uiState.pitchAccentsBySubjectId,
+                        relatedSubjectsById = uiState.relatedSubjectsById,
                         onNext = onNextStudyCard,
                         onPrevious = onPreviousStudyCard,
                         onSwiped = onStudyCardSwiped,
@@ -525,13 +512,14 @@ fun LessonScreen(
                             sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
                             useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
                             showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
-                            answerReading = phase.answerReading,
-                            // Read from the live map rather than a copy taken at grading time — a
-                            // batch's own quiz needs the same up-to-the-moment knowledge its study
-                            // cards showed. An absent entry has not been looked up yet.
-                            answerPitchAccents = uiState.pitchAccentsBySubjectId[phase.currentItem.subjectId]
-                                ?: PitchAccentUiState.Unavailable,
-                            answerReadingAudio = phase.answerReadingAudio
+                            // Pitch accents are folded in from the live map rather than a copy taken
+                            // at grading time — a batch's own quiz needs the same up-to-the-moment
+                            // knowledge its study cards showed. An absent entry has not been looked
+                            // up yet.
+                            answerHint = phase.answerHint?.copy(
+                                pitchAccents = uiState.pitchAccentsBySubjectId[phase.currentItem.subjectId]
+                                    ?: PitchAccentUiState.Unavailable
+                            )
                         ),
                         onAnswerInputChange = onAnswerInputChange,
                         onSubmit = onSubmit,
@@ -615,6 +603,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     study: LessonUiState.Phase.Study,
     settings: LessonUiState.DisplaySettings,
     pitchAccentsBySubjectId: Map<Long, PitchAccentUiState>,
+    relatedSubjectsById: Map<Long, SubjectSummary>,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSwiped: (Int) -> Unit,
@@ -739,8 +728,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
             WritingPracticeSection(strokeOrder = strokeOrder, resetKey = item.subjectId)
 
             RelatedSubjectsSection(
-                title = componentsLabel(item.subjectType),
-                subjects = item.componentSubjectIds.mapNotNull { study.relatedSubjectsById[it] },
+                group = componentsGroup(item.subjectType, item.componentSubjectIds, relatedSubjectsById),
                 onSubjectClick = onSubjectClick
             )
 
@@ -757,16 +745,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 HorizontalDivider()
                 LessonContextSentencesSection(item.contextSentences, settings.hideContextSentenceTranslations)
             }
-            if (item.subjectType == SubjectType.KANJI) {
-                RelatedSubjectsSection(
-                    title = "Visually similar",
-                    subjects = item.visuallySimilarSubjectIds.mapNotNull { study.relatedSubjectsById[it] },
-                    onSubjectClick = onSubjectClick
-                )
+            visuallySimilarGroup(item.subjectType, item.visuallySimilarSubjectIds, relatedSubjectsById)?.let { group ->
+                RelatedSubjectsSection(group = group, onSubjectClick = onSubjectClick)
             }
             RelatedSubjectsSection(
-                title = "Used in",
-                subjects = item.amalgamationSubjectIds.mapNotNull { study.relatedSubjectsById[it] },
+                group = usedInGroup(item.amalgamationSubjectIds, relatedSubjectsById),
                 onSubjectClick = onSubjectClick
             )
         }

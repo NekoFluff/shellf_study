@@ -96,8 +96,8 @@ fun LeaderboardScreen(
     var friendToDelete by remember { mutableStateOf<FriendEntry?>(null) }
     var friendToEdit by remember { mutableStateOf<FriendEntry?>(null) }
 
-    LaunchedEffect(uiState.addFriendSuccess) {
-        if (uiState.addFriendSuccess) showAddFriendDialog = false
+    LaunchedEffect(uiState.addFriendForm.success) {
+        if (uiState.addFriendForm.success) showAddFriendDialog = false
     }
 
     Scaffold(
@@ -181,10 +181,10 @@ fun LeaderboardScreen(
 
     if (showAddFriendDialog) {
         AddFriendDialog(
-            nickname = uiState.addFriendNickname,
-            token = uiState.addFriendToken,
-            isValidating = uiState.addFriendValidating,
-            error = uiState.addFriendError,
+            nickname = uiState.addFriendForm.nickname,
+            token = uiState.addFriendForm.token,
+            isValidating = uiState.addFriendForm.isValidating,
+            error = uiState.addFriendForm.error,
             onNicknameChange = onAddFriendNicknameChange,
             onTokenChange = onAddFriendTokenChange,
             onConfirm = { onAddFriendConfirm() },

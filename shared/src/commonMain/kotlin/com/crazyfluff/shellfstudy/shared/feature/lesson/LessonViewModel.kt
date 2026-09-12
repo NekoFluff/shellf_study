@@ -26,10 +26,10 @@ import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
-import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingHint
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
@@ -93,7 +93,13 @@ data class LessonUiState(
      *  dictionary's Room flow, the single source of truth. A subject absent from the map has not been
      *  looked up yet this session; [PitchAccentUiState.Unavailable] means it was looked up and has no
      *  documented pitch accent. */
-    val pitchAccentsBySubjectId: Map<Long, PitchAccentUiState> = emptyMap()
+    val pitchAccentsBySubjectId: Map<Long, PitchAccentUiState> = emptyMap(),
+    /** Related-subject summaries for every item currently in play, keyed by subject id — same shape
+     *  and same reason as [pitchAccentsBySubjectId]: one live observation off [SubjectRepository]'s
+     *  Room flow, rather than a per-batch snapshot fetched once at study time. A subject absent from
+     *  the map has no cached summary (yet); [RelatedSubjectsSection]/[toRelatedSubjectsUiState] is
+     *  what turns "absent" into a "not cached yet" caption rather than silence. */
+    val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap()
 ) {
     /** Why the learner is leaving the lesson screen, if they are. */
     sealed interface ExitRequest {
@@ -160,7 +166,6 @@ data class LessonUiState(
             val studyIndex: Int = 0,
             val batchIndex: Int = 0,
             val batchCount: Int = 1,
-            val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
             val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
         ) : Phase {
             val isLastCardInBatch: Boolean get() = studyIndex == studyItems.lastIndex
@@ -184,8 +189,10 @@ data class LessonUiState(
             val totalQuizCount: Int = 0,
             val remainingQuizCount: Int = 0,
             val timing: QuizTimingUiState = QuizTimingUiState(),
-            val answerReading: String? = null,
-            val answerReadingAudio: PronunciationAudio? = null
+            // Reading + audio for the just-graded reading question, published together at grading
+            // time. Pitch accents aren't carried here — the screen reads those live off
+            // [LessonUiState.pitchAccentsBySubjectId] and folds them into this hint at render time.
+            val answerHint: AnswerReadingHint? = null
         ) : Phase
 
         /** The end of a batch — where a session pauses instead of running every selected item's
@@ -400,6 +407,24 @@ class LessonViewModel(
                 }
                 .collect { accents -> _uiState.update { it.copy(pitchAccentsBySubjectId = accents) } }
         }
+        // Same shape as the pitch-accent collector above, off the same items-in-play stream: the
+        // study card and the quiz hint read one live observation of SubjectRepository's Room flow
+        // instead of a per-batch snapshot fetched once when the batch was entered, so a write from
+        // any source (this session's own lookups, another screen's) reaches both in place.
+        viewModelScope.launch {
+            pitchAccentItems
+                .flatMapLatest { items ->
+                    val relatedIds = items
+                        .flatMap { it.componentSubjectIds + it.amalgamationSubjectIds + it.visuallySimilarSubjectIds }
+                        .distinct()
+                    if (relatedIds.isEmpty()) {
+                        flowOf(emptyMap())
+                    } else {
+                        subjectRepository.observeSubjectSummaries(relatedIds).map { it.associateBy { s -> s.subjectId } }
+                    }
+                }
+                .collect { related -> _uiState.update { it.copy(relatedSubjectsById = related) } }
+        }
         // The initial value is handled by beginBatchQuiz/resumeQuizPhase/sessionTiming.resume() below
         // instead — see QuizSessionTiming.wireForegroundTracking's doc comment. The gate keeps a batch
         // checkpoint (or the summary) from restarting the session clock just because the learner came
@@ -518,11 +543,7 @@ class LessonViewModel(
             return
         }
 
-        val (relatedSubjects, strokeOrders) = coroutineScope {
-            val relatedSubjectsDeferred = async { fetchRelatedSubjects(items) }
-            val strokeOrdersDeferred = async { fetchStrokeOrders(items) }
-            relatedSubjectsDeferred.await() to strokeOrdersDeferred.await()
-        }
+        val strokeOrders = fetchStrokeOrders(items)
         pitchAccentItems.value = items
         currentRound = QuizRound.LESSON
         sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
@@ -534,7 +555,6 @@ class LessonViewModel(
                     studyIndex = persisted.studyIndex.coerceIn(0, items.lastIndex),
                     batchIndex = persisted.batchIndex,
                     batchCount = batchCount,
-                    relatedSubjectsById = relatedSubjects,
                     strokeOrderBySubjectId = strokeOrders
                 )
             )
@@ -794,8 +814,8 @@ class LessonViewModel(
         }
     }
 
-    /** Opens batch [index]'s flashcards. Only this batch's related-subject and stroke-order extras
-     *  are resolved here; pitch accents are watched live instead (see the collector in init), per
+    /** Opens batch [index]'s flashcards. Only this batch's stroke-order extras are resolved here;
+     *  pitch accents and related subjects are watched live instead (see the collectors in init), per
      *  batch because a 40-item session shouldn't hold a Room query open for every item it will ever
      *  show. */
     private suspend fun enterStudyPhase(index: Int) {
@@ -809,13 +829,10 @@ class LessonViewModel(
             return
         }
 
-        val (relatedSubjects, strokeOrders) = coroutineScope {
-            val relatedSubjectsDeferred = async { fetchRelatedSubjects(items) }
-            val strokeOrdersDeferred = async { fetchStrokeOrders(items) }
-            relatedSubjectsDeferred.await() to strokeOrdersDeferred.await()
-        }
+        val strokeOrders = fetchStrokeOrders(items)
         // Replaces rather than merges: the observation follows one batch at a time, and the cleanup
-        // pass (which reaches back across batches) re-points it at the items it asks about.
+        // pass (which reaches back across batches) re-points it at the items it asks about. Also
+        // drives the related-subjects collector in init{} off the same items-in-play stream.
         pitchAccentItems.value = items
         currentBatchIndex = index
         currentRound = QuizRound.LESSON
@@ -827,23 +844,11 @@ class LessonViewModel(
                     studyIndex = 0,
                     batchIndex = index,
                     batchCount = batchCount,
-                    relatedSubjectsById = relatedSubjects,
                     strokeOrderBySubjectId = strokeOrders
                 )
             )
         }
         persistStudySnapshot(0)
-    }
-
-    /** One batch lookup for every related subject (radicals/kanji/visually-similar/used-in) across
-     *  the whole study set, so the glyphs the detail view shows for these can render on the study
-     *  card too without a per-tile network/DB round trip. */
-    private suspend fun fetchRelatedSubjects(items: List<LessonItem>): Map<Long, SubjectSummary> {
-        val relatedIds = items
-            .flatMap { it.componentSubjectIds + it.amalgamationSubjectIds + it.visuallySimilarSubjectIds }
-            .distinct()
-        if (relatedIds.isEmpty()) return emptyMap()
-        return subjectRepository.observeSubjectSummaries(relatedIds).first().associateBy { it.subjectId }
     }
 
     /** Stroke data is keyed purely by character (same lookup [SubjectDetailViewModel] uses), so only
@@ -1038,8 +1043,7 @@ class LessonViewModel(
                     // The hint goes away with the answer. The check flags deliberately don't: a failed
                     // check was a fact about the *word*, which hasn't changed — same treatment
                     // SubjectDetailViewModel gives it across an unrelated uiState change.
-                    answerReading = null,
-                    answerReadingAudio = null,
+                    answerHint = null,
                     answerInput = "",
                     remainingQuizCount = quizQueue.size,
                     undoCounter = it.undoCounter + 1,
@@ -1121,7 +1125,7 @@ class LessonViewModel(
         // Selected here, where the item and the settings are already in hand, so the hint's row only
         // has to render whatever clip this produced — null when none survives the mp3-only filter.
         // The pitch patterns are *not* copied here: the hint reads them live off
-        // LessonUiState.pitchAccentsBySubjectId, so a scrape from any writer reaches it in place.
+        // LessonUiState.pitchAccentsBySubjectId, so a write from any source reaches it in place.
         val answerReadingAudio = answerReading?.let { reading ->
             selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
         }
@@ -1136,8 +1140,7 @@ class LessonViewModel(
                 // the elapsedMs recorded for the slowest-answers summary above, stamped at this
                 // same moment.
                 timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null),
-                answerReading = answerReading,
-                answerReadingAudio = answerReadingAudio
+                answerHint = answerReading?.let { reading -> AnswerReadingHint(reading = reading, audio = answerReadingAudio) }
             )
         }
 
@@ -1464,8 +1467,7 @@ class LessonViewModel(
                     answerInput = "",
                     feedback = null,
                     rankChange = null,
-                    answerReading = null,
-                    answerReadingAudio = null,
+                    answerHint = null,
                     isDetailsExpanded = false,
                     remainingQuizCount = quizQueue.size,
                     timing = it.timing.copy(

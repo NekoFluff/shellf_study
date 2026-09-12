@@ -74,9 +74,6 @@ object SubjectDetailTestTags {
     const val READING_ANSWER = "subject_detail_reading_answer"
 }
 
-private fun List<Long>.resolve(relatedSubjects: Map<Long, SubjectSummary>): List<SubjectSummary> =
-    mapNotNull { relatedSubjects[it] }
-
 /**
  * The shared "everything about this subject" content, used from Review (gated), Lesson, Search,
  * and the Dashboard's level-progress breakdown. Section order puts the answer first: the level/type
@@ -248,8 +245,7 @@ private fun SubjectComponentsSection(
     onRelatedSubjectClick: (Long) -> Unit
 ) {
     RelatedSubjectsSection(
-        title = componentsLabel(detail.subjectType),
-        subjects = detail.componentSubjectIds.resolve(relatedSubjects),
+        group = componentsGroup(detail.subjectType, detail.componentSubjectIds, relatedSubjects),
         onSubjectClick = onRelatedSubjectClick
     )
 }
@@ -286,12 +282,8 @@ private fun SubjectVisuallySimilarSection(
     relatedSubjects: Map<Long, SubjectSummary>,
     onRelatedSubjectClick: (Long) -> Unit
 ) {
-    if (detail.subjectType != SubjectType.KANJI) return
-    RelatedSubjectsSection(
-        title = "Visually similar",
-        subjects = detail.visuallySimilarSubjectIds.resolve(relatedSubjects),
-        onSubjectClick = onRelatedSubjectClick
-    )
+    val group = visuallySimilarGroup(detail.subjectType, detail.visuallySimilarSubjectIds, relatedSubjects) ?: return
+    RelatedSubjectsSection(group = group, onSubjectClick = onRelatedSubjectClick)
 }
 
 @Composable
@@ -301,8 +293,7 @@ private fun SubjectUsedInSection(
     onRelatedSubjectClick: (Long) -> Unit
 ) {
     RelatedSubjectsSection(
-        title = "Used in",
-        subjects = detail.amalgamationSubjectIds.resolve(relatedSubjects),
+        group = usedInGroup(detail.amalgamationSubjectIds, relatedSubjects),
         onSubjectClick = onRelatedSubjectClick
     )
 }
