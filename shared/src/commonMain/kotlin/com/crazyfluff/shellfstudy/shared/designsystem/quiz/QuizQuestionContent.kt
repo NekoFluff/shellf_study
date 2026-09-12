@@ -242,7 +242,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
                 Column {
                     ReadingRow(
                         reading = answerReading,
-                        audio = uiState.answerReadingAudio
+                        audio = { uiState.answerReadingAudio }
                     )
                     PitchAccentDiagram(uiState.answerPitchAccents.forReading(answerReading))
                     Spacer(modifier = Modifier.height(2.dp))

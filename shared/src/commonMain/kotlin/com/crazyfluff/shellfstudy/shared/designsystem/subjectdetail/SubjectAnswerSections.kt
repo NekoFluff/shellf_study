@@ -127,12 +127,12 @@ private fun VocabularyReadingList(
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         readings.forEach { reading ->
             Column {
-                // The clip is selected here, through the caller's own settings, so a reading whose
-                // every clip the mp3-only filter drops gets no button at all rather than one that
-                // plays nothing.
+                // Re-selected fresh on every tap (see ReadingRow's audio param) through the
+                // caller's own settings, so a reading whose every clip the mp3-only filter drops
+                // gets no button at all rather than one that plays nothing.
                 ReadingRow(
                     reading = reading,
-                    audio = selectAudioFor(pronunciationAudios, reading, mp3Only = restrictAudioToMp3)
+                    audio = { selectAudioFor(pronunciationAudios, reading, mp3Only = restrictAudioToMp3) }
                 )
                 // The setting controls the markers, not the reading: switched off, the row above is
                 // all there is.

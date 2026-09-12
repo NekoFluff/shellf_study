@@ -50,7 +50,7 @@ class ReadingRowTest {
     ) {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalPronunciationAudioPlayer provides player) {
-                ReadingRow(reading = "みず", audio = audio)
+                ReadingRow(reading = "みず", audio = { audio })
             }
         }
     }
@@ -73,6 +73,30 @@ class ReadingRowTest {
     }
 
     @Test
+    fun `re-invokes the audio selector on every tap instead of reusing the first pick`() {
+        // Regression test: audio used to be a plain value selected once at composition, so every
+        // tap replayed whatever composition happened to pick first — a caller backed by a pool of
+        // clips (VoicePreference.RANDOM) never actually varied across taps, which is exactly what
+        // made the randomizer look broken.
+        var callCount = 0
+        val player = FakePronunciationAudioPlayer()
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalPronunciationAudioPlayer provides player) {
+                ReadingRow(reading = "みず", audio = { audio.copy(url = "${audio.url}#${callCount++}") })
+            }
+        }
+
+        val playButton = composeTestRule.onNodeWithContentDescription("Play pronunciation for みず")
+        playButton.performClick()
+        playButton.performClick()
+
+        // Each tap got its own distinct call — a memoized/precomputed value would have played the
+        // same clip (whatever composition's own gating call produced) both times.
+        assertThat(player.playedAudios).hasSize(2)
+        assertThat(player.playedAudios[0]).isNotEqualTo(player.playedAudios[1])
+    }
+
+    @Test
     fun `shows no play button when there is no clip for the reading`() {
         setContentWithPlayer(audio = null)
 
@@ -82,7 +106,7 @@ class ReadingRowTest {
     @Test
     fun `shows no play button when no player is provided`() {
         composeTestRule.setContent {
-            ReadingRow(reading = "みず", audio = audio)
+            ReadingRow(reading = "みず", audio = { audio })
         }
 
         composeTestRule.onAllNodesWithContentDescription("Play pronunciation for みず").assertCountEquals(0)

@@ -32,14 +32,17 @@ val LocalPronunciationAudioPlayer = staticCompositionLocalOf<PronunciationAudioP
  * reading), so callers render this always and the diagram only when they want it.
  *
  * Takes a plain [reading] rather than a [ReadingPitchAccent] because it shows nothing from one: no
- * pitch data is consulted, so none has to exist. [audio] is data, not an event — it is the clip the
- * caller's own settings already selected for this reading, so passing null (no clip, or every clip
- * filtered away) is the single answer to "should there be a button".
+ * pitch data is consulted, so none has to exist. [audio] is a selector rather than a plain value —
+ * it is invoked once per tap, not once per composition — so a caller backed by a pool of clips (see
+ * [com.crazyfluff.shellfstudy.shared.audio.selectAudioFor]'s `VoicePreference.RANDOM` default)
+ * actually re-rolls on every tap instead of replaying whichever clip composition happened to pick
+ * last. Passing null back from it (no clip, or every clip filtered away) is the single answer to
+ * "should there be a button".
  */
 @Composable
 fun ReadingRow(
     reading: String,
-    audio: PronunciationAudio? = null
+    audio: () -> PronunciationAudio? = { null }
 ) {
     val player = LocalPronunciationAudioPlayer.current
     // Read before the Row, not inside the button: the hollow "audio unavailable" icon is driven by
@@ -51,13 +54,17 @@ fun ReadingRow(
     } else {
         player.state.collectAsState().value
     }
+    // Only to decide whether a button belongs here at all — cheap and pure (a list filter plus, at
+    // most, a random pick among candidates), so calling it again in the click handler below is what
+    // gives that tap its own fresh roll rather than reusing this one.
+    val hasAudio = audio() != null
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         // The same style the diagram measures its morae with (see pitchAccentTextStyle), so the dots
         // land under the right glyphs.
         JapaneseText(reading, style = pitchAccentTextStyle())
-        if (audio != null && player != null) {
-            IconButton(onClick = { player.play(audio) }) {
+        if (hasAudio && player != null) {
+            IconButton(onClick = { audio()?.let(player::play) }) {
                 if (playbackState == PlaybackState.ERROR) {
                     Icon(Icons.AutoMirrored.Filled.VolumeOff, contentDescription = "Audio unavailable for $reading")
                 } else {
