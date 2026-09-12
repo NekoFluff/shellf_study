@@ -158,6 +158,18 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `onHideContextSentenceTranslationsChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().hideContextSentenceTranslations).isTrue()
+
+            viewModel.onHideContextSentenceTranslationsChange(false)
+            assertThat(awaitItem().hideContextSentenceTranslations).isFalse()
+        }
+    }
+
+    @Test
     fun `onShowTotalTimerChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 

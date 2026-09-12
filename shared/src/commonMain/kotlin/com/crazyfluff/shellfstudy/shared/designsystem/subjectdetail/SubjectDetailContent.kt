@@ -99,6 +99,7 @@ fun SubjectDetailContent(
     strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
     autoPlayStrokeOrder: Boolean = true,
     showStrokeOrder: Boolean = true,
+    hideContextSentenceTranslations: Boolean = true,
     assignmentStats: SubjectAssignmentStats? = null,
     reviewStats: SubjectReviewStats? = null,
     initialScrollOffset: Int = 0,
@@ -156,7 +157,7 @@ fun SubjectDetailContent(
             showMeaning = revealMeaning,
             showReading = revealReading
         )
-        SubjectContextSentencesSection(detail, isVocabulary)
+        SubjectContextSentencesSection(detail, isVocabulary, hideContextSentenceTranslations)
         SubjectVisuallySimilarSection(detail, relatedSubjects, onRelatedSubjectClick)
         SubjectUsedInSection(detail, relatedSubjects, onRelatedSubjectClick)
         SubjectStatsZone(assignmentStats, reviewStats)
@@ -257,7 +258,11 @@ private fun SubjectComponentsSection(
 // it in the page — shared with the lesson study card, which used to carry its own copy of both.
 
 @Composable
-private fun SubjectContextSentencesSection(detail: SubjectDetail, isVocabulary: Boolean) {
+private fun SubjectContextSentencesSection(
+    detail: SubjectDetail,
+    isVocabulary: Boolean,
+    hideTranslations: Boolean
+) {
     if (!isVocabulary || detail.contextSentences.isEmpty()) return
     val shareText = rememberShareText()
     HorizontalDivider()
@@ -268,7 +273,7 @@ private fun SubjectContextSentencesSection(detail: SubjectDetail, isVocabulary: 
         AkebiSelectableContainer {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 detail.contextSentences.forEach { sentence ->
-                    ContextSentenceRow(sentence, onShare = shareText)
+                    ContextSentenceRow(sentence, onShare = shareText, hideTranslation = hideTranslations)
                 }
             }
         }

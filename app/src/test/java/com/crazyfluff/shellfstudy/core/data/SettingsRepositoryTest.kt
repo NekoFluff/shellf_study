@@ -39,6 +39,7 @@ class SettingsRepositoryTest {
             assertThat(settings.showQuestionTimer).isFalse()
             assertThat(settings.closeEnoughAnswersEnabled).isTrue()
             assertThat(settings.showAnswerReadingPitchAccent).isFalse()
+            assertThat(settings.hideContextSentenceTranslations).isTrue()
         }
     }
 
@@ -116,6 +117,17 @@ class SettingsRepositoryTest {
 
         repository.settings.test {
             assertThat(awaitItem().showAnswerReadingPitchAccent).isTrue()
+        }
+    }
+
+    @Test
+    fun `setHideContextSentenceTranslations persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setHideContextSentenceTranslations(false)
+
+        repository.settings.test {
+            assertThat(awaitItem().hideContextSentenceTranslations).isFalse()
         }
     }
 

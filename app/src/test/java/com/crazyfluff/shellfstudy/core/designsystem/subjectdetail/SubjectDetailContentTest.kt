@@ -7,6 +7,8 @@ import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -1048,5 +1050,57 @@ class SubjectDetailContentTest {
         val started = shadowOf(composeTestRule.activity).nextStartedActivity
         assertThat(started.action).isEqualTo(Intent.ACTION_VIEW)
         assertThat(started.data.toString()).contains("com.craxic.akebifree")
+    }
+
+    @Test
+    fun contextSentenceTranslation_isRedactedUntilTapped_whenHidingIsEnabled() {
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            contextSentences = listOf(ContextSentence(japanese = "水を飲みます。", english = "I drink water."))
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                hideContextSentenceTranslations = true
+            )
+        }
+
+        // Redacted state is clickable to reveal; can't assert the transparent-text/rounded-bar
+        // rendering itself under Robolectric (see CLAUDE.md's visual-effect test limitations), so
+        // the click affordance is what's asserted instead.
+        composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.TRANSLATION).performScrollTo().assertHasClickAction()
+
+        composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.TRANSLATION).performClick()
+
+        composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.TRANSLATION).assertHasNoClickAction()
+    }
+
+    @Test
+    fun contextSentenceTranslation_showsPlainly_whenHidingIsDisabled() {
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            contextSentences = listOf(ContextSentence(japanese = "水を飲みます。", english = "I drink water."))
+        )
+        composeTestRule.setContent {
+            SubjectDetailContent(
+                detail = vocabDetail,
+                relatedSubjects = emptyMap(),
+                revealMode = DetailRevealMode.FULL,
+                isAnswered = true,
+                questionType = null,
+                onRelatedSubjectClick = {},
+                hideContextSentenceTranslations = false
+            )
+        }
+
+        composeTestRule.onNodeWithText("I drink water.").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.TRANSLATION).assertHasNoClickAction()
     }
 }

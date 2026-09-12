@@ -775,7 +775,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
 
             if (isVocabulary && item.contextSentences.isNotEmpty()) {
                 HorizontalDivider()
-                LessonContextSentencesSection(item.contextSentences)
+                LessonContextSentencesSection(item.contextSentences, settings.hideContextSentenceTranslations)
             }
             if (item.subjectType == SubjectType.KANJI) {
                 RelatedSubjectsSection(
@@ -1235,14 +1235,14 @@ private fun LessonGlyphTile(
 }
 
 @Composable
-private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
+private fun LessonContextSentencesSection(sentences: List<ContextSentence>, hideTranslations: Boolean) {
     val shareText = rememberShareText()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionTitle("Context sentences")
         AkebiSelectableContainer {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 sentences.forEach { sentence ->
-                    ContextSentenceRow(sentence, onShare = shareText)
+                    ContextSentenceRow(sentence, onShare = shareText, hideTranslation = hideTranslations)
                 }
             }
         }

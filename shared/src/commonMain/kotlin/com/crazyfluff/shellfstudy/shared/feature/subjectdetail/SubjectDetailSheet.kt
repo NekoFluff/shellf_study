@@ -312,6 +312,7 @@ private fun ColumnScope.SubjectDetailBody(
                 strokeOrder = uiState.strokeOrder,
                 autoPlayStrokeOrder = autoPlayStrokeOrder,
                 showStrokeOrder = uiState.showStrokeOrder,
+                hideContextSentenceTranslations = uiState.hideContextSentenceTranslations,
                 assignmentStats = uiState.assignmentStats,
                 reviewStats = uiState.reviewStats,
                 initialScrollOffset = uiState.pendingScrollOffset,

@@ -41,6 +41,7 @@ class SettingsScreenTest {
         onUseJapaneseKeyboardChange: (Boolean) -> Unit = {},
         onCloseEnoughAnswersEnabledChange: (Boolean) -> Unit = {},
         onShowAnswerReadingPitchAccentChange: (Boolean) -> Unit = {},
+        onHideContextSentenceTranslationsChange: (Boolean) -> Unit = {},
         onNotificationsEnabledChange: (Boolean) -> Unit = {},
         onReviewsAvailableEnabledChange: (Boolean) -> Unit = {},
         onReviewsBacklogEnabledChange: (Boolean) -> Unit = {},
@@ -68,6 +69,7 @@ class SettingsScreenTest {
                 onUseJapaneseKeyboardChange = onUseJapaneseKeyboardChange,
                 onCloseEnoughAnswersEnabledChange = onCloseEnoughAnswersEnabledChange,
                 onShowAnswerReadingPitchAccentChange = onShowAnswerReadingPitchAccentChange,
+                onHideContextSentenceTranslationsChange = onHideContextSentenceTranslationsChange,
                 onNotificationsEnabledChange = onNotificationsEnabledChange,
                 onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
                 onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
@@ -244,6 +246,19 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.ANSWER_READING_PITCH_ACCENT_TOGGLE).performScrollTo().performClick()
         assert(showAnswerReadingPitchAccent == true)
+    }
+
+    @Test
+    fun togglingHideContextSentenceTranslationsSwitch_invokesCallback() {
+        var hideContextSentenceTranslations: Boolean? = null
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, hideContextSentenceTranslations = true),
+            onHideContextSentenceTranslationsChange = { hideContextSentenceTranslations = it }
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.HIDE_CONTEXT_SENTENCE_TRANSLATIONS_TOGGLE)
+            .performScrollTo().performClick()
+        assert(hideContextSentenceTranslations == false)
     }
 
     @Test

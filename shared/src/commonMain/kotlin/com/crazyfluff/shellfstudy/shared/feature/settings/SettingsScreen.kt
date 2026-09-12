@@ -77,6 +77,7 @@ object SettingsScreenTestTags {
     const val JAPANESE_KEYBOARD_TOGGLE = "settings_use_japanese_keyboard_toggle"
     const val CLOSE_ENOUGH_ANSWERS_TOGGLE = "settings_close_enough_answers_toggle"
     const val ANSWER_READING_PITCH_ACCENT_TOGGLE = "settings_answer_reading_pitch_accent_toggle"
+    const val HIDE_CONTEXT_SENTENCE_TRANSLATIONS_TOGGLE = "settings_hide_context_sentence_translations_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
     const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
     const val REVIEWS_BACKLOG_TOGGLE = "settings_reviews_backlog_toggle"
@@ -127,6 +128,7 @@ fun SettingsRoute(
         onUseJapaneseKeyboardChange = viewModel::onUseJapaneseKeyboardChange,
         onCloseEnoughAnswersEnabledChange = viewModel::onCloseEnoughAnswersEnabledChange,
         onShowAnswerReadingPitchAccentChange = viewModel::onShowAnswerReadingPitchAccentChange,
+        onHideContextSentenceTranslationsChange = viewModel::onHideContextSentenceTranslationsChange,
         onNotificationsEnabledChange = { enabled ->
             if (enabled) requestNotificationPermission() else viewModel.onNotificationsEnabledChange(false)
         },
@@ -161,6 +163,7 @@ fun SettingsScreen(
     onUseJapaneseKeyboardChange: (Boolean) -> Unit,
     onCloseEnoughAnswersEnabledChange: (Boolean) -> Unit,
     onShowAnswerReadingPitchAccentChange: (Boolean) -> Unit,
+    onHideContextSentenceTranslationsChange: (Boolean) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onReviewsAvailableEnabledChange: (Boolean) -> Unit,
     onReviewsBacklogEnabledChange: (Boolean) -> Unit,
@@ -321,6 +324,13 @@ fun SettingsScreen(
                     checked = uiState.restrictAudioToMp3,
                     onCheckedChange = onRestrictAudioToMp3Change,
                     testTag = SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE
+                )
+                ToggleRow(
+                    label = "Hide sentence translations",
+                    description = "Redacts a context sentence's English translation until tapped, so you can try reading the Japanese first.",
+                    checked = uiState.hideContextSentenceTranslations,
+                    onCheckedChange = onHideContextSentenceTranslationsChange,
+                    testTag = SettingsScreenTestTags.HIDE_CONTEXT_SENTENCE_TRANSLATIONS_TOGGLE
                 )
             }
 

@@ -127,7 +127,8 @@ data class LessonUiState(
         val showAnswerReadingPitchAccent: Boolean = false,
         // Carried into the UI so reading rows can select their own clip the same way playback
         // autoplay does, instead of the screen having to know which of a word's clips are eligible.
-        val restrictAudioToMp3: Boolean = false
+        val restrictAudioToMp3: Boolean = false,
+        val hideContextSentenceTranslations: Boolean = true
     )
 
     sealed interface Phase {
@@ -376,7 +377,8 @@ class LessonViewModel(
                             showQuestionTimer = settings.showQuestionTimer,
                             useJapaneseKeyboard = settings.useJapaneseKeyboard,
                             showAnswerReadingPitchAccent = settings.showAnswerReadingPitchAccent,
-                            restrictAudioToMp3 = settings.restrictAudioToMp3
+                            restrictAudioToMp3 = settings.restrictAudioToMp3,
+                            hideContextSentenceTranslations = settings.hideContextSentenceTranslations
                         )
                     )
                 }

@@ -30,6 +30,7 @@ data class SettingsUiState(
     val useJapaneseKeyboard: Boolean = false,
     val closeEnoughAnswersEnabled: Boolean = true,
     val showAnswerReadingPitchAccent: Boolean = false,
+    val hideContextSentenceTranslations: Boolean = true,
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
@@ -72,6 +73,7 @@ class SettingsViewModel(
             useJapaneseKeyboard = app.useJapaneseKeyboard,
             closeEnoughAnswersEnabled = app.closeEnoughAnswersEnabled,
             showAnswerReadingPitchAccent = app.showAnswerReadingPitchAccent,
+            hideContextSentenceTranslations = app.hideContextSentenceTranslations,
             notificationsEnabled = notif.notificationsEnabled,
             reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
             reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
@@ -136,6 +138,10 @@ class SettingsViewModel(
 
     fun onShowAnswerReadingPitchAccentChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setShowAnswerReadingPitchAccent(enabled) }
+    }
+
+    fun onHideContextSentenceTranslationsChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setHideContextSentenceTranslations(enabled) }
     }
 
     /**
