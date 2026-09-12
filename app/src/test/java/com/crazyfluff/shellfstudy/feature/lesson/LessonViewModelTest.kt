@@ -874,10 +874,16 @@ class LessonViewModelTest {
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isFalse()
             assertThat(feedbackState.remainingQuizCount).isEqualTo(1)
+            val questionSequenceBeforeRequeue = feedbackState.questionSequence
 
             viewModel.onContinue()
             val requeuedState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(requeuedState.currentQuestionType).isEqualTo(QuestionType.MEANING)
+            // Regression: the same item/type reappearing must still clear the answer field and
+            // force the answer field to reset — questionSequence has to change even though nothing
+            // else about the requeued question's identity did.
+            assertThat(requeuedState.answerInput).isEqualTo("")
+            assertThat(requeuedState.questionSequence).isNotEqualTo(questionSequenceBeforeRequeue)
         }
     }
 

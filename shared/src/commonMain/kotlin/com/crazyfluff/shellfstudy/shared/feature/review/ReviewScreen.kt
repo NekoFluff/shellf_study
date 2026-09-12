@@ -334,6 +334,7 @@ fun ReviewScreen(
                                 feedback = phase.feedback,
                                 rankChange = phase.rankChange,
                                 undoCounter = phase.undoCounter,
+                                questionSequence = phase.questionSequence,
                                 answerTypeMismatchCount = phase.answerTypeMismatchCount,
                                 showSubjectTypeLabel = uiState.settings.showSubjectTypeLabel,
                                 showQuestionTimer = uiState.settings.showQuestionTimer,

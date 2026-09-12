@@ -11,6 +11,9 @@ import android.content.pm.ResolveInfo
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -200,6 +203,7 @@ class LessonScreenTest {
         answerTypeMismatchCount: Int = 0,
         totalQuizCount: Int = 0,
         remainingQuizCount: Int = 0,
+        questionSequence: Int = 0,
         timing: QuizTimingUiState = QuizTimingUiState(),
         settings: LessonUiState.DisplaySettings = LessonUiState.DisplaySettings(),
         answerReading: String? = null,
@@ -214,6 +218,7 @@ class LessonScreenTest {
             answerTypeMismatchCount = answerTypeMismatchCount,
             totalQuizCount = totalQuizCount,
             remainingQuizCount = remainingQuizCount,
+            questionSequence = questionSequence,
             timing = timing,
             answerHint = answerReading?.let {
                 AnswerReadingHint(reading = it, audio = answerReadingAudio)
@@ -912,6 +917,39 @@ class LessonScreenTest {
         // from performTextInput itself — wait for that to land before reading the callback value.
         composeTestRule.waitForIdle()
         assert(typed == "Mouth")
+    }
+
+    /** Regression test for a requeued question (same item/questionType reappearing after an
+     *  incorrect answer, e.g. the last item left in the quiz queue) failing to clear the visible
+     *  answer field even though `uiState.answerInput` resets to "" — the field's real backing state
+     *  is a locally-`remember`ed `TextFieldState` keyed on `focusResetKey`, which only re-seeds when
+     *  that key's identity changes. Bumping `questionSequence` on every advance (even a same-item
+     *  one) is what forces that re-seed; asserting only against `uiState.answerInput` wouldn't catch
+     *  this. */
+    @Test
+    fun requeuedSameQuestion_clearsVisibleAnswerField() {
+        var state by mutableStateOf(
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1, answerInput = "", questionSequence = 0
+            )
+        )
+        composeTestRule.setContent {
+            LessonScreen(uiState = state, onEvent = {})
+        }
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_FIELD).performTextInput("wrong answer")
+        composeTestRule.waitForIdle()
+
+        // Same item/questionType come back as current again (a requeue), with answerInput reset
+        // and questionSequence bumped — mirrors what LessonViewModel.advanceQuiz() does.
+        state = quizState(
+            currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            totalQuizCount = 1, remainingQuizCount = 1, answerInput = "", questionSequence = 1
+        )
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_FIELD).assertTextEquals("答え", "")
     }
 
     @Test

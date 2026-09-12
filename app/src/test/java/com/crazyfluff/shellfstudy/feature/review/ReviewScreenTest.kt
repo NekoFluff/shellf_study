@@ -6,6 +6,9 @@ import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreenEvent
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreenTestTags
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -75,6 +78,7 @@ class ReviewScreenTest {
         feedback: AnswerFeedback? = null,
         rankChange: RankChange? = null,
         undoCounter: Int = 0,
+        questionSequence: Int = 0,
         isDetailsExpanded: Boolean = false,
         answerTypeMismatchCount: Int = 0,
         totalCount: Int = 0,
@@ -93,6 +97,7 @@ class ReviewScreenTest {
             feedback = feedback,
             rankChange = rankChange,
             undoCounter = undoCounter,
+            questionSequence = questionSequence,
             isDetailsExpanded = isDetailsExpanded,
             answerTypeMismatchCount = answerTypeMismatchCount,
             totalCount = totalCount,
@@ -197,6 +202,32 @@ class ReviewScreenTest {
         // from performTextInput itself — wait for that to land before reading the callback value.
         composeTestRule.waitForIdle()
         assert(typed == "Water")
+    }
+
+    /** Regression test for a requeued question (same item/questionType reappearing after an
+     *  incorrect answer, e.g. the last item left in the queue) failing to clear the visible answer
+     *  field even though `uiState.answerInput` resets to "" — the field's real backing state is a
+     *  locally-`remember`ed `TextFieldState` keyed on `focusResetKey`, which only re-seeds when that
+     *  key's identity changes. Bumping `questionSequence` on every advance (even a same-item one) is
+     *  what forces that re-seed; asserting only against `uiState.answerInput` wouldn't catch this. */
+    @Test
+    fun requeuedSameQuestion_clearsVisibleAnswerField() {
+        var state by mutableStateOf(
+            activeState(totalCount = 1, remainingCount = 1, answerInput = "", questionSequence = 0)
+        )
+        composeTestRule.setContent {
+            ReviewScreen(uiState = state, onEvent = {})
+        }
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).performTextInput("wrong answer")
+        composeTestRule.waitForIdle()
+
+        // Same item/questionType come back as current again (a requeue), with answerInput reset
+        // and questionSequence bumped — mirrors what ReviewViewModel.advanceToNextQuestion() does.
+        state = activeState(totalCount = 1, remainingCount = 1, answerInput = "", questionSequence = 1)
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).assertTextEquals("答え", "")
     }
 
     @Test

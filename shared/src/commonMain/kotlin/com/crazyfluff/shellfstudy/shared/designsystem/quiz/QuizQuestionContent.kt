@@ -97,6 +97,7 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     val feedback: AnswerFeedback?,
     val rankChange: RankChange?,
     val undoCounter: Int,
+    val questionSequence: Int,
     val answerTypeMismatchCount: Int,
     val showSubjectTypeLabel: Boolean,
     val showQuestionTimer: Boolean,
@@ -344,8 +345,12 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
             typeMismatchTextTestTag = testTags.typeMismatchText,
             // Also includes undoCounter: undo clears the field and re-enables it without changing
             // item/questionType, so the field's focus-restoring effect wouldn't otherwise refire and
-            // the user would be left tapped-out of the field they just asked to retry.
-            focusResetKey = Triple(item.assignmentId, questionType, uiState.undoCounter),
+            // the user would be left tapped-out of the field they just asked to retry. And
+            // questionSequence: a requeued question (WaniKani's wrong-answer-comes-back-later
+            // behavior) can become current again with the same item/questionType/undoCounter as
+            // before, but the field must still clear — questionSequence increments on every advance
+            // regardless of whether the question repeats.
+            focusResetKey = listOf(item.assignmentId, questionType, uiState.undoCounter, uiState.questionSequence),
             useJapaneseKeyboard = uiState.useJapaneseKeyboard,
             trailingIcon = if (feedbackForField != null) {
                 {

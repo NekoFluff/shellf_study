@@ -184,6 +184,10 @@ data class LessonUiState(
             val feedback: AnswerFeedback? = null,
             val rankChange: RankChange? = null,
             val undoCounter: Int = 0,
+            // Bumped on every advance to a new current question, even a requeued one that repeats
+            // the same item/type — see QuizQuestionContent's focusResetKey, which needs a signal
+            // that's guaranteed to change on advance regardless of whether the question repeats.
+            val questionSequence: Int = 0,
             val isDetailsExpanded: Boolean = false,
             val answerTypeMismatchCount: Int = 0,
             val totalQuizCount: Int = 0,
@@ -1470,6 +1474,7 @@ class LessonViewModel(
                     answerHint = null,
                     isDetailsExpanded = false,
                     remainingQuizCount = quizQueue.size,
+                    questionSequence = it.questionSequence + 1,
                     timing = it.timing.copy(
                         questionActiveElapsedMs = 0L,
                         questionActiveSegmentStartMs = questionStartedAt,

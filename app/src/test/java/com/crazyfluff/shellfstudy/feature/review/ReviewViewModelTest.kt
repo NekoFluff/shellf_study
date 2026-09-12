@@ -377,12 +377,19 @@ class ReviewViewModelTest {
             val feedbackState = awaitItem()
             assertThat((feedbackState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
             assertThat((feedbackState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
+            val questionSequenceBeforeRequeue = (feedbackState.phase as ReviewUiState.Phase.Active).questionSequence
 
             viewModel.onContinue()
             val requeuedState = awaitItem()
             assertThat((requeuedState.phase is ReviewUiState.Phase.Complete)).isFalse()
             assertThat((requeuedState.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)
             assertThat((requeuedState.phase as ReviewUiState.Phase.Active).feedback).isNull()
+            // Regression: the same item/type reappearing must still clear the answer field and
+            // force the answer field to reset — questionSequence has to change even though nothing
+            // else about the requeued question's identity did.
+            assertThat((requeuedState.phase as ReviewUiState.Phase.Active).answerInput).isEqualTo("")
+            assertThat((requeuedState.phase as ReviewUiState.Phase.Active).questionSequence)
+                .isNotEqualTo(questionSequenceBeforeRequeue)
 
             viewModel.onAnswerInputChange("Mouth")
             awaitItem()

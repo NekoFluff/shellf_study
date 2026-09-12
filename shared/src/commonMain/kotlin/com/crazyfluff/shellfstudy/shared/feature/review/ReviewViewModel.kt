@@ -92,6 +92,10 @@ data class ReviewUiState(
             val feedback: AnswerFeedback? = null,
             val rankChange: RankChange? = null,
             val undoCounter: Int = 0,
+            // Bumped on every advance to a new current question, even a requeued one that repeats
+            // the same item/type — see QuizQuestionContent's focusResetKey, which needs a signal
+            // that's guaranteed to change on advance regardless of whether the question repeats.
+            val questionSequence: Int = 0,
             val isDetailsExpanded: Boolean = false,
             val answerTypeMismatchCount: Int = 0,
             val totalCount: Int = 0,
@@ -726,12 +730,14 @@ class ReviewViewModel(
         // leak into this question's caption.
         pitchAccentHintKey.value = null
         _uiState.update {
+            val previousPhase = it.phase as? ReviewUiState.Phase.Active
             it.copy(
                 phase = ReviewUiState.Phase.Active(
                     currentItem = next.item,
                     currentQuestionType = next.type,
                     totalCount = totalQuestions,
                     remainingCount = queue.size,
+                    questionSequence = (previousPhase?.questionSequence ?: 0) + 1,
                     timing = QuizTimingUiState(
                         sessionActiveElapsedMs = sessionTiming.elapsedMs,
                         sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
