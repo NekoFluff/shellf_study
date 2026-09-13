@@ -639,7 +639,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 RelatedSubjectsSection(group = group, onSubjectClick = openSubjectDetail)
             }
             RelatedSubjectsSection(
-                group = usedInGroup(item.amalgamationSubjectIds, relatedSubjectsById),
+                group = usedInGroup(item.subjectType, item.amalgamationSubjectIds, relatedSubjectsById),
                 onSubjectClick = openSubjectDetail
             )
         }

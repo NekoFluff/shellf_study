@@ -80,13 +80,19 @@ fun phoneticallySimilarGroup(
     )
 }
 
-/** The "used in" group — amalgamation subjects are always vocabulary words. */
-fun usedInGroup(amalgamationSubjectIds: List<Long>, cache: Map<Long, SubjectSummary>): RelatedSubjectsGroup =
-    RelatedSubjectsGroup(
+/** The "used in" group — amalgamation subjects are one level up the radical → kanji → vocabulary
+ *  hierarchy from [subjectType] (a radical's amalgamations are kanji; a kanji's are vocabulary). */
+fun usedInGroup(subjectType: SubjectType, amalgamationSubjectIds: List<Long>, cache: Map<Long, SubjectSummary>): RelatedSubjectsGroup {
+    val accentType = when (subjectType) {
+        SubjectType.RADICAL -> SubjectType.KANJI
+        SubjectType.KANJI, SubjectType.VOCABULARY, SubjectType.KANA_VOCABULARY -> SubjectType.VOCABULARY
+    }
+    return RelatedSubjectsGroup(
         title = "Used in",
-        accentType = SubjectType.VOCABULARY,
+        accentType = accentType,
         subjects = amalgamationSubjectIds.toRelatedSubjectsUiState(cache)
     )
+}
 
 /** Resolves related subject ids against the cache — see [RelatedSubjectsUiState] for why this
  *  isn't a plain `mapNotNull` into a `List<SubjectSummary>` any more. */

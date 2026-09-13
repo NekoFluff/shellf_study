@@ -307,7 +307,7 @@ private fun SubjectUsedInSection(
     onRelatedSubjectClick: (Long) -> Unit
 ) {
     RelatedSubjectsSection(
-        group = usedInGroup(detail.amalgamationSubjectIds, relatedSubjects),
+        group = usedInGroup(detail.subjectType, detail.amalgamationSubjectIds, relatedSubjects),
         onSubjectClick = onRelatedSubjectClick
     )
 }
