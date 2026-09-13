@@ -1,0 +1,63 @@
+name: Refresh pitch-accent data
+
+on:
+  schedule:
+    - cron: '0 6 1 * *' # 1st of each month
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Fetch live WaniKani vocab
+        env:
+          WANIKANI_REFRESH_TOKEN: ${{ secrets.WANIKANI_REFRESH_TOKEN }}
+        run: python3 tools/kanjium/fetch_live_vocab.py
+
+      - name: Refresh Kanjium accents.txt
+        run: |
+          curl -sfL -o tools/kanjium/accents.txt \
+            https://raw.githubusercontent.com/mifunetoshiro/kanjium/master/data/source_files/raw/accents.txt
+
+      - name: Regenerate pitch_info.json
+        run: python3 tools/kanjium/regenerate_key_set.py | tee /tmp/refresh_stats.txt
+
+      - name: Open PR if anything changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- \
+            shared/src/commonMain/composeResources/files/pitch_info.json \
+            tools/kanjium/accents.txt \
+            tools/kanjium/live_vocab_headwords.json
+          then
+            echo "No changes; skipping PR."
+            exit 0
+          fi
+
+          BRANCH="automated/pitch-accent-refresh"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add \
+            shared/src/commonMain/composeResources/files/pitch_info.json \
+            tools/kanjium/accents.txt \
+            tools/kanjium/live_vocab_headwords.json
+          git commit -m "Refresh pitch-accent data from WaniKani + Kanjium"
+          git push -f origin "$BRANCH"
+
+          if [ -z "$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')" ]; then
+            gh pr create --base master --head "$BRANCH" \
+              --title "Refresh pitch-accent data ($(date +%Y-%m))" \
+              --body-file /tmp/refresh_stats.txt
+          fi
