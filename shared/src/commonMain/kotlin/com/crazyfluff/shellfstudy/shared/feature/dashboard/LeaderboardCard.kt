@@ -68,10 +68,17 @@ fun LeaderboardCard(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
-            // Header: title + window dropdown
+            // Header: title + window dropdown.
+            //
+            // The 16.dp top is not decoration: every other dashboard card gets its title's inset from
+            // a `Column(Modifier.padding(16.dp))`, but this card pads each row individually because its
+            // list rows are full-bleed (the current user's highlight and the loading bar both span the
+            // card). So the header states the inset itself. It did not have to while the window trigger
+            // was a TextButton — Material3's 40.dp minimum button height was silently supplying the
+            // header's height, and dropping it left the title 4.dp from the card's top edge.
             Row(
                 modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
                     .fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically

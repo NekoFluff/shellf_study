@@ -1,5 +1,8 @@
 package com.crazyfluff.shellfstudy.feature.dashboard
 
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -30,6 +33,23 @@ class LeaderboardCardTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    fun titleSitsTheSameDistanceBelowTheCardTopAsOtherCardsDo() {
+        // Every other dashboard card's title is the first child of a Column(padding(16.dp)), so it sits
+        // 16.dp below the card's top edge. This card pads per row instead, so its header supplies that
+        // inset itself. The regression this guards: while the window trigger was a TextButton, its
+        // 40.dp minimum height was silently providing the header's height, and swapping it for a
+        // compact Row dropped the title to 4.dp from the top — visibly cramped next to its siblings.
+        setContent(leaderboardOf(3))
+
+        val cardTop = composeTestRule.onNodeWithTag(LeaderboardCardTestTags.CARD).getUnclippedBoundsInRoot().top
+        val titleTop = composeTestRule.onNodeWithText("Leaderboard").getUnclippedBoundsInRoot().top
+
+        // 12.dp rather than the exact 16.dp the sibling cards use, so a type-scale change doesn't fail
+        // this on arithmetic; the failure it guards against is 4.dp.
+        assertThat(titleTop - cardTop >= 12.dp).isTrue()
+    }
 
     private fun leaderboardOf(count: Int) = Leaderboard(
         entries = List(count) { index -> entry("User ${index + 1}", index) },

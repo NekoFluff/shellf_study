@@ -34,6 +34,17 @@ import androidx.compose.ui.unit.dp
  * several extra dp of dead space below it that no amount of shrinking the following `Spacer` could
  * remove, because the space was inside the row rather than in the spacer.
  *
+ * The cost of that trade is that the trigger contributes no height of its own, so a host whose title
+ * row carries little vertical padding has to supply the title's inset itself or the title will sit
+ * hard against the card's top edge. [ReviewForecastCard][com.crazyfluff.shellfstudy.shared.feature.dashboard.ReviewForecastCard]
+ * gets it from its enclosing `Column(padding(16.dp))`; `LeaderboardCard` pads each row individually
+ * (its rows are full-bleed) and so states the top inset explicitly. That is not incidental — the
+ * leaderboard card silently lost it when its trigger stopped being a `TextButton`.
+ *
+ * Consequently the trigger is also shorter than Material's 48.dp touch-target guidance (~24.dp), which
+ * both hosts currently accept rather than pay the extra row height. Revisit it and the header insets
+ * together if either card's header is re-tuned.
+ *
  * [contentDescription] is a parameter because the two hosts word it differently ("Change time window"
  * / "Change forecast window"), and it is the only part of the trigger a screen reader announces.
  */
