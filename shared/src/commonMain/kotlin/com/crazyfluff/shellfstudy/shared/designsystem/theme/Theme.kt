@@ -77,10 +77,17 @@ fun themeAwareColor(default: Color, einkValue: Color, darkValue: Color = default
 @Composable
 fun ShellfStudyTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val isEink = themeMode == ThemeMode.EINK
+    // Resolved from the mode rather than taken as a separate `darkTheme` parameter. With a parameter,
+    // the app's two roots disagreed about it — Android passed the mode's own answer, iOS left it to
+    // the system — so choosing Dark on iOS while the system was light rendered light.
+    val darkTheme = when (themeMode) {
+        ThemeMode.LIGHT, ThemeMode.EINK -> false
+        ThemeMode.DARK -> true
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
     val colorScheme = when {
         isEink -> EinkColorScheme
         darkTheme -> DarkColorScheme

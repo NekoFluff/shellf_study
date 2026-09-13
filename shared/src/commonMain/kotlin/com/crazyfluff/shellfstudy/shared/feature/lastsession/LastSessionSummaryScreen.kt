@@ -22,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
-import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.toSessionSummaryDisplay

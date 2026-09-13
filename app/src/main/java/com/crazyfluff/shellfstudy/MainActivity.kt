@@ -5,24 +5,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import com.crazyfluff.shellfstudy.shared.ThemeViewModel
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.shared.ShellfStudyApp
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
-import com.crazyfluff.shellfstudy.shared.navigation.ShellfStudyNavHost
-import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.shared.data.ThemeMode
-import org.koin.androidx.compose.koinViewModel
-import org.koin.compose.koinInject
 
 class MainActivity : ComponentActivity() {
 
@@ -36,27 +23,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         pendingDestination = intent?.getStringExtra(NotificationDeepLink.EXTRA_DESTINATION)
         setContent {
-            val themeViewModel: ThemeViewModel = koinViewModel()
-            val themeMode by themeViewModel.themeMode.collectAsState()
-            val darkTheme = when (themeMode) {
-                ThemeMode.LIGHT -> false
-                ThemeMode.DARK -> true
-                ThemeMode.EINK -> false
-                ThemeMode.SYSTEM -> isSystemInDarkTheme()
-            }
-            // Android's app root — mirroring ShellfStudyApp (iOS) so a reading's play button has a
-            // player to dispatch through. See LocalPronunciationAudioPlayer.
-            val audioPlayer: PronunciationAudioPlayer = koinInject()
-            ShellfStudyTheme(themeMode = themeMode, darkTheme = darkTheme) {
-                CompositionLocalProvider(LocalPronunciationAudioPlayer provides audioPlayer) {
-                    Surface(modifier = Modifier.fillMaxSize()) {
-                        ShellfStudyNavHost(
-                            pendingDestination = pendingDestination,
-                            onPendingDestinationConsumed = { pendingDestination = null }
-                        )
-                    }
-                }
-            }
+            // The content is entirely ShellfStudyApp — the same composable iOS's MainViewController
+            // uses. This method used to mirror it by hand, and the two drifted; see that function's
+            // doc comment. Only the notification deep link, which is Android-specific, is wired here.
+            ShellfStudyApp(
+                pendingDestination = pendingDestination,
+                onPendingDestinationConsumed = { pendingDestination = null }
+            )
         }
     }
 

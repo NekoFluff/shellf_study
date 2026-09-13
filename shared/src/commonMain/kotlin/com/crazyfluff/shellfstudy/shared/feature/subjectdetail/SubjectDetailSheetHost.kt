@@ -63,6 +63,14 @@ fun SubjectDetailSheetHost(state: SubjectDetailSheetState) {
 /**
  * Opens the shared browse [SubjectDetailSheet] on a subject.
  *
+ * Unlike `LocalShareText` and `LocalNotificationPermissionRequest`, this has no meaningful fallback:
+ * "no opener" can only mean "a tap that does nothing". That is the safe direction for a test that
+ * composes one card in isolation, but it is also a silent failure if a *production* composition ever
+ * sits outside the root — which is exactly how the Android build lost its subject taps once. So the
+ * default no-op is only acceptable because `ArchitectureConventionsTest` proves this is provided in
+ * `ShellfStudyApp` and that there is one app root; if a second composition root ever appears, make
+ * this nullable and hide the tap affordance instead of defaulting to a dead one.
+ *
  * Provided once by `ShellfStudyApp`, which also mounts the single [SubjectDetailSheetHost]. Before
  * this, four screens each remembered their own [SubjectDetailSheetState] and mounted their own host —
  * four identical copies of something with no per-screen state, since the browse host is always
