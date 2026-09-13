@@ -184,8 +184,6 @@ object LessonScreenTestTags {
     const val BATCH_COMPLETE_MISSED_TEXT = "lesson_batch_complete_missed_text"
     const val CONTINUE_SESSION_BUTTON = "lesson_continue_session_button"
     const val FINISH_FOR_NOW_BUTTON = "lesson_finish_for_now_button"
-    const val PRACTICE_MISSED_BUTTON = "lesson_practice_missed_button"
-    const val FINISH_SESSION_BUTTON = "lesson_finish_session_button"
 }
 
 @Composable
@@ -447,7 +445,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
             // Which pass of the session this question belongs to: a plan of several batches needs
             // saying out loud, or "3 / 10" reads as the whole session.
             sessionContextLabel = when {
-                phase.round == QuizRound.CLEANUP -> "Extra practice"
                 phase.batchCount > 1 -> "Batch ${phase.batchIndex + 1} of ${phase.batchCount}"
                 else -> null
             },
@@ -678,7 +675,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteCo
     actions: LessonActions
 ) {
     val openSubjectDetail = LocalOpenSubjectDetail.current
-    val isFinalBatch = checkpoint.batchIndex == checkpoint.batchCount - 1
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -688,7 +684,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteCo
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = if (isFinalBatch) "Last batch done!" else "Batch ${checkpoint.batchIndex + 1} of ${checkpoint.batchCount} done!",
+            text = "Batch ${checkpoint.batchIndex + 1} of ${checkpoint.batchCount} done!",
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.testTag(LessonScreenTestTags.BATCH_COMPLETE_HEADLINE)
         )
@@ -720,46 +716,26 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteCo
             }
         }
 
-        when (val next = checkpoint.next) {
-            is LessonUiState.Phase.BatchComplete.NextStep.StudyBatch -> {
-                Text(
-                    text = "${next.remainingSessionItems} items left in this session.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                // Plain "Continue", not "Study next 5": the scale is the line above, and the count in
-                // the label was noise on a button whose only job is to move forward.
-                Button(
-                    onClick = actions::continueSession,
-                    modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON)
-                ) { Text("Continue") }
-                TextButton(
-                    onClick = actions::finishForNow,
-                    modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON)
-                ) { Text("Finish for now") }
-                Text(
-                    text = "Stopping here is fine — you can pick the session back up from the dashboard.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            is LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed -> {
-                Text(
-                    text = "${next.itemCount} didn't stick on the first try.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Button(
-                    onClick = actions::practiceMissedItems,
-                    modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.PRACTICE_MISSED_BUTTON)
-                ) { Text("Practice ${next.itemCount} missed") }
-                TextButton(
-                    onClick = actions::finishSessionNow,
-                    modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.FINISH_SESSION_BUTTON)
-                ) { Text("See results") }
-            }
-        }
+        Text(
+            text = "${checkpoint.remainingSessionItems} items left in this session.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        // Plain "Continue", not "Study next 5": the scale is the line above, and the count in
+        // the label was noise on a button whose only job is to move forward.
+        Button(
+            onClick = actions::continueSession,
+            modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON)
+        ) { Text("Continue") }
+        TextButton(
+            onClick = actions::finishForNow,
+            modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON)
+        ) { Text("Finish for now") }
+        Text(
+            text = "Stopping here is fine — you can pick the session back up from the dashboard.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

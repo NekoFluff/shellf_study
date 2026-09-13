@@ -5,7 +5,6 @@ import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSort
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
-import com.crazyfluff.shellfstudy.shared.feature.lesson.QuizRound
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -115,19 +114,9 @@ class LessonViewModelTest {
         pronunciationAudioPlayer, appForegroundTracker, backgroundScope
     )
 
-    /**
-     * Waits for the session summary, declining the end-of-session extra-practice checkpoint if the
-     * session stopped at one — a session with any miss now lands there before its summary, since that
-     * checkpoint is the only place "practice what you missed" can be offered.
-     */
-    private suspend fun ReceiveTurbine<LessonUiState>.awaitSessionSummary(viewModel: LessonViewModel): LessonUiState.Phase.Complete {
-        var state = awaitItem()
-        if (state.phase is LessonUiState.Phase.BatchComplete) {
-            viewModel.finishSessionNow()
-            state = awaitItem()
-        }
-        return state.phase as LessonUiState.Phase.Complete
-    }
+    /** Waits for the session summary, which is where the last batch's questions lead directly. */
+    private suspend fun ReceiveTurbine<LessonUiState>.awaitSessionSummary(): LessonUiState.Phase.Complete =
+        (awaitItem().phase as LessonUiState.Phase.Complete)
 
     /**
      * Answers every question of the batch the session is currently quizzed on, correctly, and returns
@@ -1162,7 +1151,7 @@ class LessonViewModelTest {
             awaitItem()
 
             viewModel.onContinue()
-            val finalState = awaitSessionSummary(viewModel)
+            val finalState = awaitSessionSummary()
 
             assertThat(finalState.sessionItemsLearned).isEqualTo(1)
             assertThat(finalState.sessionItemsCorrectFirstTry).isEqualTo(0)
@@ -1259,9 +1248,6 @@ class LessonViewModelTest {
                         awaitItem()
                         secondViewModel.onContinue()
                     }
-                    // A session with a miss ends its last batch at the checkpoint that offers extra
-                    // practice on it; declining that offer is what "until the summary" means now.
-                    is LessonUiState.Phase.BatchComplete -> secondViewModel.finishSessionNow()
                     else -> error("unexpected phase while waiting for the session summary: $phase")
                 }
                 state = awaitItem()
@@ -1341,9 +1327,6 @@ class LessonViewModelTest {
                         awaitItem()
                         secondViewModel.onContinue()
                     }
-                    // Same as above: the last batch of a session with a miss stops at the extra-practice
-                    // checkpoint first.
-                    is LessonUiState.Phase.BatchComplete -> secondViewModel.finishSessionNow()
                     else -> error("unexpected phase while waiting for the session summary: $phase")
                 }
                 state = awaitItem()
@@ -2085,7 +2068,6 @@ class LessonViewModelTest {
             val quiz = state.phase as LessonUiState.Phase.Quiz
             assertThat(quiz.batchIndex).isEqualTo(0)
             assertThat(quiz.batchCount).isEqualTo(2)
-            assertThat(quiz.round).isEqualTo(QuizRound.LESSON)
             assertThat(quiz.totalQuizCount).isEqualTo(2)
         }
     }
@@ -2117,11 +2099,7 @@ class LessonViewModelTest {
             assertThat(checkpoint.itemsLearned).isEqualTo(2)
             assertThat(checkpoint.itemsCorrectFirstTry).isEqualTo(2)
             assertThat(checkpoint.missedItems).isEmpty()
-            val next = checkpoint.next
-            assertThat(next).isInstanceOf(LessonUiState.Phase.BatchComplete.NextStep.StudyBatch::class.java)
-            next as LessonUiState.Phase.BatchComplete.NextStep.StudyBatch
-            assertThat(next.batchIndex).isEqualTo(1)
-            assertThat(next.remainingSessionItems).isEqualTo(1)
+            assertThat(checkpoint.remainingSessionItems).isEqualTo(1)
 
             viewModel.continueSession()
             val secondBatch = awaitItem().phase as LessonUiState.Phase.Study
@@ -2172,67 +2150,6 @@ class LessonViewModelTest {
             assertThat(resumed.batchIndex).isEqualTo(1)
             assertThat(resumed.batchCount).isEqualTo(2)
             assertThat(resumed.studyItems.map { it.assignmentId }).containsExactly(103L)
-        }
-    }
-
-    @Test
-    fun `the final checkpoint's extra practice asks only the missed half without changing the summary`() = runTest(mainDispatcherRule.dispatcher) {
-        // The kanji fixture gives each item both a meaning and a reading question, so missing one half
-        // is expressible while the other is answered correctly.
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            state = awaitItem() // quiz
-
-            var missedMeaning = false
-            var guard = 0
-            while (state.phase !is LessonUiState.Phase.BatchComplete && guard++ < 10) {
-                val quiz = state.phase as LessonUiState.Phase.Quiz
-                val answer = if (quiz.currentQuestionType == QuestionType.MEANING && !missedMeaning) {
-                    missedMeaning = true
-                    "definitely wrong"
-                } else {
-                    if (quiz.currentQuestionType == QuestionType.MEANING) quiz.currentItem.meanings.first() else quiz.currentItem.readings.first()
-                }
-                viewModel.onAnswerInputChange(answer)
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            val offer = (state.phase as LessonUiState.Phase.BatchComplete).next
-            assertThat(offer).isInstanceOf(LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed::class.java)
-            assertThat((offer as LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed).itemCount).isEqualTo(1)
-
-            viewModel.practiceMissedItems()
-            val cleanup = awaitItem().phase as LessonUiState.Phase.Quiz
-
-            assertThat(cleanup.round).isEqualTo(QuizRound.CLEANUP)
-            // Only the half that was missed is asked again — the reading was answered correctly on the
-            // way to learning the item.
-            assertThat(cleanup.totalQuizCount).isEqualTo(1)
-            assertThat(cleanup.currentQuestionType).isEqualTo(QuestionType.MEANING)
-
-            viewModel.onAnswerInputChange(cleanup.currentItem.meanings.first())
-            awaitItem()
-            viewModel.submitAnswer()
-            awaitItem()
-            viewModel.onContinue()
-            val complete = awaitItem().phase as LessonUiState.Phase.Complete
-
-            // Rehearsing an already-learned item can't retroactively make the session a clean one.
-            assertThat(complete.sessionItemsLearned).isEqualTo(1)
-            assertThat(complete.sessionItemsCorrectFirstTry).isEqualTo(0)
-            assertThat(complete.sessionMissedItems).hasSize(1)
         }
     }
 

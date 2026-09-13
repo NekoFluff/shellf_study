@@ -15,12 +15,6 @@ import kotlinx.serialization.json.Json
  *  phase actually uses are meaningful at a time. */
 enum class PersistedLessonPhase { STUDY, QUIZ, CHECKPOINT }
 
-/** Which pass over the queue a QUIZ-phase snapshot belongs to — the lesson's own quiz for a batch,
- *  or the optional end-of-session extra pass over the items missed during it. Unlike the lesson quiz,
- *  a cleanup pass can never change the session summary (those items' misses are already recorded), so
- *  resuming one has to know which of the two it is restoring. */
-enum class PersistedQuizRound { LESSON, CLEANUP }
-
 /**
  * A lesson session's persisted snapshot.
  *
@@ -44,7 +38,6 @@ data class PersistedLessonSession(
      *  convention [com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSessionPlanner.batches]'s
      *  empty-selection rule relies on. */
     val batchIndex: Int = 0,
-    val quizRound: PersistedQuizRound = PersistedQuizRound.LESSON,
     /** Read only to migrate a snapshot written before session plans existed, where a STUDY payload's
      *  selected batch *was* the whole session — see [migratedFromLegacyShape]. Never written by this
      *  version (a migrated snapshot re-saves its plan through [sessionAssignmentIds]). */
@@ -81,7 +74,7 @@ data class PersistedLessonSession(
             PersistedLessonPhase.CHECKPOINT -> emptyList()
         }
         if (legacyIds.isEmpty()) return this
-        return copy(sessionAssignmentIds = legacyIds, batchSize = legacyIds.size, quizRound = PersistedQuizRound.LESSON)
+        return copy(sessionAssignmentIds = legacyIds, batchSize = legacyIds.size)
     }
 }
 

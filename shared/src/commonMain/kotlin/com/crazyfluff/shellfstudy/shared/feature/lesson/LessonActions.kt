@@ -64,11 +64,5 @@ interface LessonActions {
     /** The batch checkpoint's "Finishing for now" — keeps the session and leaves the screen. */
     fun finishForNow()
 
-    /** The final checkpoint's optional extra pass over the session's misses. */
-    fun practiceMissedItems()
-
-    /** The final checkpoint's "See results" — declines the extra practice and shows the summary. */
-    fun finishSessionNow()
-
     fun abandonSession()
 }

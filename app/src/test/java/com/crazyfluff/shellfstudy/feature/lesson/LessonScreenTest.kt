@@ -185,7 +185,7 @@ class LessonScreenTest {
         itemsLearned: Int = 2,
         itemsCorrectFirstTry: Int = 2,
         missedItems: List<LessonItem> = emptyList(),
-        next: LessonUiState.Phase.BatchComplete.NextStep
+        remainingSessionItems: Int = 0
     ) = LessonUiState(
         phase = LessonUiState.Phase.BatchComplete(
             batchIndex = batchIndex,
@@ -193,7 +193,7 @@ class LessonScreenTest {
             itemsLearned = itemsLearned,
             itemsCorrectFirstTry = itemsCorrectFirstTry,
             missedItems = missedItems,
-            next = next
+            remainingSessionItems = remainingSessionItems
         )
     )
 
@@ -710,9 +710,7 @@ class LessonScreenTest {
                 batchCount = 3,
                 itemsLearned = 5,
                 itemsCorrectFirstTry = 4,
-                next = LessonUiState.Phase.BatchComplete.NextStep.StudyBatch(
-                    batchIndex = 1, remainingSessionItems = 10
-                )
+                remainingSessionItems = 10
             ),
             actions = actions
         )
@@ -734,9 +732,7 @@ class LessonScreenTest {
         val actions = RecordingLessonActions()
         setScreen(
             batchCompleteState(
-                next = LessonUiState.Phase.BatchComplete.NextStep.StudyBatch(
-                    batchIndex = 1, remainingSessionItems = 2
-                )
+                remainingSessionItems = 2
             ),
             actions = actions
         )
@@ -747,31 +743,23 @@ class LessonScreenTest {
     }
 
     @Test
-    fun batchCompletePhase_finalBatchOffersPracticeOnTheMisses() {
-        val actions = RecordingLessonActions()
+    fun batchCompletePhase_listsTheBatchesMisses() {
         setScreen(
             batchCompleteState(
-                batchIndex = 1,
+                batchIndex = 0,
                 batchCount = 2,
                 itemsLearned = 5,
                 itemsCorrectFirstTry = 3,
                 missedItems = listOf(radicalItem, secondRadicalItem),
-                next = LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed(itemCount = 2)
-            ),
-            actions = actions
+                remainingSessionItems = 3
+            )
         )
 
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_HEADLINE).assertTextEquals("Last batch done!")
         composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_MISSED_TEXT).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.PRACTICE_MISSED_BUTTON).assertTextEquals("Practice 2 missed")
-        // The final checkpoint's non-primary exit is the summary, so "Finish for now" isn't offered.
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON).assertDoesNotExist()
-
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.PRACTICE_MISSED_BUTTON).performClick()
-        assertThat(actions.calls).contains("practiceMissedItems")
-
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_SESSION_BUTTON).performClick()
-        assertThat(actions.calls).contains("finishSessionNow")
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_SUMMARY_TEXT)
+            .assertTextContains("5 learned · 3 right first try")
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON).assertIsDisplayed()
     }
 
     @Test
@@ -1584,7 +1572,5 @@ private class RecordingLessonActions : LessonActions {
     override fun closeDetails() = record("closeDetails")
     override fun continueSession() = record("continueSession")
     override fun finishForNow() = record("finishForNow")
-    override fun practiceMissedItems() = record("practiceMissedItems")
-    override fun finishSessionNow() = record("finishSessionNow")
     override fun abandonSession() = record("abandonSession")
 }

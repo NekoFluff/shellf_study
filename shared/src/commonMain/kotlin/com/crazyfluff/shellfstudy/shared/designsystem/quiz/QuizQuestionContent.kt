@@ -116,7 +116,7 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     // The reading/pitch-accent/audio hint for the just-graded reading question. Whether it is shown
     // at all is a display setting, read from LocalDisplaySettings where the hint is consumed.
     val answerHint: AnswerReadingHint? = null,
-    // Which pass of the session this question belongs to ("Batch 2 of 4", "Extra practice") — null
+    // Which batch of the session this question belongs to ("Batch 2 of 4") — null
     // when there's nothing worth saying, which is the case for every review question and for a lesson
     // session that fits in a single batch.
     val sessionContextLabel: String? = null
