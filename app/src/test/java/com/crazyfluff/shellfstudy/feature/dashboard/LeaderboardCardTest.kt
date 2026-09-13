@@ -34,8 +34,7 @@ class LeaderboardCardTest {
     private fun leaderboardOf(count: Int) = Leaderboard(
         entries = List(count) { index -> entry("User ${index + 1}", index) },
         metric = LeaderboardMetric.LEARNED,
-        window = LeaderboardWindow.WEEK,
-        selfRank = null
+        window = LeaderboardWindow.WEEK
     )
 
     private fun setContent(leaderboard: Leaderboard, onSeeAll: () -> Unit = {}) {

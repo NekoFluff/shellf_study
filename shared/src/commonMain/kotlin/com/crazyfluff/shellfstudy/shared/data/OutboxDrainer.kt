@@ -1,8 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
-import com.crazyfluff.shellfstudy.shared.database.outbox.PendingLessonStartEntity
-import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 
 enum class DrainOutcome { SUCCESS, RETRY, AUTH_FAILURE }

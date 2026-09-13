@@ -77,8 +77,7 @@ data class FriendStats(
 data class Leaderboard(
     val entries: List<FriendStats>,
     val metric: LeaderboardMetric,
-    val window: LeaderboardWindow,
-    val selfRank: Int?
+    val window: LeaderboardWindow
 ) {
     fun sorted(by: LeaderboardMetric, window: LeaderboardWindow): Leaderboard {
         val sorted = when (by) {
@@ -89,12 +88,6 @@ data class Leaderboard(
             // ranks below one with a real 0% rather than being given a made-up number to sort by.
             LeaderboardMetric.ACCURACY -> entries.sortedByDescending { it.reviewAccuracy }
         }
-        val selfIndex = sorted.indexOfFirst { it.isCurrentUser }
-        return copy(
-            entries = sorted,
-            metric = by,
-            window = window,
-            selfRank = if (selfIndex >= 0) selfIndex + 1 else null
-        )
+        return copy(entries = sorted, metric = by, window = window)
     }
 }

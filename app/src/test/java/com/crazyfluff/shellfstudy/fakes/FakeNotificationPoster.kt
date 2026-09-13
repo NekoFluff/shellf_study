@@ -4,13 +4,9 @@ import com.crazyfluff.shellfstudy.shared.notifications.NotificationPoster
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationSpec
 
 /** In-memory stand-in for [NotificationPoster] — the real one needs a real Context/NotificationManager. */
-class FakeNotificationPoster(private var canPostValue: Boolean = true) : NotificationPoster {
+class FakeNotificationPoster(private val canPostValue: Boolean = true) : NotificationPoster {
     val posted = mutableListOf<NotificationSpec>()
     val cancelled = mutableListOf<Int>()
-
-    fun setCanPost(value: Boolean) {
-        canPostValue = value
-    }
 
     override fun canPost(): Boolean = canPostValue
 

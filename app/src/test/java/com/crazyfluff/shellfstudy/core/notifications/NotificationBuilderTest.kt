@@ -38,7 +38,7 @@ class NotificationBuilderTest {
 
     @Test
     fun `reviewsBacklog targets the backlog channel and dashboard destination`() {
-        val spec = NotificationBuilder.reviewsBacklog(totalDueNow = 75, threshold = 50)
+        val spec = NotificationBuilder.reviewsBacklog(totalDueNow = 75)
         assertThat(spec.id).isEqualTo(NotificationIds.REVIEWS_BACKLOG)
         assertThat(spec.channelId).isEqualTo(NotificationChannels.REVIEWS_BACKLOG)
         assertThat(spec.destination).isEqualTo(NotificationDeepLink.DESTINATION_DASHBOARD)

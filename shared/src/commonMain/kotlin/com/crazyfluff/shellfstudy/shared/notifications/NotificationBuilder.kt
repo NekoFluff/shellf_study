@@ -30,7 +30,7 @@ object NotificationBuilder {
         destination = NotificationDeepLink.DESTINATION_DASHBOARD
     )
 
-    fun reviewsBacklog(totalDueNow: Int, threshold: Int): NotificationSpec = NotificationSpec(
+    fun reviewsBacklog(totalDueNow: Int): NotificationSpec = NotificationSpec(
         id = NotificationIds.REVIEWS_BACKLOG,
         channelId = NotificationChannels.REVIEWS_BACKLOG,
         title = "Your reviews miss you",

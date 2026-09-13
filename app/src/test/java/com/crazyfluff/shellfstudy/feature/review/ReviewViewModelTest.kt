@@ -6,7 +6,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.lifecycle.viewModelScope
-import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.data.PlaybackState
@@ -19,12 +18,9 @@ import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
-import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
-import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
@@ -104,47 +100,6 @@ class ReviewViewModelTest {
         pronunciationAudioPlayer, settingsRepository, pitchAccentRepository, appForegroundTracker, backgroundScope
     )
 
-    /** Answers meaning questions correctly until a reading question is on screen, answers that one
-     *  correctly too, and returns the graded Active state with its feedback showing. Starts from
-     *  [initialState], the last state the caller already consumed. */
-    private suspend fun ReceiveTurbine<ReviewUiState>.gradeReadingQuestionCorrectly(
-        viewModel: ReviewViewModel,
-        initialState: ReviewUiState
-    ): ReviewUiState.Phase.Active {
-        var state = initialState
-        while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
-            val active = state.phase as ReviewUiState.Phase.Active
-            viewModel.onAnswerInputChange(active.currentItem.meanings.first())
-            awaitItem()
-            viewModel.submitAnswer()
-            awaitItem()
-            viewModel.onContinue()
-            state = awaitItem()
-        }
-        val readingActive = state.phase as ReviewUiState.Phase.Active
-        viewModel.onAnswerInputChange(readingActive.currentItem.readings.first())
-        awaitItem()
-        viewModel.submitAnswer()
-        var graded = awaitItem()
-        while ((graded.phase as ReviewUiState.Phase.Active).feedback == null) graded = awaitItem()
-        return graded.phase as ReviewUiState.Phase.Active
-    }
-
-    /** Answers whichever question is current correctly and taps Continue, so the queue actually
-     *  advances — used where a test needs the question on screen to change. Leaves the next state for
-     *  the caller to `awaitItem()`. */
-    private suspend fun ReceiveTurbine<ReviewUiState>.answerCurrentQuestionCorrectly(viewModel: ReviewViewModel) {
-        val active = viewModel.uiState.value.phase as? ReviewUiState.Phase.Active ?: return
-        val answer = when (active.currentQuestionType) {
-            QuestionType.MEANING -> active.currentItem.meanings.first()
-            QuestionType.READING -> active.currentItem.readings.first()
-        }
-        viewModel.onAnswerInputChange(answer)
-        awaitItem()
-        viewModel.submitAnswer()
-        awaitItem()
-        viewModel.onContinue()
-    }
 
     /** Routes by path — refreshing the review queue now syncs subjects and assignments, in either order. */
     private fun dispatch(assignmentsResponse: MockResponse, subjectsResponse: MockResponse, reviewResponse: MockResponse? = null) {

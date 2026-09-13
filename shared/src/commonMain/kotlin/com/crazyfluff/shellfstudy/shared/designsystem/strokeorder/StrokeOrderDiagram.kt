@@ -51,6 +51,9 @@ object StrokeOrderTestTags {
 // KanjiVG's native coordinate space is a fixed 109x109 unit square; stroke width and number size
 // below are chosen to match the proportions KanjiVG's own SVGs use in that same space, so they
 // scale together with the diagram at any rendered size.
+//
+// The inverse — canvas pixels back to these units, which a user-drawn stroke would need for any
+// future stroke-shape comparison — is `points.map { it * (KANJIVG_UNITS / canvasSizePx) }`.
 private const val KANJIVG_UNITS = 109f
 private const val STROKE_WIDTH_UNITS = 3f
 private const val PEN_TIP_RADIUS_UNITS = 2.5f

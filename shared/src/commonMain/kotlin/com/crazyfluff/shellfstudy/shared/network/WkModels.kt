@@ -8,15 +8,13 @@ data class UserData(
     val id: String,
     val username: String,
     val level: Int,
-    @SerialName("profile_url") val profileUrl: String,
     @SerialName("started_at") val startedAt: String
 )
 
 @Serializable
 data class SummaryData(
     val lessons: List<SummaryEntry> = emptyList(),
-    val reviews: List<SummaryEntry> = emptyList(),
-    @SerialName("next_reviews_at") val nextReviewsAt: String? = null
+    val reviews: List<SummaryEntry> = emptyList()
 ) {
     /** Subjects immediately available right now (first entry's available_at is always "now"). */
     val availableLessonSubjectIds: List<Long> get() = lessons.firstOrNull()?.subjectIds ?: emptyList()
@@ -111,7 +109,6 @@ data class PronunciationAudioData(
 @Serializable
 data class PronunciationAudioMetadataData(
     val gender: String? = null,
-    @SerialName("source_id") val sourceId: Long? = null,
     val pronunciation: String? = null,
     @SerialName("voice_actor_id") val voiceActorId: Long? = null,
     @SerialName("voice_actor_name") val voiceActorName: String? = null,

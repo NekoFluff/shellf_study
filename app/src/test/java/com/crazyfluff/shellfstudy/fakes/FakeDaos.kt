@@ -12,7 +12,6 @@ import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsDao
 import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /** In-memory stand-in for [SubjectDao] used by repository/ViewModel unit tests. */
@@ -41,11 +40,6 @@ class FakeSubjectDao : SubjectDao {
     override suspend fun getUnlockedVocabularyCharacters(): List<String> = subjects.value.values
         .filter { (it.subjectType == "vocabulary" || it.subjectType == "kana_vocabulary") && it.id in unlockedIds.value }
         .mapNotNull { it.characters }
-
-    /** Test-only helper mirroring the real DAO's join against assignments.unlockedAt/hidden. */
-    fun markUnlocked(vararg ids: Long) {
-        unlockedIds.value = unlockedIds.value + ids.toSet()
-    }
 
     /** Test-only helper so [FakeAssignmentDao] can enumerate every (non-hidden) subject at a level
      *  for its subject-driven, left-join-style level progress/level-up queries — mirroring the real

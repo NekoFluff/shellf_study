@@ -252,7 +252,7 @@ class FriendStatsRepository(
             }
 
             val all = listOf(selfStats) + friendEntries
-            Leaderboard(entries = all, metric = metric, window = window, selfRank = null)
+            Leaderboard(entries = all, metric = metric, window = window)
                 .sorted(by = metric, window = window)
         }.flowOn(defaultDispatcher)
 

@@ -10,7 +10,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.fakes.dashboardCallbacks
-import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardFetch
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreen
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreenTestTags

@@ -113,7 +113,7 @@ class DefaultNotificationCoordinator(
                 if (isQuiet(settings, now)) {
                     notificationScheduler.scheduleDeferredNotification(DeferredNotificationCategory.BACKLOG, quietHoursEnd(settings, now))
                 } else {
-                    notificationPoster.post(NotificationBuilder.reviewsBacklog(forecast.reviewsAvailableNow, settings.backlogThreshold))
+                    notificationPoster.post(NotificationBuilder.reviewsBacklog(forecast.reviewsAvailableNow))
                     notificationStateRepository.recordBacklogNotified(now)
                 }
             }

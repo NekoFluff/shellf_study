@@ -76,7 +76,6 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import kotlinx.coroutines.flow.drop
 
 object SearchOverlayTestTags {
-    const val TRIGGER_BUTTON = "search_trigger_button"
     const val QUERY_FIELD = "search_query_field"
     const val CLOSE_BUTTON = "search_close_button"
     const val CLEAR_BUTTON = "search_clear_button"

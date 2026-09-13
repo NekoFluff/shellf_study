@@ -30,12 +30,8 @@ import com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationStateRepository
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
-import com.crazyfluff.shellfstudy.shared.data.DrainOutcome
 import kotlin.time.Instant
-import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.dsl.bind
 import org.koin.dsl.module
