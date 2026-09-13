@@ -65,6 +65,21 @@ fun visuallySimilarGroup(subjectType: SubjectType, visuallySimilarSubjectIds: Li
     )
 }
 
+/** The "phonetically similar" group — vocabulary/kana-vocabulary only (the inverse restriction of
+ *  [visuallySimilarGroup]); `null` for kanji/radicals, which have no reading to match on. */
+fun phoneticallySimilarGroup(
+    subjectType: SubjectType,
+    phoneticallySimilarSubjectIds: List<Long>,
+    cache: Map<Long, SubjectSummary>
+): RelatedSubjectsGroup? {
+    if (subjectType != SubjectType.VOCABULARY && subjectType != SubjectType.KANA_VOCABULARY) return null
+    return RelatedSubjectsGroup(
+        title = "Phonetically similar",
+        accentType = subjectType,
+        subjects = phoneticallySimilarSubjectIds.toRelatedSubjectsUiState(cache)
+    )
+}
+
 /** The "used in" group — amalgamation subjects are always vocabulary words. */
 fun usedInGroup(amalgamationSubjectIds: List<Long>, cache: Map<Long, SubjectSummary>): RelatedSubjectsGroup =
     RelatedSubjectsGroup(

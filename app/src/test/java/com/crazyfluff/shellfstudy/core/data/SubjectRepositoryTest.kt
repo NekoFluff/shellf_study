@@ -168,6 +168,52 @@ class SubjectRepositoryTest {
     }
 
     @Test
+    fun `observeSubjectDetail resolves other vocabulary sharing this word's exact primary reading`() = runTest {
+        repositories.subjectDao.upsertAll(
+            listOf(
+                SubjectEntity(
+                    id = 902,
+                    subjectType = "vocabulary",
+                    level = 1,
+                    slug = "協力",
+                    characters = "協力",
+                    meanings = listOf(MeaningData(meaning = "Cooperation", primary = true)),
+                    readings = listOf(ReadingData(reading = "きょうりょく", primary = true)),
+                    documentUrl = null,
+                    searchTarget = "協力 cooperation きょうりょく",
+                    primaryReadingKey = "キョウリョク"
+                ),
+                SubjectEntity(
+                    id = 903,
+                    subjectType = "vocabulary",
+                    level = 1,
+                    slug = "強力",
+                    characters = "強力",
+                    meanings = listOf(MeaningData(meaning = "Strength", primary = true)),
+                    readings = listOf(ReadingData(reading = "きょうりょく", primary = true)),
+                    documentUrl = null,
+                    searchTarget = "強力 strength きょうりょく",
+                    primaryReadingKey = "キョウリョク"
+                )
+            )
+        )
+
+        repository.observeSubjectDetail(902).test {
+            assertThat(awaitItem()?.phoneticallySimilarSubjectIds).containsExactly(903L)
+        }
+    }
+
+    @Test
+    fun `observeSubjectDetail never returns phonetically similar ids for a kanji subject`() = runTest {
+        server.enqueue(jsonResponse(SUBJECTS_JSON))
+        repository.syncSubjects(force = true)
+
+        repository.observeSubjectDetail(440).test {
+            assertThat(awaitItem()?.phoneticallySimilarSubjectIds).isEmpty()
+        }
+    }
+
+    @Test
     fun `syncSubjects maps pronunciation audios into the cached subject`() = runTest {
         server.enqueue(jsonResponse(SUBJECTS_JSON))
         repository.syncSubjects(force = true)

@@ -129,7 +129,8 @@ class SubjectDetailViewModel(
                 }
                 .flatMapLatest { (requestedId, detail) ->
                     val relatedIds = detail?.let {
-                        it.componentSubjectIds + it.amalgamationSubjectIds + it.visuallySimilarSubjectIds
+                        it.componentSubjectIds + it.amalgamationSubjectIds +
+                            it.visuallySimilarSubjectIds + it.phoneticallySimilarSubjectIds
                     }.orEmpty()
                     val relatedFlow = if (relatedIds.isEmpty()) {
                         flowOf(emptyList<SubjectSummary>())

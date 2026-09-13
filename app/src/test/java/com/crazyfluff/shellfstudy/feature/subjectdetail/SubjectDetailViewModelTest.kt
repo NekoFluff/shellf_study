@@ -161,6 +161,31 @@ class SubjectDetailViewModelTest {
     }
 
     @Test
+    fun `open resolves a phonetically similar vocabulary word as a related tile`() = runTest(mainDispatcherRule.dispatcher) {
+        repositories.subjectDao.upsertAll(
+            listOf(
+                subjectEntity(
+                    id = 10, characters = "協力", meaning = "Cooperation", subjectType = "vocabulary",
+                    readings = listOf("きょうりょく"), primaryReadingKey = "キョウリョク"
+                ),
+                subjectEntity(
+                    id = 11, characters = "強力", meaning = "Strength", subjectType = "vocabulary",
+                    readings = listOf("きょうりょく"), primaryReadingKey = "キョウリョク"
+                )
+            )
+        )
+
+        viewModel.uiState.test {
+            awaitNothingOpened()
+
+            viewModel.open(10)
+            val loaded = awaitSettled(10)
+
+            assertThat(loaded.relatedSubjects[11]?.meanings).containsExactly("Strength")
+        }
+    }
+
+    @Test
     fun `an uncached subject resolves to NotFound instead of loading forever`() = runTest(mainDispatcherRule.dispatcher) {
         // Bug regression: isLoading and a nullable detail couldn't tell "no row for this subject"
         // from "still loading", so drilling into a related id that had never been synced left the
@@ -350,7 +375,8 @@ class SubjectDetailViewModelTest {
         componentIds: List<Long> = emptyList(),
         pronunciationAudios: List<PronunciationAudioData> = emptyList(),
         subjectType: String = "kanji",
-        readings: List<String> = listOf("みず")
+        readings: List<String> = listOf("みず"),
+        primaryReadingKey: String = ""
     ): SubjectEntity = SubjectEntity(
         id = id,
         subjectType = subjectType,
@@ -362,7 +388,8 @@ class SubjectDetailViewModelTest {
         documentUrl = null,
         componentSubjectIds = componentIds,
         pronunciationAudios = pronunciationAudios,
-        searchTarget = "$characters $meaning".lowercase()
+        searchTarget = "$characters $meaning".lowercase(),
+        primaryReadingKey = primaryReadingKey
     )
 
 

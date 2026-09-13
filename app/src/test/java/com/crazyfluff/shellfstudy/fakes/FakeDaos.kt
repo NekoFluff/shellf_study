@@ -31,6 +31,15 @@ class FakeSubjectDao : SubjectDao {
     override fun observeSearch(query: String): Flow<List<SubjectEntity>> =
         subjects.map { map -> map.values.filter { it.searchTarget.contains(query, ignoreCase = true) }.take(200) }
 
+    override fun observePhoneticallySimilarIds(readingKey: String, excludeId: Long): Flow<List<Long>> =
+        subjects.map { map ->
+            map.values.filter {
+                (it.subjectType == "vocabulary" || it.subjectType == "kana_vocabulary") &&
+                    it.primaryReadingKey == readingKey && it.primaryReadingKey.isNotEmpty() &&
+                    it.id != excludeId
+            }.map { it.id }
+        }
+
     override fun observeTotalCount(): Flow<Int> = subjects.map { it.size }
 
     override fun observeTotalCountsByType(): Flow<List<SubjectTypeCount>> = subjects.map { map ->

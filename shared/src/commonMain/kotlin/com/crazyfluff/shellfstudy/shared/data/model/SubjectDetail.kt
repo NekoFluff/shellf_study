@@ -33,6 +33,8 @@ data class SubjectDetail(
     val componentSubjectIds: List<Long>,
     val amalgamationSubjectIds: List<Long>,
     val visuallySimilarSubjectIds: List<Long>,
+    /** Vocabulary/kana-vocabulary only — other subjects sharing this word's exact primary reading. */
+    val phoneticallySimilarSubjectIds: List<Long> = emptyList(),
     /**
      * Vocabulary/kana-vocabulary only — kanji/radicals, which don't have pitch accent at all,
      * resolve to [PitchAccentUiState.Unavailable] just like a word absent from the bundled

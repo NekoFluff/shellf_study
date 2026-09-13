@@ -11,6 +11,7 @@ import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.CharacterImageData
+import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.collectAllPages
@@ -20,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -82,7 +84,8 @@ class SubjectRepository(
                             searchTarget = buildSearchTarget(
                                 item.data.characters, item.data.slug, item.data.meanings.map { it.meaning },
                                 item.data.readings.map { it.reading }
-                            )
+                            ),
+                            primaryReadingKey = primaryReadingKey(item.data.readings)
                         )
                     }
                 )
@@ -135,12 +138,30 @@ class SubjectRepository(
                     // pending one, so the detail view doesn't offer to wait for data that can't come.
                     flowOf(PitchAccentUiState.Unavailable)
                 }
-            pitchAccentsFlow.map { pitchAccents -> entity?.toSubjectDetail(pitchAccents) }
+            val phoneticallySimilarFlow: Flow<List<Long>> =
+                if (entity != null &&
+                    (type == SubjectType.VOCABULARY || type == SubjectType.KANA_VOCABULARY) &&
+                    entity.primaryReadingKey.isNotEmpty()
+                ) {
+                    subjectDao.observePhoneticallySimilarIds(entity.primaryReadingKey, entity.id)
+                } else {
+                    // Kanji/radicals have no reading to match on — a confirmed absence, same as
+                    // pitch accents above.
+                    flowOf(emptyList())
+                }
+            combine(pitchAccentsFlow, phoneticallySimilarFlow) { pitchAccents, phoneticallySimilarIds ->
+                entity?.toSubjectDetail(pitchAccents, phoneticallySimilarIds)
+            }
         }.flowOn(defaultDispatcher)
 }
 
 private fun buildSearchTarget(characters: String?, slug: String, meanings: List<String>, readings: List<String>): String =
     (listOfNotNull(characters) + slug + meanings + readings).joinToString(" ").lowercase()
+
+/** Katakana-normalized primary reading, for exact-match "phonetically similar" lookups — falls back
+ *  to the first reading if none is marked primary, and to "" if there are no readings at all. */
+private fun primaryReadingKey(readings: List<ReadingData>): String =
+    (readings.firstOrNull { it.primary } ?: readings.firstOrNull())?.reading?.toKatakana() ?: ""
 
 /** WaniKani only ever supplies character_images as SVG; the ImageLoader has an SvgDecoder registered. */
 private fun selectCharacterImageUrl(images: List<CharacterImageData>): String? =
@@ -156,7 +177,10 @@ private fun SubjectEntity.toSubjectSummary(): SubjectSummary = SubjectSummary(
     readings = readings.map { it.reading }
 )
 
-private fun SubjectEntity.toSubjectDetail(pitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable): SubjectDetail {
+private fun SubjectEntity.toSubjectDetail(
+    pitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
+    phoneticallySimilarSubjectIds: List<Long> = emptyList()
+): SubjectDetail {
     val readingsByType = readings.groupBy { it.type }
     return SubjectDetail(
         subjectId = id,
@@ -180,6 +204,7 @@ private fun SubjectEntity.toSubjectDetail(pitchAccents: PitchAccentUiState = Pit
         componentSubjectIds = componentSubjectIds,
         amalgamationSubjectIds = amalgamationSubjectIds,
         visuallySimilarSubjectIds = visuallySimilarSubjectIds,
+        phoneticallySimilarSubjectIds = phoneticallySimilarSubjectIds,
         pitchAccents = pitchAccents,
         pronunciationAudios = toPronunciationAudios()
     )

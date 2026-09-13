@@ -14,7 +14,7 @@ import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import kotlinx.coroutines.flow.Flow
 
-@Entity(tableName = "subjects", indices = [Index("level"), Index("subjectType")])
+@Entity(tableName = "subjects", indices = [Index("level"), Index("subjectType"), Index("primaryReadingKey")])
 data class SubjectEntity(
     @PrimaryKey val id: Long,
     val subjectType: String,
@@ -40,7 +40,10 @@ data class SubjectEntity(
     val pronunciationAudios: List<PronunciationAudioData> = emptyList(),
     val hiddenAt: String? = null,
     /** Precomputed lowercase concat of characters+slug+meanings+readings, for LIKE search. */
-    val searchTarget: String = ""
+    val searchTarget: String = "",
+    /** Katakana-normalized primary reading (vocabulary/kana-vocabulary only), for the
+     *  "phonetically similar" section — matches subjects whose primary reading is identical. */
+    val primaryReadingKey: String = ""
 )
 
 /** One subject type's total subject count — the item-spread "locked" type-breakdown source. */
@@ -59,6 +62,18 @@ interface SubjectDao {
 
     @Query("SELECT * FROM subjects WHERE searchTarget LIKE '%' || :query || '%' LIMIT 200")
     fun observeSearch(query: String): Flow<List<SubjectEntity>>
+
+    /** Other vocabulary/kana-vocabulary subjects sharing this subject's exact primary reading —
+     *  powers the "Phonetically similar" section. */
+    @Query(
+        """
+        SELECT id FROM subjects
+        WHERE subjectType IN ('vocabulary', 'kana_vocabulary')
+          AND primaryReadingKey = :readingKey AND primaryReadingKey != ''
+          AND id != :excludeId
+        """
+    )
+    fun observePhoneticallySimilarIds(readingKey: String, excludeId: Long): Flow<List<Long>>
 
     @Query("SELECT COUNT(*) FROM subjects")
     fun observeTotalCount(): Flow<Int>

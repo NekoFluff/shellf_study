@@ -84,7 +84,8 @@ object SubjectDetailTestTags {
  * line with its SRS chip (pinned to the trailing edge, above the characters), the subject's
  * characters, then the headerless meaning underneath (see [SubjectMeaningAnswer]), the headerless
  * reading (see [SubjectReadingAnswer]), the part-of-speech tags, the writing zone and components, the
- * mnemonics (see [SubjectMnemonicZone]), then context sentences, visually similar, used-in, and stats.
+ * mnemonics (see [SubjectMnemonicZone]), then context sentences, visually/phonetically similar,
+ * used-in, and stats.
  */
 @Composable
 fun SubjectDetailContent(
@@ -154,6 +155,7 @@ fun SubjectDetailContent(
         )
         SubjectContextSentencesSection(detail, isVocabulary)
         SubjectVisuallySimilarSection(detail, relatedSubjects, onRelatedSubjectClick)
+        SubjectPhoneticallySimilarSection(detail, relatedSubjects, onRelatedSubjectClick)
         SubjectUsedInSection(detail, relatedSubjects, onRelatedSubjectClick)
         SubjectStatsZone(assignmentStats, reviewStats)
     }
@@ -281,6 +283,20 @@ private fun SubjectVisuallySimilarSection(
     onRelatedSubjectClick: (Long) -> Unit
 ) {
     val group = visuallySimilarGroup(detail.subjectType, detail.visuallySimilarSubjectIds, relatedSubjects) ?: return
+    if (group.subjects is RelatedSubjectsUiState.None) return
+    HorizontalDivider()
+    RelatedSubjectsSection(group = group, onSubjectClick = onRelatedSubjectClick)
+}
+
+@Composable
+private fun SubjectPhoneticallySimilarSection(
+    detail: SubjectDetail,
+    relatedSubjects: Map<Long, SubjectSummary>,
+    onRelatedSubjectClick: (Long) -> Unit
+) {
+    val group = phoneticallySimilarGroup(detail.subjectType, detail.phoneticallySimilarSubjectIds, relatedSubjects) ?: return
+    if (group.subjects is RelatedSubjectsUiState.None) return
+    HorizontalDivider()
     RelatedSubjectsSection(group = group, onSubjectClick = onRelatedSubjectClick)
 }
 
