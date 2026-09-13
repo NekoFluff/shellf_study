@@ -4,8 +4,10 @@ import com.crazyfluff.shellfstudy.shared.designsystem.time.LocalClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -347,12 +349,17 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
             }
 
             Spacer(Modifier.height(12.dp))
-            userSeries.forEach { series ->
-                ChartLegendRow(
-                    color = series.color,
-                    label = series.entry.nickname,
-                    isCurrentUser = series.entry.isCurrentUser
-                )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                userSeries.forEach { series ->
+                    ChartLegendRow(
+                        color = series.color,
+                        label = series.entry.nickname,
+                        isCurrentUser = series.entry.isCurrentUser
+                    )
+                }
             }
         }
     }
@@ -548,12 +555,17 @@ private fun ActivityWindowChart(
             }
 
             Spacer(Modifier.height(12.dp))
-            series.forEach { user ->
-                ChartLegendRow(
-                    color = user.color,
-                    label = user.entry.nickname,
-                    isCurrentUser = user.entry.isCurrentUser
-                )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                series.forEach { user ->
+                    ChartLegendRow(
+                        color = user.color,
+                        label = user.entry.nickname,
+                        isCurrentUser = user.entry.isCurrentUser
+                    )
+                }
             }
         }
     }
