@@ -61,7 +61,7 @@ val LocalJapaneseFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.
  * Resolves a colour that the light palette defines but the other two themes cannot reuse.
  *
  * [darkValue] deliberately defaults to [default] rather than to [einkValue]: an e-ink stand-in is
- * usually a near-black grayscale (see `CorrectAnswerColorDark`, 1.26:1 on the dark surface), so
+ * usually a near-black grayscale (see `CorrectAnswerColorDark`, 1.37:1 on the dark surface), so
  * treating it as the dark value would be a regression rather than a fix. Call sites that genuinely
  * need a separate dark colour pass one; the rest keep their light value in dark mode and stay
  * readable because most of this palette already clears the 3:1 UI-component guideline on both

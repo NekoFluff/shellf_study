@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  * This is the test that makes `LocalDarkTheme` load-bearing. Before it, the local was declared,
  * documented as existing "so categorical colours that don't otherwise track Material's colour scheme
  * swap in a legible dark-theme variant", provided by `ShellfStudyTheme` — and read by nothing, so
- * Master (#6A1B9A, 1.82:1) and Burned (#B71C1C, 2.61:1) were all but invisible in dark mode.
+ * Master (#6A1B9A, 1.98:1) and Burned (#B71C1C, 2.83:1) were all but invisible in dark mode.
  *
  * The light surface is asserted as it actually is, not as it should be: [lightStageColoursBelowBar]
  * names the stages that are still under the bar there, so the outstanding light-theme work is
@@ -82,9 +82,49 @@ class SrsStageColorContrastTest {
         assertEquals(lightStageColoursBelowBar, below)
     }
 
+    /**
+     * Chasing [MIN_UI_CONTRAST] by desaturating is a real trap, and this test exists because it was
+     * fallen into: the first dark variants were a lavender Master (S=0.43 against its light 0.83) and
+     * a salmon Burned (S=0.49 against 0.85), which satisfy the ratio while reading as neither purple
+     * nor red. The palette is meant to be vivid — its own doc says "a vivid green through vivid blue
+     * ... ending in a deep red" — and staying inside the Material colour family instead keeps those
+     * at 0.62 and 0.80.
+     *
+     * Measured against each stage's *own* light colour rather than an absolute floor, because `Locked`
+     * is deliberately grey: it is the "not started yet" state, so it has no vividness to keep and a
+     * fixed floor would fail it for being what it is.
+     */
+    @Test
+    fun `the dark variants keep their light counterpart's vividness`() {
+        val washedOut = stages.filter {
+            saturation(it.dark) < saturation(it.light) * MIN_SATURATION_RETENTION
+        }
+        assertTrue(
+            washedOut.isEmpty(),
+            "these clear the contrast bar by desaturating, which breaks the palette's progression: " +
+                washedOut.joinToString {
+                    "${it.name}=${"%.2f".format(saturation(it.dark))} of ${"%.2f".format(saturation(it.light))}"
+                }
+        )
+    }
+
     private companion object {
         /** WCAG 2.2 "graphical objects and user interface components" minimum. */
         const val MIN_UI_CONTRAST = 3.0
+
+        /**
+         * How much of a stage's light-palette saturation its dark variant must keep. The on-brand dark
+         * variants sit at 0.75 and 0.94 of their light counterparts; the washed-out mistakes at 0.53
+         * and 0.57.
+         */
+        const val MIN_SATURATION_RETENTION = 0.7
+
+        /** HSV saturation, i.e. how far the colour is from grey. */
+        fun saturation(color: Color): Double {
+            val max = maxOf(color.red, color.green, color.blue).toDouble()
+            val min = minOf(color.red, color.green, color.blue).toDouble()
+            return if (max == 0.0) 0.0 else (max - min) / max
+        }
 
         fun contrastRatio(a: Color, b: Color): Double {
             val la = relativeLuminance(a)

@@ -31,17 +31,23 @@ object SrsStageColors {
 
 /**
  * Dark-theme variants of [SrsStageColors]. Only the two that fall below the 3:1 UI-component
- * contrast guideline against the dark surface differ — Master (#6A1B9A, 1.82:1) and Burned
- * (#B71C1C, 2.61:1). The rest already clear it there, so they are reused rather than shifted for
- * consistency's sake. `SrsStageColorContrastTest` holds both palettes to the bar.
+ * contrast guideline against the dark surface differ — Master (#6A1B9A, 1.98:1) and Burned
+ * (#B71C1C, 2.83:1). The rest already clear it there, so they are reused rather than shifted for
+ * consistency's sake.
+ *
+ * Both replacements stay in their Material colour family rather than being lightened toward white:
+ * Master is Purple 400 and Burned is Red 800, so the progression the palette documents — "a
+ * cool-to-warm progression ... ending in a deep red for Burned" — still reads in dark mode. Lifting
+ * them to whatever cleared 3:1 first produced a lavender (S=0.43) and a salmon (S=0.49) that read as
+ * neither purple nor red; `SrsStageColorContrastTest` now holds both the contrast and the vividness.
  */
 object SrsStageColorsDark {
     val Locked = SrsStageColors.Locked
     val Apprentice = SrsStageColors.Apprentice
     val Guru = SrsStageColors.Guru
-    val Master = Color(0xFF9E6BBD)
+    val Master = Color(0xFFAB47BC)
     val Enlightened = SrsStageColors.Enlightened
-    val Burned = Color(0xFFD06B6B)
+    val Burned = Color(0xFFC62828)
 }
 
 /** Accent for "Correct!" feedback text and success icons in quiz flows. */
