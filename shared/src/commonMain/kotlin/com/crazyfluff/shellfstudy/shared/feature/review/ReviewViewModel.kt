@@ -460,8 +460,8 @@ class ReviewViewModel(
                 }
             } else {
                 when (type) {
-                    QuestionType.MEANING -> itemProgress.hadIncorrectMeaning = true
-                    QuestionType.READING -> itemProgress.hadIncorrectReading = true
+                    QuestionType.MEANING -> itemProgress.recordIncorrectMeaning()
+                    QuestionType.READING -> itemProgress.recordIncorrectReading()
                 }
                 queue.requeue(PendingQuestion(item, type))
             }

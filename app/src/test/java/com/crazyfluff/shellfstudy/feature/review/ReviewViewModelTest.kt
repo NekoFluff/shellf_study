@@ -788,6 +788,64 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `undoing a second wrong attempt before answering correctly still submits the item as incorrect`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression for: fail, retry and fail again, undo that second miss, then answer correctly.
+        // undoLastIncorrectAnswer unconditionally clears hadIncorrectMeaning to false — correct for
+        // undoing the *only* wrong attempt, but wrong here because it also erases the memory of the
+        // first, never-undone miss. The item must still be reported to WaniKani as having had an
+        // incorrect attempt.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            // First wrong attempt — committed via Continue, never undone.
+            viewModel.onAnswerInputChange("typo one")
+            awaitItem()
+            viewModel.submitAnswer()
+            val firstMissState = awaitItem()
+            assertThat((firstMissState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
+
+            viewModel.onContinue()
+            val requeuedState = awaitItem()
+            assertThat((requeuedState.phase as ReviewUiState.Phase.Active).feedback).isNull()
+            assertThat((requeuedState.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)
+
+            // Second wrong attempt on the retry — this one gets undone.
+            viewModel.onAnswerInputChange("typo two")
+            awaitItem()
+            viewModel.submitAnswer()
+            val secondMissState = awaitItem()
+            assertThat((secondMissState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
+
+            viewModel.undoLastAnswer()
+            val undoneState = awaitItem()
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).feedback).isNull()
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
+
+            // Now answer correctly.
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
+
+            viewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat((finalState.phase is ReviewUiState.Phase.Complete)).isTrue()
+        }
+
+        val queued = repositories.outboxDao.allReviewSubmissions()
+        assertThat(queued).hasSize(1)
+        // The item genuinely had a miss earlier in the session (never undone) — undoing the later,
+        // separate miss must not erase that.
+        assertThat(queued.first().incorrectMeaningAnswers).isEqualTo(1)
+    }
+
+    @Test
     fun `abandonSession clears persisted state and marks the session abandoned`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
@@ -898,6 +956,72 @@ class ReviewViewModelTest {
         assertThat(reviewSessionRepository.load()).isNull()
     }
 
+    @Test
+    fun `a miss committed before pausing survives undoing a second miss after resuming`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression for the pause/resume path of the same bug as "undoing a second wrong attempt
+        // before answering correctly still submits the item as incorrect": only the boolean
+        // hadIncorrectMeaning/hadIncorrectReading survives a persisted resume (there's no persisted
+        // attempt count), so a fresh ViewModel restores it as count 1 via a floor, not a bare
+        // overwrite. A second miss made after resuming must increment off that floor, and undoing it
+        // must land back on the floor — never below it — so the pre-pause miss is never erased.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            // First miss — committed via Continue before the (simulated) pause.
+            firstViewModel.onAnswerInputChange("typo one")
+            awaitItem()
+            firstViewModel.submitAnswer()
+            val firstMissState = awaitItem()
+            assertThat((firstMissState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
+
+            firstViewModel.onContinue()
+            val requeuedState = awaitItem()
+            assertThat((requeuedState.phase as ReviewUiState.Phase.Active).feedback).isNull()
+        }
+        assertThat(reviewSessionRepository.load()?.progress?.single()?.hadIncorrectMeaning).isTrue()
+
+        // Simulate leaving and coming back: a fresh ViewModel resumes the persisted session instead
+        // of starting a new one.
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat((state.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)
+            assertThat((state.phase as ReviewUiState.Phase.Active).feedback).isNull()
+
+            // Second miss on the retry, after resuming — then undone.
+            secondViewModel.onAnswerInputChange("typo two")
+            awaitItem()
+            secondViewModel.submitAnswer()
+            val secondMissState = awaitItem()
+            assertThat((secondMissState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
+
+            secondViewModel.undoLastAnswer()
+            val undoneState = awaitItem()
+            assertThat((undoneState.phase as ReviewUiState.Phase.Active).feedback).isNull()
+
+            // Now answer correctly.
+            secondViewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            secondViewModel.submitAnswer()
+            val correctState = awaitItem()
+            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
+
+            secondViewModel.onContinue()
+            val finalState = awaitItem()
+            assertThat((finalState.phase is ReviewUiState.Phase.Complete)).isTrue()
+        }
+
+        val queued = repositories.outboxDao.allReviewSubmissions()
+        assertThat(queued).hasSize(1)
+        // The pre-pause miss must still count, even though the only miss undone was the one made
+        // after resuming.
+        assertThat(queued.first().incorrectMeaningAnswers).isEqualTo(1)
+    }
 
     @Test
     fun `answering a reading question with the setting on surfaces the reading for the hint`() = runTest(mainDispatcherRule.dispatcher) {

@@ -24,8 +24,8 @@ suspend fun <T : QuizDisplayItem> undoLastIncorrectAnswer(
 ): Boolean {
     val itemProgress = progressByAssignmentId[item.assignmentId] ?: return false
     when (questionType) {
-        QuestionType.MEANING -> itemProgress.hadIncorrectMeaning = false
-        QuestionType.READING -> itemProgress.hadIncorrectReading = false
+        QuestionType.MEANING -> itemProgress.revertIncorrectMeaning()
+        QuestionType.READING -> itemProgress.revertIncorrectReading()
     }
     // The wrong submission moved this question to the back of the queue via requeue(); move it
     // back to the front so it stays "current" (queue.current == the item passed in is the
