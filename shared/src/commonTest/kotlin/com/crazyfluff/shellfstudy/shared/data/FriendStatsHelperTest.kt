@@ -180,7 +180,7 @@ class FriendStatsHelperTest {
     }
 
     @Test
-    fun buildStatsCore_zeroAttempts_reportsSentinelAccuracy() {
+    fun buildStatsCore_zeroAttempts_reportsNullAccuracy() {
         val core = buildStatsCore(
             burnedTimestamps = emptyList(),
             learnedTimestamps = emptyList(),
@@ -189,7 +189,7 @@ class FriendStatsHelperTest {
             sortedProgressions = emptyList(),
             nowMillis = 1_750_000_000_000L
         )
-        assertEquals(-1f, core.reviewAccuracy)
+        assertNull(core.reviewAccuracy)
     }
 
     @Test

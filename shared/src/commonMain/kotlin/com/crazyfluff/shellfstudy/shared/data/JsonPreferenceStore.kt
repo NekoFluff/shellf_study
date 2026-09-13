@@ -42,6 +42,20 @@ class JsonPreferenceStore<T>(
         return runCatching { json.decodeFromString(serializer, raw) }.getOrNull()
     }
 
+    /**
+     * [load] that keeps "nothing stored" and "stored but unreadable" apart: null still means the key
+     * is absent, but a stored value that fails to decode throws instead of reading as absent.
+     *
+     * A read-modify-write caller needs the difference. [load]'s fold to null is fine for a plain
+     * "is there a session to resume" read, where an unparseable snapshot is equivalent to none — but
+     * for a roster that gets read, edited, and written back, an unreadable value silently reads as
+     * "empty" and the next save replaces it with just the edit. See [FriendRepository].
+     */
+    suspend fun loadOrThrow(): T? {
+        val raw = dataStore.data.first()[key] ?: return null
+        return json.decodeFromString(serializer, raw)
+    }
+
     suspend fun clear() {
         dataStore.edit { prefs -> prefs.remove(key) }
     }

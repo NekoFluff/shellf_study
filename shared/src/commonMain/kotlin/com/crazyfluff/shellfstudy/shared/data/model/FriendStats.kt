@@ -61,7 +61,8 @@ data class FriendStats(
     val nickname: String,
     val username: String,
     val level: Int,
-    val reviewAccuracy: Float,
+    /** Null when the friend has never had a review graded — distinct from 0f, which is a real 0%. */
+    val reviewAccuracy: Float?,
     val avgDaysPerLevel: Float?,
     val daysSinceStart: Int?,
     val levelTimeline: List<LevelTimelinePoint>,
@@ -84,6 +85,8 @@ data class Leaderboard(
             LeaderboardMetric.LEARNED -> entries.sortedByDescending { it.learned.forWindow(window) }
             LeaderboardMetric.LEVEL -> entries.sortedByDescending { it.level }
             LeaderboardMetric.BURNED -> entries.sortedByDescending { it.burned.forWindow(window) }
+            // sortedByDescending treats null as smaller than any value, so a friend with no reviews
+            // ranks below one with a real 0% rather than being given a made-up number to sort by.
             LeaderboardMetric.ACCURACY -> entries.sortedByDescending { it.reviewAccuracy }
         }
         val selfIndex = sorted.indexOfFirst { it.isCurrentUser }

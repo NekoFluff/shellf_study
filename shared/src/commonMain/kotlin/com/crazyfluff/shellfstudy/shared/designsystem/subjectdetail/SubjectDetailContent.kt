@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SectionTitle
@@ -28,6 +29,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSec
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
 import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRow
+import com.crazyfluff.shellfstudy.shared.designsystem.text.LocalShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SrsStageChip
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
@@ -72,6 +74,9 @@ object SubjectDetailTestTags {
      *  without scrolling and where it sits (see [SubjectMeaningAnswer], [SubjectReadingAnswer]). */
     const val MEANING_ANSWER = "subject_detail_meaning_answer"
     const val READING_ANSWER = "subject_detail_reading_answer"
+
+    /** Shown when the sheet's subject has no cached row — see `SubjectDetailLoadState.NotFound`. */
+    const val NOT_LOADED = "subject_detail_not_loaded"
 }
 
 /**
@@ -91,12 +96,8 @@ fun SubjectDetailContent(
     questionType: DetailQuestionType?,
     onRelatedSubjectClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    showPitchAccent: Boolean = true,
-    restrictAudioToMp3: Boolean = false,
     strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
     autoPlayStrokeOrder: Boolean = true,
-    showStrokeOrder: Boolean = true,
-    hideContextSentenceTranslations: Boolean = true,
     assignmentStats: SubjectAssignmentStats? = null,
     reviewStats: SubjectReviewStats? = null,
     initialScrollOffset: Int = 0,
@@ -139,12 +140,10 @@ fun SubjectDetailContent(
                 kunyomiReadings = detail.kunyomiReadings,
                 nanoriReadings = detail.nanoriReadings,
                 pronunciationAudios = detail.pronunciationAudios,
-                pitchAccents = detail.pitchAccents,
-                showPitchAccent = showPitchAccent,
-                restrictAudioToMp3 = restrictAudioToMp3
+                pitchAccents = detail.pitchAccents
             )
         }
-        SubjectWritingZone(strokeOrder, autoPlayStrokeOrder, showStrokeOrder, detail.subjectId)
+        SubjectWritingZone(strokeOrder, autoPlayStrokeOrder, detail.subjectId)
         SubjectComponentsSection(detail, relatedSubjects, onRelatedSubjectClick)
         SubjectMnemonicZone(
             meaningMnemonic = detail.meaningMnemonic,
@@ -154,7 +153,7 @@ fun SubjectDetailContent(
             showMeaning = revealMeaning,
             showReading = revealReading
         )
-        SubjectContextSentencesSection(detail, isVocabulary, hideContextSentenceTranslations)
+        SubjectContextSentencesSection(detail, isVocabulary)
         SubjectVisuallySimilarSection(detail, relatedSubjects, onRelatedSubjectClick)
         SubjectUsedInSection(detail, relatedSubjects, onRelatedSubjectClick)
         SubjectStatsZone(assignmentStats, reviewStats)
@@ -230,10 +229,9 @@ private fun SubjectHeadline(
 private fun SubjectWritingZone(
     strokeOrder: StrokeOrderUiState,
     autoPlayStrokeOrder: Boolean,
-    showStrokeOrder: Boolean,
     resetKey: Long
 ) {
-    if (!showStrokeOrder) return
+    if (!LocalDisplaySettings.current.showStrokeOrder) return
     StrokeOrderSection(strokeOrder, autoPlay = autoPlayStrokeOrder)
     WritingPracticeSection(strokeOrder = strokeOrder, resetKey = resetKey)
 }
@@ -256,11 +254,12 @@ private fun SubjectComponentsSection(
 @Composable
 private fun SubjectContextSentencesSection(
     detail: SubjectDetail,
-    isVocabulary: Boolean,
-    hideTranslations: Boolean
+    isVocabulary: Boolean
 ) {
     if (!isVocabulary || detail.contextSentences.isEmpty()) return
-    val shareText = rememberShareText()
+    val hideTranslations = LocalDisplaySettings.current.hideContextSentenceTranslations
+    val platformShareText = rememberShareText()
+    val shareText = LocalShareText.current ?: platformShareText
     HorizontalDivider()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionTitle("Context sentences")

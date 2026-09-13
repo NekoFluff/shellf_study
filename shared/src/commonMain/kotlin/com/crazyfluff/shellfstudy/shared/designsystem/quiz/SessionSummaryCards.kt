@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.model.SessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.data.model.SessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
@@ -47,13 +49,11 @@ fun SessionOverviewCard(
     itemsLabel: String,
     itemsCount: Int,
     correctFirstTry: Int,
-    cardTestTag: String,
-    itemsTextTestTag: String,
-    correctFirstTryTextTestTag: String,
+    testTags: SessionOverviewCardTestTags,
     modifier: Modifier = Modifier
 ) {
     val accuracyPercent = if (itemsCount == 0) 0 else correctFirstTry * 100 / itemsCount
-    Card(modifier = modifier.testTag(cardTestTag)) {
+    Card(modifier = modifier.testTag(testTags.card)) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(64.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(
@@ -70,13 +70,13 @@ fun SessionOverviewCard(
                 Text(
                     text = "$itemsLabel: $itemsCount",
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.testTag(itemsTextTestTag)
+                    modifier = Modifier.testTag(testTags.itemsText)
                 )
                 Text(
                     text = "Correct on first try: $correctFirstTry of $itemsCount ($accuracyPercent%)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(correctFirstTryTextTestTag)
+                    modifier = Modifier.testTag(testTags.correctFirstTryText)
                 )
             }
         }
@@ -88,26 +88,24 @@ fun SessionTimingCard(
     totalElapsedMs: Long,
     averageTimePerItemMs: Long,
     averageLabel: String,
-    cardTestTag: String,
-    totalTimeTestTag: String,
-    averageTimeTestTag: String,
+    testTags: SessionTimingCardTestTags,
     modifier: Modifier = Modifier
 ) {
-    Card(modifier = modifier.testTag(cardTestTag)) {
+    Card(modifier = modifier.testTag(testTags.card)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Timing", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Total time: ${formatDuration(totalElapsedMs)}",
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.testTag(totalTimeTestTag)
+                modifier = Modifier.testTag(testTags.totalTime)
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "$averageLabel: ${formatDuration(averageTimePerItemMs)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag(averageTimeTestTag)
+                modifier = Modifier.testTag(testTags.averageTime)
             )
         }
     }
@@ -192,6 +190,21 @@ fun SessionMissedItemsCard(
 
 /** Test tags for [SessionCompleteContent] — one bundle per feature (Lesson/Review), each following
  *  the same 1:1 naming scheme their screen's own test-tag object already used. */
+/** [SessionOverviewCard]'s own test tags — three nodes that can only ever travel together. */
+data class SessionOverviewCardTestTags(
+    val card: String,
+    val itemsText: String,
+    val correctFirstTryText: String
+)
+
+/** [SessionTimingCard]'s own test tags. */
+data class SessionTimingCardTestTags(
+    val card: String,
+    val totalTime: String,
+    val averageTime: String
+)
+
+
 data class SessionCompleteTestTags(
     val root: String,
     val overviewCard: String,
@@ -203,6 +216,62 @@ data class SessionCompleteTestTags(
     val slowestCard: String,
     val missedCard: String,
     val doneButton: String
+) {
+    /** [SessionOverviewCard]'s sub-bundle, so the card takes one value instead of three loose tags. */
+    val overviewCardTags: SessionOverviewCardTestTags
+        get() = SessionOverviewCardTestTags(
+            card = overviewCard,
+            itemsText = itemsText,
+            correctFirstTryText = correctFirstTryText
+        )
+
+    /** [SessionTimingCard]'s sub-bundle. */
+    val timingCardTags: SessionTimingCardTestTags
+        get() = SessionTimingCardTestTags(
+            card = timingCard,
+            totalTime = totalTimeText,
+            averageTime = averageTimeText
+        )
+}
+
+/**
+ * The session figures [SessionCompleteContent] renders, plus which kind of session produced them.
+ *
+ * [kind] travels with the figures because it is what decides the two "Items ..." labels — and
+ * deriving those at each call site had already drifted into three copies: two hardcoded strings (in
+ * the lesson and review screens) and a pair of private helpers in `LastSessionSummaryScreen`.
+ */
+data class SessionSummaryDisplay(
+    val kind: LastSessionKind,
+    val itemsCount: Int,
+    val correctFirstTry: Int,
+    val totalElapsedMs: Long,
+    val averageTimePerItemMs: Long,
+    val slowestAnswers: List<SessionAnswerRow>,
+    val missedItems: List<SessionMissedItemRow>
+) {
+    val itemsLabel: String
+        get() = when (kind) {
+            LastSessionKind.LESSON -> "Items learned"
+            LastSessionKind.REVIEW -> "Items reviewed"
+        }
+
+    val averageLabel: String
+        get() = when (kind) {
+            LastSessionKind.LESSON -> "Avg. time per item learned"
+            LastSessionKind.REVIEW -> "Avg. time per item reviewed"
+        }
+}
+
+/** A persisted snapshot as the display value above — the one place a stored summary becomes one. */
+fun LastSessionSummary.toSessionSummaryDisplay(): SessionSummaryDisplay = SessionSummaryDisplay(
+    kind = kind,
+    itemsCount = itemsCount,
+    correctFirstTry = correctFirstTry,
+    totalElapsedMs = totalElapsedMs,
+    averageTimePerItemMs = averageTimePerItemMs,
+    slowestAnswers = slowestAnswers,
+    missedItems = missedItems
 )
 
 /** The "session complete" screen shown after a lesson or review session finishes — shared between
@@ -211,14 +280,7 @@ data class SessionCompleteTestTags(
 fun SessionCompleteContent(
     title: String,
     subtitle: String?,
-    itemsLabel: String,
-    averageLabel: String,
-    itemsCount: Int,
-    correctFirstTry: Int,
-    totalElapsedMs: Long,
-    averageTimePerItemMs: Long,
-    slowestAnswers: List<SessionAnswerRow>,
-    missedItems: List<SessionMissedItemRow>,
+    summary: SessionSummaryDisplay,
     onDone: () -> Unit,
     onSubjectClick: (Long) -> Unit,
     testTags: SessionCompleteTestTags,
@@ -257,40 +319,36 @@ fun SessionCompleteContent(
             modifier = Modifier.fillMaxWidth().testTag(testTags.doneButton)
         ) { Text("Back to dashboard") }
 
-        if (itemsCount > 0) {
+        if (summary.itemsCount > 0) {
             Spacer(modifier = Modifier.height(24.dp))
             SessionOverviewCard(
-                itemsLabel = itemsLabel,
-                itemsCount = itemsCount,
-                correctFirstTry = correctFirstTry,
-                cardTestTag = testTags.overviewCard,
-                itemsTextTestTag = testTags.itemsText,
-                correctFirstTryTextTestTag = testTags.correctFirstTryText,
+                itemsLabel = summary.itemsLabel,
+                itemsCount = summary.itemsCount,
+                correctFirstTry = summary.correctFirstTry,
+                testTags = testTags.overviewCardTags,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(12.dp))
             SessionTimingCard(
-                totalElapsedMs = totalElapsedMs,
-                averageTimePerItemMs = averageTimePerItemMs,
-                averageLabel = averageLabel,
-                cardTestTag = testTags.timingCard,
-                totalTimeTestTag = testTags.totalTimeText,
-                averageTimeTestTag = testTags.averageTimeText,
+                totalElapsedMs = summary.totalElapsedMs,
+                averageTimePerItemMs = summary.averageTimePerItemMs,
+                averageLabel = summary.averageLabel,
+                testTags = testTags.timingCardTags,
                 modifier = Modifier.fillMaxWidth()
             )
-            if (slowestAnswers.isNotEmpty()) {
+            if (summary.slowestAnswers.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 SessionSlowestAnswersCard(
-                    answers = slowestAnswers,
+                    answers = summary.slowestAnswers,
                     onSubjectClick = onSubjectClick,
                     cardTestTag = testTags.slowestCard,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            if (missedItems.isNotEmpty()) {
+            if (summary.missedItems.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 SessionMissedItemsCard(
-                    items = missedItems,
+                    items = summary.missedItems,
                     onSubjectClick = onSubjectClick,
                     cardTestTag = testTags.missedCard,
                     modifier = Modifier.fillMaxWidth()

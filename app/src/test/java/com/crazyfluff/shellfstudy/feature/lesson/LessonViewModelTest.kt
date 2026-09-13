@@ -191,35 +191,7 @@ class LessonViewModelTest {
         }
     }
 
-    @Test
-    fun `showSubjectTypeLabel setting flows into uiState`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowSubjectTypeLabel(true)
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showSubjectTypeLabel) state = awaitItem()
-            assertThat(state.settings.showSubjectTypeLabel).isTrue()
-        }
-    }
-
-    @Test
-    fun `showTotalTimer and showQuestionTimer settings flow into uiState`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowTotalTimer(true)
-        settingsRepository.setShowQuestionTimer(true)
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showTotalTimer || !state.settings.showQuestionTimer) state = awaitItem()
-            assertThat(state.settings.showTotalTimer).isTrue()
-            assertThat(state.settings.showQuestionTimer).isTrue()
-        }
-    }
 
     @Test
     fun `answering a reading question with the setting on surfaces the reading for the hint`() = runTest(mainDispatcherRule.dispatcher) {
@@ -230,7 +202,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -303,7 +275,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -339,7 +311,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -373,7 +345,7 @@ class LessonViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             viewModel.startSelectedLessons()
             awaitItem()
@@ -433,7 +405,7 @@ class LessonViewModelTest {
         val secondViewModel = createViewModel()
         secondViewModel.uiState.test {
             var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
             while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
                 secondViewModel.onAnswerInputChange("Water")

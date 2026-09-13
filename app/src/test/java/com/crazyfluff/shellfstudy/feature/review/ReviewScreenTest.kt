@@ -1,8 +1,10 @@
 package com.crazyfluff.shellfstudy.feature.review
 
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.DisplaySettings
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
+import com.crazyfluff.shellfstudy.shared.feature.review.ReviewActions
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewUiState
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreen
-import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreenEvent
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewScreenTestTags
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import androidx.compose.runtime.CompositionLocalProvider
@@ -85,7 +87,6 @@ class ReviewScreenTest {
         remainingCount: Int = 0,
         isWrappingUp: Boolean = false,
         timing: QuizTimingUiState = QuizTimingUiState(),
-        settings: ReviewUiState.DisplaySettings = ReviewUiState.DisplaySettings(),
         answerReading: String? = null,
         answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
         answerReadingAudio: PronunciationAudio? = null
@@ -108,7 +109,6 @@ class ReviewScreenTest {
                 AnswerReadingHint(reading = it, pitchAccents = answerPitchAccents, audio = answerReadingAudio)
             }
         ),
-        settings = settings
     )
 
     /** Builds a [ReviewUiState] in the [ReviewUiState.Phase.Complete] phase. */
@@ -130,50 +130,33 @@ class ReviewScreenTest {
         )
     )
 
+    /**
+     * Renders the screen against a recording stand-in for the ViewModel, so a control's wiring can be
+     * asserted without standing up the repository graph. Rendering assertions pass only [uiState] and
+     * ignore [actions].
+     */
     private fun setScreen(
         uiState: ReviewUiState,
-        onAnswerInputChange: (String) -> Unit = {},
-        onSubmit: () -> Unit = {},
-        onDontKnow: () -> Unit = {},
-        onContinue: () -> Unit = {},
-        onUndo: () -> Unit = {},
+        actions: ReviewActions = RecordingReviewActions(),
         audioPlayer: FakePronunciationAudioPlayer = FakePronunciationAudioPlayer(),
-        onToggleDetails: () -> Unit = {},
-        onCloseDetails: () -> Unit = {},
-        onRetry: () -> Unit = {},
-        onStudyOffline: () -> Unit = {},
-        onWrapUp: () -> Unit = {},
-        onAbandon: () -> Unit = {},
-        onDone: () -> Unit = {},
-        onBack: () -> Unit = {}
+        onSessionComplete: () -> Unit = {},
+        onBack: () -> Unit = {},
+        displaySettings: DisplaySettings = DisplaySettings()
     ) {
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalPronunciationAudioPlayer provides audioPlayer) {
+            CompositionLocalProvider(
+                LocalPronunciationAudioPlayer provides audioPlayer,
+                LocalDisplaySettings provides displaySettings
+            ) {
                 ReviewScreen(
                     uiState = uiState,
-                    onEvent = { event ->
-                        when (event) {
-                            is ReviewScreenEvent.AnswerInputChange -> onAnswerInputChange(event.value)
-                            ReviewScreenEvent.Submit -> onSubmit()
-                            ReviewScreenEvent.DontKnow -> onDontKnow()
-                            ReviewScreenEvent.Continue -> onContinue()
-                            ReviewScreenEvent.Undo -> onUndo()
-                            ReviewScreenEvent.ToggleDetails -> onToggleDetails()
-                            ReviewScreenEvent.CloseDetails -> onCloseDetails()
-                            ReviewScreenEvent.Retry -> onRetry()
-                            ReviewScreenEvent.StudyOffline -> onStudyOffline()
-                            ReviewScreenEvent.WrapUp -> onWrapUp()
-                            ReviewScreenEvent.Abandon -> onAbandon()
-                            ReviewScreenEvent.Done -> onDone()
-                            ReviewScreenEvent.Back -> onBack()
-                            is ReviewScreenEvent.SearchQueryChange -> Unit
-                        }
-                    }
+                    actions = actions,
+                    onSessionComplete = onSessionComplete,
+                    onBack = onBack
                 )
             }
         }
     }
-
     @Test
     fun showsCharacterAndQuestionLabel_forMeaningQuestion() {
         setScreen(activeState(totalCount = 2, remainingCount = 2))
@@ -191,17 +174,17 @@ class ReviewScreenTest {
 
     @Test
     fun typingAnswer_invokesCallback() {
-        var typed = ""
+        val actions = RecordingReviewActions()
         setScreen(
             activeState(totalCount = 1, remainingCount = 1),
-            onAnswerInputChange = { typed = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).performTextInput("Water")
         // TextFieldState pushes edits up via a LaunchedEffect/snapshotFlow, one dispatch removed
         // from performTextInput itself — wait for that to land before reading the callback value.
         composeTestRule.waitForIdle()
-        assert(typed == "Water")
+        assertThat(actions.lastArgumentOf("onAnswerInputChange")).isEqualTo("Water")
     }
 
     /** Regression test for a requeued question (same item/questionType reappearing after an
@@ -216,7 +199,12 @@ class ReviewScreenTest {
             activeState(totalCount = 1, remainingCount = 1, answerInput = "", questionSequence = 0)
         )
         composeTestRule.setContent {
-            ReviewScreen(uiState = state, onEvent = {})
+            ReviewScreen(
+                uiState = state,
+                actions = RecordingReviewActions(),
+                onSessionComplete = {},
+                onBack = {}
+            )
         }
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).performTextInput("wrong answer")
@@ -231,31 +219,31 @@ class ReviewScreenTest {
     }
 
     @Test
-    fun submittingAnswer_invokesOnSubmit() {
-        var submitted = false
+    fun submittingAnswer_invokesSubmit() {
+        val actions = RecordingReviewActions()
         setScreen(
             activeState(totalCount = 1, remainingCount = 1, answerInput = "Water"),
-            onSubmit = { submitted = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.SUBMIT_BUTTON).performClick()
-        assert(submitted)
+        assertThat(actions.calls).contains("submitAnswer")
     }
 
     @Test
     fun feedback_showsCorrectAnswerText_andContinueAdvances() {
-        var continued = false
+        val actions = RecordingReviewActions()
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Water")
             ),
-            onContinue = { continued = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.FEEDBACK_TEXT).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.CONTINUE_BUTTON).performClick()
-        assert(continued)
+        assertThat(actions.calls).contains("onContinue")
     }
 
     @Test
@@ -263,8 +251,8 @@ class ReviewScreenTest {
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
-                settings = ReviewUiState.DisplaySettings(showSubjectTypeLabel = true)
-            )
+            ),
+            displaySettings = DisplaySettings(showSubjectTypeLabel = true),
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.SUBJECT_TYPE_LABEL).assertIsDisplayed()
@@ -276,8 +264,8 @@ class ReviewScreenTest {
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
-                settings = ReviewUiState.DisplaySettings(showSubjectTypeLabel = false)
-            )
+            ),
+            displaySettings = DisplaySettings(showSubjectTypeLabel = false),
         )
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.SUBJECT_TYPE_LABEL).assertCountEquals(0)
@@ -290,10 +278,10 @@ class ReviewScreenTest {
                 questionType = QuestionType.READING,
                 totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
                 answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
-            )
+            ),
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = true),
         )
 
         composeTestRule.onNodeWithTag(PitchAccentTestTags.ROOT).assertIsDisplayed()
@@ -306,9 +294,9 @@ class ReviewScreenTest {
                 questionType = QuestionType.READING,
                 totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = false),
                 answerReading = "みず"
-            )
+            ),
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = false),
         )
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
@@ -333,12 +321,12 @@ class ReviewScreenTest {
                 questionType = QuestionType.READING,
                 totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
                 answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))),
                 answerReadingAudio = audio
             ),
-            audioPlayer = player
+            audioPlayer = player,
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = true),
         )
 
         composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
@@ -352,11 +340,11 @@ class ReviewScreenTest {
                 questionType = QuestionType.READING,
                 totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
                 answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))),
                 answerReadingAudio = null
-            )
+            ),
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = true),
         )
 
         composeTestRule.onAllNodesWithContentDescription("Play pronunciation for みず").assertCountEquals(0)
@@ -369,9 +357,9 @@ class ReviewScreenTest {
                 questionType = QuestionType.MEANING,
                 totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water"),
-                settings = ReviewUiState.DisplaySettings(showAnswerReadingPitchAccent = true)
                 // answerReading stays null — the ViewModel never populates it for a meaning question.
-            )
+            ),
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = true),
         )
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
@@ -404,9 +392,9 @@ class ReviewScreenTest {
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
-                settings = ReviewUiState.DisplaySettings(showTotalTimer = true),
                 timing = QuizTimingUiState(sessionActiveSegmentStartMs = System.currentTimeMillis())
-            )
+            ),
+            displaySettings = DisplaySettings(showTotalTimer = true),
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT).assertIsDisplayed()
@@ -417,9 +405,9 @@ class ReviewScreenTest {
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
-                settings = ReviewUiState.DisplaySettings(showTotalTimer = false),
                 timing = QuizTimingUiState(sessionActiveSegmentStartMs = System.currentTimeMillis())
-            )
+            ),
+            displaySettings = DisplaySettings(showTotalTimer = false),
         )
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT).assertCountEquals(0)
@@ -432,9 +420,9 @@ class ReviewScreenTest {
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
-                settings = ReviewUiState.DisplaySettings(showTotalTimer = true),
                 timing = QuizTimingUiState(sessionActiveElapsedMs = 65_000L, sessionActiveSegmentStartMs = null)
-            )
+            ),
+            displaySettings = DisplaySettings(showTotalTimer = true),
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.TOTAL_TIMER_TEXT).assertTextEquals("1:05")
@@ -445,9 +433,9 @@ class ReviewScreenTest {
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
-                settings = ReviewUiState.DisplaySettings(showQuestionTimer = true),
                 timing = QuizTimingUiState(questionActiveSegmentStartMs = System.currentTimeMillis())
-            )
+            ),
+            displaySettings = DisplaySettings(showQuestionTimer = true),
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertIsDisplayed()
@@ -458,9 +446,9 @@ class ReviewScreenTest {
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
-                settings = ReviewUiState.DisplaySettings(showQuestionTimer = false),
                 timing = QuizTimingUiState(questionActiveSegmentStartMs = System.currentTimeMillis())
-            )
+            ),
+            displaySettings = DisplaySettings(showQuestionTimer = false),
         )
 
         composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertCountEquals(0)
@@ -473,13 +461,13 @@ class ReviewScreenTest {
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
-                settings = ReviewUiState.DisplaySettings(showQuestionTimer = true),
                 timing = QuizTimingUiState(
                     questionActiveSegmentStartMs = System.currentTimeMillis() - 60_000,
                     questionElapsedMs = 5_000L
                 ),
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
-            )
+            ),
+            displaySettings = DisplaySettings(showQuestionTimer = true),
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals(formatElapsedClock(5_000L))
@@ -492,9 +480,9 @@ class ReviewScreenTest {
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
-                settings = ReviewUiState.DisplaySettings(showQuestionTimer = true),
                 timing = QuizTimingUiState(questionActiveElapsedMs = 5_000L, questionActiveSegmentStartMs = null)
-            )
+            ),
+            displaySettings = DisplaySettings(showQuestionTimer = true),
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals("0:05")
@@ -531,37 +519,37 @@ class ReviewScreenTest {
 
     @Test
     fun undoIcon_enabledOnIncorrectFeedback_andInvokesCallback() {
-        var undone = false
+        val actions = RecordingReviewActions()
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Water")
             ),
-            onUndo = { undone = true }
+            actions = actions
         )
 
         // Lives on the answer field itself now, not the overflow menu.
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.UNDO_BUTTON).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.UNDO_BUTTON).performClick()
-        assert(undone)
+        assertThat(actions.calls).contains("undoLastAnswer")
     }
 
     @Test
     fun undoIcon_enabledOnCorrectFeedback_andInvokesCallback() {
         // Review defers submitting a correct answer to WaniKani until Continue is pressed, so it
         // can still be undone up to that point (unlike Lesson, which has no such window).
-        var undone = false
+        val actions = RecordingReviewActions()
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
             ),
-            onUndo = { undone = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.UNDO_BUTTON).assertIsEnabled()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.UNDO_BUTTON).performClick()
-        assert(undone)
+        assertThat(actions.calls).contains("undoLastAnswer")
     }
 
     @Test
@@ -626,31 +614,31 @@ class ReviewScreenTest {
 
     @Test
     fun detailsToggle_enabledAndInvokesCallback_onceAnswered() {
-        var toggled = false
+        val actions = RecordingReviewActions()
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
                 questionType = QuestionType.READING,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず")
             ),
-            onToggleDetails = { toggled = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.DETAILS_TOGGLE).performClick()
-        assert(toggled)
+        assertThat(actions.calls).contains("toggleDetails")
     }
 
     @Test
     fun dontKnowButton_isDisplayedBeforeAnswering_andInvokesCallback() {
-        var dontKnow = false
+        val actions = RecordingReviewActions()
         setScreen(
             activeState(totalCount = 1, remainingCount = 1),
-            onDontKnow = { dontKnow = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.DONT_KNOW_BUTTON).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.DONT_KNOW_BUTTON).performClick()
-        assert(dontKnow)
+        assertThat(actions.calls).contains("dontKnowAnswer")
     }
 
     @Test
@@ -705,7 +693,7 @@ class ReviewScreenTest {
         var done = false
         setScreen(
             ReviewUiState(phase = ReviewUiState.Phase.NoReviewsAvailable),
-            onDone = { done = true }
+            onSessionComplete = { done = true }
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.NO_REVIEWS_TEXT).assertIsDisplayed()
@@ -723,7 +711,7 @@ class ReviewScreenTest {
     @Test
     fun sessionComplete_showsDoneButtonAndInvokesCallback() {
         var done = false
-        setScreen(completeState(), onDone = { done = true })
+        setScreen(completeState(), onSessionComplete = { done = true })
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.SESSION_COMPLETE).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.DONE_BUTTON).performClick()
@@ -833,14 +821,45 @@ class ReviewScreenTest {
 
     @Test
     fun errorState_studyOfflineButton_invokesCallback() {
-        var studiedOffline = false
+        val actions = RecordingReviewActions()
         setScreen(
             ReviewUiState(phase = ReviewUiState.Phase.Error(message = "Network error")),
-            onStudyOffline = { studiedOffline = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.STUDY_OFFLINE_BUTTON).performClick()
 
-        assert(studiedOffline)
+        assertThat(actions.calls).contains("studyOffline")
     }
+}
+
+/**
+ * A [ReviewActions] that records what it was asked to do. Assertions read [calls] (in call order) for
+ * the parameterless actions and [lastArgumentOf] for the ones carrying a value — so a rendering test
+ * can assert "this control is wired to that action" without building a ViewModel and its graph.
+ */
+private class RecordingReviewActions : ReviewActions {
+    val calls = mutableListOf<String>()
+    private val arguments = mutableListOf<Any?>()
+
+    /** The argument passed to the most recent [name] call — mirrors the `var x: T? = null` the
+     *  per-callback tests used to capture, where each call overwrote the previous value. */
+    fun lastArgumentOf(name: String): Any? = arguments[calls.lastIndexOf(name)]
+
+    private fun record(name: String, argument: Any? = null) {
+        calls += name
+        arguments += argument
+    }
+
+    override fun loadOrResume() = record("loadOrResume")
+    override fun studyOffline() = record("studyOffline")
+    override fun onAnswerInputChange(value: String) = record("onAnswerInputChange", value)
+    override fun submitAnswer() = record("submitAnswer")
+    override fun dontKnowAnswer() = record("dontKnowAnswer")
+    override fun onContinue() = record("onContinue")
+    override fun undoLastAnswer() = record("undoLastAnswer")
+    override fun toggleDetails() = record("toggleDetails")
+    override fun closeDetails() = record("closeDetails")
+    override fun wrapUp() = record("wrapUp")
+    override fun abandonSession() = record("abandonSession")
 }

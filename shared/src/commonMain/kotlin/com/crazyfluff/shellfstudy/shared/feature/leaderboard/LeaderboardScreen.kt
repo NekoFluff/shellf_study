@@ -69,13 +69,8 @@ fun LeaderboardRoute(
     val uiState by viewModel.uiState.collectAsState()
     LeaderboardScreen(
         uiState = uiState,
-        onBack = onBack,
-        onRefresh = viewModel::onRefresh,
-        onAddFriendNicknameChange = viewModel::onAddFriendNicknameChange,
-        onAddFriendTokenChange = viewModel::onAddFriendTokenChange,
-        onAddFriendConfirm = viewModel::onAddFriendConfirm,
-        onRemoveFriend = viewModel::onRemoveFriend,
-        onEditNickname = viewModel::onEditNickname
+        actions = viewModel,
+        onBack = onBack
     )
 }
 
@@ -83,13 +78,8 @@ fun LeaderboardRoute(
 @Composable
 fun LeaderboardScreen(
     uiState: LeaderboardUiState,
+    actions: LeaderboardActions,
     onBack: () -> Unit,
-    onRefresh: () -> Unit,
-    onAddFriendNicknameChange: (String) -> Unit,
-    onAddFriendTokenChange: (String) -> Unit,
-    onAddFriendConfirm: () -> Unit,
-    onRemoveFriend: (String) -> Unit,
-    onEditNickname: (String, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showAddFriendDialog by remember { mutableStateOf(false) }
@@ -120,7 +110,7 @@ fun LeaderboardScreen(
     ) { paddingValues ->
         PullToRefreshBox(
             isRefreshing = uiState.isRefreshing,
-            onRefresh = onRefresh,
+            onRefresh = actions::onRefresh,
             modifier = Modifier.padding(paddingValues)
         ) {
             if (uiState.friends.isEmpty()) {
@@ -181,13 +171,8 @@ fun LeaderboardScreen(
 
     if (showAddFriendDialog) {
         AddFriendDialog(
-            nickname = uiState.addFriendForm.nickname,
-            token = uiState.addFriendForm.token,
-            isValidating = uiState.addFriendForm.isValidating,
-            error = uiState.addFriendForm.error,
-            onNicknameChange = onAddFriendNicknameChange,
-            onTokenChange = onAddFriendTokenChange,
-            onConfirm = { onAddFriendConfirm() },
+            form = uiState.addFriendForm,
+            actions = actions,
             onDismiss = { showAddFriendDialog = false }
         )
     }
@@ -198,7 +183,7 @@ fun LeaderboardScreen(
             title = "Remove ${entry.nickname}?",
             text = "Their stats will be removed from your leaderboard.",
             confirmLabel = "Remove",
-            onConfirm = { onRemoveFriend(entry.id); friendToDelete = null },
+            onConfirm = { actions.onRemoveFriend(entry.id); friendToDelete = null },
             onDismiss = { friendToDelete = null }
         )
     }
@@ -207,7 +192,7 @@ fun LeaderboardScreen(
     if (editing != null) {
         EditNicknameDialog(
             initialNickname = editing.nickname,
-            onConfirm = { onEditNickname(editing.id, it); friendToEdit = null },
+            onConfirm = { actions.onEditNickname(editing.id, it); friendToEdit = null },
             onDismiss = { friendToEdit = null }
         )
     }
@@ -326,13 +311,8 @@ private fun FriendCard(
 
 @Composable
 private fun AddFriendDialog(
-    nickname: String,
-    token: String,
-    isValidating: Boolean,
-    error: String?,
-    onNicknameChange: (String) -> Unit,
-    onTokenChange: (String) -> Unit,
-    onConfirm: () -> Unit,
+    form: AddFriendFormState,
+    actions: LeaderboardActions,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -351,9 +331,9 @@ private fun AddFriendDialog(
                 // (see LegacyCursorAnchorInfoBuilder). Neither value is ever reset from outside
                 // while this dialog is open — it's torn down and rebuilt fresh on next open — so a
                 // one-time initial value is enough, no need for continuous two-way sync.
-                val nicknameFieldState = rememberTextFieldState(nickname)
+                val nicknameFieldState = rememberTextFieldState(form.nickname)
                 LaunchedEffect(nicknameFieldState) {
-                    snapshotFlow { nicknameFieldState.text.toString() }.drop(1).collect(onNicknameChange)
+                    snapshotFlow { nicknameFieldState.text.toString() }.drop(1).collect(actions::onAddFriendNicknameChange)
                 }
                 OutlinedTextField(
                     state = nicknameFieldState,
@@ -361,25 +341,25 @@ private fun AddFriendDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                val tokenFieldState = rememberTextFieldState(token)
+                val tokenFieldState = rememberTextFieldState(form.token)
                 LaunchedEffect(tokenFieldState) {
-                    snapshotFlow { tokenFieldState.text.toString() }.drop(1).collect(onTokenChange)
+                    snapshotFlow { tokenFieldState.text.toString() }.drop(1).collect(actions::onAddFriendTokenChange)
                 }
                 OutlinedTextField(
                     state = tokenFieldState,
                     label = { Text("API token") },
                     modifier = Modifier.fillMaxWidth(),
-                    isError = error != null
+                    isError = form.error != null
                 )
-                if (error != null) {
+                if (form.error != null) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Text(form.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onConfirm, enabled = !isValidating) {
-                if (isValidating) {
+            TextButton(onClick = actions::onAddFriendConfirm, enabled = !form.isValidating) {
+                if (form.isValidating) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp))
                 } else {
                     Text("Validate & Add")

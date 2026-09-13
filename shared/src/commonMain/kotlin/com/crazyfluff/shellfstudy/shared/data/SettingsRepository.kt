@@ -21,6 +21,11 @@ const val DEFAULT_LESSON_BATCH_SIZE = 5
  *  is already a long batch for brand-new material. */
 val LESSON_BATCH_SIZE_RANGE = 1..20
 
+/** Bounds [AppSettings.dailyLessonGoal] — at least one lesson a day, and 99 is the point past which
+ *  the goal stops being a goal. Shared with the settings screen's stepper, which used to inline the
+ *  same two numbers as its enable bounds. */
+val DAILY_LESSON_GOAL_RANGE = 1..99
+
 enum class ThemeMode { SYSTEM, LIGHT, DARK, EINK }
 
 data class AppSettings(
@@ -124,7 +129,7 @@ class SettingsRepository(
     }.distinctUntilChanged()
 
     suspend fun setDailyLessonGoal(goal: Int) {
-        dataStore.edit { it[dailyLessonGoalKey] = goal.coerceIn(1, 99) }
+        dataStore.edit { it[dailyLessonGoalKey] = goal.coerceIn(DAILY_LESSON_GOAL_RANGE) }
     }
 
     suspend fun setLessonBatchSize(size: Int) {

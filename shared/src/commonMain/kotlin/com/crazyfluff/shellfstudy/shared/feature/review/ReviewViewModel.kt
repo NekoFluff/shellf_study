@@ -65,20 +65,9 @@ import kotlinx.coroutines.launch
 
 data class ReviewUiState(
     val phase: Phase = Phase.Loading,
-    val settings: DisplaySettings = DisplaySettings(),
     // Deliberately not folded into Phase — see LessonUiState.isAbandoned's doc comment for why.
     val isAbandoned: Boolean = false
 ) {
-    /** Settings-derived display flags — hoisted here rather than duplicated into every [Phase]
-     *  variant, since they apply uniformly regardless of phase. */
-    data class DisplaySettings(
-        val showSubjectTypeLabel: Boolean = false,
-        val showTotalTimer: Boolean = false,
-        val showQuestionTimer: Boolean = false,
-        val useJapaneseKeyboard: Boolean = false,
-        val showAnswerReadingPitchAccent: Boolean = false
-    )
-
     sealed interface Phase {
         data object Loading : Phase
         data class Error(val message: String) : Phase
@@ -165,7 +154,7 @@ class ReviewViewModel(
     private val pitchAccentRepository: PitchAccentRepository,
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope
-) : ViewModel() {
+) : ViewModel(), ReviewActions {
 
     private val _uiState = MutableStateFlow(ReviewUiState())
     val uiState: StateFlow<ReviewUiState> = _uiState.asStateFlow()
@@ -229,20 +218,10 @@ class ReviewViewModel(
     init {
         loadOrResume()
         viewModelScope.launch {
-            settingsRepository.settings.collect { settings ->
-                latestSettings = settings
-                _uiState.update {
-                    it.copy(
-                        settings = it.settings.copy(
-                            showSubjectTypeLabel = settings.showSubjectTypeLabel,
-                            showTotalTimer = settings.showTotalTimer,
-                            showQuestionTimer = settings.showQuestionTimer,
-                            useJapaneseKeyboard = settings.useJapaneseKeyboard,
-                            showAnswerReadingPitchAccent = settings.showAnswerReadingPitchAccent
-                        )
-                    )
-                }
-            }
+            // Only kept warm for the ViewModel's own use (see latestSettings): the display flags it
+            // used to mirror into the UI state are provided app-wide by LocalDisplaySettings instead,
+            // so a settings change no longer re-emits a whole ReviewUiState.
+            settingsRepository.settings.collect { latestSettings = it }
         }
         // The hint's pitch patterns are followed live rather than fetched once at grading time: the
         // repository's Room flow is the single source of truth, so whichever writer resolves the word
@@ -291,7 +270,7 @@ class ReviewViewModel(
     }
 
     /** Resumes a persisted in-progress session if one exists, otherwise fetches a fresh queue. */
-    fun loadOrResume() {
+    override fun loadOrResume() {
         viewModelScope.launch {
             _uiState.update { ReviewUiState() }
             pitchAccentHintKey.value = null
@@ -327,7 +306,7 @@ class ReviewViewModel(
     /** Bound to the error screen's "Study offline" action — builds the review queue from whatever
      *  was cached as of the last successful sync instead of retrying the network refresh that just
      *  failed in [fetchFreshQueue]. */
-    fun studyOffline() {
+    override fun studyOffline() {
         viewModelScope.launch { buildQueue(assignmentRepository.observeReviewQueue().first()) }
     }
 
@@ -409,11 +388,11 @@ class ReviewViewModel(
         }
     }
 
-    fun onAnswerInputChange(value: String) {
+    override fun onAnswerInputChange(value: String) {
         updateActive { it.copy(answerInput = value) }
     }
 
-    fun toggleDetails() {
+    override fun toggleDetails() {
         updateActive { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
     }
 
@@ -421,11 +400,11 @@ class ReviewViewModel(
      *  the definitively-directional close used by the scrim tap, the close button, and the back
      *  handler — those always mean "close", never "toggle", so they must not risk re-opening the
      *  sheet if called while it's already collapsed. */
-    fun closeDetails() {
+    override fun closeDetails() {
         updateActive { it.copy(isDetailsExpanded = false) }
     }
 
-    fun submitAnswer() {
+    override fun submitAnswer() {
         val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
         if (active.feedback != null) return
         val item = active.currentItem
@@ -448,7 +427,7 @@ class ReviewViewModel(
     }
 
     /** Gives up on the current question — grades it as a miss without requiring a typed guess. */
-    fun dontKnowAnswer() {
+    override fun dontKnowAnswer() {
         val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
         if (active.feedback != null) return
         val item = active.currentItem
@@ -566,7 +545,7 @@ class ReviewViewModel(
     /** Reverts the most recent answer — a typo (incorrect) or a change of mind (correct, and not yet
      *  submitted to WaniKani — see [pendingSubmissionAssignmentId]). The queue/progress mutation
      *  itself is shared via [undoLastIncorrectAnswer]/[undoLastCorrectAnswer]. */
-    fun undoLastAnswer() {
+    override fun undoLastAnswer() {
         val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
         val item = active.currentItem
         val type = active.currentQuestionType
@@ -631,14 +610,14 @@ class ReviewViewModel(
         return progress.meaningDone && (!requiresReading || progress.readingDone)
     }
 
-    fun onContinue() {
+    override fun onContinue() {
         viewModelScope.launch { advanceToNextQuestion() }
     }
 
     /** Stops introducing brand-new items; only the current item and ones already attempted remain.
      *  persistCurrentState()'s save is a no-op if the session already completed between the last
      *  question being graded and this menu action running — see QuizSessionController.persist(). */
-    fun wrapUp() {
+    override fun wrapUp() {
         viewModelScope.launch {
             val currentAssignmentId = queue.current?.item?.assignmentId
             queue.retainCurrentAndMatching {
@@ -657,7 +636,7 @@ class ReviewViewModel(
      *  rest — the user already saw "Correct!" feedback for it, so it reads as finished to them,
      *  matching what the abandon confirmation dialog's copy promises ("this won't affect items
      *  you've already submitted"). */
-    fun abandonSession() {
+    override fun abandonSession() {
         viewModelScope.launch {
             commitPendingSubmission()
             sessionController.abandon()

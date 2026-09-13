@@ -1,6 +1,8 @@
 package com.crazyfluff.shellfstudy.shared.feature.review
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.LocalOpenSubjectDetail
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
+import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
@@ -48,6 +51,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSummaryDisplay
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemsCard
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionOverviewCard
@@ -65,8 +69,6 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
-import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
-import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
 
 object ReviewScreenTestTags {
     const val LOADING_INDICATOR = "review_loading_indicator"
@@ -112,23 +114,6 @@ object ReviewScreenTestTags {
     const val SESSION_CONTEXT_LABEL = "review_session_context_label"
 }
 
-sealed interface ReviewScreenEvent {
-    data class AnswerInputChange(val value: String) : ReviewScreenEvent
-    data object Submit : ReviewScreenEvent
-    data object DontKnow : ReviewScreenEvent
-    data object Continue : ReviewScreenEvent
-    data object Undo : ReviewScreenEvent
-    data object ToggleDetails : ReviewScreenEvent
-    data object CloseDetails : ReviewScreenEvent
-    data object Retry : ReviewScreenEvent
-    data object StudyOffline : ReviewScreenEvent
-    data object WrapUp : ReviewScreenEvent
-    data object Abandon : ReviewScreenEvent
-    data object Done : ReviewScreenEvent
-    data object Back : ReviewScreenEvent
-    data class SearchQueryChange(val query: String) : ReviewScreenEvent
-}
-
 @Composable
 fun ReviewRoute(
     onSessionComplete: () -> Unit,
@@ -145,25 +130,11 @@ fun ReviewRoute(
 
     ReviewScreen(
         uiState = uiState,
-        onEvent = { event ->
-            when (event) {
-                is ReviewScreenEvent.AnswerInputChange -> viewModel.onAnswerInputChange(event.value)
-                ReviewScreenEvent.Submit -> viewModel.submitAnswer()
-                ReviewScreenEvent.DontKnow -> viewModel.dontKnowAnswer()
-                ReviewScreenEvent.Continue -> viewModel.onContinue()
-                ReviewScreenEvent.Undo -> viewModel.undoLastAnswer()
-                ReviewScreenEvent.ToggleDetails -> viewModel.toggleDetails()
-                ReviewScreenEvent.CloseDetails -> viewModel.closeDetails()
-                ReviewScreenEvent.Retry -> viewModel.loadOrResume()
-                ReviewScreenEvent.StudyOffline -> viewModel.studyOffline()
-                ReviewScreenEvent.WrapUp -> viewModel.wrapUp()
-                ReviewScreenEvent.Abandon -> viewModel.abandonSession()
-                ReviewScreenEvent.Done -> onSessionComplete()
-                ReviewScreenEvent.Back -> onBack()
-                is ReviewScreenEvent.SearchQueryChange -> searchViewModel.onQueryChange(event.query)
-            }
-        },
-        searchUiState = searchUiState
+        actions = viewModel,
+        onSessionComplete = onSessionComplete,
+        onBack = onBack,
+        searchUiState = searchUiState,
+        onSearchQueryChange = searchViewModel::onQueryChange
     )
 }
 
@@ -171,30 +142,15 @@ fun ReviewRoute(
 @Composable
 fun ReviewScreen(
     uiState: ReviewUiState,
-    onEvent: (ReviewScreenEvent) -> Unit,
-    searchUiState: SearchUiState = SearchUiState()
+    actions: ReviewActions,
+    onSessionComplete: () -> Unit,
+    onBack: () -> Unit,
+    searchUiState: SearchUiState = SearchUiState(),
+    onSearchQueryChange: (String) -> Unit = {}
 ) {
-    val onAnswerInputChange: (String) -> Unit = { onEvent(ReviewScreenEvent.AnswerInputChange(it)) }
-    val onSubmit = { onEvent(ReviewScreenEvent.Submit) }
-    val onDontKnow = { onEvent(ReviewScreenEvent.DontKnow) }
-    val onContinue = { onEvent(ReviewScreenEvent.Continue) }
-    val onUndo = { onEvent(ReviewScreenEvent.Undo) }
-    val onToggleDetails = { onEvent(ReviewScreenEvent.ToggleDetails) }
-    val onCloseDetails = { onEvent(ReviewScreenEvent.CloseDetails) }
-    val onRetry = { onEvent(ReviewScreenEvent.Retry) }
-    val onStudyOffline = { onEvent(ReviewScreenEvent.StudyOffline) }
-    val onWrapUp = { onEvent(ReviewScreenEvent.WrapUp) }
-    val onAbandon = { onEvent(ReviewScreenEvent.Abandon) }
-    val onDone = { onEvent(ReviewScreenEvent.Done) }
-    val onBack = { onEvent(ReviewScreenEvent.Back) }
-    val onSearchQueryChange: (String) -> Unit = { onEvent(ReviewScreenEvent.SearchQueryChange(it)) }
-
     var menuExpanded by remember { mutableStateOf(false) }
     var showAbandonConfirm by remember { mutableStateOf(false) }
     var isSearchActive by remember { mutableStateOf(false) }
-    // Distinct from the gated details toggle below — an arbitrary subject looked up mid-review via
-    // search has no relationship to the current question, so it's never gated by answer state.
-    val searchDetailSheetState = rememberSubjectDetailSheetState()
     val canManageSession = uiState.phase is ReviewUiState.Phase.Active
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -230,7 +186,7 @@ fun ReviewScreen(
                                     text = { Text("Wrap up") },
                                     leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
                                     enabled = (uiState.phase as? ReviewUiState.Phase.Active)?.isWrappingUp != true,
-                                    onClick = { menuExpanded = false; onWrapUp() },
+                                    onClick = { menuExpanded = false; actions.wrapUp() },
                                     modifier = Modifier.testTag(ReviewScreenTestTags.WRAP_UP_MENU_ITEM)
                                 )
                                 HorizontalDivider()
@@ -258,124 +214,18 @@ fun ReviewScreen(
                 title = "Abandon this session?",
                 text = "Progress on items you haven't finished yet will be lost. This won't affect items you've already submitted.",
                 confirmLabel = "Abandon",
-                onConfirm = { showAbandonConfirm = false; onAbandon() },
+                onConfirm = { showAbandonConfirm = false; actions.abandonSession() },
                 onDismiss = { showAbandonConfirm = false },
                 confirmButtonTestTag = ReviewScreenTestTags.ABANDON_CONFIRM_BUTTON
             )
         }
 
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            when (val phase = uiState.phase) {
-                ReviewUiState.Phase.Loading -> {
-                    QuizLoadingContent(loadingIndicatorTestTag = ReviewScreenTestTags.LOADING_INDICATOR)
-                }
-
-                is ReviewUiState.Phase.Error -> {
-                    QuizErrorContent(
-                        message = phase.message,
-                        onRetry = onRetry,
-                        onStudyOffline = onStudyOffline,
-                        testTags = QuizErrorTestTags(
-                            errorText = ReviewScreenTestTags.ERROR_TEXT,
-                            retryButton = ReviewScreenTestTags.RETRY_BUTTON,
-                            studyOfflineButton = ReviewScreenTestTags.STUDY_OFFLINE_BUTTON
-                        )
-                    )
-                }
-
-                ReviewUiState.Phase.NoReviewsAvailable -> {
-                    QuizEmptyQueueContent(
-                        message = "No reviews available right now.",
-                        onDone = onDone,
-                        testTags = QuizEmptyQueueTestTags(
-                            messageText = ReviewScreenTestTags.NO_REVIEWS_TEXT,
-                            doneButton = ReviewScreenTestTags.NO_REVIEWS_DONE_BUTTON
-                        )
-                    )
-                }
-
-                is ReviewUiState.Phase.Complete -> {
-                    SessionCompleteContent(
-                        title = "Session complete!",
-                        subtitle = null,
-                        itemsLabel = "Items reviewed",
-                        averageLabel = "Avg. time per item reviewed",
-                        itemsCount = phase.sessionItemsReviewed,
-                        correctFirstTry = phase.sessionItemsCorrectFirstTry,
-                        totalElapsedMs = phase.sessionTotalElapsedMs,
-                        averageTimePerItemMs = phase.sessionAverageTimePerItemMs,
-                        slowestAnswers = phase.sessionSlowestAnswers.map { it.toSessionAnswerRow() },
-                        missedItems = phase.sessionMissedItems.map { it.toSessionMissedItemRow() },
-                        onDone = onDone,
-                        onSubjectClick = { searchDetailSheetState.show(it) },
-                        testTags = SessionCompleteTestTags(
-                            root = ReviewScreenTestTags.SESSION_COMPLETE,
-                            overviewCard = ReviewScreenTestTags.SESSION_OVERVIEW_CARD,
-                            itemsText = ReviewScreenTestTags.ITEMS_REVIEWED_TEXT,
-                            correctFirstTryText = ReviewScreenTestTags.CORRECT_FIRST_TRY_TEXT,
-                            timingCard = ReviewScreenTestTags.SESSION_TIMING_CARD,
-                            totalTimeText = ReviewScreenTestTags.SESSION_TOTAL_TIME_TEXT,
-                            averageTimeText = ReviewScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
-                            slowestCard = ReviewScreenTestTags.SESSION_SLOWEST_CARD,
-                            missedCard = ReviewScreenTestTags.SESSION_MISSED_CARD,
-                            doneButton = ReviewScreenTestTags.DONE_BUTTON
-                        )
-                    )
-                }
-
-                is ReviewUiState.Phase.Active -> {
-                    QuizQuestionContent(
-                        uiState = QuizQuestionUiState(
-                                item = phase.currentItem,
-                                questionType = phase.currentQuestionType,
-                                totalCount = phase.totalCount,
-                                remainingCount = phase.remainingCount,
-                                answerInput = phase.answerInput,
-                                feedback = phase.feedback,
-                                rankChange = phase.rankChange,
-                                undoCounter = phase.undoCounter,
-                                questionSequence = phase.questionSequence,
-                                answerTypeMismatchCount = phase.answerTypeMismatchCount,
-                                showSubjectTypeLabel = uiState.settings.showSubjectTypeLabel,
-                                showQuestionTimer = uiState.settings.showQuestionTimer,
-                                showTotalTimer = uiState.settings.showTotalTimer,
-                                questionElapsedMs = phase.timing.questionElapsedMs,
-                                questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
-                                questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
-                                sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
-                                sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
-                                useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
-                                allowUndoAfterCorrect = true,
-                                showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
-                                answerHint = phase.answerHint
-                        ),
-                        onAnswerInputChange = onAnswerInputChange,
-                        onSubmit = onSubmit,
-                        onDontKnow = onDontKnow,
-                        onContinue = onContinue,
-                        onUndo = onUndo,
-                        testTags = QuizQuestionTestTags(
-                            progressCount = ReviewScreenTestTags.PROGRESS_COUNT,
-                            questionTimerText = ReviewScreenTestTags.QUESTION_TIMER_TEXT,
-                            totalTimerText = ReviewScreenTestTags.TOTAL_TIMER_TEXT,
-                            characters = ReviewScreenTestTags.CHARACTERS,
-                            subjectTypeLabel = ReviewScreenTestTags.SUBJECT_TYPE_LABEL,
-                            rankChangeText = ReviewScreenTestTags.RANK_CHANGE_TEXT,
-                            questionLabel = ReviewScreenTestTags.QUESTION_LABEL,
-                            answerField = ReviewScreenTestTags.ANSWER_FIELD,
-                            typeMismatchText = ReviewScreenTestTags.TYPE_MISMATCH_TEXT,
-                            dontKnowButton = ReviewScreenTestTags.DONT_KNOW_BUTTON,
-                            submitButton = ReviewScreenTestTags.SUBMIT_BUTTON,
-                            undoButton = ReviewScreenTestTags.UNDO_BUTTON,
-                            feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
-                            answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
-                            continueButton = ReviewScreenTestTags.CONTINUE_BUTTON,
-                            // Review has no session context to name — its queue is the whole session.
-                            sessionContextLabel = ReviewScreenTestTags.SESSION_CONTEXT_LABEL
-                        )
-                    )
-                }
-            }
+            ReviewPhaseContent(
+                uiState = uiState,
+                actions = actions,
+                onSessionComplete = onSessionComplete,
+            )
         }
     }
 
@@ -402,8 +252,8 @@ fun ReviewScreen(
                     subjectId = subjectId,
                     active = active,
                     expanded = activePhase?.isDetailsExpanded == true,
-                    onToggle = onToggleDetails,
-                    onDismiss = onCloseDetails,
+                    onToggle = { actions.toggleDetails() },
+                    onDismiss = { actions.closeDetails() },
                     revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
                     isAnswered = true,
                     questionType = questionType.toDetailQuestionType(),
@@ -419,10 +269,141 @@ fun ReviewScreen(
             uiState = searchUiState,
             onQueryChange = onSearchQueryChange,
             modifier = Modifier.fillMaxSize(),
-            onSubjectClick = { searchDetailSheetState.show(it) }
         )
 
-        SubjectDetailSheetHost(searchDetailSheetState)
     }
+}
+
+/**
+ * The one place that decides which phase renders — everything above it in [ReviewScreen] is chrome
+ * (top bar, search overlay, detail sheet), shared by every phase.
+ *
+ * Each branch hands off to the composable that owns that phase, so no single composable declares every
+ * phase's actions. The four `Quiz*`/`SessionComplete*` composables below take state + callbacks rather
+ * than [actions] because they live in `designsystem/` and are shared with Lesson — they cannot depend
+ * on this feature's state holder.
+ */
+@Composable
+private fun ColumnScope.ReviewPhaseContent(
+    uiState: ReviewUiState,
+    actions: ReviewActions,
+    onSessionComplete: () -> Unit
+) {
+    val openSubjectDetail = LocalOpenSubjectDetail.current
+    when (val phase = uiState.phase) {
+        ReviewUiState.Phase.Loading -> QuizLoadingContent(
+            loadingIndicatorTestTag = ReviewScreenTestTags.LOADING_INDICATOR
+        )
+
+        is ReviewUiState.Phase.Error -> QuizErrorContent(
+            message = phase.message,
+            onRetry = actions::loadOrResume,
+            onStudyOffline = actions::studyOffline,
+            testTags = QuizErrorTestTags(
+                errorText = ReviewScreenTestTags.ERROR_TEXT,
+                retryButton = ReviewScreenTestTags.RETRY_BUTTON,
+                studyOfflineButton = ReviewScreenTestTags.STUDY_OFFLINE_BUTTON
+            )
+        )
+
+        ReviewUiState.Phase.NoReviewsAvailable -> QuizEmptyQueueContent(
+            message = "No reviews available right now.",
+            onDone = onSessionComplete,
+            testTags = QuizEmptyQueueTestTags(
+                messageText = ReviewScreenTestTags.NO_REVIEWS_TEXT,
+                doneButton = ReviewScreenTestTags.NO_REVIEWS_DONE_BUTTON
+            )
+        )
+
+        is ReviewUiState.Phase.Complete -> SessionCompleteContent(
+            title = "Session complete!",
+            subtitle = null,
+            summary = SessionSummaryDisplay(
+                kind = LastSessionKind.REVIEW,
+                itemsCount = phase.sessionItemsReviewed,
+                correctFirstTry = phase.sessionItemsCorrectFirstTry,
+                totalElapsedMs = phase.sessionTotalElapsedMs,
+                averageTimePerItemMs = phase.sessionAverageTimePerItemMs,
+                slowestAnswers = phase.sessionSlowestAnswers.map { it.toSessionAnswerRow() },
+                missedItems = phase.sessionMissedItems.map { it.toSessionMissedItemRow() }
+            ),
+            onDone = onSessionComplete,
+            onSubjectClick = openSubjectDetail,
+            testTags = SessionCompleteTestTags(
+                root = ReviewScreenTestTags.SESSION_COMPLETE,
+                overviewCard = ReviewScreenTestTags.SESSION_OVERVIEW_CARD,
+                itemsText = ReviewScreenTestTags.ITEMS_REVIEWED_TEXT,
+                correctFirstTryText = ReviewScreenTestTags.CORRECT_FIRST_TRY_TEXT,
+                timingCard = ReviewScreenTestTags.SESSION_TIMING_CARD,
+                totalTimeText = ReviewScreenTestTags.SESSION_TOTAL_TIME_TEXT,
+                averageTimeText = ReviewScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
+                slowestCard = ReviewScreenTestTags.SESSION_SLOWEST_CARD,
+                missedCard = ReviewScreenTestTags.SESSION_MISSED_CARD,
+                doneButton = ReviewScreenTestTags.DONE_BUTTON
+            )
+        )
+
+        is ReviewUiState.Phase.Active -> ReviewActivePhase(
+            phase = phase,
+            actions = actions
+        )
+    }
+}
+
+/**
+ * Builds the shared [QuizQuestionContent]'s state from the active phase plus the session's display
+ * settings. Lives here rather than inline in [ReviewPhaseContent] because the mapping is ~35 lines and
+ * would otherwise dominate the dispatch.
+ */
+@Composable
+private fun ColumnScope.ReviewActivePhase(
+    phase: ReviewUiState.Phase.Active,
+    actions: ReviewActions
+) {
+    QuizQuestionContent(
+        uiState = QuizQuestionUiState(
+            item = phase.currentItem,
+            questionType = phase.currentQuestionType,
+            totalCount = phase.totalCount,
+            remainingCount = phase.remainingCount,
+            answerInput = phase.answerInput,
+            feedback = phase.feedback,
+            rankChange = phase.rankChange,
+            undoCounter = phase.undoCounter,
+            questionSequence = phase.questionSequence,
+            answerTypeMismatchCount = phase.answerTypeMismatchCount,
+            questionElapsedMs = phase.timing.questionElapsedMs,
+            questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
+            questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
+            sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
+            sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
+            allowUndoAfterCorrect = true,
+            answerHint = phase.answerHint
+        ),
+        onAnswerInputChange = actions::onAnswerInputChange,
+        onSubmit = actions::submitAnswer,
+        onDontKnow = actions::dontKnowAnswer,
+        onContinue = actions::onContinue,
+        onUndo = actions::undoLastAnswer,
+        testTags = QuizQuestionTestTags(
+            progressCount = ReviewScreenTestTags.PROGRESS_COUNT,
+            questionTimerText = ReviewScreenTestTags.QUESTION_TIMER_TEXT,
+            totalTimerText = ReviewScreenTestTags.TOTAL_TIMER_TEXT,
+            characters = ReviewScreenTestTags.CHARACTERS,
+            subjectTypeLabel = ReviewScreenTestTags.SUBJECT_TYPE_LABEL,
+            rankChangeText = ReviewScreenTestTags.RANK_CHANGE_TEXT,
+            questionLabel = ReviewScreenTestTags.QUESTION_LABEL,
+            answerField = ReviewScreenTestTags.ANSWER_FIELD,
+            typeMismatchText = ReviewScreenTestTags.TYPE_MISMATCH_TEXT,
+            dontKnowButton = ReviewScreenTestTags.DONT_KNOW_BUTTON,
+            submitButton = ReviewScreenTestTags.SUBMIT_BUTTON,
+            undoButton = ReviewScreenTestTags.UNDO_BUTTON,
+            feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
+            answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
+            continueButton = ReviewScreenTestTags.CONTINUE_BUTTON,
+            // Review has no session context to name — its queue is the whole session.
+            sessionContextLabel = ReviewScreenTestTags.SESSION_CONTEXT_LABEL
+        )
+    )
 }
 

@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.quiz
 
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -75,7 +76,11 @@ data class QuizQuestionTestTags(
     val continueButton: String,
     /** The optional "Batch 2 of 4"-style label in the progress row. */
     val sessionContextLabel: String
-)
+) {
+    /** [QuizAnswerField]'s sub-bundle, so the field takes one parameter rather than two loose tags. */
+    val answerFieldTags: QuizAnswerFieldTestTags
+        get() = QuizAnswerFieldTestTags(answerField = answerField, typeMismatchText = typeMismatchText)
+}
 
 /** The reading, its live pitch-accent answer, and the audio clip that survived the caller's own
  *  audio settings — always produced/cleared together, so callers carry one value instead of three
@@ -99,23 +104,17 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     val undoCounter: Int,
     val questionSequence: Int,
     val answerTypeMismatchCount: Int,
-    val showSubjectTypeLabel: Boolean,
-    val showQuestionTimer: Boolean,
-    val showTotalTimer: Boolean,
     val questionElapsedMs: Long?,
     val questionActiveElapsedMs: Long,
     val questionActiveSegmentStartMs: Long?,
     val sessionActiveElapsedMs: Long,
     val sessionActiveSegmentStartMs: Long?,
-    val useJapaneseKeyboard: Boolean,
     // Review defers submitting a correct answer to WaniKani until Continue is pressed, so it can
     // still be undone up to that point — Lesson has no such pending-submission window, so it leaves
     // this at the default and undo stays incorrect-only there.
     val allowUndoAfterCorrect: Boolean = false,
-    // Live setting gate, plus the reading/pitch-accent/audio hint for the just-graded reading
-    // question — no reading to show unless that setting is on, the question type is READING, and
-    // feedback exists.
-    val showAnswerReadingPitchAccent: Boolean = false,
+    // The reading/pitch-accent/audio hint for the just-graded reading question. Whether it is shown
+    // at all is a display setting, read from LocalDisplaySettings where the hint is consumed.
     val answerHint: AnswerReadingHint? = null,
     // Which pass of the session this question belongs to ("Batch 2 of 4", "Extra practice") — null
     // when there's nothing worth saying, which is the case for every review question and for a lesson
@@ -141,6 +140,10 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
 ) {
     val item = uiState.item
     val questionType = uiState.questionType
+    // Read here rather than taken as parameters: these five are app-wide display preferences with no
+    // per-call-site variation, and they used to arrive as five fields of QuizQuestionUiState that both
+    // Lesson and Review had to fill in from their own copy of the settings bag.
+    val display = LocalDisplaySettings.current
 
     val progress = if (uiState.totalCount == 0) 0f else
         (uiState.totalCount - uiState.remainingCount).toFloat() / uiState.totalCount
@@ -180,7 +183,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (uiState.showQuestionTimer) {
+            if (display.showQuestionTimer) {
                 val questionElapsedMs = uiState.questionElapsedMs
                 if (questionElapsedMs != null) {
                     // Frozen at the instant the question was answered, matching the elapsedMs recorded
@@ -202,14 +205,14 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
                     )
                 }
             }
-            if (uiState.showQuestionTimer && uiState.showTotalTimer) {
+            if (display.showQuestionTimer && display.showTotalTimer) {
                 Text(
                     text = " / ",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (uiState.showTotalTimer) {
+            if (display.showTotalTimer) {
                 PausableElapsedTimeText(
                     baseElapsedMs = uiState.sessionActiveElapsedMs,
                     segmentStartMs = uiState.sessionActiveSegmentStartMs,
@@ -226,7 +229,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         val answerHint = uiState.answerHint
-        val showAnswerHint = uiState.showAnswerReadingPitchAccent &&
+        val showAnswerHint = display.showAnswerReadingPitchAccent &&
             questionType == QuestionType.READING &&
             answerHint != null
         AnimatedVisibility(
@@ -263,7 +266,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
             size = 104.dp,
             modifier = Modifier.testTag(testTags.characters)
         )
-        if (uiState.showSubjectTypeLabel) {
+        if (display.showSubjectTypeLabel) {
             Text(
                 text = subjectTypeLabel(item.subjectType),
                 style = MaterialTheme.typography.labelLarge,
@@ -341,8 +344,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
             isAnswered = feedbackForField != null,
             answerTypeMismatchCount = uiState.answerTypeMismatchCount,
             onSubmit = onSubmit,
-            answerFieldTestTag = testTags.answerField,
-            typeMismatchTextTestTag = testTags.typeMismatchText,
+            testTags = testTags.answerFieldTags,
             // Also includes undoCounter: undo clears the field and re-enables it without changing
             // item/questionType, so the field's focus-restoring effect wouldn't otherwise refire and
             // the user would be left tapped-out of the field they just asked to retry. And
@@ -351,7 +353,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
             // before, but the field must still clear — questionSequence increments on every advance
             // regardless of whether the question repeats.
             focusResetKey = listOf(item.assignmentId, questionType, uiState.undoCounter, uiState.questionSequence),
-            useJapaneseKeyboard = uiState.useJapaneseKeyboard,
+            useJapaneseKeyboard = display.useJapaneseKeyboard,
             trailingIcon = if (feedbackForField != null) {
                 {
                     IconButton(

@@ -53,6 +53,10 @@ class ReviewForecastCardTest {
         }
 
         composeTestRule.onNodeWithTag(ReviewForecastTestTags.EMPTY_STATE).assertIsDisplayed()
+        // Bug regression: the status line above the chart resolves to the same "All caught up" in this
+        // state, so the card said it twice, ~10dp apart, in two slightly different wordings. The status
+        // line is suppressed here so the empty state is the one message.
+        composeTestRule.onNodeWithTag(ReviewForecastTestTags.SUMMARY).assertDoesNotExist()
     }
 
     @Test

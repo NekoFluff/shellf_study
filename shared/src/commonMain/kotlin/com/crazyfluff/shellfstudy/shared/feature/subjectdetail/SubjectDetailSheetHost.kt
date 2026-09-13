@@ -5,6 +5,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.setValue
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 
@@ -58,3 +59,18 @@ fun SubjectDetailSheetHost(state: SubjectDetailSheetState) {
         )
     }
 }
+
+/**
+ * Opens the shared browse [SubjectDetailSheet] on a subject.
+ *
+ * Provided once by `ShellfStudyApp`, which also mounts the single [SubjectDetailSheetHost]. Before
+ * this, four screens each remembered their own [SubjectDetailSheetState] and mounted their own host —
+ * four identical copies of something with no per-screen state, since the browse host is always
+ * [DetailRevealMode.FULL] and answered — and each threaded an `onSubjectClick` closure down through
+ * every composable on the way to a tappable subject.
+ *
+ * The no-op default is what a composition outside the app root gets: a focused test that does not
+ * care where a tap leads. A test that asserts on opening a subject provides its own, which is also
+ * the first time this has been assertable at all.
+ */
+val LocalOpenSubjectDetail = staticCompositionLocalOf<(Long) -> Unit> { { } }

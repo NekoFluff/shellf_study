@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -85,9 +86,7 @@ fun SubjectReadingAnswer(
     kunyomiReadings: List<String> = emptyList(),
     nanoriReadings: List<String> = emptyList(),
     pronunciationAudios: List<PronunciationAudio> = emptyList(),
-    pitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
-    showPitchAccent: Boolean = false,
-    restrictAudioToMp3: Boolean = false
+    pitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable
 ) {
     if (readings.isEmpty()) return
 
@@ -107,9 +106,7 @@ fun SubjectReadingAnswer(
             ReadingDisplayStyle.VOCABULARY -> VocabularyReadingList(
                 readings = readings,
                 pronunciationAudios = pronunciationAudios,
-                pitchAccents = pitchAccents,
-                showPitchAccent = showPitchAccent,
-                restrictAudioToMp3 = restrictAudioToMp3
+                pitchAccents = pitchAccents
             )
             ReadingDisplayStyle.PLAIN -> JapaneseText(readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)
         }
@@ -120,10 +117,9 @@ fun SubjectReadingAnswer(
 private fun VocabularyReadingList(
     readings: List<String>,
     pronunciationAudios: List<PronunciationAudio>,
-    pitchAccents: PitchAccentUiState,
-    showPitchAccent: Boolean,
-    restrictAudioToMp3: Boolean
+    pitchAccents: PitchAccentUiState
 ) {
+    val displaySettings = LocalDisplaySettings.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         readings.forEach { reading ->
             Column {
@@ -132,11 +128,17 @@ private fun VocabularyReadingList(
                 // gets no button at all rather than one that plays nothing.
                 ReadingRow(
                     reading = reading,
-                    audio = { selectAudioFor(pronunciationAudios, reading, mp3Only = restrictAudioToMp3) }
+                    audio = {
+                        selectAudioFor(
+                            pronunciationAudios,
+                            reading,
+                            mp3Only = displaySettings.restrictAudioToMp3
+                        )
+                    }
                 )
                 // The setting controls the markers, not the reading: switched off, the row above is
                 // all there is.
-                if (showPitchAccent) {
+                if (displaySettings.showPitchAccent) {
                     PitchAccentDiagram(pitchAccents.forReading(reading))
                 }
             }

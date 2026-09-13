@@ -1,7 +1,9 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.DisplaySettings
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
+import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonActions
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreen
-import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenEvent
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreenTestTags
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSort
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonUiState
@@ -205,7 +207,6 @@ class LessonScreenTest {
         remainingQuizCount: Int = 0,
         questionSequence: Int = 0,
         timing: QuizTimingUiState = QuizTimingUiState(),
-        settings: LessonUiState.DisplaySettings = LessonUiState.DisplaySettings(),
         answerReading: String? = null,
         answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
         answerReadingAudio: PronunciationAudio? = null
@@ -224,7 +225,6 @@ class LessonScreenTest {
                 AnswerReadingHint(reading = it, audio = answerReadingAudio)
             }
         ),
-        settings = settings,
         // The quiz hint reads the live map for the current item — spelled out here so a fixture can
         // still express "this word's pitch accent is Available/Unavailable" in one line.
         pitchAccentsBySubjectId = mapOf(currentItem.subjectId to answerPitchAccents)
@@ -248,69 +248,29 @@ class LessonScreenTest {
         )
     )
 
+    /**
+     * Renders the screen against a recording stand-in for the ViewModel, so a control's wiring can be
+     * asserted without standing up the repository graph. Rendering assertions pass only [uiState] and
+     * ignore [actions].
+     */
     private fun setScreen(
         uiState: LessonUiState,
-        onToggleLessonSelection: (Long) -> Unit = {},
-        onToggleTypeSelection: (SubjectType) -> Unit = {},
-        onSetLessonSort: (LessonSort) -> Unit = {},
-        onSelectFirst: (Int) -> Unit = {},
-        onSelectAll: () -> Unit = {},
-        onSelectNone: () -> Unit = {},
-        onStartSelectedLessons: () -> Unit = {},
-        onStudyCardSwiped: (Int) -> Unit = {},
-        onNextStudyCard: () -> Unit = {},
-        onPreviousStudyCard: () -> Unit = {},
-        onAnswerInputChange: (String) -> Unit = {},
-        onSubmit: () -> Unit = {},
-        onDontKnow: () -> Unit = {},
-        onUndo: () -> Unit = {},
+        actions: LessonActions = RecordingLessonActions(),
         audioPlayer: FakePronunciationAudioPlayer = FakePronunciationAudioPlayer(),
-        onContinue: () -> Unit = {},
-        onRetry: () -> Unit = {},
-        onStudyOffline: () -> Unit = {},
-        onAbandon: () -> Unit = {},
-        onContinueSession: () -> Unit = {},
-        onFinishForNow: () -> Unit = {},
-        onPracticeMissed: () -> Unit = {},
-        onFinishSession: () -> Unit = {},
-        onDone: () -> Unit = {},
-        onBack: () -> Unit = {}
+        onSessionComplete: () -> Unit = {},
+        onBack: () -> Unit = {},
+        displaySettings: DisplaySettings = DisplaySettings()
     ) {
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalPronunciationAudioPlayer provides audioPlayer) {
+            CompositionLocalProvider(
+                LocalPronunciationAudioPlayer provides audioPlayer,
+                LocalDisplaySettings provides displaySettings
+            ) {
                 LessonScreen(
                     uiState = uiState,
-                    onEvent = { event ->
-                        when (event) {
-                            is LessonScreenEvent.ToggleLessonSelection -> onToggleLessonSelection(event.assignmentId)
-                            is LessonScreenEvent.ToggleLessonTypeSelection -> onToggleTypeSelection(event.type)
-                            is LessonScreenEvent.SetLessonSort -> onSetLessonSort(event.sort)
-                            is LessonScreenEvent.SelectFirst -> onSelectFirst(event.count)
-                            LessonScreenEvent.SelectAll -> onSelectAll()
-                            LessonScreenEvent.SelectNone -> onSelectNone()
-                            LessonScreenEvent.StartSelectedLessons -> onStartSelectedLessons()
-                            is LessonScreenEvent.StudyCardSwiped -> onStudyCardSwiped(event.index)
-                            LessonScreenEvent.NextStudyCard -> onNextStudyCard()
-                            LessonScreenEvent.PreviousStudyCard -> onPreviousStudyCard()
-                            is LessonScreenEvent.AnswerInputChange -> onAnswerInputChange(event.value)
-                            LessonScreenEvent.Submit -> onSubmit()
-                            LessonScreenEvent.DontKnow -> onDontKnow()
-                            LessonScreenEvent.Undo -> onUndo()
-                            LessonScreenEvent.Continue -> onContinue()
-                            LessonScreenEvent.ToggleDetails -> {}
-                            LessonScreenEvent.CloseDetails -> {}
-                            LessonScreenEvent.Retry -> onRetry()
-                            LessonScreenEvent.StudyOffline -> onStudyOffline()
-                            LessonScreenEvent.Abandon -> onAbandon()
-                            LessonScreenEvent.ContinueSession -> onContinueSession()
-                            LessonScreenEvent.FinishForNow -> onFinishForNow()
-                            LessonScreenEvent.PracticeMissed -> onPracticeMissed()
-                            LessonScreenEvent.FinishSession -> onFinishSession()
-                            LessonScreenEvent.Done -> onDone()
-                            LessonScreenEvent.Back -> onBack()
-                            is LessonScreenEvent.SearchQueryChange -> {}
-                        }
-                    }
+                    actions = actions,
+                    onSessionComplete = onSessionComplete,
+                    onBack = onBack
                 )
             }
         }
@@ -331,13 +291,13 @@ class LessonScreenTest {
 
     @Test
     fun selectPhase_showsSelectedCountAndTogglesOnCheckboxRowClick() {
-        var toggledId: Long? = null
+        val actions = RecordingLessonActions()
         setScreen(
             selectState(
                 availableLessons = listOf(radicalItem, secondRadicalItem),
                 selectedAssignmentIds = setOf(1L)
             ),
-            onToggleLessonSelection = { toggledId = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithText("1 of 2 selected").assertIsDisplayed()
@@ -345,7 +305,7 @@ class LessonScreenTest {
         composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.lessonCheckboxTag(2L)).performClick()
-        assert(toggledId == 2L)
+        assertThat(actions.lastArgumentOf("toggleLessonSelection")).isEqualTo(2L)
     }
 
     @Test
@@ -368,41 +328,39 @@ class LessonScreenTest {
 
     @Test
     fun selectPhase_selectAllAndSelectNoneChips_invokeCallbacks() {
-        var selectedAll = false
-        var selectedNone = false
+        val actions = RecordingLessonActions()
         setScreen(
             selectState(
                 availableLessons = listOf(radicalItem, secondRadicalItem),
                 selectedAssignmentIds = setOf(1L)
             ),
-            onSelectAll = { selectedAll = true },
-            onSelectNone = { selectedNone = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECT_ALL_CHIP).performClick()
-        assert(selectedAll)
+        assertThat(actions.calls).contains("selectAll")
         composeTestRule.onNodeWithTag(LessonScreenTestTags.SELECT_NONE_CHIP).performClick()
-        assert(selectedNone)
+        assertThat(actions.calls).contains("selectNone")
     }
 
     @Test
     fun selectPhase_stepperButtons_invokeOnSelectFirstWithClampedCount() {
-        var selectedN: Int? = null
+        val actions = RecordingLessonActions()
         setScreen(
             selectState(
                 availableLessons = listOf(radicalItem, secondRadicalItem),
                 selectedAssignmentIds = setOf(1L)
             ),
-            onSelectFirst = { selectedN = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STEPPER_INCREMENT).performClick()
-        assert(selectedN == 2)
+        assertThat(actions.lastArgumentOf("selectFirst")).isEqualTo(2)
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STEPPER_DECREMENT).performClick()
-        assert(selectedN == 0)
+        assertThat(actions.lastArgumentOf("selectFirst")).isEqualTo(0)
     }
 
     @Test
@@ -451,13 +409,13 @@ class LessonScreenTest {
 
     @Test
     fun selectPhase_sortDropdown_showsTheCurrentSortAndInvokesOnSetLessonSort() {
-        var chosenSort: LessonSort? = null
+        val actions = RecordingLessonActions()
         setScreen(
             selectState(
                 availableLessons = listOf(radicalItem, kanjiItem, vocabularyItem),
                 selectedAssignmentIds = setOf(1L)
             ),
-            onSetLessonSort = { chosenSort = it }
+            actions = actions
         )
 
         // Only part of the checklist, not of the quick pick.
@@ -472,7 +430,7 @@ class LessonScreenTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.sortOptionTag(LessonSort.KANJI_FIRST)).performClick()
 
-        assertThat(chosenSort).isEqualTo(LessonSort.KANJI_FIRST)
+        assertThat(actions.lastArgumentOf("setLessonSort")).isEqualTo(LessonSort.KANJI_FIRST)
     }
 
     @Test
@@ -502,13 +460,13 @@ class LessonScreenTest {
 
     @Test
     fun selectPhase_levelGroupToggle_showsAndHidesTilesForUnselectedLevel() {
-        var toggledId: Long? = null
+        val actions = RecordingLessonActions()
         setScreen(
             selectState(
                 availableLessons = listOf(radicalItem),
                 selectedAssignmentIds = emptySet()
             ),
-            onToggleLessonSelection = { toggledId = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.CUSTOMIZE_TOGGLE).performClick()
@@ -520,7 +478,7 @@ class LessonScreenTest {
         composeTestRule.onNodeWithTag(LessonScreenTestTags.levelGroupToggleTag(1)).performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.lessonCheckboxTag(1L)).performClick()
-        assert(toggledId == 1L)
+        assertThat(actions.lastArgumentOf("toggleLessonSelection")).isEqualTo(1L)
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.levelGroupToggleTag(1)).performClick()
         composeTestRule.waitForIdle()
@@ -541,30 +499,30 @@ class LessonScreenTest {
 
     @Test
     fun selectPhase_startButton_invokesCallback_whenSelectionNonEmpty() {
-        var started = false
+        val actions = RecordingLessonActions()
         setScreen(
             selectState(
                 availableLessons = listOf(radicalItem),
                 selectedAssignmentIds = setOf(1L)
             ),
-            onStartSelectedLessons = { started = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.START_SELECTED_BUTTON).performClick()
-        assert(started)
+        assertThat(actions.calls).contains("startSelectedLessons")
     }
 
     @Test
     fun studyPhase_swipingPager_invokesOnStudyCardSwiped() {
-        var swipedToIndex: Int? = null
+        val actions = RecordingLessonActions()
         setScreen(
             studyState(studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 0),
-            onStudyCardSwiped = { swipedToIndex = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_PAGER).performTouchInput { swipeLeft() }
         composeTestRule.waitForIdle()
-        assert(swipedToIndex == 1)
+        assertThat(actions.lastArgumentOf("onStudyCardSwiped")).isEqualTo(1)
     }
 
     @Test
@@ -732,21 +690,20 @@ class LessonScreenTest {
 
     @Test
     fun selectPhase_typeSelectorChipClick_invokesOnToggleTypeSelection() {
-        var toggledType: SubjectType? = null
+        val actions = RecordingLessonActions()
         setScreen(
             selectState(availableLessons = listOf(radicalItem, kanjiItem)),
-            onToggleTypeSelection = { toggledType = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.KANJI)).performClick()
 
-        assertThat(toggledType).isEqualTo(SubjectType.KANJI)
+        assertThat(actions.lastArgumentOf("toggleLessonTypeSelection")).isEqualTo(SubjectType.KANJI)
     }
 
     @Test
     fun batchCompletePhase_offersTheNextBatchAndAChanceToStop() {
-        var continued = false
-        var parked = false
+        val actions = RecordingLessonActions()
         setScreen(
             batchCompleteState(
                 batchIndex = 0,
@@ -757,8 +714,7 @@ class LessonScreenTest {
                     batchIndex = 1, remainingSessionItems = 10
                 )
             ),
-            onContinueSession = { continued = true },
-            onFinishForNow = { parked = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_HEADLINE).assertTextEquals("Batch 1 of 3 done!")
@@ -769,31 +725,30 @@ class LessonScreenTest {
         composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON).assertIsDisplayed()
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON).performClick()
-        assertThat(continued).isTrue()
-        assertThat(parked).isFalse()
+        assertThat(actions.calls).contains("continueSession")
+        assertThat(actions.calls).doesNotContain("finishForNow")
     }
 
     @Test
     fun batchCompletePhase_finishForNow_invokesItsCallback() {
-        var parked = false
+        val actions = RecordingLessonActions()
         setScreen(
             batchCompleteState(
                 next = LessonUiState.Phase.BatchComplete.NextStep.StudyBatch(
                     batchIndex = 1, remainingSessionItems = 2
                 )
             ),
-            onFinishForNow = { parked = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON).performClick()
 
-        assertThat(parked).isTrue()
+        assertThat(actions.calls).contains("finishForNow")
     }
 
     @Test
     fun batchCompletePhase_finalBatchOffersPracticeOnTheMisses() {
-        var practiced = false
-        var finished = false
+        val actions = RecordingLessonActions()
         setScreen(
             batchCompleteState(
                 batchIndex = 1,
@@ -803,8 +758,7 @@ class LessonScreenTest {
                 missedItems = listOf(radicalItem, secondRadicalItem),
                 next = LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed(itemCount = 2)
             ),
-            onPracticeMissed = { practiced = true },
-            onFinishSession = { finished = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_HEADLINE).assertTextEquals("Last batch done!")
@@ -814,37 +768,37 @@ class LessonScreenTest {
         composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON).assertDoesNotExist()
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.PRACTICE_MISSED_BUTTON).performClick()
-        assertThat(practiced).isTrue()
+        assertThat(actions.calls).contains("practiceMissedItems")
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.FINISH_SESSION_BUTTON).performClick()
-        assertThat(finished).isTrue()
+        assertThat(actions.calls).contains("finishSessionNow")
     }
 
     @Test
     fun studyPhase_nextButton_invokesCallback() {
-        var advanced = false
+        val actions = RecordingLessonActions()
         setScreen(
             studyState(studyItems = listOf(radicalItem), studyIndex = 0),
-            onNextStudyCard = { advanced = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.START_QUIZ_BUTTON).performClick()
-        assert(advanced)
+        assertThat(actions.calls).contains("nextStudyCard")
     }
 
     @Test
     fun quizPhase_submittingAnswer_invokesOnSubmit() {
-        var submitted = false
+        val actions = RecordingLessonActions()
         setScreen(
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1, answerInput = "Mouth"
             ),
-            onSubmit = { submitted = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.SUBMIT_BUTTON).performClick()
-        assert(submitted)
+        assertThat(actions.calls).contains("submitAnswer")
     }
 
     @Test
@@ -903,20 +857,20 @@ class LessonScreenTest {
 
     @Test
     fun quizPhase_typingAnswer_invokesCallback() {
-        var typed = ""
+        val actions = RecordingLessonActions()
         setScreen(
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1
             ),
-            onAnswerInputChange = { typed = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_FIELD).performTextInput("Mouth")
         // TextFieldState pushes edits up via a LaunchedEffect/snapshotFlow, one dispatch removed
         // from performTextInput itself — wait for that to land before reading the callback value.
         composeTestRule.waitForIdle()
-        assert(typed == "Mouth")
+        assertThat(actions.lastArgumentOf("onAnswerInputChange")).isEqualTo("Mouth")
     }
 
     /** Regression test for a requeued question (same item/questionType reappearing after an
@@ -935,7 +889,12 @@ class LessonScreenTest {
             )
         )
         composeTestRule.setContent {
-            LessonScreen(uiState = state, onEvent = {})
+            LessonScreen(
+                uiState = state,
+                actions = RecordingLessonActions(),
+                onSessionComplete = {},
+                onBack = {}
+            )
         }
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_FIELD).performTextInput("wrong answer")
@@ -1014,8 +973,8 @@ class LessonScreenTest {
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 timing = QuizTimingUiState(sessionActiveSegmentStartMs = System.currentTimeMillis()),
-                settings = LessonUiState.DisplaySettings(showTotalTimer = true)
-            )
+            ),
+            displaySettings = DisplaySettings(showTotalTimer = true),
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.TOTAL_TIMER_TEXT).assertIsDisplayed()
@@ -1028,8 +987,8 @@ class LessonScreenTest {
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 timing = QuizTimingUiState(sessionActiveSegmentStartMs = System.currentTimeMillis()),
-                settings = LessonUiState.DisplaySettings(showTotalTimer = false)
-            )
+            ),
+            displaySettings = DisplaySettings(showTotalTimer = false),
         )
 
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.TOTAL_TIMER_TEXT).assertCountEquals(0)
@@ -1044,8 +1003,8 @@ class LessonScreenTest {
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 timing = QuizTimingUiState(sessionActiveElapsedMs = 65_000L, sessionActiveSegmentStartMs = null),
-                settings = LessonUiState.DisplaySettings(showTotalTimer = true)
-            )
+            ),
+            displaySettings = DisplaySettings(showTotalTimer = true),
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.TOTAL_TIMER_TEXT).assertTextEquals("1:05")
@@ -1058,8 +1017,8 @@ class LessonScreenTest {
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 timing = QuizTimingUiState(questionActiveSegmentStartMs = System.currentTimeMillis()),
-                settings = LessonUiState.DisplaySettings(showQuestionTimer = true)
-            )
+            ),
+            displaySettings = DisplaySettings(showQuestionTimer = true),
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT).assertIsDisplayed()
@@ -1072,8 +1031,8 @@ class LessonScreenTest {
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 timing = QuizTimingUiState(questionActiveSegmentStartMs = System.currentTimeMillis()),
-                settings = LessonUiState.DisplaySettings(showQuestionTimer = false)
-            )
+            ),
+            displaySettings = DisplaySettings(showQuestionTimer = false),
         )
 
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT).assertCountEquals(0)
@@ -1091,9 +1050,9 @@ class LessonScreenTest {
                     questionActiveSegmentStartMs = System.currentTimeMillis() - 60_000,
                     questionElapsedMs = 5_000L
                 ),
-                settings = LessonUiState.DisplaySettings(showQuestionTimer = true),
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
-            )
+            ),
+            displaySettings = DisplaySettings(showQuestionTimer = true),
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals(formatElapsedClock(5_000L))
@@ -1108,8 +1067,8 @@ class LessonScreenTest {
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 timing = QuizTimingUiState(questionActiveElapsedMs = 5_000L, questionActiveSegmentStartMs = null),
-                settings = LessonUiState.DisplaySettings(showQuestionTimer = true)
-            )
+            ),
+            displaySettings = DisplaySettings(showQuestionTimer = true),
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals("0:05")
@@ -1117,19 +1076,19 @@ class LessonScreenTest {
 
     @Test
     fun quizPhase_feedback_showsContinueButton() {
-        var continued = false
+        val actions = RecordingLessonActions()
         setScreen(
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
             ),
-            onContinue = { continued = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.FEEDBACK_TEXT).assertIsDisplayed()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).performClick()
-        assert(continued)
+        assertThat(actions.calls).contains("onContinue")
     }
 
     @Test
@@ -1139,10 +1098,10 @@ class LessonScreenTest {
                 currentItem = radicalItem, currentQuestionType = QuestionType.READING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
                 answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
-            )
+            ),
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = true),
         )
 
         composeTestRule.onNodeWithTag(PitchAccentTestTags.ROOT).assertIsDisplayed()
@@ -1155,9 +1114,9 @@ class LessonScreenTest {
                 currentItem = radicalItem, currentQuestionType = QuestionType.READING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = false),
                 answerReading = "みず"
-            )
+            ),
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = false),
         )
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
@@ -1170,9 +1129,9 @@ class LessonScreenTest {
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth"),
-                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true)
                 // answerReading stays null — the ViewModel never populates it for a meaning question.
-            )
+            ),
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = true),
         )
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
@@ -1196,12 +1155,12 @@ class LessonScreenTest {
                 currentItem = itemWithAudio, currentQuestionType = QuestionType.READING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
                 answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))),
                 answerReadingAudio = audio
             ),
-            audioPlayer = player
+            audioPlayer = player,
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = true),
         )
 
         composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").performClick()
@@ -1215,11 +1174,11 @@ class LessonScreenTest {
                 currentItem = radicalItem, currentQuestionType = QuestionType.READING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "みず"),
-                settings = LessonUiState.DisplaySettings(showAnswerReadingPitchAccent = true),
                 answerReading = "みず",
                 answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))),
                 answerReadingAudio = null
-            )
+            ),
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = true),
         )
 
         composeTestRule.onAllNodesWithContentDescription("Play pronunciation for みず").assertCountEquals(0)
@@ -1231,8 +1190,8 @@ class LessonScreenTest {
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
-                settings = LessonUiState.DisplaySettings(showSubjectTypeLabel = true)
-            )
+            ),
+            displaySettings = DisplaySettings(showSubjectTypeLabel = true),
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL).assertIsDisplayed()
@@ -1245,8 +1204,8 @@ class LessonScreenTest {
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
-                settings = LessonUiState.DisplaySettings(showSubjectTypeLabel = false)
-            )
+            ),
+            displaySettings = DisplaySettings(showSubjectTypeLabel = false),
         )
 
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL).assertCountEquals(0)
@@ -1288,7 +1247,7 @@ class LessonScreenTest {
         var done = false
         setScreen(
             LessonUiState(phase = LessonUiState.Phase.NoLessonsAvailable),
-            onDone = { done = true }
+            onSessionComplete = { done = true }
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.NO_LESSONS_TEXT).assertIsDisplayed()
@@ -1301,7 +1260,7 @@ class LessonScreenTest {
         var done = false
         setScreen(
             completeState(),
-            onDone = { done = true }
+            onSessionComplete = { done = true }
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.SESSION_COMPLETE).assertIsDisplayed()
@@ -1393,28 +1352,28 @@ class LessonScreenTest {
 
     @Test
     fun errorState_showsErrorTextAndRetry() {
-        var retried = false
+        val actions = RecordingLessonActions()
         setScreen(
             LessonUiState(phase = LessonUiState.Phase.Error(message = "Network error")),
-            onRetry = { retried = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ERROR_TEXT).assertIsDisplayed()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.RETRY_BUTTON).performClick()
-        assert(retried)
+        assertThat(actions.calls).contains("load")
     }
 
     @Test
     fun errorState_studyOfflineButton_invokesCallback() {
-        var studiedOffline = false
+        val actions = RecordingLessonActions()
         setScreen(
             LessonUiState(phase = LessonUiState.Phase.Error(message = "Network error")),
-            onStudyOffline = { studiedOffline = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_OFFLINE_BUTTON).performClick()
 
-        assert(studiedOffline)
+        assertThat(actions.calls).contains("studyOffline")
     }
 
     @Test
@@ -1440,48 +1399,48 @@ class LessonScreenTest {
 
     @Test
     fun overflowMenu_abandonConfirmed_invokesCallback_duringStudyPhase() {
-        var abandoned = false
+        val actions = RecordingLessonActions()
         setScreen(
             studyState(studyItems = listOf(radicalItem)),
-            onAbandon = { abandoned = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.OVERFLOW_MENU).performClick()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ABANDON_MENU_ITEM).performClick()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ABANDON_CONFIRM_BUTTON).performClick()
-        assert(abandoned)
+        assertThat(actions.calls).contains("abandonSession")
     }
 
     @Test
     fun overflowMenu_abandonConfirmed_invokesCallback_duringQuizPhase() {
-        var abandoned = false
+        val actions = RecordingLessonActions()
         setScreen(
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1
             ),
-            onAbandon = { abandoned = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.OVERFLOW_MENU).performClick()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ABANDON_MENU_ITEM).performClick()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ABANDON_CONFIRM_BUTTON).performClick()
-        assert(abandoned)
+        assertThat(actions.calls).contains("abandonSession")
     }
 
     @Test
     fun overflowMenu_abandonCancelled_doesNotInvokeCallback() {
-        var abandoned = false
+        val actions = RecordingLessonActions()
         setScreen(
             studyState(studyItems = listOf(radicalItem)),
-            onAbandon = { abandoned = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.OVERFLOW_MENU).performClick()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.ABANDON_MENU_ITEM).performClick()
         composeTestRule.onNodeWithText("Cancel").performClick()
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.ABANDON_CONFIRM_BUTTON).assertCountEquals(0)
-        assert(!abandoned)
+        assertThat(actions.calls).doesNotContain("abandonSession")
     }
 
     // The following eight tests were ported from the instrumented LessonScreenTest when that file
@@ -1497,26 +1456,26 @@ class LessonScreenTest {
 
     @Test
     fun studyPhase_nextButton_invokesNextStudyCard() {
-        var advancedNext = false
+        val actions = RecordingLessonActions()
         setScreen(
             studyState(studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 0),
-            onNextStudyCard = { advancedNext = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_NEXT_BUTTON).performClick()
-        assert(advancedNext)
+        assertThat(actions.calls).contains("nextStudyCard")
     }
 
     @Test
     fun studyPhase_previousButton_invokesCallback() {
-        var wentBack = false
+        val actions = RecordingLessonActions()
         setScreen(
             studyState(studyItems = listOf(radicalItem, secondRadicalItem), studyIndex = 1),
-            onPreviousStudyCard = { wentBack = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.STUDY_PREVIOUS_BUTTON).performClick()
-        assert(wentBack)
+        assertThat(actions.calls).contains("previousStudyCard")
     }
 
     @Test
@@ -1558,18 +1517,18 @@ class LessonScreenTest {
 
     @Test
     fun quizPhase_dontKnowButton_displayedBeforeAnswering_andInvokesCallback() {
-        var dontKnow = false
+        val actions = RecordingLessonActions()
         setScreen(
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1
             ),
-            onDontKnow = { dontKnow = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.DONT_KNOW_BUTTON).assertIsDisplayed()
         composeTestRule.onNodeWithTag(LessonScreenTestTags.DONT_KNOW_BUTTON).performClick()
-        assert(dontKnow)
+        assertThat(actions.calls).contains("dontKnowAnswer")
     }
 
     @Test
@@ -1584,4 +1543,48 @@ class LessonScreenTest {
 
         composeTestRule.onAllNodesWithTag(LessonScreenTestTags.DONT_KNOW_BUTTON).assertCountEquals(0)
     }
+}
+
+/**
+ * A [LessonActions] that records what it was asked to do. Assertions read [calls] (in call order) for
+ * the parameterless actions and [argumentOf] for the ones carrying a value — so a rendering test can
+ * assert "this control is wired to that action" without building a ViewModel and its repository graph.
+ */
+private class RecordingLessonActions : LessonActions {
+    val calls = mutableListOf<String>()
+    private val arguments = mutableListOf<Any?>()
+
+    /** The argument passed to the most recent [name] call — mirrors the `var x: T? = null` the
+     *  per-callback tests used to capture, where each call overwrote the previous value. */
+    fun lastArgumentOf(name: String): Any? = arguments[calls.lastIndexOf(name)]
+
+    private fun record(name: String, argument: Any? = null) {
+        calls += name
+        arguments += argument
+    }
+
+    override fun load() = record("load")
+    override fun studyOffline() = record("studyOffline")
+    override fun toggleLessonSelection(assignmentId: Long) = record("toggleLessonSelection", assignmentId)
+    override fun toggleLessonTypeSelection(type: SubjectType) = record("toggleLessonTypeSelection", type)
+    override fun setLessonSort(sort: LessonSort) = record("setLessonSort", sort)
+    override fun selectFirst(count: Int) = record("selectFirst", count)
+    override fun selectAll() = record("selectAll")
+    override fun selectNone() = record("selectNone")
+    override fun startSelectedLessons() = record("startSelectedLessons")
+    override fun onStudyCardSwiped(index: Int) = record("onStudyCardSwiped", index)
+    override fun nextStudyCard() = record("nextStudyCard")
+    override fun previousStudyCard() = record("previousStudyCard")
+    override fun onAnswerInputChange(value: String) = record("onAnswerInputChange", value)
+    override fun submitAnswer() = record("submitAnswer")
+    override fun dontKnowAnswer() = record("dontKnowAnswer")
+    override fun undoLastAnswer() = record("undoLastAnswer")
+    override fun onContinue() = record("onContinue")
+    override fun toggleDetails() = record("toggleDetails")
+    override fun closeDetails() = record("closeDetails")
+    override fun continueSession() = record("continueSession")
+    override fun finishForNow() = record("finishForNow")
+    override fun practiceMissedItems() = record("practiceMissedItems")
+    override fun finishSessionNow() = record("finishSessionNow")
+    override fun abandonSession() = record("abandonSession")
 }

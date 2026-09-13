@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.feature.search
 
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.LocalOpenSubjectDetail
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
@@ -96,11 +97,11 @@ fun SubjectSearchOverlay(
     onActiveChange: (Boolean) -> Unit,
     uiState: SearchUiState,
     onQueryChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    onSubjectClick: (Long) -> Unit = {}
+    modifier: Modifier = Modifier
 ) {
     val queryFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val openSubjectDetail = LocalOpenSubjectDetail.current
     LaunchedEffect(active) {
         if (active) {
             onQueryChange("")
@@ -305,7 +306,7 @@ fun SubjectSearchOverlay(
                                 items(uiState.results, key = { it.subjectId }) { subject ->
                                     SubjectResultRow(subject) { subjectId ->
                                         focusManager.clearFocus()
-                                        onSubjectClick(subjectId)
+                                        openSubjectDetail(subjectId)
                                     }
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }

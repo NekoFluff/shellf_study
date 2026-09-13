@@ -1,5 +1,8 @@
 package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
 
+import com.crazyfluff.shellfstudy.shared.designsystem.text.LocalShareText
+import com.crazyfluff.shellfstudy.shared.designsystem.time.LocalClock
+import kotlin.time.Clock
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.ResolveInfo
@@ -32,6 +35,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunc
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.DisplaySettings
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectStatsTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRowTestTags
@@ -41,7 +46,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
-import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderTestTags
@@ -377,15 +381,16 @@ class SubjectDetailContentTest {
             pitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
         )
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = vocabDetail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                showPitchAccent = true
-            )
+            CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(showPitchAccent = true)) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                )
+            }
         }
 
         composeTestRule.onNodeWithTag(PitchAccentTestTags.DIAGRAM).assertIsDisplayed()
@@ -405,15 +410,16 @@ class SubjectDetailContentTest {
             )
         )
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = vocabDetail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                showPitchAccent = true
-            )
+            CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(showPitchAccent = true)) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                )
+            }
         }
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(1)
@@ -432,15 +438,16 @@ class SubjectDetailContentTest {
             pitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
         )
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = vocabDetail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                showPitchAccent = false
-            )
+            CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(showPitchAccent = false)) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                )
+            }
         }
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
@@ -455,15 +462,16 @@ class SubjectDetailContentTest {
             pitchAccents = PitchAccentUiState.Unavailable
         )
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = vocabDetail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                showPitchAccent = true
-            )
+            CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(showPitchAccent = true)) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                )
+            }
         }
 
         composeTestRule.onAllNodesWithTag(PitchAccentTestTags.DIAGRAM).assertCountEquals(0)
@@ -479,15 +487,16 @@ class SubjectDetailContentTest {
             pitchAccents = PitchAccentUiState.Unavailable
         )
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = vocabDetail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                showPitchAccent = false
-            )
+            CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(showPitchAccent = false)) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                )
+            }
         }
 
         composeTestRule.onAllNodesWithText("Pitch accent not available").assertCountEquals(0)
@@ -513,15 +522,16 @@ class SubjectDetailContentTest {
         val player = FakePronunciationAudioPlayer()
         composeTestRule.setContent {
             CompositionLocalProvider(LocalPronunciationAudioPlayer provides player) {
-                SubjectDetailContent(
-                    detail = vocabDetail,
-                    relatedSubjects = emptyMap(),
-                    revealMode = DetailRevealMode.FULL,
-                    isAnswered = true,
-                    questionType = null,
-                    onRelatedSubjectClick = {},
-                    restrictAudioToMp3 = false
-                )
+                CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(restrictAudioToMp3 = false)) {
+                    SubjectDetailContent(
+                        detail = vocabDetail,
+                        relatedSubjects = emptyMap(),
+                        revealMode = DetailRevealMode.FULL,
+                        isAnswered = true,
+                        questionType = null,
+                        onRelatedSubjectClick = {},
+                    )
+                }
             }
         }
 
@@ -548,15 +558,16 @@ class SubjectDetailContentTest {
         )
         composeTestRule.setContent {
             CompositionLocalProvider(LocalPronunciationAudioPlayer provides FakePronunciationAudioPlayer()) {
-                SubjectDetailContent(
-                    detail = vocabDetail,
-                    relatedSubjects = emptyMap(),
-                    revealMode = DetailRevealMode.FULL,
-                    isAnswered = true,
-                    questionType = null,
-                    onRelatedSubjectClick = {},
-                    restrictAudioToMp3 = true
-                )
+                CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(restrictAudioToMp3 = true)) {
+                    SubjectDetailContent(
+                        detail = vocabDetail,
+                        relatedSubjects = emptyMap(),
+                        revealMode = DetailRevealMode.FULL,
+                        isAnswered = true,
+                        questionType = null,
+                        onRelatedSubjectClick = {},
+                    )
+                }
             }
         }
 
@@ -585,16 +596,16 @@ class SubjectDetailContentTest {
         val player = FakePronunciationAudioPlayer()
         composeTestRule.setContent {
             CompositionLocalProvider(LocalPronunciationAudioPlayer provides player) {
-                SubjectDetailContent(
-                    detail = vocabDetail,
-                    relatedSubjects = emptyMap(),
-                    revealMode = DetailRevealMode.FULL,
-                    isAnswered = true,
-                    questionType = null,
-                    onRelatedSubjectClick = {},
-                    showPitchAccent = true,
-                    restrictAudioToMp3 = false
-                )
+                CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(showPitchAccent = true, restrictAudioToMp3 = false)) {
+                    SubjectDetailContent(
+                        detail = vocabDetail,
+                        relatedSubjects = emptyMap(),
+                        revealMode = DetailRevealMode.FULL,
+                        isAnswered = true,
+                        questionType = null,
+                        onRelatedSubjectClick = {},
+                    )
+                }
             }
         }
 
@@ -608,15 +619,16 @@ class SubjectDetailContentTest {
         val vocabDetail = detail.copy(subjectType = SubjectType.VOCABULARY, readings = listOf("みず"), pronunciationAudios = emptyList())
         composeTestRule.setContent {
             CompositionLocalProvider(LocalPronunciationAudioPlayer provides FakePronunciationAudioPlayer()) {
-                SubjectDetailContent(
-                    detail = vocabDetail,
-                    relatedSubjects = emptyMap(),
-                    revealMode = DetailRevealMode.FULL,
-                    isAnswered = true,
-                    questionType = null,
-                    onRelatedSubjectClick = {},
-                    restrictAudioToMp3 = false
-                )
+                CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(restrictAudioToMp3 = false)) {
+                    SubjectDetailContent(
+                        detail = vocabDetail,
+                        relatedSubjects = emptyMap(),
+                        revealMode = DetailRevealMode.FULL,
+                        isAnswered = true,
+                        questionType = null,
+                        onRelatedSubjectClick = {},
+                    )
+                }
             }
         }
 
@@ -641,6 +653,31 @@ class SubjectDetailContentTest {
 
         composeTestRule.onNodeWithTag(StrokeOrderTestTags.SECTION).assertIsDisplayed()
         composeTestRule.onNodeWithTag(StrokeOrderTestTags.DIAGRAM).assertIsDisplayed()
+    }
+
+    @Test
+    fun strokeOrderAvailable_hiddenWhenTheSettingIsOff() {
+        // The gate lives inside SubjectWritingZone, which reads LocalDisplaySettings directly — this is
+        // what makes the app-wide local load-bearing rather than decorative, and there was no test for
+        // the "off" direction (the positive case above passes on the local's default alone).
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(showStrokeOrder = false)) {
+                SubjectDetailContent(
+                    detail = detail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                    strokeOrder = StrokeOrderUiState.Available(
+                        listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f))
+                    )
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag(StrokeOrderTestTags.SECTION).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(StrokeOrderTestTags.DIAGRAM).assertCountEquals(0)
     }
 
     @Test
@@ -818,19 +855,31 @@ class SubjectDetailContentTest {
 
     @Test
     fun nextReviewInThePast_showsAvailableNow() {
+        // Dated far enough ahead that a composable reading the real clock instead of LocalClock would
+        // take the future branch — so this is proof of the wiring rather than a coincidence of the
+        // fixture happening to sit in the past. The date only needs to stay ahead of "today" for the
+        // wiring to remain under test; the assertion itself never depends on the real clock.
+        val now = Instant.parse("2098-06-01T12:00:00.000000Z")
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = detail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                assignmentStats = lessonedAssignmentStats.copy(nextReviewAt = Clock.System.now() - 1.hours)
-            )
+            CompositionLocalProvider(LocalClock provides FixedClock(now)) {
+                SubjectDetailContent(
+                    detail = detail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                    assignmentStats = lessonedAssignmentStats.copy(nextReviewAt = now - 1.hours)
+                )
+            }
         }
 
         composeTestRule.onNodeWithText("Available now").performScrollTo().assertIsDisplayed()
+    }
+
+    /** A [Clock] frozen at one instant, so a composable's "now" is whatever the test says it is. */
+    private class FixedClock(private val instant: Instant) : Clock {
+        override fun now(): Instant = instant
     }
 
     @Test
@@ -962,6 +1011,37 @@ class SubjectDetailContentTest {
     }
 
     @Test
+    fun contextSentenceLookupButton_usesTheProvidedShareSinkInsteadOfThePlatformOne() {
+        // LocalShareText exists so a test can assert *what* the app chose to share, which the
+        // ACTION_PROCESS_TEXT assertions above cannot express — they assert the intent the platform
+        // implementation happened to build, not the payload handed to it.
+        val shared = mutableListOf<String>()
+        val vocabDetail = detail.copy(
+            subjectType = SubjectType.VOCABULARY,
+            readings = listOf("みず"),
+            contextSentences = listOf(ContextSentence(japanese = "水を飲みます。", english = "I drink water."))
+        )
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalShareText provides { text -> shared += text }) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag(ContextSentenceRowTestTags.SHARE_BUTTON).performScrollTo().performClick()
+
+        assertThat(shared).containsExactly("水を飲みます。")
+        // The provided sink really did take precedence: nothing went out through the platform path.
+        assertThat(shadowOf(composeTestRule.activity).nextStartedActivity).isNull()
+    }
+
+    @Test
     fun contextSentenceLookupButton_opensPlayStoreListing_whenAkebiNotInstalled() {
         // No Akebi resolver registered — Robolectric resolves nothing by default, exercising the
         // "Akebi not installed" fallback path. Register just enough resolvability for the
@@ -1008,15 +1088,16 @@ class SubjectDetailContentTest {
             contextSentences = listOf(ContextSentence(japanese = "水を飲みます。", english = "I drink water."))
         )
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = vocabDetail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                hideContextSentenceTranslations = true
-            )
+            CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(hideContextSentenceTranslations = true)) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                )
+            }
         }
 
         // Redacted state is clickable to reveal; can't assert the transparent-text/rounded-bar
@@ -1037,15 +1118,16 @@ class SubjectDetailContentTest {
             contextSentences = listOf(ContextSentence(japanese = "水を飲みます。", english = "I drink water."))
         )
         composeTestRule.setContent {
-            SubjectDetailContent(
-                detail = vocabDetail,
-                relatedSubjects = emptyMap(),
-                revealMode = DetailRevealMode.FULL,
-                isAnswered = true,
-                questionType = null,
-                onRelatedSubjectClick = {},
-                hideContextSentenceTranslations = false
-            )
+            CompositionLocalProvider(LocalDisplaySettings provides DisplaySettings(hideContextSentenceTranslations = false)) {
+                SubjectDetailContent(
+                    detail = vocabDetail,
+                    relatedSubjects = emptyMap(),
+                    revealMode = DetailRevealMode.FULL,
+                    isAnswered = true,
+                    questionType = null,
+                    onRelatedSubjectClick = {},
+                )
+            }
         }
 
         composeTestRule.onNodeWithText("I drink water.").performScrollTo().assertIsDisplayed()

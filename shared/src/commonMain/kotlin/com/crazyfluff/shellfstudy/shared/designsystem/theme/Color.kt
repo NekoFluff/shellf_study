@@ -29,6 +29,21 @@ object SrsStageColors {
     val Locked = Color(0xFF9E9E9E)
 }
 
+/**
+ * Dark-theme variants of [SrsStageColors]. Only the two that fall below the 3:1 UI-component
+ * contrast guideline against the dark surface differ — Master (#6A1B9A, 1.82:1) and Burned
+ * (#B71C1C, 2.61:1). The rest already clear it there, so they are reused rather than shifted for
+ * consistency's sake. `SrsStageColorContrastTest` holds both palettes to the bar.
+ */
+object SrsStageColorsDark {
+    val Locked = SrsStageColors.Locked
+    val Apprentice = SrsStageColors.Apprentice
+    val Guru = SrsStageColors.Guru
+    val Master = Color(0xFF9E6BBD)
+    val Enlightened = SrsStageColors.Enlightened
+    val Burned = Color(0xFFD06B6B)
+}
+
 /** Accent for "Correct!" feedback text and success icons in quiz flows. */
 val CorrectAnswerColor = SubjectTypeColors.Radical
 val CorrectAnswerColorDark = Color(0xFF2E2E2E)

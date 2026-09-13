@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.feature.dashboard
 
+import com.crazyfluff.shellfstudy.shared.designsystem.time.LocalClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -54,7 +55,6 @@ import kotlinx.datetime.format.MonthNames
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.roundToInt
-import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
@@ -64,6 +64,15 @@ private val DAY_MS_CHART = 24.hours.inWholeMilliseconds
 // bar/day would already have at least this much room, so there's nowhere useful left to zoom to.
 private val MIN_POINT_SPACING = 32.dp
 private val Y_AXIS_WIDTH = 36.dp
+
+/** WaniKani tops out at level 60. The Y axis is pinned to it rather than auto-scaled to whoever is
+ *  furthest along, so two users' curves stay comparable — and so a lone high-level racer doesn't
+ *  squash everyone else into the bottom tenth of the plot. */
+private const val WANIKANI_MAX_LEVEL = 60
+
+/** The labelled Y-axis gridlines. Every tenth level, stopping short of [WANIKANI_MAX_LEVEL] so the
+ *  top label doesn't collide with the plot's edge. */
+private val LEVEL_AXIS_TICKS = listOf(10, 20, 30, 40, 50)
 
 private fun formatMonthYear(epochMillis: Long): String {
     val dt = Instant.fromEpochMilliseconds(epochMillis)
@@ -129,7 +138,7 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
     val usersWithData = leaderboard.entries.filter { it.levelTimeline.isNotEmpty() }
     if (usersWithData.isEmpty()) return
 
-    val nowMillis = Clock.System.now().toEpochMilliseconds()
+    val nowMillis = LocalClock.current.now().toEpochMilliseconds()
     val window = leaderboard.window
     val windowStartMs = when (window) {
         LeaderboardWindow.WEEK -> nowMillis - 7 * DAY_MS_CHART
@@ -198,8 +207,8 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                 // Fixed Y-axis — stays in place while the plot is panned/zoomed.
                 Canvas(Modifier.width(Y_AXIS_WIDTH).fillMaxHeight()) {
                     val plotH = size.height - 20.dp.toPx()
-                    val maxLvl = 60f
-                    for (lvl in listOf(10, 20, 30, 40, 50)) {
+                    val maxLvl = WANIKANI_MAX_LEVEL.toFloat()
+                    for (lvl in LEVEL_AXIS_TICKS) {
                         val y = plotH * (1f - lvl / maxLvl)
                         val lr = textMeasurer.measure("$lvl", labelStyle)
                         drawText(lr, labelColor, Offset(0f, y - lr.size.height / 2f))
@@ -237,14 +246,14 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
                 ) {
                     val w = size.width
                     val plotH = size.height - 20.dp.toPx()
-                    val maxLvl = 60f
+                    val maxLvl = WANIKANI_MAX_LEVEL.toFloat()
                     val contentW = w * scale
 
                     fun xOf(ms: Long) = (ms - globalMinMs).toFloat() / timeRange * contentW + offsetX
                     fun yOf(lvl: Int) = plotH * (1f - lvl / maxLvl)
 
                     // Horizontal grid lines
-                    for (lvl in listOf(10, 20, 30, 40, 50)) {
+                    for (lvl in LEVEL_AXIS_TICKS) {
                         drawLine(gridColor, Offset(0f, yOf(lvl)), Offset(w, yOf(lvl)), 1.dp.toPx())
                     }
 
@@ -361,7 +370,7 @@ private fun ActivityWindowChart(
 ) {
     if (leaderboard.entries.isEmpty()) return
 
-    val nowMillis = Clock.System.now().toEpochMilliseconds()
+    val nowMillis = LocalClock.current.now().toEpochMilliseconds()
     val entries = leaderboard.entries
 
     val bars = buildActivityBars(entries, leaderboard.metric, leaderboard.window, nowMillis)

@@ -943,23 +943,6 @@ class ReviewViewModelTest {
         assertThat(reviewSessionRepository.load()).isNull()
     }
 
-    @Test
-    fun `showSubjectTypeLabel, showTotalTimer, and showQuestionTimer settings flow into uiState`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowSubjectTypeLabel(true)
-        settingsRepository.setShowTotalTimer(true)
-        settingsRepository.setShowQuestionTimer(true)
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showSubjectTypeLabel || !state.settings.showTotalTimer || !state.settings.showQuestionTimer) state = awaitItem()
-            assertThat(state.settings.showSubjectTypeLabel).isTrue()
-            assertThat(state.settings.showTotalTimer).isTrue()
-            assertThat(state.settings.showQuestionTimer).isTrue()
-        }
-    }
 
     @Test
     fun `answering a reading question with the setting on surfaces the reading for the hint`() = runTest(mainDispatcherRule.dispatcher) {
@@ -970,7 +953,7 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
             // Queue order is shuffled — answer meaning questions correctly until reading comes up.
             while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
                 viewModel.onAnswerInputChange("Testword")
@@ -1032,7 +1015,7 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
             while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.MEANING) {
                 viewModel.onAnswerInputChange("けんあ")
                 awaitItem()
@@ -1063,7 +1046,7 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
             while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
                 viewModel.onAnswerInputChange("Water")
                 awaitItem()
@@ -1092,7 +1075,7 @@ class ReviewViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading) || !state.settings.showAnswerReadingPitchAccent) state = awaitItem()
+            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
             while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
                 viewModel.onAnswerInputChange("Testword")
                 awaitItem()

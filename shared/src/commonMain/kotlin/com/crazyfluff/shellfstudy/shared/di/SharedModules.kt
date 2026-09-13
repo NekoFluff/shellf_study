@@ -177,7 +177,6 @@ val viewModelModule = module {
         SubjectDetailViewModel(
             subjectRepository = get(),
             assignmentRepository = get(),
-            settingsRepository = get(),
             audioPlayer = get(),
             strokeOrderRepository = get(),
             statsRepository = get()

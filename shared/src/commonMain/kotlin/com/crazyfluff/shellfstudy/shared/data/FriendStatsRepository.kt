@@ -125,7 +125,7 @@ internal fun computeAvgDaysPerLevel(sortedProgressions: List<Pair<Int, String>>)
 }
 
 internal data class StatsCore(
-    val reviewAccuracy: Float,
+    val reviewAccuracy: Float?,
     val avgDaysPerLevel: Float?,
     val daysSinceStart: Int?,
     val timeline: List<TimelinePointJson>,
@@ -157,7 +157,7 @@ internal fun buildStatsCore(
     val learnedCounts = computeWindowedCounts(learnedBuckets)
     val burnedCounts = computeWindowedCounts(burnedBuckets)
 
-    val accuracy = if (totalAttempts > 0) totalCorrect / totalAttempts else -1f
+    val accuracy = if (totalAttempts > 0) totalCorrect / totalAttempts else null
 
     val avgDaysPerLevel = computeAvgDaysPerLevel(sortedProgressions)
     val daysSinceStart = sortedProgressions.firstOrNull()?.let { (_, unlockedAt) ->
@@ -190,6 +190,13 @@ internal fun buildStatsCore(
     )
 }
 
+/**
+ * A friend a [FriendStatsRepository.refreshAllIfStale] fan-out could not update. Carries the nickname
+ * so a caller can name who is missing rather than only how many, and the original [ApiResult.Error]
+ * so [isAuthError] still identifies a revoked token.
+ */
+data class FriendStatsRefreshFailure(val nickname: String, val error: ApiResult.Error)
+
 class FriendStatsRepository(
     private val friendRepository: FriendRepository,
     private val friendStatsDao: FriendStatsDao,
@@ -197,7 +204,13 @@ class FriendStatsRepository(
     private val selfAssignmentDao: AssignmentDao,
     private val selfReviewStatisticDao: ReviewStatisticDao,
     private val selfLevelProgressionDao: LevelProgressionDao,
-    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * Builds the client for one friend's token. Injectable so a test can aim a friend's requests at
+     * a MockEngine — the refresh path otherwise builds its own client, which left the partial-fetch
+     * behaviour in [fetchFriendStats] unreachable from a test.
+     */
+    private val friendApiFactory: (String) -> WaniKaniApi = { token -> createFriendWaniKaniApi(token, json) }
 ) {
     // Pre-built self-stats flow; shared across all observeLeaderboard subscriptions so Room
     // doesn't open duplicate queries when metric/window changes (only the re-sort changes).
@@ -243,36 +256,58 @@ class FriendStatsRepository(
                 .sorted(by = metric, window = window)
         }.flowOn(defaultDispatcher)
 
-    suspend fun refreshAllIfStale(force: Boolean = false) {
+    /**
+     * Refreshes every friend whose cached figures have fallen outside [FRIEND_STATS_TTL], or all of
+     * them when [force] is set.
+     *
+     * Returns the friends that could *not* be refreshed rather than returning [Unit]: a fan-out that
+     * discards [refreshFriend]'s per-friend [ApiResult] cannot distinguish "everyone is current" from
+     * "everyone failed", which is how the dashboard's background refresh came to swallow revoked
+     * tokens silently while the leaderboard's identical-looking refresh reported them. An empty list
+     * means every friend that needed refreshing now is.
+     */
+    suspend fun refreshAllIfStale(force: Boolean = false): List<FriendStatsRefreshFailure> {
         val friends = friendRepository.friendsFlow.first()
-        coroutineScope {
+        // One clock reading for the whole fan-out. Taking it per friend made the staleness decision
+        // depend on how long the friends ahead of them took to refresh, so a friend could be judged
+        // stale against a "now" that had already drifted past the TTL.
+        val nowMillis = Clock.System.now().toEpochMilliseconds()
+        return coroutineScope {
             friends.map { entry ->
                 async {
                     val cached = friendStatsDao.getById(entry.id)
-                    val nowMillis = Clock.System.now().toEpochMilliseconds()
                     val isStale = cached == null ||
                         (nowMillis - cached.fetchedAtMillis) > FRIEND_STATS_TTL.inWholeMilliseconds
-                    if (force || isStale) refreshFriend(entry)
+                    if (!force && !isStale) return@async null
+                    (refreshFriend(entry) as? ApiResult.Error)
+                        ?.let { FriendStatsRefreshFailure(entry.nickname, it) }
                 }
-            }.awaitAll()
+            }.awaitAll().filterNotNull()
         }
     }
 
     /**
-     * @return [ApiResult.Error] if the friend's token failed to decrypt, the API call failed, the
-     * response couldn't be parsed into stats, or the cache write itself failed — callers use this
-     * to distinguish "nothing new to fetch" from a real failure. Never throws (cancellation
-     * excepted): a bad token (e.g. a Keystore entry invalidated after a device unlock change) must
-     * not cancel sibling refreshes running in the same `coroutineScope`.
+     * @return [ApiResult.Error] if the friend's token failed to decrypt, any of the API calls
+     * failed, or the cache write itself failed — callers use this to distinguish "nothing new to
+     * fetch" from a real failure. The underlying failure is passed through rather than flattened
+     * into one generic message, so [isAuthError] still identifies a revoked token. Never throws
+     * (cancellation excepted): a bad token (e.g. a Keystore entry invalidated after a device unlock
+     * change) must not cancel sibling refreshes running in the same `coroutineScope`.
+     *
+     * The cache is written only when every fetch succeeded. A partial failure must not replace the
+     * friend's cached figures with zeros for whichever endpoints did answer — that is exactly how an
+     * offline refresh used to erase a friend's real stats.
      */
     suspend fun refreshFriend(entry: FriendEntry): ApiResult<Unit> {
         return try {
-            val token = friendRepository.decryptToken(entry)
-            val api = createFriendWaniKaniApi(token, json)
-            val entity = fetchFriendStats(entry.id, api)
-                ?: return ApiResult.Error("Couldn't fetch stats for ${entry.nickname}.")
-            friendStatsDao.upsert(entity)
-            ApiResult.Success(Unit)
+            val api = friendApiFactory(friendRepository.decryptToken(entry))
+            when (val result = fetchFriendStats(entry.id, api)) {
+                is ApiResult.Error -> result
+                is ApiResult.Success -> {
+                    friendStatsDao.upsert(result.data)
+                    ApiResult.Success(Unit)
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -284,40 +319,61 @@ class FriendStatsRepository(
         friendStatsDao.deleteById(id)
     }
 
-    private suspend fun fetchFriendStats(friendId: String, api: WaniKaniApi): FriendStatsEntity? {
-        val userResult = safeApiCall { api.getUser() }
-        val userData = (userResult as? ApiResult.Success)?.data?.data ?: return null
+    /**
+     * Fetches every endpoint a friend's stats are assembled from.
+     *
+     * Fails as a whole rather than degrading per endpoint: an empty assignment or statistics list
+     * means "this friend has none", which is indistinguishable from "that call failed", so treating
+     * a failure as an empty list silently cached a zeroed friend over real figures.
+     */
+    private suspend fun fetchFriendStats(friendId: String, api: WaniKaniApi): ApiResult<FriendStatsEntity> {
+        val userData = when (val userResult = safeApiCall { api.getUser() }) {
+            is ApiResult.Error -> return userResult
+            is ApiResult.Success -> userResult.data.data
+        }
 
         val nowMillis = Clock.System.now().toEpochMilliseconds()
 
         // All burned assignments → all-time + windowed burned counts
-        val burnedResult = safeApiCall {
-            collectAllPages(
-                firstPage = { api.getAssignments(burned = true) },
-                nextPage = { url -> api.getAssignmentsPage(url) }
-            )
+        val burnedItems = when (
+            val burnedResult = safeApiCall {
+                collectAllPages(
+                    firstPage = { api.getAssignments(burned = true) },
+                    nextPage = { url -> api.getAssignmentsPage(url) }
+                )
+            }
+        ) {
+            is ApiResult.Error -> return burnedResult
+            is ApiResult.Success -> burnedResult.data
         }
-        val burnedItems = (burnedResult as? ApiResult.Success)?.data ?: emptyList()
         val burnedTimestamps = burnedItems.map { it.data.burnedAt }
 
         // All started assignments → all-time + windowed learned counts
-        val learnedResult = safeApiCall {
-            collectAllPages(
-                firstPage = { api.getAssignments(started = true) },
-                nextPage = { url -> api.getAssignmentsPage(url) }
-            )
+        val learnedItems = when (
+            val learnedResult = safeApiCall {
+                collectAllPages(
+                    firstPage = { api.getAssignments(started = true) },
+                    nextPage = { url -> api.getAssignmentsPage(url) }
+                )
+            }
+        ) {
+            is ApiResult.Error -> return learnedResult
+            is ApiResult.Success -> learnedResult.data
         }
-        val learnedItems = (learnedResult as? ApiResult.Success)?.data ?: emptyList()
         val learnedTimestamps = learnedItems.map { it.data.startedAt }
 
         // Review statistics → accuracy + all-time totals
-        val statsResult = safeApiCall {
-            collectAllPages(
-                firstPage = { api.getReviewStatistics() },
-                nextPage = { url -> api.getReviewStatisticsPage(url) }
-            )
+        val statsItems = when (
+            val statsResult = safeApiCall {
+                collectAllPages(
+                    firstPage = { api.getReviewStatistics() },
+                    nextPage = { url -> api.getReviewStatisticsPage(url) }
+                )
+            }
+        ) {
+            is ApiResult.Error -> return statsResult
+            is ApiResult.Success -> statsResult.data
         }
-        val statsItems = (statsResult as? ApiResult.Success)?.data ?: emptyList()
         val totalCorrect = statsItems.sumOf { it.data.meaningCorrect + it.data.readingCorrect }.toFloat()
         val totalAttempts = statsItems.sumOf {
             it.data.meaningCorrect + it.data.meaningIncorrect +
@@ -325,11 +381,12 @@ class FriendStatsRepository(
         }
 
         // Level progressions → timeline + avg speed
-        val progressionsResult = safeApiCall { api.getLevelProgressions() }
-        val sortedProgressions = (progressionsResult as? ApiResult.Success)?.data?.data
-            ?.mapNotNull { item -> item.data.unlockedAt?.let { item.data.level to it } }
-            ?.sortedBy { it.second }
-            ?: emptyList()
+        val sortedProgressions = when (val progressionsResult = safeApiCall { api.getLevelProgressions() }) {
+            is ApiResult.Error -> return progressionsResult
+            is ApiResult.Success -> progressionsResult.data.data
+                .mapNotNull { item -> item.data.unlockedAt?.let { item.data.level to it } }
+                .sortedBy { it.second }
+        }
 
         val core = buildStatsCore(
             burnedTimestamps = burnedTimestamps,
@@ -342,28 +399,29 @@ class FriendStatsRepository(
 
         val timelineJson = json.encodeToString(ListSerializer(TimelinePointJson.serializer()), core.timeline)
 
-        return FriendStatsEntity(
-            friendId = friendId,
-            username = userData.username,
-            level = userData.level,
-            reviewAccuracy = core.reviewAccuracy,
-            avgDaysPerLevel = core.avgDaysPerLevel ?: -1f,
-            daysSinceStart = core.daysSinceStart ?: -1,
-            levelTimelineJson = timelineJson,
-            fetchedAtMillis = nowMillis,
-            learnedToday = core.learned.today,
-            learnedWeek = core.learned.week,
-            learnedMonth = core.learned.month,
-            learnedYear = core.learned.year,
-            learnedAllTime = core.learned.allTime,
-            burnedToday = core.burned.today,
-            burnedWeek = core.burned.week,
-            burnedMonth = core.burned.month,
-            burnedYear = core.burned.year,
-            burnedAllTime = core.burned.allTime,
-            totalReviews = totalAttempts,
-            learnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.learnedBuckets),
-            burnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.burnedBuckets)
+        return ApiResult.Success(
+            FriendStatsEntity(
+                friendId = friendId,
+                username = userData.username,
+                level = userData.level,
+                reviewAccuracy = core.reviewAccuracy,
+                avgDaysPerLevel = core.avgDaysPerLevel,
+                daysSinceStart = core.daysSinceStart,
+                levelTimelineJson = timelineJson,
+                fetchedAtMillis = nowMillis,
+                learnedToday = core.learned.today,
+                learnedWeek = core.learned.week,
+                learnedMonth = core.learned.month,
+                learnedYear = core.learned.year,
+                learnedAllTime = core.learned.allTime,
+                burnedToday = core.burned.today,
+                burnedWeek = core.burned.week,
+                burnedMonth = core.burned.month,
+                burnedYear = core.burned.year,
+                burnedAllTime = core.burned.allTime,
+                learnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.learnedBuckets),
+                burnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.burnedBuckets)
+            )
         )
     }
 
@@ -428,8 +486,8 @@ class FriendStatsRepository(
             username = username,
             level = level,
             reviewAccuracy = reviewAccuracy,
-            avgDaysPerLevel = if (avgDaysPerLevel < 0f) null else avgDaysPerLevel,
-            daysSinceStart = if (daysSinceStart < 0) null else daysSinceStart,
+            avgDaysPerLevel = avgDaysPerLevel,
+            daysSinceStart = daysSinceStart,
             levelTimeline = timeline,
             isCurrentUser = false,
             rosterIndex = rosterIndex,

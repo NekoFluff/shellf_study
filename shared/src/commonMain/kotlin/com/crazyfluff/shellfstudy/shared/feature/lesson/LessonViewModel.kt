@@ -80,7 +80,6 @@ enum class QuizRound { LESSON, CLEANUP }
 
 data class LessonUiState(
     val phase: Phase = Phase.Loading,
-    val settings: DisplaySettings = DisplaySettings(),
     // Deliberately not folded into Phase — leaving the screen is a one-shot navigation signal, not a
     // rendering mode. The screen keeps rendering whatever phase was showing for one more frame while
     // a LaunchedEffect(exit) fires the actual back-navigation. One sealed value rather than two
@@ -112,22 +111,6 @@ data class LessonUiState(
          *  resume it at the next batch. */
         data object Parked : ExitRequest
     }
-
-    /** Settings-derived display flags — hoisted here rather than duplicated into every [Phase]
-     *  variant, since they apply uniformly regardless of phase (never null/absent in one phase and
-     *  required in another) and are only ever read, never used to decide which phase to render. */
-    data class DisplaySettings(
-        val showPitchAccent: Boolean = true,
-        val showSubjectTypeLabel: Boolean = false,
-        val showTotalTimer: Boolean = false,
-        val showQuestionTimer: Boolean = false,
-        val useJapaneseKeyboard: Boolean = false,
-        val showAnswerReadingPitchAccent: Boolean = false,
-        // Carried into the UI so reading rows can select their own clip the same way playback
-        // autoplay does, instead of the screen having to know which of a word's clips are eligible.
-        val restrictAudioToMp3: Boolean = false,
-        val hideContextSentenceTranslations: Boolean = true
-    )
 
     sealed interface Phase {
         data object Loading : Phase
@@ -167,9 +150,7 @@ data class LessonUiState(
             val batchIndex: Int = 0,
             val batchCount: Int = 1,
             val strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap()
-        ) : Phase {
-            val isLastCardInBatch: Boolean get() = studyIndex == studyItems.lastIndex
-        }
+        ) : Phase
 
         data class Quiz(
             // Non-nullable by construction — a next-question decision always branches into either a
@@ -270,7 +251,7 @@ class LessonViewModel(
     private val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope
-) : ViewModel() {
+) : ViewModel(), LessonActions {
 
     private val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
@@ -369,23 +350,10 @@ class LessonViewModel(
     init {
         loadOrResume()
         viewModelScope.launch {
-            settingsRepository.settings.collect { settings ->
-                latestSettings = settings
-                _uiState.update {
-                    it.copy(
-                        settings = it.settings.copy(
-                            showPitchAccent = settings.showPitchAccent,
-                            showSubjectTypeLabel = settings.showSubjectTypeLabel,
-                            showTotalTimer = settings.showTotalTimer,
-                            showQuestionTimer = settings.showQuestionTimer,
-                            useJapaneseKeyboard = settings.useJapaneseKeyboard,
-                            showAnswerReadingPitchAccent = settings.showAnswerReadingPitchAccent,
-                            restrictAudioToMp3 = settings.restrictAudioToMp3,
-                            hideContextSentenceTranslations = settings.hideContextSentenceTranslations
-                        )
-                    )
-                }
-            }
+            // Only kept warm for the ViewModel's own use (see latestSettings): the display flags it
+            // used to mirror into the UI state are provided app-wide by LocalDisplaySettings instead,
+            // so a settings change no longer re-emits a whole LessonUiState.
+            settingsRepository.settings.collect { latestSettings = it }
         }
         // The study card and the quiz hint both read pitch accents from
         // LessonUiState.pitchAccentsBySubjectId, which this collector keeps live off the repository's
@@ -462,7 +430,7 @@ class LessonViewModel(
 
     /** Explicit fresh fetch — bound to the error screen's retry action, so it always discards any
      *  persisted quiz-in-progress rather than resuming a session that may be what's broken. */
-    fun load() {
+    override fun load() {
         viewModelScope.launch {
             _uiState.update { LessonUiState() }
             assignmentRepository.warmSrsSystemCache()
@@ -728,7 +696,7 @@ class LessonViewModel(
     /** Bound to the error screen's "Study offline" action — builds the lesson queue from whatever
      *  was cached as of the last successful sync instead of retrying the network refresh that just
      *  failed in [fetchFreshQueue]. */
-    fun studyOffline() {
+    override fun studyOffline() {
         viewModelScope.launch {
             clearSessionState()
             buildLessonSelectionFromCache()
@@ -742,7 +710,7 @@ class LessonViewModel(
         }
     }
 
-    fun toggleLessonSelection(assignmentId: Long) {
+    override fun toggleLessonSelection(assignmentId: Long) {
         updateSelect { select ->
             val selected = select.selectedAssignmentIds.toMutableSet()
             if (!selected.add(assignmentId)) selected.remove(assignmentId)
@@ -750,16 +718,16 @@ class LessonViewModel(
         }
     }
 
-    fun selectFirst(n: Int) {
-        updateSelect { select -> select.copy(selectedAssignmentIds = select.availableLessons.take(n).map { it.assignmentId }.toSet()) }
+    override fun selectFirst(count: Int) {
+        updateSelect { select -> select.copy(selectedAssignmentIds = select.availableLessons.take(count).map { it.assignmentId }.toSet()) }
     }
 
     /** Selects everything on offer. */
-    fun selectAll() {
+    override fun selectAll() {
         updateSelect { select -> select.copy(selectedAssignmentIds = select.availableLessons.map { it.assignmentId }.toSet()) }
     }
 
-    fun selectNone() {
+    override fun selectNone() {
         updateSelect { select -> select.copy(selectedAssignmentIds = emptySet()) }
     }
 
@@ -767,7 +735,7 @@ class LessonViewModel(
      *  tap. A partially selected type completes rather than clearing, so the first tap always lands
      *  on "all of them" and only a fully selected type empties. No-op for a type the queue has none
      *  of. */
-    fun toggleLessonTypeSelection(type: SubjectType) {
+    override fun toggleLessonTypeSelection(type: SubjectType) {
         updateSelect { select ->
             val assignmentIds = select.availableLessons
                 .filter { it.subjectType == type }
@@ -787,7 +755,7 @@ class LessonViewModel(
     /** Re-orders the picker's queue. Selection is untouched — it's a set of assignment ids, so the
      *  same lessons stay selected and simply sit in a different order (which is what the slider's
      *  "first N" and the session's batch slicing then follow). */
-    fun setLessonSort(sort: LessonSort) {
+    override fun setLessonSort(sort: LessonSort) {
         updateSelect { select ->
             if (select.sort == sort) return@updateSelect select
             select.copy(
@@ -804,7 +772,7 @@ class LessonViewModel(
 
     /** Commits to a session: the selection becomes a frozen plan, sliced into batches, and the first
      *  batch's flashcards open. */
-    fun startSelectedLessons() {
+    override fun startSelectedLessons() {
         val select = _uiState.value.phase as? LessonUiState.Phase.Select ?: return
         val selected = select.availableLessons.filter { it.assignmentId in select.selectedAssignmentIds }
         if (selected.isEmpty()) return
@@ -878,14 +846,14 @@ class LessonViewModel(
         }
     }
 
-    fun onStudyCardSwiped(index: Int) {
+    override fun onStudyCardSwiped(index: Int) {
         val study = _uiState.value.phase as? LessonUiState.Phase.Study ?: return
         if (index !in study.studyItems.indices) return
         updateStudy { it.copy(studyIndex = index) }
         viewModelScope.launch { persistStudySnapshot(index) }
     }
 
-    fun nextStudyCard() {
+    override fun nextStudyCard() {
         val study = _uiState.value.phase as? LessonUiState.Phase.Study ?: return
         val nextIndex = study.studyIndex + 1
         if (nextIndex >= study.studyItems.size) {
@@ -896,7 +864,7 @@ class LessonViewModel(
         }
     }
 
-    fun previousStudyCard() {
+    override fun previousStudyCard() {
         val study = _uiState.value.phase as? LessonUiState.Phase.Study ?: return
         if (study.studyIndex == 0) return
         val previousIndex = study.studyIndex - 1
@@ -973,11 +941,11 @@ class LessonViewModel(
         persistCurrentState()
     }
 
-    fun onAnswerInputChange(value: String) {
+    override fun onAnswerInputChange(value: String) {
         updateQuiz { it.copy(answerInput = value) }
     }
 
-    fun submitAnswer() {
+    override fun submitAnswer() {
         val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
         if (quiz.feedback != null) return
         val item = quiz.currentItem
@@ -1000,7 +968,7 @@ class LessonViewModel(
     }
 
     /** Gives up on the current question — treated the same as a wrong answer, requeued for another pass. */
-    fun dontKnowAnswer() {
+    override fun dontKnowAnswer() {
         val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
         if (quiz.feedback != null) return
         val item = quiz.currentItem
@@ -1016,7 +984,7 @@ class LessonViewModel(
      *  submission isn't deferred to Continue the way a review grade is, so by the time feedback is
      *  showing it's already committed. The queue/progress mutation for the incorrect-answer case
      *  is shared via [undoLastIncorrectAnswer]. */
-    fun undoLastAnswer() {
+    override fun undoLastAnswer() {
         val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
         val item = quiz.currentItem
         val type = quiz.currentQuestionType
@@ -1244,20 +1212,20 @@ class LessonViewModel(
         }
     }
 
-    fun onContinue() {
+    override fun onContinue() {
         viewModelScope.launch { advanceQuiz() }
     }
 
-    fun toggleDetails() {
+    override fun toggleDetails() {
         updateQuiz { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
     }
 
-    fun closeDetails() {
+    override fun closeDetails() {
         updateQuiz { it.copy(isDetailsExpanded = false) }
     }
 
     /** Walks from a just-finished batch into the next one — the checkpoint's primary action. */
-    fun continueSession() {
+    override fun continueSession() {
         val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
         val next = checkpoint.next as? LessonUiState.Phase.BatchComplete.NextStep.StudyBatch ?: return
         viewModelScope.launch { enterStudyPhase(next.batchIndex) }
@@ -1267,14 +1235,14 @@ class LessonViewModel(
      *  here — [enterCheckpoint] already persisted the checkpoint — so this only asks the screen to
      *  navigate back, where the dashboard will offer to resume at the next batch. Refuses on the final
      *  checkpoint, where the exits are the cleanup pass or the summary, not a park. */
-    fun finishForNow() {
+    override fun finishForNow() {
         val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
         if (checkpoint.next !is LessonUiState.Phase.BatchComplete.NextStep.StudyBatch) return
         _uiState.update { it.copy(exit = LessonUiState.ExitRequest.Parked) }
     }
 
     /** Declines the final checkpoint's extra practice and shows the session summary. */
-    fun finishSessionNow() {
+    override fun finishSessionNow() {
         val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
         if (checkpoint.next !is LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed) return
         viewModelScope.launch { finishSession() }
@@ -1287,7 +1255,7 @@ class LessonViewModel(
      *  was already committed, so answering it can neither start a lesson twice (startedAssignmentIds)
      *  nor clear the miss flags that made the item count as missed in the first place. The pass exists
      *  purely to give the session's weakest items one more retrieval. */
-    fun practiceMissedItems() {
+    override fun practiceMissedItems() {
         val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
         if (checkpoint.next !is LessonUiState.Phase.BatchComplete.NextStep.PracticeMissed) return
         viewModelScope.launch {
@@ -1338,7 +1306,7 @@ class LessonViewModel(
 
     /** Discards a persisted in-progress lesson session (study, quiz, or a parked checkpoint) and
      *  exits — a clean slate next time. Mirrors ReviewViewModel.abandonSession. */
-    fun abandonSession() {
+    override fun abandonSession() {
         viewModelScope.launch {
             sessionController.abandon()
             clearSessionState()

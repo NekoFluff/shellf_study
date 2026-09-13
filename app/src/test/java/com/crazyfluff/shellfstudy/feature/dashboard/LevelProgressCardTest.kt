@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.feature.dashboard
 
+import androidx.compose.runtime.CompositionLocalProvider
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.LocalOpenSubjectDetail
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
@@ -91,7 +93,12 @@ class LevelProgressCardTest {
     fun tappingItemChip_invokesOnSubjectClickWithItsSubjectId() {
         var clickedSubjectId: Long? = null
         composeTestRule.setContent {
-            LevelProgressCard(progress = sampleProgress, onSubjectClick = { clickedSubjectId = it })
+            // The card reads the app-wide opener rather than taking a callback, so this provides it —
+            // which also means the test now exercises the real capability instead of a parameter that
+            // only existed to be passed straight back out.
+            CompositionLocalProvider(LocalOpenSubjectDetail provides { clickedSubjectId = it }) {
+                LevelProgressCard(progress = sampleProgress)
+            }
         }
 
         composeTestRule.onNodeWithTag(LevelProgressTestTags.EXPAND_TOGGLE_BUTTON).performClick()
@@ -106,7 +113,12 @@ class LevelProgressCardTest {
         // explicit rather than relying on zero-height chips being unhittable.
         var clickedSubjectId: Long? = null
         composeTestRule.setContent {
-            LevelProgressCard(progress = sampleProgress, onSubjectClick = { clickedSubjectId = it })
+            // The card reads the app-wide opener rather than taking a callback, so this provides it —
+            // which also means the test now exercises the real capability instead of a parameter that
+            // only existed to be passed straight back out.
+            CompositionLocalProvider(LocalOpenSubjectDetail provides { clickedSubjectId = it }) {
+                LevelProgressCard(progress = sampleProgress)
+            }
         }
 
         composeTestRule.onNodeWithTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + (SubjectType.KANJI.ordinal * 1000L + 1))

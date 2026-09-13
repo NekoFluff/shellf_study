@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.feature.dashboard
 
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.LocalOpenSubjectDetail
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.background
@@ -77,7 +78,6 @@ fun LevelProgressCard(
     maxLevel: Int? = null,
     levelUpProgress: LevelUpProgress? = null,
     onLevelChange: (Int) -> Unit = {},
-    onSubjectClick: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (progress == null) return
@@ -132,7 +132,6 @@ fun LevelProgressCard(
                 SubjectTypeProgressRow(
                     entry,
                     showDetail = expanded,
-                    onSubjectClick = onSubjectClick,
                     levelUpProgress = relevantLevelUpProgress
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -145,10 +144,10 @@ fun LevelProgressCard(
 private fun SubjectTypeProgressRow(
     entry: SubjectTypeProgress,
     showDetail: Boolean,
-    onSubjectClick: (Long) -> Unit,
     levelUpProgress: LevelUpProgress? = null
 ) {
     val accent = subjectColor(entry.subjectType)
+    val openSubjectDetail = LocalOpenSubjectDetail.current
     val (doneCount, inProgressCount, lockedCount) = barSegmentCounts(entry)
     // entry.totalCount and levelUpProgress.kanjiTotal are both drawn from the same unfiltered
     // (locked-items-included) per-level assignment set, so this mark lines up exactly with the
@@ -224,7 +223,7 @@ private fun SubjectTypeProgressRow(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxWidth().testTag(LevelProgressTestTags.DETAIL_PREFIX + entry.subjectType.name)
                     ) {
-                        entry.items.forEach { item -> LevelItemChip(item, enabled = showDetail, onClick = onSubjectClick) }
+                        entry.items.forEach { item -> LevelItemChip(item, enabled = showDetail, onClick = openSubjectDetail) }
                     }
                 }
             }

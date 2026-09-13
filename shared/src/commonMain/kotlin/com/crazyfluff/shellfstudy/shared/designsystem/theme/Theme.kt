@@ -57,10 +57,22 @@ val LocalDarkTheme = staticCompositionLocalOf { false }
  *  ships. Defaults to [FontFamily.Default] outside of [ShellfStudyTheme] (e.g. previews/tests). */
 val LocalJapaneseFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
 
-/** Returns [einkValue] under the e-ink theme, [default] otherwise. */
+/**
+ * Resolves a colour that the light palette defines but the other two themes cannot reuse.
+ *
+ * [darkValue] deliberately defaults to [default] rather than to [einkValue]: an e-ink stand-in is
+ * usually a near-black grayscale (see `CorrectAnswerColorDark`, 1.26:1 on the dark surface), so
+ * treating it as the dark value would be a regression rather than a fix. Call sites that genuinely
+ * need a separate dark colour pass one; the rest keep their light value in dark mode and stay
+ * readable because most of this palette already clears the 3:1 UI-component guideline on both
+ * surfaces (`SrsStageColorContrastTest` pins which ones do).
+ */
 @Composable
-fun themeAwareColor(default: Color, einkValue: Color): Color =
-    if (LocalEinkTheme.current) einkValue else default
+fun themeAwareColor(default: Color, einkValue: Color, darkValue: Color = default): Color = when {
+    LocalEinkTheme.current -> einkValue
+    LocalDarkTheme.current -> darkValue
+    else -> default
+}
 
 @Composable
 fun ShellfStudyTheme(

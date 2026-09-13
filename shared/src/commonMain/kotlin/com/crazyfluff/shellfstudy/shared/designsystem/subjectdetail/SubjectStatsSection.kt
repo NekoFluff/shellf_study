@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
+import com.crazyfluff.shellfstudy.shared.designsystem.time.LocalClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,11 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.data.model.QuestionTypeStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectReviewStats
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SectionTitle
 import com.crazyfluff.shellfstudy.shared.data.model.formatHourOfDay
-import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -64,27 +65,19 @@ fun SubjectStatsSection(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             QuestionTypeStatsCard(
                 title = "Meaning",
-                correct = reviewStats?.meaningCorrect,
-                incorrect = reviewStats?.meaningIncorrect,
-                accuracyPercent = reviewStats?.meaningAccuracyPercent,
-                currentStreak = reviewStats?.meaningCurrentStreak,
-                bestStreak = reviewStats?.meaningMaxStreak,
+                stats = reviewStats?.meaningStats,
                 modifier = Modifier.weight(1f)
             )
             QuestionTypeStatsCard(
                 title = "Reading",
-                correct = reviewStats?.readingCorrect,
-                incorrect = reviewStats?.readingIncorrect,
-                accuracyPercent = reviewStats?.readingAccuracyPercent,
-                currentStreak = reviewStats?.readingCurrentStreak,
-                bestStreak = reviewStats?.readingMaxStreak,
+                stats = reviewStats?.readingStats,
                 modifier = Modifier.weight(1f)
             )
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                StatRow(label = "Next review", value = nextReviewText(assignmentStats.nextReviewAt))
+                StatRow(label = "Next review", value = nextReviewText(assignmentStats.nextReviewAt, LocalClock.current.now()))
                 if (reviewStats?.lastReviewedAt != null) {
                     StatRow(label = "Last reviewed", value = formatDateTime(reviewStats.lastReviewedAt))
                 }
@@ -98,34 +91,34 @@ fun SubjectStatsSection(
     }
 }
 
-private fun nextReviewText(nextReviewAt: Instant?): String = when {
+/**
+ * Pure, and takes [now] rather than reading the clock, so a test can pin either side of the
+ * "available now" boundary instead of hoping wall-clock lands where it expects.
+ */
+internal fun nextReviewText(nextReviewAt: Instant?, now: Instant): String = when {
     nextReviewAt == null -> "—"
-    nextReviewAt <= Clock.System.now() -> "Available now"
+    nextReviewAt <= now -> "Available now"
     else -> formatDateTime(nextReviewAt)
 }
 
 @Composable
 private fun QuestionTypeStatsCard(
     title: String,
-    correct: Int?,
-    incorrect: Int?,
-    accuracyPercent: Int?,
-    currentStreak: Int?,
-    bestStreak: Int?,
+    stats: QuestionTypeStats?,
     modifier: Modifier = Modifier
 ) {
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(text = title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (accuracyPercent != null && correct != null && incorrect != null && currentStreak != null && bestStreak != null) {
-                Text(text = "$accuracyPercent%", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            if (stats != null) {
+                Text(text = "${stats.accuracyPercent}%", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                 Text(
-                    text = "$correct correct, $incorrect wrong",
+                    text = "${stats.correct} correct, ${stats.incorrect} wrong",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "Streak $currentStreak (best $bestStreak)",
+                    text = "Streak ${stats.currentStreak} (best ${stats.bestStreak})",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

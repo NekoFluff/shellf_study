@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.feature.subjectdetail
 
+import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailLoadState
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailUiState
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailViewModel
 import androidx.datastore.core.DataStore
@@ -8,7 +10,6 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
-import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
@@ -44,7 +45,6 @@ class SubjectDetailViewModelTest {
 
     private lateinit var server: MockWebServer
     private lateinit var viewModel: SubjectDetailViewModel
-    private lateinit var settingsRepository: SettingsRepository
     private lateinit var audioPlayer: FakePronunciationAudioPlayer
     private lateinit var strokeOrderRepository: FakeStrokeOrderRepository
     private lateinit var repositories: TestRepositories
@@ -105,13 +105,12 @@ class SubjectDetailViewModelTest {
             scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
-        settingsRepository = SettingsRepository(dataStore)
         audioPlayer = FakePronunciationAudioPlayer()
         strokeOrderRepository = FakeStrokeOrderRepository(
             mapOf('水' to listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f)))
         )
         viewModel = SubjectDetailViewModel(
-            repositories.subjectRepository, repositories.assignmentRepository, settingsRepository, audioPlayer, strokeOrderRepository,
+            repositories.subjectRepository, repositories.assignmentRepository, audioPlayer, strokeOrderRepository,
             repositories.statsRepository
         )
     }
@@ -121,19 +120,27 @@ class SubjectDetailViewModelTest {
         server.shutdown()
     }
 
-    /** Drains until the initial "nothing opened yet" emission clears. */
-    private suspend fun ReceiveTurbine<SubjectDetailUiState>.awaitNotLoading(): SubjectDetailUiState {
-        var state = awaitItem()
-        while (state.isLoading) state = awaitItem()
+    /** The state before anything has been opened — [SubjectDetailLoadState.Loading], since no
+     *  subject has been asked for yet. That is deliberately distinct from [NotFound], which means a
+     *  subject *was* asked for and has no cached row. */
+    private suspend fun ReceiveTurbine<SubjectDetailUiState>.awaitNothingOpened(): SubjectDetailUiState {
+        val state = awaitItem()
+        check(state.loadState is SubjectDetailLoadState.Loading) {
+            "expected nothing opened yet, was ${state.loadState}"
+        }
         return state
     }
+
+    /** The loaded detail, or null while loading / when the subject has no cached row. */
+    private fun SubjectDetailUiState.loadedDetail(): SubjectDetail? =
+        (loadState as? SubjectDetailLoadState.Loaded)?.detail
 
     /** Drains until [subjectId] is loaded AND its stroke-order lookup (a second, later-arriving
      *  emission — see [SubjectDetailViewModel.strokeOrderFlow]) has resolved, so no unconsumed
      *  event is left behind when the `test { }` block exits. */
     private suspend fun ReceiveTurbine<SubjectDetailUiState>.awaitSettled(subjectId: Long): SubjectDetailUiState {
         var state = awaitItem()
-        while (state.detail?.subjectId != subjectId || state.strokeOrder is StrokeOrderUiState.Loading) {
+        while (state.loadedDetail()?.subjectId != subjectId || state.strokeOrder is StrokeOrderUiState.Loading) {
             state = awaitItem()
         }
         return state
@@ -142,21 +149,38 @@ class SubjectDetailViewModelTest {
     @Test
     fun `open loads the subject and resolves its component as a related tile`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             val loaded = awaitSettled(1)
 
-            assertThat(loaded.detail?.meanings).containsExactly("Water")
+            assertThat(loaded.loadedDetail()?.meanings).containsExactly("Water")
             assertThat(loaded.relatedSubjects[2]?.meanings).containsExactly("Water radical")
             assertThat(loaded.backStack).isEmpty()
         }
     }
 
     @Test
+    fun `an uncached subject resolves to NotFound instead of loading forever`() = runTest(mainDispatcherRule.dispatcher) {
+        // Bug regression: isLoading and a nullable detail couldn't tell "no row for this subject"
+        // from "still loading", so drilling into a related id that had never been synced left the
+        // sheet spinning with nothing to say. Reachable via navigateToRelated, which takes any id.
+        viewModel.uiState.test {
+            awaitNothingOpened()
+
+            // 999 is seeded by no test — the subject dao has no row for it.
+            viewModel.open(999L)
+            var state = awaitItem()
+            while (state.loadState is SubjectDetailLoadState.Loading) state = awaitItem()
+
+            assertThat(state.loadState).isEqualTo(SubjectDetailLoadState.NotFound)
+        }
+    }
+
+    @Test
     fun `navigateToRelated pushes current subject onto the back stack and loads the target`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             awaitSettled(1)
@@ -178,15 +202,15 @@ class SubjectDetailViewModelTest {
         // sheet must go from subject 1 straight to subject 2: from the moment the navigation
         // changes, every emission carries subject 2's detail — never subject 1's, never null.
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             awaitSettled(1)
 
             viewModel.navigateToRelated(2)
             var state = awaitItem()
-            while (state.detail?.subjectId != 2L || state.strokeOrder is StrokeOrderUiState.Loading) {
-                assertThat(state.detail?.subjectId).isEqualTo(2L)
+            while (state.loadedDetail()?.subjectId != 2L || state.strokeOrder is StrokeOrderUiState.Loading) {
+                assertThat(state.loadedDetail()?.subjectId).isEqualTo(2L)
                 state = awaitItem()
             }
             assertThat(state.backStack).containsExactly(1L)
@@ -196,7 +220,7 @@ class SubjectDetailViewModelTest {
     @Test
     fun `goBack pops the stack and returns false once empty`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             awaitSettled(1)
@@ -215,7 +239,7 @@ class SubjectDetailViewModelTest {
     @Test
     fun `goBack restores the recorded scroll offset for the subject being returned to`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             awaitSettled(1)
@@ -233,7 +257,7 @@ class SubjectDetailViewModelTest {
     @Test
     fun `goBack yields a pendingScrollOffset of 0 when nothing was recorded for the subject`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             awaitSettled(1)
@@ -250,7 +274,7 @@ class SubjectDetailViewModelTest {
     @Test
     fun `navigateToRelated always resets pendingScrollOffset to 0`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             awaitSettled(1)
@@ -271,7 +295,7 @@ class SubjectDetailViewModelTest {
     @Test
     fun `open resets pendingScrollOffset to 0`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             awaitSettled(1)
@@ -292,23 +316,11 @@ class SubjectDetailViewModelTest {
         }
     }
 
-    @Test
-    fun `uiState reflects showPitchAccent from settings and updates when it changes`() = runTest(mainDispatcherRule.dispatcher) {
-        viewModel.uiState.test {
-            val state = awaitNotLoading()
-            assertThat(state.showPitchAccent).isTrue()
-
-            settingsRepository.setShowPitchAccent(false)
-            var updated = awaitItem()
-            while (updated.showPitchAccent) updated = awaitItem()
-            assertThat(updated.showPitchAccent).isFalse()
-        }
-    }
 
     @Test
     fun `uiState resolves stroke order for a kanji with bundled data`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             val loaded = awaitSettled(1)
@@ -322,7 +334,7 @@ class SubjectDetailViewModelTest {
     @Test
     fun `uiState has no stroke order for a radical with no matching character`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(2)
             val loaded = awaitSettled(2)
@@ -353,25 +365,11 @@ class SubjectDetailViewModelTest {
         searchTarget = "$characters $meaning".lowercase()
     )
 
-    @Test
-    fun `uiState exposes the restrictAudioToMp3 setting so reading rows can filter their own clips`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRestrictAudioToMp3(true)
-
-        viewModel.uiState.test {
-            awaitNotLoading()
-
-            viewModel.open(1)
-            var state = awaitSettled(1)
-            while (!state.restrictAudioToMp3) state = awaitItem()
-
-            assertThat(state.restrictAudioToMp3).isTrue()
-        }
-    }
 
     @Test
     fun `uiState has no assignmentStats or reviewStats when the subject has not been lessoned`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             val loaded = awaitSettled(1)
@@ -398,7 +396,7 @@ class SubjectDetailViewModelTest {
         )
 
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             val loaded = awaitSettled(1)
@@ -424,7 +422,7 @@ class SubjectDetailViewModelTest {
         )
 
         viewModel.uiState.test {
-            awaitNotLoading()
+            awaitNothingOpened()
 
             viewModel.open(1)
             val loaded = awaitSettled(1)

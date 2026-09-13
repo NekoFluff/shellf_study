@@ -51,8 +51,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
-import com.crazyfluff.shellfstudy.shared.designsystem.rememberNotificationPermissionRequest
+import com.crazyfluff.shellfstudy.shared.designsystem.rememberPermissionRequest
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
+import com.crazyfluff.shellfstudy.shared.data.DAILY_LESSON_GOAL_RANGE
 import com.crazyfluff.shellfstudy.shared.data.LESSON_BATCH_SIZE_RANGE
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 
@@ -100,7 +101,21 @@ object SettingsScreenTestTags {
     const val FULL_REFRESH_PROGRESS = "settings_full_refresh_progress"
     const val FULL_REFRESH_CONFIRM_BUTTON = "settings_full_refresh_confirm_button"
     const val FULL_REFRESH_ERROR_TEXT = "settings_full_refresh_error_text"
+
+    /** The three tags each [StepperRow] addresses, grouped once so every call site passes one value
+     *  instead of three strings that can only ever travel together. */
+    val BACKLOG_THRESHOLD_TAGS = StepperRowTestTags(BACKLOG_THRESHOLD_DECREASE, BACKLOG_THRESHOLD_INCREASE, BACKLOG_THRESHOLD_VALUE)
+    val DAILY_REMINDER_HOUR_TAGS = StepperRowTestTags(DAILY_REMINDER_HOUR_DECREASE, DAILY_REMINDER_HOUR_INCREASE, DAILY_REMINDER_HOUR_VALUE)
+    val QUIET_HOURS_START_TAGS = StepperRowTestTags(QUIET_HOURS_START_DECREASE, QUIET_HOURS_START_INCREASE, QUIET_HOURS_START_VALUE)
+    val QUIET_HOURS_END_TAGS = StepperRowTestTags(QUIET_HOURS_END_DECREASE, QUIET_HOURS_END_INCREASE, QUIET_HOURS_END_VALUE)
 }
+
+/** [StepperRow]'s three nodes: the two buttons and the value between them. */
+data class StepperRowTestTags(
+    val decrease: String,
+    val increase: String,
+    val value: String
+)
 
 @Composable
 fun SettingsRoute(
@@ -110,38 +125,16 @@ fun SettingsRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    val requestNotificationPermission = rememberNotificationPermissionRequest { granted ->
+    val requestNotificationPermission = rememberPermissionRequest { granted ->
         viewModel.onNotificationsPermissionResult(granted)
     }
 
     SettingsScreen(
         uiState = uiState,
-        onDailyLessonGoalChange = viewModel::onDailyLessonGoalChange,
-        onLessonBatchSizeChange = viewModel::onLessonBatchSizeChange,
-        onThemeModeChange = viewModel::onThemeModeChange,
-        onShowPitchAccentChange = viewModel::onShowPitchAccentChange,
-        onAutoplayPronunciationAudioChange = viewModel::onAutoplayPronunciationAudioChange,
-        onRestrictAudioToMp3Change = viewModel::onRestrictAudioToMp3Change,
-        onShowSubjectTypeLabelChange = viewModel::onShowSubjectTypeLabelChange,
-        onShowTotalTimerChange = viewModel::onShowTotalTimerChange,
-        onShowQuestionTimerChange = viewModel::onShowQuestionTimerChange,
-        onShowStrokeOrderChange = viewModel::onShowStrokeOrderChange,
-        onUseJapaneseKeyboardChange = viewModel::onUseJapaneseKeyboardChange,
-        onCloseEnoughAnswersEnabledChange = viewModel::onCloseEnoughAnswersEnabledChange,
-        onShowAnswerReadingPitchAccentChange = viewModel::onShowAnswerReadingPitchAccentChange,
-        onHideContextSentenceTranslationsChange = viewModel::onHideContextSentenceTranslationsChange,
+        actions = viewModel,
         onNotificationsEnabledChange = { enabled ->
             if (enabled) requestNotificationPermission() else viewModel.onNotificationsEnabledChange(false)
         },
-        onReviewsAvailableEnabledChange = viewModel::onReviewsAvailableEnabledChange,
-        onReviewsBacklogEnabledChange = viewModel::onReviewsBacklogEnabledChange,
-        onBacklogThresholdChange = viewModel::onBacklogThresholdChange,
-        onDailyReminderEnabledChange = viewModel::onDailyReminderEnabledChange,
-        onDailyReminderHourChange = viewModel::onDailyReminderHourChange,
-        onQuietHoursEnabledChange = viewModel::onQuietHoursEnabledChange,
-        onQuietHoursStartHourChange = viewModel::onQuietHoursStartHourChange,
-        onQuietHoursEndHourChange = viewModel::onQuietHoursEndHourChange,
-        onFullRefreshRequested = viewModel::onFullRefreshRequested,
         onOpenLeaderboard = onOpenLeaderboard,
         onBack = onBack
     )
@@ -151,34 +144,11 @@ fun SettingsRoute(
 @Composable
 fun SettingsScreen(
     uiState: SettingsUiState,
-    onDailyLessonGoalChange: (Int) -> Unit,
-    onLessonBatchSizeChange: (Int) -> Unit,
-    onThemeModeChange: (ThemeMode) -> Unit,
-    onShowPitchAccentChange: (Boolean) -> Unit,
-    onAutoplayPronunciationAudioChange: (Boolean) -> Unit,
-    onRestrictAudioToMp3Change: (Boolean) -> Unit,
-    onShowSubjectTypeLabelChange: (Boolean) -> Unit,
-    onShowTotalTimerChange: (Boolean) -> Unit,
-    onShowQuestionTimerChange: (Boolean) -> Unit,
-    onShowStrokeOrderChange: (Boolean) -> Unit,
-    onUseJapaneseKeyboardChange: (Boolean) -> Unit,
-    onCloseEnoughAnswersEnabledChange: (Boolean) -> Unit,
-    onShowAnswerReadingPitchAccentChange: (Boolean) -> Unit,
-    onHideContextSentenceTranslationsChange: (Boolean) -> Unit,
+    actions: SettingsActions,
     onNotificationsEnabledChange: (Boolean) -> Unit,
-    onReviewsAvailableEnabledChange: (Boolean) -> Unit,
-    onReviewsBacklogEnabledChange: (Boolean) -> Unit,
-    onBacklogThresholdChange: (Int) -> Unit,
-    onDailyReminderEnabledChange: (Boolean) -> Unit,
-    onDailyReminderHourChange: (Int) -> Unit,
-    onQuietHoursEnabledChange: (Boolean) -> Unit,
-    onQuietHoursStartHourChange: (Int) -> Unit,
-    onQuietHoursEndHourChange: (Int) -> Unit,
-    onFullRefreshRequested: () -> Unit,
     onOpenLeaderboard: () -> Unit = {},
     onBack: () -> Unit
 ) {
-    var showFullRefreshConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -199,345 +169,59 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp)
         ) {
-            SectionCard(title = "Daily lesson goal", icon = Icons.AutoMirrored.Filled.MenuBook) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    IconButton(
-                        onClick = { onDailyLessonGoalChange(uiState.dailyLessonGoal - 1) },
-                        enabled = uiState.dailyLessonGoal > 1,
-                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_DECREASE)
-                    ) {
-                        Icon(Icons.Default.Remove, contentDescription = "Decrease daily lesson goal")
-                    }
-                    Text(
-                        text = uiState.dailyLessonGoal.toString(),
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_VALUE)
-                    )
-                    IconButton(
-                        onClick = { onDailyLessonGoalChange(uiState.dailyLessonGoal + 1) },
-                        enabled = uiState.dailyLessonGoal < 99,
-                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_INCREASE)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Increase daily lesson goal")
-                    }
-                }
-            }
+            DailyGoalSection(
+                uiState = uiState,
+                actions = actions,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SectionCard(title = "Lesson session size", icon = Icons.AutoMirrored.Filled.MenuBook) {
-                Text(
-                    text = "New lessons are studied and quizzed in batches of this size, so a long session " +
-                        "becomes a series of short study→quiz cycles instead of one long one.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    IconButton(
-                        onClick = { onLessonBatchSizeChange(uiState.lessonBatchSize - 1) },
-                        enabled = uiState.lessonBatchSize > LESSON_BATCH_SIZE_RANGE.first,
-                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_DECREASE)
-                    ) {
-                        Icon(Icons.Default.Remove, contentDescription = "Smaller batches")
-                    }
-                    Text(
-                        text = uiState.lessonBatchSize.toString(),
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_VALUE)
-                    )
-                    IconButton(
-                        onClick = { onLessonBatchSizeChange(uiState.lessonBatchSize + 1) },
-                        enabled = uiState.lessonBatchSize < LESSON_BATCH_SIZE_RANGE.last,
-                        modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_INCREASE)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Bigger batches")
-                    }
-                }
-            }
+            LessonBatchSizeSection(
+                uiState = uiState,
+                actions = actions,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SectionCard(title = "Appearance", icon = Icons.Default.Palette) {
-                ThemeOptionRow(
-                    label = "System default",
-                    mode = ThemeMode.SYSTEM,
-                    selected = uiState.themeMode,
-                    onSelect = onThemeModeChange,
-                    testTag = SettingsScreenTestTags.THEME_SYSTEM_OPTION
-                )
-                ThemeOptionRow(
-                    label = "Light",
-                    mode = ThemeMode.LIGHT,
-                    selected = uiState.themeMode,
-                    onSelect = onThemeModeChange,
-                    testTag = SettingsScreenTestTags.THEME_LIGHT_OPTION
-                )
-                ThemeOptionRow(
-                    label = "Dark",
-                    mode = ThemeMode.DARK,
-                    selected = uiState.themeMode,
-                    onSelect = onThemeModeChange,
-                    testTag = SettingsScreenTestTags.THEME_DARK_OPTION
-                )
-                ThemeOptionRow(
-                    label = "E-Ink (grayscale)",
-                    mode = ThemeMode.EINK,
-                    selected = uiState.themeMode,
-                    onSelect = onThemeModeChange,
-                    testTag = SettingsScreenTestTags.THEME_EINK_OPTION
-                )
-            }
+            AppearanceSection(
+                uiState = uiState,
+                actions = actions,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SectionCard(title = "Vocabulary", icon = Icons.Default.Translate) {
-                ToggleRow(
-                    label = "Show pitch accent",
-                    description = "Overlays WaniKani's pitch-accent pattern markers on vocabulary readings.",
-                    checked = uiState.showPitchAccent,
-                    onCheckedChange = onShowPitchAccentChange,
-                    testTag = SettingsScreenTestTags.PITCH_ACCENT_TOGGLE
-                )
-                ToggleRow(
-                    label = "Show stroke order",
-                    description = "Displays the animated stroke order diagram and writing practice canvas for kanji in the subject detail panel.",
-                    checked = uiState.showStrokeOrder,
-                    onCheckedChange = onShowStrokeOrderChange,
-                    testTag = SettingsScreenTestTags.STROKE_ORDER_TOGGLE
-                )
-                ToggleRow(
-                    label = "Auto-play pronunciation audio",
-                    description = "Plays a word's audio automatically when a reading question is revealed during reviews.",
-                    checked = uiState.autoplayPronunciationAudio,
-                    onCheckedChange = onAutoplayPronunciationAudioChange,
-                    testTag = SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE
-                )
-                ToggleRow(
-                    label = "MP3 audio only",
-                    description = "Only play pronunciation clips available as MP3. Every word has an MP3 version, so nothing is lost — this just guarantees playback on devices that can't play Ogg audio (e.g. e-ink readers).",
-                    checked = uiState.restrictAudioToMp3,
-                    onCheckedChange = onRestrictAudioToMp3Change,
-                    testTag = SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE
-                )
-                ToggleRow(
-                    label = "Hide sentence translations",
-                    description = "Redacts a context sentence's English translation until tapped, so you can try reading the Japanese first.",
-                    checked = uiState.hideContextSentenceTranslations,
-                    onCheckedChange = onHideContextSentenceTranslationsChange,
-                    testTag = SettingsScreenTestTags.HIDE_CONTEXT_SENTENCE_TRANSLATIONS_TOGGLE
-                )
-            }
+            VocabularySection(
+                uiState = uiState,
+                actions = actions,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SectionCard(title = "Reviews", icon = Icons.Default.Quiz) {
-                ToggleRow(
-                    label = "Show item type",
-                    description = "Displays Radical, Kanji, or Vocabulary below the word during reviews and lesson quizzes — handy on e-ink screens where color alone is hard to read.",
-                    checked = uiState.showSubjectTypeLabel,
-                    onCheckedChange = onShowSubjectTypeLabelChange,
-                    testTag = SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE
-                )
-                ToggleRow(
-                    label = "Total time",
-                    description = "Shows a running clock above the progress bar for how long the current review/lesson quiz has taken.",
-                    checked = uiState.showTotalTimer,
-                    onCheckedChange = onShowTotalTimerChange,
-                    testTag = SettingsScreenTestTags.SHOW_TOTAL_TIMER_TOGGLE
-                )
-                ToggleRow(
-                    label = "Question time",
-                    description = "Shows a running clock below the progress bar for how long you've spent on the current question.",
-                    checked = uiState.showQuestionTimer,
-                    onCheckedChange = onShowQuestionTimerChange,
-                    testTag = SettingsScreenTestTags.SHOW_QUESTION_TIMER_TOGGLE
-                )
-                ToggleRow(
-                    label = "Use system keyboard for reading",
-                    description = "Disables the built-in romaji converter and sends a Japanese locale hint to your keyboard, so Gboard and similar apps switch language automatically between meaning and reading questions.",
-                    checked = uiState.useJapaneseKeyboard,
-                    onCheckedChange = onUseJapaneseKeyboardChange,
-                    testTag = SettingsScreenTestTags.JAPANESE_KEYBOARD_TOGGLE
-                )
-                ToggleRow(
-                    label = "Accept close-enough answers",
-                    description = "Allows small typos in meaning answers (a couple of letters off from a correct answer still counts). Turn off to require an exact match.",
-                    checked = uiState.closeEnoughAnswersEnabled,
-                    onCheckedChange = onCloseEnoughAnswersEnabledChange,
-                    testTag = SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE
-                )
-                ToggleRow(
-                    label = "Show reading & pitch accent on answer",
-                    description = "After answering a reading question during lessons and reviews, shows the word's reading and its pitch-accent pattern above the character.",
-                    checked = uiState.showAnswerReadingPitchAccent,
-                    onCheckedChange = onShowAnswerReadingPitchAccentChange,
-                    testTag = SettingsScreenTestTags.ANSWER_READING_PITCH_ACCENT_TOGGLE
-                )
-            }
+            ReviewsSection(
+                uiState = uiState,
+                actions = actions,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SectionCard(title = "Notifications", icon = Icons.Default.Notifications) {
-                ToggleRow(
-                    label = "Enable notifications",
-                    description = "Turn on to receive the alerts below.",
-                    checked = uiState.notificationsEnabled,
-                    onCheckedChange = onNotificationsEnabledChange,
-                    testTag = SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE
-                )
-
-                if (uiState.notificationsEnabled) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    NotificationGroupLabel("Reviews")
-                    ToggleRow(
-                        label = "Reviews available",
-                        description = "Notifies you as soon as new reviews are ready.",
-                        checked = uiState.reviewsAvailableEnabled,
-                        onCheckedChange = onReviewsAvailableEnabledChange,
-                        testTag = SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE
-                    )
-                    ToggleRow(
-                        label = "Review backlog warning",
-                        description = "Warns you when unanswered reviews pile up past the threshold below. Won't repeat more than once every 6 hours.",
-                        checked = uiState.reviewsBacklogEnabled,
-                        onCheckedChange = onReviewsBacklogEnabledChange,
-                        testTag = SettingsScreenTestTags.REVIEWS_BACKLOG_TOGGLE
-                    )
-                    if (uiState.reviewsBacklogEnabled) {
-                        StepperRow(
-                            label = "Backlog threshold",
-                            value = uiState.backlogThreshold,
-                            onValueChange = onBacklogThresholdChange,
-                            decreaseTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE,
-                            increaseTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE,
-                            valueTestTag = SettingsScreenTestTags.BACKLOG_THRESHOLD_VALUE,
-                            step = 5
-                        )
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    NotificationGroupLabel("Reminders")
-                    ToggleRow(
-                        label = "Daily study reminder",
-                        description = "A one-time nudge at the hour below, sent only if you haven't studied yet that day.",
-                        checked = uiState.dailyReminderEnabled,
-                        onCheckedChange = onDailyReminderEnabledChange,
-                        testTag = SettingsScreenTestTags.DAILY_REMINDER_TOGGLE
-                    )
-                    if (uiState.dailyReminderEnabled) {
-                        StepperRow(
-                            label = "Reminder hour",
-                            value = uiState.dailyReminderHour,
-                            onValueChange = { onDailyReminderHourChange(it.mod(24)) },
-                            decreaseTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_DECREASE,
-                            increaseTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_INCREASE,
-                            valueTestTag = SettingsScreenTestTags.DAILY_REMINDER_HOUR_VALUE,
-                            valueLabel = { formatHour(it) }
-                        )
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    NotificationGroupLabel("Quiet hours")
-                    ToggleRow(
-                        label = "Quiet hours",
-                        description = "Holds back review/backlog alerts during the window below and delivers them right after it ends. The daily reminder is skipped instead of delayed.",
-                        checked = uiState.quietHoursEnabled,
-                        onCheckedChange = onQuietHoursEnabledChange,
-                        testTag = SettingsScreenTestTags.QUIET_HOURS_TOGGLE
-                    )
-                    if (uiState.quietHoursEnabled) {
-                        StepperRow(
-                            label = "Quiet hours start",
-                            value = uiState.quietHoursStartHour,
-                            onValueChange = { onQuietHoursStartHourChange(it.mod(24)) },
-                            decreaseTestTag = SettingsScreenTestTags.QUIET_HOURS_START_DECREASE,
-                            increaseTestTag = SettingsScreenTestTags.QUIET_HOURS_START_INCREASE,
-                            valueTestTag = SettingsScreenTestTags.QUIET_HOURS_START_VALUE,
-                            valueLabel = { formatHour(it) }
-                        )
-                        StepperRow(
-                            label = "Quiet hours end",
-                            value = uiState.quietHoursEndHour,
-                            onValueChange = { onQuietHoursEndHourChange(it.mod(24)) },
-                            decreaseTestTag = SettingsScreenTestTags.QUIET_HOURS_END_DECREASE,
-                            increaseTestTag = SettingsScreenTestTags.QUIET_HOURS_END_INCREASE,
-                            valueTestTag = SettingsScreenTestTags.QUIET_HOURS_END_VALUE,
-                            valueLabel = { formatHour(it) }
-                        )
-                    }
-                }
-            }
+            NotificationsSection(
+                uiState = uiState,
+                actions = actions,
+                onNotificationsEnabledChange = onNotificationsEnabledChange,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SectionCard(title = "Friends & Competition", icon = Icons.Default.Group) {
-                Text(
-                    text = "Add friends' read-only API tokens to compare progress on the dashboard.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenLeaderboard() }
-                        .padding(vertical = 8.dp)
-                ) {
-                    Icon(Icons.Default.Group, contentDescription = null)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Manage friends", style = MaterialTheme.typography.bodyLarge)
-                }
-            }
+            FriendsSection(
+                onOpenLeaderboard = onOpenLeaderboard,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SectionCard(title = "Data", icon = Icons.Default.Sync) {
-                Text(
-                    text = "Re-downloads your entire WaniKani library from scratch. Useful if some content looks wrong or missing after an app update.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = !uiState.isFullRefreshing) { showFullRefreshConfirm = true }
-                        .testTag(SettingsScreenTestTags.FULL_REFRESH_ROW)
-                        .padding(vertical = 8.dp)
-                ) {
-                    Text("Full refresh", style = MaterialTheme.typography.bodyLarge)
-                    if (uiState.isFullRefreshing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp).testTag(SettingsScreenTestTags.FULL_REFRESH_PROGRESS),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(Icons.Default.Sync, contentDescription = null)
-                    }
-                }
-                val fullRefreshError = uiState.fullRefreshError
-                if (fullRefreshError != null) {
-                    Text(
-                        text = fullRefreshError,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.testTag(SettingsScreenTestTags.FULL_REFRESH_ERROR_TEXT)
-                    )
-                }
-            }
+            DataSection(
+                uiState = uiState,
+                actions = actions,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -545,19 +229,6 @@ fun SettingsScreen(
         }
     }
 
-    if (showFullRefreshConfirm) {
-        ConfirmationDialog(
-            title = "Full refresh?",
-            text = "This re-downloads your entire WaniKani library from scratch instead of just what's changed. It may take longer than a normal sync and use more data.",
-            confirmLabel = "Refresh",
-            onConfirm = {
-                showFullRefreshConfirm = false
-                onFullRefreshRequested()
-            },
-            onDismiss = { showFullRefreshConfirm = false },
-            confirmButtonTestTag = SettingsScreenTestTags.FULL_REFRESH_CONFIRM_BUTTON
-        )
-    }
 }
 
 /** Card shell used for every settings section — a small tinted icon next to the section title, matching the dashboard's card language. */
@@ -675,9 +346,7 @@ private fun StepperRow(
     label: String,
     value: Int,
     onValueChange: (Int) -> Unit,
-    decreaseTestTag: String,
-    increaseTestTag: String,
-    valueTestTag: String,
+    testTags: StepperRowTestTags,
     step: Int = 1,
     valueLabel: (Int) -> String = { it.toString() }
 ) {
@@ -690,18 +359,18 @@ private fun StepperRow(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconButton(
                 onClick = { onValueChange(value - step) },
-                modifier = Modifier.testTag(decreaseTestTag)
+                modifier = Modifier.testTag(testTags.decrease)
             ) {
                 Icon(Icons.Default.Remove, contentDescription = "Decrease $label")
             }
             Text(
                 text = valueLabel(value),
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.testTag(valueTestTag)
+                modifier = Modifier.testTag(testTags.value)
             )
             IconButton(
                 onClick = { onValueChange(value + step) },
-                modifier = Modifier.testTag(increaseTestTag)
+                modifier = Modifier.testTag(testTags.increase)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Increase $label")
             }
@@ -738,3 +407,391 @@ private fun ThemeOptionRow(
     }
 }
 
+/** One settings section: the state it renders and the actions it offers. */
+@Composable
+private fun DailyGoalSection(
+    uiState: SettingsUiState,
+    actions: SettingsActions,
+) {
+    SectionCard(title = "Daily lesson goal", icon = Icons.AutoMirrored.Filled.MenuBook) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            IconButton(
+                onClick = { actions.onDailyLessonGoalChange(uiState.dailyLessonGoal - 1) },
+                enabled = uiState.dailyLessonGoal > DAILY_LESSON_GOAL_RANGE.first,
+                modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_DECREASE)
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = "Decrease daily lesson goal")
+            }
+            Text(
+                text = uiState.dailyLessonGoal.toString(),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_VALUE)
+            )
+            IconButton(
+                onClick = { actions.onDailyLessonGoalChange(uiState.dailyLessonGoal + 1) },
+                enabled = uiState.dailyLessonGoal < DAILY_LESSON_GOAL_RANGE.last,
+                modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_INCREASE)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Increase daily lesson goal")
+            }
+        }
+    }
+}
+
+/** One settings section: the state it renders and the actions it offers. */
+@Composable
+private fun LessonBatchSizeSection(
+    uiState: SettingsUiState,
+    actions: SettingsActions,
+) {
+    SectionCard(title = "Lesson session size", icon = Icons.AutoMirrored.Filled.MenuBook) {
+        Text(
+            text = "New lessons are studied and quizzed in batches of this size, so a long session " +
+                "becomes a series of short study→quiz cycles instead of one long one.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            IconButton(
+                onClick = { actions.onLessonBatchSizeChange(uiState.lessonBatchSize - 1) },
+                enabled = uiState.lessonBatchSize > LESSON_BATCH_SIZE_RANGE.first,
+                modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_DECREASE)
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = "Smaller batches")
+            }
+            Text(
+                text = uiState.lessonBatchSize.toString(),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_VALUE)
+            )
+            IconButton(
+                onClick = { actions.onLessonBatchSizeChange(uiState.lessonBatchSize + 1) },
+                enabled = uiState.lessonBatchSize < LESSON_BATCH_SIZE_RANGE.last,
+                modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_INCREASE)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Bigger batches")
+            }
+        }
+    }
+}
+
+/** One settings section: the state it renders and the actions it offers. */
+@Composable
+private fun AppearanceSection(
+    uiState: SettingsUiState,
+    actions: SettingsActions,
+) {
+    SectionCard(title = "Appearance", icon = Icons.Default.Palette) {
+        ThemeOptionRow(
+            label = "System default",
+            mode = ThemeMode.SYSTEM,
+            selected = uiState.themeMode,
+            onSelect = actions::onThemeModeChange,
+            testTag = SettingsScreenTestTags.THEME_SYSTEM_OPTION
+        )
+        ThemeOptionRow(
+            label = "Light",
+            mode = ThemeMode.LIGHT,
+            selected = uiState.themeMode,
+            onSelect = actions::onThemeModeChange,
+            testTag = SettingsScreenTestTags.THEME_LIGHT_OPTION
+        )
+        ThemeOptionRow(
+            label = "Dark",
+            mode = ThemeMode.DARK,
+            selected = uiState.themeMode,
+            onSelect = actions::onThemeModeChange,
+            testTag = SettingsScreenTestTags.THEME_DARK_OPTION
+        )
+        ThemeOptionRow(
+            label = "E-Ink (grayscale)",
+            mode = ThemeMode.EINK,
+            selected = uiState.themeMode,
+            onSelect = actions::onThemeModeChange,
+            testTag = SettingsScreenTestTags.THEME_EINK_OPTION
+        )
+    }
+}
+
+/** One settings section: the state it renders and the actions it offers. */
+@Composable
+private fun VocabularySection(
+    uiState: SettingsUiState,
+    actions: SettingsActions,
+) {
+    SectionCard(title = "Vocabulary", icon = Icons.Default.Translate) {
+        ToggleRow(
+            label = "Show pitch accent",
+            description = "Overlays WaniKani's pitch-accent pattern markers on vocabulary readings.",
+            checked = uiState.showPitchAccent,
+            onCheckedChange = actions::onShowPitchAccentChange,
+            testTag = SettingsScreenTestTags.PITCH_ACCENT_TOGGLE
+        )
+        ToggleRow(
+            label = "Show stroke order",
+            description = "Displays the animated stroke order diagram and writing practice canvas for kanji in the subject detail panel.",
+            checked = uiState.showStrokeOrder,
+            onCheckedChange = actions::onShowStrokeOrderChange,
+            testTag = SettingsScreenTestTags.STROKE_ORDER_TOGGLE
+        )
+        ToggleRow(
+            label = "Auto-play pronunciation audio",
+            description = "Plays a word's audio automatically when a reading question is revealed during reviews.",
+            checked = uiState.autoplayPronunciationAudio,
+            onCheckedChange = actions::onAutoplayPronunciationAudioChange,
+            testTag = SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE
+        )
+        ToggleRow(
+            label = "MP3 audio only",
+            description = "Only play pronunciation clips available as MP3. Every word has an MP3 version, so nothing is lost — this just guarantees playback on devices that can't play Ogg audio (e.g. e-ink readers).",
+            checked = uiState.restrictAudioToMp3,
+            onCheckedChange = actions::onRestrictAudioToMp3Change,
+            testTag = SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE
+        )
+        ToggleRow(
+            label = "Hide sentence translations",
+            description = "Redacts a context sentence's English translation until tapped, so you can try reading the Japanese first.",
+            checked = uiState.hideContextSentenceTranslations,
+            onCheckedChange = actions::onHideContextSentenceTranslationsChange,
+            testTag = SettingsScreenTestTags.HIDE_CONTEXT_SENTENCE_TRANSLATIONS_TOGGLE
+        )
+    }
+}
+
+/** One settings section: the state it renders and the actions it offers. */
+@Composable
+private fun ReviewsSection(
+    uiState: SettingsUiState,
+    actions: SettingsActions,
+) {
+    SectionCard(title = "Reviews", icon = Icons.Default.Quiz) {
+        ToggleRow(
+            label = "Show item type",
+            description = "Displays Radical, Kanji, or Vocabulary below the word during reviews and lesson quizzes — handy on e-ink screens where color alone is hard to read.",
+            checked = uiState.showSubjectTypeLabel,
+            onCheckedChange = actions::onShowSubjectTypeLabelChange,
+            testTag = SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE
+        )
+        ToggleRow(
+            label = "Total time",
+            description = "Shows a running clock above the progress bar for how long the current review/lesson quiz has taken.",
+            checked = uiState.showTotalTimer,
+            onCheckedChange = actions::onShowTotalTimerChange,
+            testTag = SettingsScreenTestTags.SHOW_TOTAL_TIMER_TOGGLE
+        )
+        ToggleRow(
+            label = "Question time",
+            description = "Shows a running clock below the progress bar for how long you've spent on the current question.",
+            checked = uiState.showQuestionTimer,
+            onCheckedChange = actions::onShowQuestionTimerChange,
+            testTag = SettingsScreenTestTags.SHOW_QUESTION_TIMER_TOGGLE
+        )
+        ToggleRow(
+            label = "Use system keyboard for reading",
+            description = "Disables the built-in romaji converter and sends a Japanese locale hint to your keyboard, so Gboard and similar apps switch language automatically between meaning and reading questions.",
+            checked = uiState.useJapaneseKeyboard,
+            onCheckedChange = actions::onUseJapaneseKeyboardChange,
+            testTag = SettingsScreenTestTags.JAPANESE_KEYBOARD_TOGGLE
+        )
+        ToggleRow(
+            label = "Accept close-enough answers",
+            description = "Allows small typos in meaning answers (a couple of letters off from a correct answer still counts). Turn off to require an exact match.",
+            checked = uiState.closeEnoughAnswersEnabled,
+            onCheckedChange = actions::onCloseEnoughAnswersEnabledChange,
+            testTag = SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE
+        )
+        ToggleRow(
+            label = "Show reading & pitch accent on answer",
+            description = "After answering a reading question during lessons and reviews, shows the word's reading and its pitch-accent pattern above the character.",
+            checked = uiState.showAnswerReadingPitchAccent,
+            onCheckedChange = actions::onShowAnswerReadingPitchAccentChange,
+            testTag = SettingsScreenTestTags.ANSWER_READING_PITCH_ACCENT_TOGGLE
+        )
+    }
+}
+
+/** One settings section: the state it renders and the actions it offers. */
+@Composable
+private fun NotificationsSection(
+    uiState: SettingsUiState,
+    actions: SettingsActions,
+    onNotificationsEnabledChange: (Boolean) -> Unit,
+) {
+    SectionCard(title = "Notifications", icon = Icons.Default.Notifications) {
+        ToggleRow(
+            label = "Enable notifications",
+            description = "Turn on to receive the alerts below.",
+            checked = uiState.notificationsEnabled,
+            onCheckedChange = onNotificationsEnabledChange,
+            testTag = SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE
+        )
+
+        if (uiState.notificationsEnabled) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            NotificationGroupLabel("Reviews")
+            ToggleRow(
+                label = "Reviews available",
+                description = "Notifies you as soon as new reviews are ready.",
+                checked = uiState.reviewsAvailableEnabled,
+                onCheckedChange = actions::onReviewsAvailableEnabledChange,
+                testTag = SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE
+            )
+            ToggleRow(
+                label = "Review backlog warning",
+                description = "Warns you when unanswered reviews pile up past the threshold below. Won't repeat more than once every 6 hours.",
+                checked = uiState.reviewsBacklogEnabled,
+                onCheckedChange = actions::onReviewsBacklogEnabledChange,
+                testTag = SettingsScreenTestTags.REVIEWS_BACKLOG_TOGGLE
+            )
+            if (uiState.reviewsBacklogEnabled) {
+                StepperRow(
+                    label = "Backlog threshold",
+                    value = uiState.backlogThreshold,
+                    onValueChange = actions::onBacklogThresholdChange,
+                    testTags = SettingsScreenTestTags.BACKLOG_THRESHOLD_TAGS,
+                    step = 5
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            NotificationGroupLabel("Reminders")
+            ToggleRow(
+                label = "Daily study reminder",
+                description = "A one-time nudge at the hour below, sent only if you haven't studied yet that day.",
+                checked = uiState.dailyReminderEnabled,
+                onCheckedChange = actions::onDailyReminderEnabledChange,
+                testTag = SettingsScreenTestTags.DAILY_REMINDER_TOGGLE
+            )
+            if (uiState.dailyReminderEnabled) {
+                StepperRow(
+                    label = "Reminder hour",
+                    value = uiState.dailyReminderHour,
+                    onValueChange = { actions.onDailyReminderHourChange(it.mod(24)) },
+                    testTags = SettingsScreenTestTags.DAILY_REMINDER_HOUR_TAGS,
+                    valueLabel = { formatHour(it) }
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            NotificationGroupLabel("Quiet hours")
+            ToggleRow(
+                label = "Quiet hours",
+                description = "Holds back review/backlog alerts during the window below and delivers them right after it ends. The daily reminder is skipped instead of delayed.",
+                checked = uiState.quietHoursEnabled,
+                onCheckedChange = actions::onQuietHoursEnabledChange,
+                testTag = SettingsScreenTestTags.QUIET_HOURS_TOGGLE
+            )
+            if (uiState.quietHoursEnabled) {
+                StepperRow(
+                    label = "Quiet hours start",
+                    value = uiState.quietHoursStartHour,
+                    onValueChange = { actions.onQuietHoursStartHourChange(it.mod(24)) },
+                    testTags = SettingsScreenTestTags.QUIET_HOURS_START_TAGS,
+                    valueLabel = { formatHour(it) }
+                )
+                StepperRow(
+                    label = "Quiet hours end",
+                    value = uiState.quietHoursEndHour,
+                    onValueChange = { actions.onQuietHoursEndHourChange(it.mod(24)) },
+                    testTags = SettingsScreenTestTags.QUIET_HOURS_END_TAGS,
+                    valueLabel = { formatHour(it) }
+                )
+            }
+        }
+    }
+}
+
+/** One settings section: the state it renders and the actions it offers. */
+@Composable
+private fun FriendsSection(
+    onOpenLeaderboard: () -> Unit,
+) {
+    SectionCard(title = "Friends & Competition", icon = Icons.Default.Group) {
+        Text(
+            text = "Add friends' read-only API tokens to compare progress on the dashboard.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onOpenLeaderboard() }
+                .padding(vertical = 8.dp)
+        ) {
+            Icon(Icons.Default.Group, contentDescription = null)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text("Manage friends", style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+/** One settings section: the state it renders and the actions it offers. */
+@Composable
+private fun DataSection(
+    uiState: SettingsUiState,
+    actions: SettingsActions,
+) {
+    var showFullRefreshConfirm by remember { mutableStateOf(false) }
+    SectionCard(title = "Data", icon = Icons.Default.Sync) {
+        Text(
+            text = "Re-downloads your entire WaniKani library from scratch. Useful if some content looks wrong or missing after an app update.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !uiState.isFullRefreshing) { showFullRefreshConfirm = true }
+                .testTag(SettingsScreenTestTags.FULL_REFRESH_ROW)
+                .padding(vertical = 8.dp)
+        ) {
+            Text("Full refresh", style = MaterialTheme.typography.bodyLarge)
+            if (uiState.isFullRefreshing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp).testTag(SettingsScreenTestTags.FULL_REFRESH_PROGRESS),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(Icons.Default.Sync, contentDescription = null)
+            }
+        }
+        val fullRefreshError = uiState.fullRefreshError
+        if (fullRefreshError != null) {
+            Text(
+                text = fullRefreshError,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag(SettingsScreenTestTags.FULL_REFRESH_ERROR_TEXT)
+            )
+        }
+    }
+
+    if (showFullRefreshConfirm) {
+        ConfirmationDialog(
+            title = "Full refresh?",
+            text = "This re-downloads your entire WaniKani library from scratch instead of just what's changed. It may take longer than a normal sync and use more data.",
+            confirmLabel = "Refresh",
+            onConfirm = {
+                showFullRefreshConfirm = false
+                actions.onFullRefreshRequested()
+            },
+            onDismiss = { showFullRefreshConfirm = false },
+            confirmButtonTestTag = SettingsScreenTestTags.FULL_REFRESH_CONFIRM_BUTTON
+        )
+    }
+}

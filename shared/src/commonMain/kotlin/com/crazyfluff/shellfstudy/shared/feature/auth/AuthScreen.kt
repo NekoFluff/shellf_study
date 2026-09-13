@@ -25,7 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
-import com.crazyfluff.shellfstudy.shared.designsystem.rememberNotificationPermissionRequest
+import com.crazyfluff.shellfstudy.shared.designsystem.rememberPermissionRequest
 import kotlinx.coroutines.flow.drop
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -53,7 +53,7 @@ fun AuthRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    val requestPermission = rememberNotificationPermissionRequest { granted ->
+    val requestPermission = rememberPermissionRequest { granted ->
         viewModel.onNotificationPermissionResult(granted)
     }
     LaunchedEffect(uiState.pendingNotificationRequest) {

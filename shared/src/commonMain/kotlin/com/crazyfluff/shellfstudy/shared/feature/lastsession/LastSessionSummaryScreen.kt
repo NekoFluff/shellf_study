@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.feature.lastsession
 
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.LocalOpenSubjectDetail
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -24,8 +25,7 @@ import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
-import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
-import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.toSessionSummaryDisplay
 import com.crazyfluff.shellfstudy.shared.util.formatRelativeTime
 
 object LastSessionSummaryScreenTestTags {
@@ -59,7 +59,7 @@ fun LastSessionSummaryScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val detailSheetState = rememberSubjectDetailSheetState()
+    val openSubjectDetail = LocalOpenSubjectDetail.current
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -75,15 +75,14 @@ fun LastSessionSummaryScreen(
                 )
             }
         ) { innerPadding ->
-            val summary = uiState.summary
-            when {
-                uiState.isLoading -> {
+            when (val state = uiState) {
+                LastSessionSummaryUiState.Loading -> {
                     Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(modifier = Modifier.testTag(LastSessionSummaryScreenTestTags.LOADING_INDICATOR))
                     }
                 }
 
-                summary == null -> {
+                LastSessionSummaryUiState.Empty -> {
                     Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                         Text(
                             text = "No recent session to show.",
@@ -93,23 +92,17 @@ fun LastSessionSummaryScreen(
                     }
                 }
 
-                else -> {
+                is LastSessionSummaryUiState.Loaded -> {
+                    val summary = state.summary
                     SessionCompleteContent(
                         title = when (summary.kind) {
                             LastSessionKind.LESSON -> "Last lesson session"
                             LastSessionKind.REVIEW -> "Last review session"
                         },
                         subtitle = "Completed ${formatRelativeTime(summary.completedAtMillis)}.",
-                        itemsLabel = summary.itemsLabel(),
-                        averageLabel = summary.averageLabel(),
-                        itemsCount = summary.itemsCount,
-                        correctFirstTry = summary.correctFirstTry,
-                        totalElapsedMs = summary.totalElapsedMs,
-                        averageTimePerItemMs = summary.averageTimePerItemMs,
-                        slowestAnswers = summary.slowestAnswers,
-                        missedItems = summary.missedItems,
+                        summary = summary.toSessionSummaryDisplay(),
                         onDone = onBack,
-                        onSubjectClick = { detailSheetState.show(it) },
+                        onSubjectClick = openSubjectDetail,
                         testTags = SessionCompleteTestTags(
                             root = LastSessionSummaryScreenTestTags.SESSION_COMPLETE,
                             overviewCard = LastSessionSummaryScreenTestTags.SESSION_OVERVIEW_CARD,
@@ -129,15 +122,4 @@ fun LastSessionSummaryScreen(
         }
     }
 
-    SubjectDetailSheetHost(detailSheetState)
-}
-
-private fun LastSessionSummary.itemsLabel(): String = when (kind) {
-    LastSessionKind.LESSON -> "Items learned"
-    LastSessionKind.REVIEW -> "Items reviewed"
-}
-
-private fun LastSessionSummary.averageLabel(): String = when (kind) {
-    LastSessionKind.LESSON -> "Avg. time per item learned"
-    LastSessionKind.REVIEW -> "Avg. time per item reviewed"
 }

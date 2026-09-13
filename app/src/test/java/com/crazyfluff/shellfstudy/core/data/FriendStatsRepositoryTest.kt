@@ -9,6 +9,7 @@ import com.crazyfluff.shellfstudy.fakes.FakeFriendStatsDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
+import com.crazyfluff.shellfstudy.fakes.addFriendOrFail
 import com.crazyfluff.shellfstudy.shared.data.FriendRepository
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
@@ -68,9 +69,9 @@ class FriendStatsRepositoryTest {
     @Test
     fun `roster index is self at 0 then friends in the order they were added`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val a = friendRepository.addFriend("A", "token-a")
-            val b = friendRepository.addFriend("B", "token-b")
-            val c = friendRepository.addFriend("C", "token-c")
+            val a = friendRepository.addFriendOrFail("A", "token-a")
+            val b = friendRepository.addFriendOrFail("B", "token-b")
+            val c = friendRepository.addFriendOrFail("C", "token-c")
             listOf(a, b, c).forEach { friendStatsDao.upsert(entity(it.id)) }
 
             val byNickname = repository.observeLeaderboard().first()!!.rosterIndexByNickname()
@@ -81,9 +82,9 @@ class FriendStatsRepositoryTest {
     @Test
     fun `a friend with no cached stats does not shift the friends added after them`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val a = friendRepository.addFriend("A", "token-a")
-            friendRepository.addFriend("B", "token-b")
-            val c = friendRepository.addFriend("C", "token-c")
+            val a = friendRepository.addFriendOrFail("A", "token-a")
+            friendRepository.addFriendOrFail("B", "token-b")
+            val c = friendRepository.addFriendOrFail("C", "token-c")
             // B has never been fetched, so it is absent from the leaderboard entirely — but C must
             // keep the index it would otherwise have had, or C's color would depend on B's cache.
             listOf(a, c).forEach { friendStatsDao.upsert(entity(it.id)) }
@@ -96,8 +97,8 @@ class FriendStatsRepositoryTest {
     @Test
     fun `roster index survives re-sorting by metric and window`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val a = friendRepository.addFriend("A", "token-a")
-            val b = friendRepository.addFriend("B", "token-b")
+            val a = friendRepository.addFriendOrFail("A", "token-a")
+            val b = friendRepository.addFriendOrFail("B", "token-b")
             // B leads on lessons, A leads on level, so the two leaderboards rank them oppositely.
             friendStatsDao.upsert(entity(a.id, level = 30, learnedWeek = 1))
             friendStatsDao.upsert(entity(b.id, level = 5, learnedWeek = 99))
@@ -113,6 +114,55 @@ class FriendStatsRepositoryTest {
                 .isEqualTo(byLevel.rosterIndexByNickname())
         }
 
+    @Test
+    fun `a real zero survives the cache round trip instead of reading back as absent`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val a = friendRepository.addFriendOrFail("A", "token-a")
+            // 0 is a legitimate figure for all three: a friend who unlocked their first level the day
+            // they started, one whose level-ups average no whole days apart, and one who got every
+            // review wrong. A negative sentinel is what used to make those interchangeable with
+            // "unknown", and made decoding depend on remembering to write `< 0`.
+            friendStatsDao.upsert(
+                entity(a.id).copy(daysSinceStart = 0, avgDaysPerLevel = 0f, reviewAccuracy = 0f)
+            )
+
+            val entry = repository.observeLeaderboard().first()!!.entries.single { !it.isCurrentUser }
+
+            assertThat(entry.daysSinceStart).isEqualTo(0)
+            assertThat(entry.avgDaysPerLevel).isEqualTo(0f)
+            assertThat(entry.reviewAccuracy).isEqualTo(0f)
+        }
+
+    @Test
+    fun `an absent level speed and accuracy read back as null rather than a number`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val a = friendRepository.addFriendOrFail("A", "token-a")
+            friendStatsDao.upsert(entity(a.id).copy(reviewAccuracy = null))
+
+            val entry = repository.observeLeaderboard().first()!!.entries.single { !it.isCurrentUser }
+
+            assertThat(entry.daysSinceStart).isNull()
+            assertThat(entry.avgDaysPerLevel).isNull()
+            assertThat(entry.reviewAccuracy).isNull()
+        }
+
+    @Test
+    fun `a friend with no reviews ranks below one with a real accuracy`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val none = friendRepository.addFriendOrFail("None", "token-none")
+            val some = friendRepository.addFriendOrFail("Some", "token-some")
+            friendStatsDao.upsert(entity(none.id).copy(reviewAccuracy = null))
+            friendStatsDao.upsert(entity(some.id).copy(reviewAccuracy = 0f))
+
+            val ranked = repository
+                .observeLeaderboard(LeaderboardMetric.ACCURACY, LeaderboardWindow.WEEK)
+                .first()!!.entries.filter { !it.isCurrentUser }.map { it.nickname }
+
+            // A real 0% beats no data at all: sorting by accuracy must not reward never having
+            // answered a review.
+            assertThat(ranked).containsExactly("Some", "None").inOrder()
+        }
+
     private fun entity(
         friendId: String,
         level: Int = 1,
@@ -122,8 +172,8 @@ class FriendStatsRepositoryTest {
         username = "user-$friendId",
         level = level,
         reviewAccuracy = 1f,
-        avgDaysPerLevel = -1f,
-        daysSinceStart = -1,
+        avgDaysPerLevel = null,
+        daysSinceStart = null,
         levelTimelineJson = "[]",
         fetchedAtMillis = 0L,
         learnedWeek = learnedWeek

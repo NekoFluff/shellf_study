@@ -10,6 +10,7 @@ import com.crazyfluff.shellfstudy.fakes.FakeFriendStatsDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
+import com.crazyfluff.shellfstudy.fakes.addFriendOrFail
 import com.crazyfluff.shellfstudy.shared.data.FriendRepository
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardViewModel
@@ -60,7 +61,7 @@ class LeaderboardViewModelTest {
 
     @Test
     fun `onEditNickname updates the friend's nickname`() = runTest(mainDispatcherRule.dispatcher) {
-        val entry = friendRepository.addFriend("Old Name", "some-token")
+        val entry = friendRepository.addFriendOrFail("Old Name", "some-token")
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
@@ -77,7 +78,7 @@ class LeaderboardViewModelTest {
 
     @Test
     fun `onEditNickname ignores a blank nickname`() = runTest(mainDispatcherRule.dispatcher) {
-        val entry = friendRepository.addFriend("Old Name", "some-token")
+        val entry = friendRepository.addFriendOrFail("Old Name", "some-token")
         val viewModel = createViewModel()
 
         viewModel.uiState.test {

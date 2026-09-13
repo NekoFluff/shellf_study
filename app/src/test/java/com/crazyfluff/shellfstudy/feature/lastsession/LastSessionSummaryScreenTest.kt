@@ -1,5 +1,12 @@
 package com.crazyfluff.shellfstudy.feature.lastsession
 
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.LocalOpenSubjectDetail
+import androidx.compose.ui.Modifier
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -120,7 +127,7 @@ class LastSessionSummaryScreenTest {
                     single<PronunciationAudioPlayer> { FakePronunciationAudioPlayer() }
                     single<StrokeOrderRepository> { FakeStrokeOrderRepository(emptyMap()) }
                     viewModel {
-                        SubjectDetailViewModel(get(), get(), get(), get(), get(), get())
+                        SubjectDetailViewModel(get(), get(), get(), get(), get())
                     }
                 }
             )
@@ -136,7 +143,7 @@ class LastSessionSummaryScreenTest {
     @Test
     fun showsLoadingIndicator_whileLoading() {
         composeTestRule.setContent {
-            LastSessionSummaryScreen(uiState = LastSessionSummaryUiState(isLoading = true), onBack = {})
+            LastSessionSummaryScreen(uiState = LastSessionSummaryUiState.Loading, onBack = {})
         }
 
         composeTestRule.onNodeWithTag(LastSessionSummaryScreenTestTags.LOADING_INDICATOR).assertIsDisplayed()
@@ -145,7 +152,7 @@ class LastSessionSummaryScreenTest {
     @Test
     fun showsEmptyState_whenNoSummaryExists() {
         composeTestRule.setContent {
-            LastSessionSummaryScreen(uiState = LastSessionSummaryUiState(isLoading = false, summary = null), onBack = {})
+            LastSessionSummaryScreen(uiState = LastSessionSummaryUiState.Empty, onBack = {})
         }
 
         composeTestRule.onNodeWithTag(LastSessionSummaryScreenTestTags.EMPTY_TEXT).assertIsDisplayed()
@@ -155,7 +162,7 @@ class LastSessionSummaryScreenTest {
     fun showsReviewSummary_withReviewedLabel_whenKindIsReview() {
         composeTestRule.setContent {
             LastSessionSummaryScreen(
-                uiState = LastSessionSummaryUiState(isLoading = false, summary = sampleSummary),
+                uiState = LastSessionSummaryUiState.Loaded(sampleSummary),
                 onBack = {}
             )
         }
@@ -168,7 +175,7 @@ class LastSessionSummaryScreenTest {
     fun showsLessonSummary_withLearnedLabel_whenKindIsLesson() {
         composeTestRule.setContent {
             LastSessionSummaryScreen(
-                uiState = LastSessionSummaryUiState(isLoading = false, summary = sampleSummary.copy(kind = LastSessionKind.LESSON)),
+                uiState = LastSessionSummaryUiState.Loaded(sampleSummary.copy(kind = LastSessionKind.LESSON)),
                 onBack = {}
             )
         }
@@ -182,7 +189,7 @@ class LastSessionSummaryScreenTest {
         var wentBack = false
         composeTestRule.setContent {
             LastSessionSummaryScreen(
-                uiState = LastSessionSummaryUiState(isLoading = false, summary = sampleSummary),
+                uiState = LastSessionSummaryUiState.Loaded(sampleSummary),
                 onBack = { wentBack = true }
             )
         }
@@ -196,7 +203,7 @@ class LastSessionSummaryScreenTest {
         var wentBack = false
         composeTestRule.setContent {
             LastSessionSummaryScreen(
-                uiState = LastSessionSummaryUiState(isLoading = false, summary = sampleSummary),
+                uiState = LastSessionSummaryUiState.Loaded(sampleSummary),
                 onBack = { wentBack = true }
             )
         }
@@ -226,11 +233,20 @@ class LastSessionSummaryScreenTest {
             missedItems = listOf(SessionMissedItemRow(label = "水", subjectId = 1, subjectType = SubjectType.KANJI))
         )
 
+        // Mirrors ShellfStudyApp's root: the browse sheet is no longer hosted by the screen, so the
+        // test stands up the app-level host and opener the same way the app does. The assertion below
+        // is still about SubjectDetailSheetHost's `active` gating; only its mounting point moved.
         composeTestRule.setContent {
-            LastSessionSummaryScreen(
-                uiState = LastSessionSummaryUiState(isLoading = false, summary = summaryWithMissedItem),
-                onBack = {}
-            )
+            val sheetState = rememberSubjectDetailSheetState()
+            CompositionLocalProvider(LocalOpenSubjectDetail provides { sheetState.show(it) }) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LastSessionSummaryScreen(
+                        uiState = LastSessionSummaryUiState.Loaded(summaryWithMissedItem),
+                        onBack = {}
+                    )
+                    SubjectDetailSheetHost(sheetState)
+                }
+            }
         }
 
         // Open with the clock running normally first, so the sheet's ViewModel (real coroutines on

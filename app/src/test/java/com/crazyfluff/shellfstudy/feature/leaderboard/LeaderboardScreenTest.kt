@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
+import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardActions
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardScreen
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardUiState
 import org.junit.Rule
@@ -31,13 +32,8 @@ class LeaderboardScreenTest {
         composeTestRule.setContent {
             LeaderboardScreen(
                 uiState = uiState,
-                onBack = {},
-                onRefresh = {},
-                onAddFriendNicknameChange = {},
-                onAddFriendTokenChange = {},
-                onAddFriendConfirm = {},
-                onRemoveFriend = {},
-                onEditNickname = { _, _ -> }
+                actions = RecordingLeaderboardActions(),
+                onBack = {}
             )
         }
     }
@@ -60,4 +56,18 @@ class LeaderboardScreenTest {
 
         composeTestRule.onAllNodesWithText("Couldn't refresh 1 friend.").assertCountEquals(0)
     }
+}
+
+/** A [LeaderboardActions] that records what it was asked to do — see the Lesson and Review tests. */
+private class RecordingLeaderboardActions : LeaderboardActions {
+    val calls = mutableListOf<String>()
+
+    private fun record(name: String) { calls += name }
+
+    override fun onRefresh() = record("onRefresh")
+    override fun onAddFriendNicknameChange(value: String) = record("onAddFriendNicknameChange")
+    override fun onAddFriendTokenChange(value: String) = record("onAddFriendTokenChange")
+    override fun onAddFriendConfirm() = record("onAddFriendConfirm")
+    override fun onRemoveFriend(id: String) = record("onRemoveFriend")
+    override fun onEditNickname(id: String, nickname: String) = record("onEditNickname")
 }

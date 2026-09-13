@@ -14,11 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -43,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
+import com.crazyfluff.shellfstudy.shared.designsystem.components.TitleRowDropdown
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserColor
 
@@ -89,9 +86,12 @@ fun LeaderboardCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                WindowDropdownButton(
-                    selectedWindow = selectedWindow,
-                    onWindowChange = onWindowChange
+                TitleRowDropdown(
+                    selected = selectedWindow,
+                    options = LeaderboardWindow.entries,
+                    labelOf = { it.label },
+                    onSelect = onWindowChange,
+                    contentDescription = "Change time window"
                 )
             }
 
@@ -233,39 +233,4 @@ private fun todayDelta(entry: FriendStats, metric: LeaderboardMetric): String? =
     LeaderboardMetric.LEARNED -> if (entry.learned.today > 0) "+${entry.learned.today} today" else null
     LeaderboardMetric.BURNED -> if (entry.burned.today > 0) "+${entry.burned.today} today" else null
     else -> null
-}
-
-@Composable
-fun WindowDropdownButton(
-    selectedWindow: LeaderboardWindow,
-    onWindowChange: (LeaderboardWindow) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box(modifier = modifier) {
-        TextButton(onClick = { expanded = true }) {
-            Text(
-                text = selectedWindow.label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Icon(
-                imageVector = Icons.Default.ArrowDropDown,
-                contentDescription = "Change time window",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LeaderboardWindow.entries.forEach { window ->
-                DropdownMenuItem(
-                    text = { Text(window.label) },
-                    onClick = { onWindowChange(window); expanded = false },
-                    trailingIcon = if (window == selectedWindow) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                    } else null
-                )
-            }
-        }
-    }
 }

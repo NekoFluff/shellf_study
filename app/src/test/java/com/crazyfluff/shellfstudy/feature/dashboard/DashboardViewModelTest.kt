@@ -10,6 +10,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardContentState
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardFetch
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.data.AccountDataCleaner
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
@@ -217,13 +219,13 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
 
             assertThat(state.username).isEqualTo("durtle_fan")
             assertThat(state.level).isEqualTo(12)
             assertThat(state.lessonCount).isEqualTo(2)
             assertThat(state.reviewCount).isEqualTo(3)
-            assertThat(state.errorMessage).isNull()
+            assertThat(state.fetchState).isEqualTo(DashboardFetch.Idle)
             cancelAndIgnoreRemainingEvents()
         }
         assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isAtLeast(1)
@@ -249,7 +251,7 @@ class DashboardViewModelTest {
 
             viewModel.uiState.test {
                 var state = awaitItem()
-                while (state.isRefreshing || state.pendingSyncCount == 0) state = awaitItem()
+                while ((state.fetchState is DashboardFetch.InFlight) || state.pendingSyncCount == 0) state = awaitItem()
 
                 assertThat(state.reviewCount).isEqualTo(0)
                 assertThat(state.lessonCount).isEqualTo(0)
@@ -267,7 +269,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -299,7 +301,7 @@ class DashboardViewModelTest {
             appForegroundTracker.onStop(FakeLifecycleOwner)
             appForegroundTracker.onStart(FakeLifecycleOwner)
 
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -317,7 +319,7 @@ class DashboardViewModelTest {
         viewModel.uiState.test {
             var state = awaitItem()
             viewModel.onDashboardResumed() // cold start: forces a full sync, including assignments
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
             val coldStartSyncedAt = state.lastSyncedAtMillis
 
             // Drain the cold-start requests (including its own /assignments call) so only the
@@ -352,9 +354,9 @@ class DashboardViewModelTest {
             while (state.username == null) state = awaitItem()
             assertThat(state.username).isEqualTo("cached_user")
             assertThat(state.lastSyncedAtMillis).isEqualTo(1_000L)
-            assertThat(state.isRefreshing).isTrue()
+            assertThat(state.fetchState).isEqualTo(DashboardFetch.InFlight)
 
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
             assertThat(state.username).isEqualTo("durtle_fan")
             assertThat(state.lastSyncedAtMillis).isNotEqualTo(1_000L)
             cancelAndIgnoreRemainingEvents()
@@ -372,11 +374,64 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
 
-            assertThat(state.isOffline).isTrue()
-            assertThat(state.errorMessage).isNull()
+            assertThat(state.fetchState).isEqualTo(DashboardFetch.Stale)
             assertThat(state.username).isEqualTo("cached_user")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `flags stale content when a later resume fails, not just when the cold-start refresh does`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            viewModel.onDashboardResumed() // cold start: succeeds, and caches the summary
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
+            assertThat(state.fetchState).isEqualTo(DashboardFetch.Idle)
+
+            // A later resume takes the `hasCompletedInitialSync` branch, which resolves the summary
+            // by hand from whatever came back rather than through performForcedRefresh. With every
+            // request now failing there is still a username on screen, so this has to surface as
+            // Stale — the branch is separate code and was previously untested.
+            dispatchByPath(emptyResponse(500), emptyResponse(500))
+            viewModel.onDashboardResumed()
+            while (state.fetchState !is DashboardFetch.Stale) state = awaitItem()
+
+            assertThat(state.isShowingCachedData).isTrue()
+            assertThat(state.username).isEqualTo("durtle_fan")
+            assertThat(state.bannerState).isInstanceOf(DashboardBannerState.Offline::class.java)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `keeps the full error screen when a later resume also fails with nothing cached`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(emptyResponse(500), emptyResponse(500))
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed() // cold start fails, and there is no cache to fall back on
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
+            val coldStartFetch = state.fetchState
+            assertThat(coldStartFetch).isInstanceOf(DashboardFetch.Failed::class.java)
+            assertThat(state.contentState).isInstanceOf(DashboardContentState.FullScreenError::class.java)
+
+            // A later resume takes the hasCompletedInitialSync branch, which resolves its outcome by
+            // hand instead of through performForcedRefresh. Still nothing cached and still failing,
+            // so the error belongs on screen — this must not fall through to a blank dashboard.
+            // A different status makes the message differ, so the emission is unambiguous rather
+            // than relying on StateFlow's equality check to swallow an unchanged value.
+            dispatchByPath(emptyResponse(422), emptyResponse(422))
+            viewModel.onDashboardResumed()
+            while (state.fetchState == coldStartFetch) state = awaitItem()
+
+            assertThat(state.fetchState).isEqualTo(DashboardFetch.Failed("WaniKani API error (422)."))
+            assertThat(state.contentState).isInstanceOf(DashboardContentState.FullScreenError::class.java)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -416,9 +471,9 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
 
-            assertThat(state.isOffline).isTrue()
+            assertThat(state.fetchState).isEqualTo(DashboardFetch.Stale)
             assertThat(state.reviewCount).isEqualTo(2)
             assertThat(state.lessonCount).isEqualTo(1)
             assertThat(state.isReviewsCardEnabled).isTrue()
@@ -435,7 +490,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -458,8 +513,8 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing) state = awaitItem()
-            assertThat(state.errorMessage).isNotNull()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
+            assertThat(state.fetchState).isInstanceOf(DashboardFetch.Failed::class.java)
             assertThat(state.isLoggedOut).isFalse()
             cancelAndIgnoreRemainingEvents()
         }
@@ -486,7 +541,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `a confirmed 401 discovered on onDashboardResumed also logs out, not just isOffline`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a confirmed 401 discovered on onDashboardResumed also logs out, not just the offline fallback`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         tokenRepository.saveToken("stale-token")
         val viewModel = createViewModel()
@@ -494,12 +549,12 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
 
         // A token revoked after the initial load — the resume path (not just manual refresh) must
-        // also detect this rather than falling through to the generic isOffline treatment.
+        // also detect this rather than falling through to the generic stale-content treatment.
         dispatchByPath(emptyResponse(401), jsonResponse(summaryJson()))
 
         viewModel.uiState.test {
@@ -507,7 +562,7 @@ class DashboardViewModelTest {
             var state = awaitItem()
             while (!state.isLoggedOut) state = awaitItem()
             assertThat(state.isLoggedOut).isTrue()
-            assertThat(state.isOffline).isFalse()
+            assertThat(state.fetchState).isEqualTo(DashboardFetch.Idle)
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -525,7 +580,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
 
             viewModel.logOut()
             var afterLogout = awaitItem()
@@ -567,7 +622,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing || !state.hasActiveReviewSession) state = awaitItem()
+            while ((state.fetchState is DashboardFetch.InFlight) || !state.hasActiveReviewSession) state = awaitItem()
             assertThat(state.hasActiveReviewSession).isTrue()
             assertThat(state.hasActiveLessonSession).isFalse()
             cancelAndIgnoreRemainingEvents()
@@ -595,7 +650,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing || !state.hasLastSessionSummary) state = awaitItem()
+            while ((state.fetchState is DashboardFetch.InFlight) || !state.hasLastSessionSummary) state = awaitItem()
             assertThat(state.hasLastSessionSummary).isTrue()
             cancelAndIgnoreRemainingEvents()
         }
@@ -611,7 +666,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing || !state.hasActiveReviewSession) state = awaitItem()
+            while ((state.fetchState is DashboardFetch.InFlight) || !state.hasActiveReviewSession) state = awaitItem()
 
             viewModel.abandonReviewSession()
             var afterAbandon = awaitItem()
@@ -634,7 +689,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing || !state.hasActiveLessonSession) state = awaitItem()
+            while ((state.fetchState is DashboardFetch.InFlight) || !state.hasActiveLessonSession) state = awaitItem()
 
             viewModel.abandonLessonSession()
             var afterAbandon = awaitItem()
@@ -659,7 +714,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
             while (state.lessonsCompletedToday != 4) state = awaitItem()
 
             assertThat(state.lessonsCompletedToday).isEqualTo(4)
@@ -677,7 +732,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing || state.dailyLessonGoal != 5) state = awaitItem()
+            while ((state.fetchState is DashboardFetch.InFlight) || state.dailyLessonGoal != 5) state = awaitItem()
             assertThat(state.dailyLessonGoal).isEqualTo(5)
             cancelAndIgnoreRemainingEvents()
         }
@@ -697,7 +752,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            while (state.isRefreshing) state = awaitItem()
+            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
             while ((state.levelUpProgress?.kanjiTotal ?: 0) == 0) state = awaitItem()
 
             assertThat(state.levelUpProgress?.kanjiTotal).isEqualTo(2)

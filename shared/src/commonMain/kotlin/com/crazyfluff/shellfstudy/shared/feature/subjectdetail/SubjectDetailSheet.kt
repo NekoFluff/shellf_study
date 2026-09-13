@@ -278,33 +278,47 @@ private fun ColumnScope.SubjectDetailBody(
         }
     }
 
-    val detail = uiState.detail
-    if (uiState.isLoading || detail == null) {
-        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+    when (val loadState = uiState.loadState) {
+        SubjectDetailLoadState.Loading -> {
+            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
         }
-    } else {
-        SubjectDetailContent(
-            detail = detail,
-            relatedSubjects = uiState.relatedSubjects,
-            revealMode = effectiveRevealMode,
-            isAnswered = isAnswered,
-            questionType = questionType,
-            onRelatedSubjectClick = viewModel::navigateToRelated,
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
-            showPitchAccent = uiState.showPitchAccent,
-            restrictAudioToMp3 = uiState.restrictAudioToMp3,
-            strokeOrder = uiState.strokeOrder,
-            autoPlayStrokeOrder = autoPlayStrokeOrder,
-            showStrokeOrder = uiState.showStrokeOrder,
-            hideContextSentenceTranslations = uiState.hideContextSentenceTranslations,
-            assignmentStats = uiState.assignmentStats,
-            reviewStats = uiState.reviewStats,
-            initialScrollOffset = uiState.pendingScrollOffset,
-            onScrollPositionChanged = { viewModel.recordScrollOffset(detail.subjectId, it) }
-        )
+
+        // Says so rather than spinning forever: reached by drilling into a related subject that was
+        // never synced to this device. Copy matches RelatedSubjectsSection's caption for the same
+        // situation (a subject that isn't in the local cache yet).
+        SubjectDetailLoadState.NotFound -> {
+            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "Not loaded yet",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(SubjectDetailTestTags.NOT_LOADED)
+                )
+            }
+        }
+
+        is SubjectDetailLoadState.Loaded -> {
+            val detail = loadState.detail
+            SubjectDetailContent(
+                detail = detail,
+                relatedSubjects = uiState.relatedSubjects,
+                revealMode = effectiveRevealMode,
+                isAnswered = isAnswered,
+                questionType = questionType,
+                onRelatedSubjectClick = viewModel::navigateToRelated,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
+                strokeOrder = uiState.strokeOrder,
+                autoPlayStrokeOrder = autoPlayStrokeOrder,
+                assignmentStats = uiState.assignmentStats,
+                reviewStats = uiState.reviewStats,
+                initialScrollOffset = uiState.pendingScrollOffset,
+                onScrollPositionChanged = { viewModel.recordScrollOffset(detail.subjectId, it) }
+            )
+        }
     }
 }
 

@@ -49,7 +49,7 @@ class SettingsViewModel(
     private val notificationCoordinator: NotificationCoordinator,
     private val notificationScheduler: NotificationScheduler,
     private val syncOrchestrator: SyncOrchestrator
-) : ViewModel() {
+) : ViewModel(), SettingsActions {
 
     private data class FullRefreshState(val isRefreshing: Boolean = false, val error: String? = null)
     private val fullRefreshState = MutableStateFlow(FullRefreshState())
@@ -88,59 +88,59 @@ class SettingsViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
-    fun onDailyLessonGoalChange(goal: Int) {
+    override fun onDailyLessonGoalChange(goal: Int) {
         viewModelScope.launch { settingsRepository.setDailyLessonGoal(goal) }
     }
 
-    fun onLessonBatchSizeChange(size: Int) {
+    override fun onLessonBatchSizeChange(size: Int) {
         viewModelScope.launch { settingsRepository.setLessonBatchSize(size) }
     }
 
-    fun onThemeModeChange(mode: ThemeMode) {
+    override fun onThemeModeChange(mode: ThemeMode) {
         viewModelScope.launch { settingsRepository.setThemeMode(mode) }
     }
 
-    fun onShowPitchAccentChange(enabled: Boolean) {
+    override fun onShowPitchAccentChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setShowPitchAccent(enabled) }
     }
 
-    fun onAutoplayPronunciationAudioChange(enabled: Boolean) {
+    override fun onAutoplayPronunciationAudioChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setAutoplayPronunciationAudio(enabled) }
     }
 
-    fun onRestrictAudioToMp3Change(enabled: Boolean) {
+    override fun onRestrictAudioToMp3Change(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setRestrictAudioToMp3(enabled) }
     }
 
-    fun onShowSubjectTypeLabelChange(enabled: Boolean) {
+    override fun onShowSubjectTypeLabelChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setShowSubjectTypeLabel(enabled) }
     }
 
-    fun onShowTotalTimerChange(enabled: Boolean) {
+    override fun onShowTotalTimerChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setShowTotalTimer(enabled) }
     }
 
-    fun onShowQuestionTimerChange(enabled: Boolean) {
+    override fun onShowQuestionTimerChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setShowQuestionTimer(enabled) }
     }
 
-    fun onShowStrokeOrderChange(enabled: Boolean) {
+    override fun onShowStrokeOrderChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setShowStrokeOrder(enabled) }
     }
 
-    fun onUseJapaneseKeyboardChange(enabled: Boolean) {
+    override fun onUseJapaneseKeyboardChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setUseJapaneseKeyboard(enabled) }
     }
 
-    fun onCloseEnoughAnswersEnabledChange(enabled: Boolean) {
+    override fun onCloseEnoughAnswersEnabledChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setCloseEnoughAnswersEnabled(enabled) }
     }
 
-    fun onShowAnswerReadingPitchAccentChange(enabled: Boolean) {
+    override fun onShowAnswerReadingPitchAccentChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setShowAnswerReadingPitchAccent(enabled) }
     }
 
-    fun onHideContextSentenceTranslationsChange(enabled: Boolean) {
+    override fun onHideContextSentenceTranslationsChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setHideContextSentenceTranslations(enabled) }
     }
 
@@ -158,37 +158,39 @@ class SettingsViewModel(
         if (enabled) notificationCoordinator.rescheduleDailyReminder() else notificationScheduler.cancelAll()
     }
 
-    fun onReviewsAvailableEnabledChange(enabled: Boolean) {
+    override fun onReviewsAvailableEnabledChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setReviewsAvailableEnabled(enabled) }
     }
 
-    fun onReviewsBacklogEnabledChange(enabled: Boolean) {
+    override fun onReviewsBacklogEnabledChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setReviewsBacklogEnabled(enabled) }
     }
 
-    fun onBacklogThresholdChange(threshold: Int) {
+    override fun onBacklogThresholdChange(threshold: Int) {
         viewModelScope.launch { settingsRepository.setBacklogThreshold(threshold) }
     }
 
-    fun onDailyReminderEnabledChange(enabled: Boolean) = viewModelScope.launch {
-        settingsRepository.setDailyReminderEnabled(enabled)
-        notificationCoordinator.rescheduleDailyReminder()
+    override fun onDailyReminderEnabledChange(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setDailyReminderEnabled(enabled)
+            notificationCoordinator.rescheduleDailyReminder()
+        }
     }
 
-    fun onDailyReminderHourChange(hour: Int) = viewModelScope.launch {
+    override fun onDailyReminderHourChange(hour: Int) = viewModelScope.launch {
         settingsRepository.setDailyReminderHour(hour)
         notificationCoordinator.rescheduleDailyReminder()
     }
 
-    fun onQuietHoursEnabledChange(enabled: Boolean) {
+    override fun onQuietHoursEnabledChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setQuietHoursEnabled(enabled) }
     }
 
-    fun onQuietHoursStartHourChange(hour: Int) {
+    override fun onQuietHoursStartHourChange(hour: Int) {
         viewModelScope.launch { settingsRepository.setQuietHoursStartHour(hour) }
     }
 
-    fun onQuietHoursEndHourChange(hour: Int) {
+    override fun onQuietHoursEndHourChange(hour: Int) {
         viewModelScope.launch { settingsRepository.setQuietHoursEndHour(hour) }
     }
 
@@ -198,11 +200,13 @@ class SettingsViewModel(
      * only way to recover on-device data left wrong by a client-side mapping bug that's since been
      * fixed but whose bad output was already persisted.
      */
-    fun onFullRefreshRequested() = viewModelScope.launch {
-        fullRefreshState.value = FullRefreshState(isRefreshing = true)
-        fullRefreshState.value = when (val result = syncOrchestrator.fullRefresh()) {
-            is ApiResult.Success -> FullRefreshState()
-            is ApiResult.Error -> FullRefreshState(error = result.message)
+    override fun onFullRefreshRequested() {
+        viewModelScope.launch {
+            fullRefreshState.value = FullRefreshState(isRefreshing = true)
+            fullRefreshState.value = when (val result = syncOrchestrator.fullRefresh()) {
+                is ApiResult.Success -> FullRefreshState()
+                is ApiResult.Error -> FullRefreshState(error = result.message)
+            }
         }
     }
 }

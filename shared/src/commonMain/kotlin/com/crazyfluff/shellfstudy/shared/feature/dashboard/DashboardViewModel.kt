@@ -51,13 +51,11 @@ import kotlin.math.ceil
 import kotlin.time.Clock
 
 data class DashboardUiState(
-    val isRefreshing: Boolean = true,
+    val fetchState: DashboardFetch = DashboardFetch.InFlight,
     val username: String? = null,
     val level: Int? = null,
     val lessonCount: Int = 0,
     val reviewCount: Int = 0,
-    val errorMessage: String? = null,
-    val isOffline: Boolean = false,
     val pendingSyncCount: Int = 0,
     val syncBlockedOnAuth: Boolean = false,
     val lastSyncedAtMillis: Long? = null,
@@ -80,19 +78,23 @@ data class DashboardUiState(
     val selectedForecastColorMode: ReviewForecastColorMode = ReviewForecastColorMode.SUBJECT_TYPE,
     val hasLastSessionSummary: Boolean = false
 ) {
+    /** The last fetch failed but cached content is still on screen — see [DashboardFetch.Stale]. */
+    val isShowingCachedData: Boolean
+        get() = fetchState is DashboardFetch.Stale
+
     val bannerState: DashboardBannerState
         get() = when {
             syncBlockedOnAuth -> DashboardBannerState.SyncBlockedOnAuth
-            isOffline -> DashboardBannerState.Offline(lastSyncedAtMillis)
+            isShowingCachedData -> DashboardBannerState.Offline(lastSyncedAtMillis)
             pendingSyncCount > 0 -> DashboardBannerState.PendingSync(pendingSyncCount)
-            isRefreshing -> DashboardBannerState.Refreshing
+            fetchState is DashboardFetch.InFlight -> DashboardBannerState.Refreshing
             else -> DashboardBannerState.None
         }
 
     val contentState: DashboardContentState
         get() = when {
-            isRefreshing && username == null -> DashboardContentState.Loading
-            errorMessage != null -> DashboardContentState.FullScreenError(errorMessage)
+            fetchState is DashboardFetch.InFlight && username == null -> DashboardContentState.Loading
+            fetchState is DashboardFetch.Failed -> DashboardContentState.FullScreenError(fetchState.message)
             else -> DashboardContentState.Content
         }
 
@@ -101,6 +103,32 @@ data class DashboardUiState(
 
     val isReviewsCardEnabled: Boolean
         get() = hasActiveReviewSession || reviewCount > 0
+}
+
+/**
+ * What the dashboard's last attempt to fetch its own summary did. One value rather than the
+ * `isRefreshing` / `errorMessage` / `isOffline` trio it replaces, which encoded the same three
+ * outcomes across three fields that could not be active together — [DashboardBannerState] and
+ * [DashboardContentState] resolved the winner by `when` ordering, so the two getters were the only
+ * thing keeping an impossible combination (a spinner *and* a full-screen error) off the screen.
+ *
+ * Deliberately not folded into the banner state: that type is a *view* state the screen renders, and
+ * its `Offline` case carries `lastSyncedAtMillis`, which is written at different moments from this
+ * one. Keeping the banner derived means it always reads the freshest timestamp rather than one frozen
+ * at the moment of a failure.
+ */
+sealed interface DashboardFetch {
+    /** A fetch is in flight. */
+    data object InFlight : DashboardFetch
+
+    /** Not fetching, and the last fetch succeeded — there is nothing to report. */
+    data object Idle : DashboardFetch
+
+    /** The last fetch failed and cached content is still on screen; the banner says so. */
+    data object Stale : DashboardFetch
+
+    /** The last fetch failed with nothing cached, so the whole screen is the error. */
+    data class Failed(val message: String) : DashboardFetch
 }
 
 sealed interface DashboardBannerState {
@@ -240,7 +268,7 @@ class DashboardViewModel(
             // mask genuinely due reviews/lessons.
             val hasUnsentSubmissions = sessionSync.pendingSyncCount > 0
             fun reconcile(remoteCount: Int, localCount: Int) = when {
-                imperative.isOffline -> localCount
+                imperative.isShowingCachedData -> localCount
                 hasUnsentSubmissions -> minOf(remoteCount, localCount)
                 else -> remoteCount
             }
@@ -335,7 +363,7 @@ class DashboardViewModel(
     }
 
     private suspend fun performForcedRefresh(forceFriendStatsRefresh: Boolean = false) {
-        _dashboardData.update { it.copy(isRefreshing = true, errorMessage = null, isOffline = false) }
+        _dashboardData.update { it.copy(fetchState = DashboardFetch.InFlight) }
 
         // Non-blocking: friend stats refresh runs in the background and doesn't gate the main UI.
         // Only pull-to-refresh forces past the TTL — the cold-start call below should still
@@ -355,19 +383,19 @@ class DashboardViewModel(
         if (userResult is ApiResult.Error) {
             if (userResult.isAuthError) {
                 logoutCoordinator.logout()
-                _dashboardData.update { it.copy(isRefreshing = false, isLoggedOut = true) }
+                _dashboardData.update { it.copy(fetchState = DashboardFetch.Idle, isLoggedOut = true) }
             } else if (hasContent) {
-                _dashboardData.update { it.copy(isRefreshing = false, isOffline = true) }
+                _dashboardData.update { it.copy(fetchState = DashboardFetch.Stale) }
             } else {
-                _dashboardData.update { it.copy(isRefreshing = false, errorMessage = userResult.message) }
+                _dashboardData.update { it.copy(fetchState = DashboardFetch.Failed(userResult.message)) }
             }
             return
         }
         if (summaryResult is ApiResult.Error) {
             if (hasContent) {
-                _dashboardData.update { it.copy(isRefreshing = false, isOffline = true) }
+                _dashboardData.update { it.copy(fetchState = DashboardFetch.Stale) }
             } else {
-                _dashboardData.update { it.copy(isRefreshing = false, errorMessage = summaryResult.message) }
+                _dashboardData.update { it.copy(fetchState = DashboardFetch.Failed(summaryResult.message)) }
             }
             return
         }
@@ -378,8 +406,7 @@ class DashboardViewModel(
         dashboardSyncCoordinator.cacheSummary(user, summary, syncedAtMillis)
         _dashboardData.update {
             it.copy(
-                isRefreshing = false,
-                isOffline = false,
+                fetchState = DashboardFetch.Idle,
                 username = user.username,
                 level = user.level,
                 lessonCount = summary.lessonCount,
@@ -419,7 +446,9 @@ class DashboardViewModel(
 
             val user = (userResult as? ApiResult.Success)?.data
             val summary = (summaryResult as? ApiResult.Success)?.data
-            val fetchFailed = user == null || summary == null
+            // ApiResult has no variant besides Success and Error, so "one of the two came back
+            // empty" is the same question as "did either of them come back an Error".
+            val failedFetch = (userResult as? ApiResult.Error) ?: (summaryResult as? ApiResult.Error)
             val syncedAtMillis = Clock.System.now().toEpochMilliseconds()
 
             _dashboardData.update {
@@ -432,8 +461,14 @@ class DashboardViewModel(
                     level = resolvedLevel,
                     lessonCount = resolvedLessonCount,
                     reviewCount = resolvedReviewCount,
-                    isOffline = fetchFailed && resolvedUsername != null,
-                    lastSyncedAtMillis = if (fetchFailed) it.lastSyncedAtMillis else syncedAtMillis
+                    // Same three outcomes as the cold-start path above: a clean fetch, cached
+                    // content that outlived a failure, or nothing at all to show.
+                    fetchState = when {
+                        failedFetch == null -> DashboardFetch.Idle
+                        resolvedUsername != null -> DashboardFetch.Stale
+                        else -> DashboardFetch.Failed(failedFetch.message)
+                    },
+                    lastSyncedAtMillis = if (failedFetch != null) it.lastSyncedAtMillis else syncedAtMillis
                 )
             }
 

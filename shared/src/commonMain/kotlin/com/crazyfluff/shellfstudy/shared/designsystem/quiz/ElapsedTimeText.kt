@@ -12,8 +12,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import com.crazyfluff.shellfstudy.shared.designsystem.time.LocalClock
 import kotlinx.coroutines.delay
-import kotlin.time.Clock
 
 /** Same "m:ss" clock format [PausableElapsedTimeText] ticks with — shared so a frozen elapsed time
  *  (e.g. the per-question timer once an answer's been submitted) reads identically to the live
@@ -39,13 +39,14 @@ fun PausableElapsedTimeText(
     style: TextStyle = MaterialTheme.typography.labelMedium,
     color: Color = LocalContentColor.current
 ) {
+    val clock = LocalClock.current
     var elapsedMs by remember(baseElapsedMs, segmentStartMs) {
-        mutableStateOf(baseElapsedMs + (segmentStartMs?.let { Clock.System.now().toEpochMilliseconds() - it } ?: 0L))
+        mutableStateOf(baseElapsedMs + (segmentStartMs?.let { clock.now().toEpochMilliseconds() - it } ?: 0L))
     }
     LaunchedEffect(baseElapsedMs, segmentStartMs) {
         if (segmentStartMs == null) return@LaunchedEffect
         while (true) {
-            elapsedMs = baseElapsedMs + (Clock.System.now().toEpochMilliseconds() - segmentStartMs)
+            elapsedMs = baseElapsedMs + (clock.now().toEpochMilliseconds() - segmentStartMs)
             delay(1000)
         }
     }

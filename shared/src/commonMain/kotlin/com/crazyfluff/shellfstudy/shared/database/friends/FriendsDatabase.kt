@@ -14,14 +14,23 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * One friend's cached figures.
+ *
+ * [reviewAccuracy], [avgDaysPerLevel] and [daysSinceStart] are nullable rather than carrying a
+ * sentinel: "this friend has no reviews yet" / "no level-up interval to average" / "no parsed
+ * progression" are real absences, and a negative sentinel is indistinguishable from a real value to
+ * every reader that forgets to check for it. Room stores a null column as SQL NULL, so the absence
+ * survives the round trip on its own.
+ */
 @Entity(tableName = "friend_stats")
 data class FriendStatsEntity(
     @PrimaryKey val friendId: String,
     val username: String,
     val level: Int,
-    val reviewAccuracy: Float,
-    val avgDaysPerLevel: Float,
-    val daysSinceStart: Int,
+    val reviewAccuracy: Float?,
+    val avgDaysPerLevel: Float?,
+    val daysSinceStart: Int?,
     val levelTimelineJson: String,
     val fetchedAtMillis: Long,
     // Learned (items started) by time window
@@ -36,8 +45,6 @@ data class FriendStatsEntity(
     val burnedMonth: Int = 0,
     val burnedYear: Int = 0,
     val burnedAllTime: Int = 0,
-    // All-time review count
-    val totalReviews: Int = 0,
     // Per-day activity buckets serialised as JSON (ActivityBuckets)
     val learnedBucketsJson: String = "{}",
     val burnedBucketsJson: String = "{}"
@@ -58,7 +65,7 @@ interface FriendStatsDao {
     suspend fun deleteById(id: String)
 }
 
-@Database(entities = [FriendStatsEntity::class], version = 3, exportSchema = true)
+@Database(entities = [FriendStatsEntity::class], version = 4, exportSchema = true)
 @ConstructedBy(FriendsDatabaseConstructor::class)
 abstract class FriendsDatabase : RoomDatabase() {
     abstract fun friendStatsDao(): FriendStatsDao

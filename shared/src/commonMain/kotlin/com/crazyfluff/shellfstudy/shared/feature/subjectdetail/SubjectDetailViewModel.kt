@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
-import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectAssignmentStats
@@ -27,15 +26,27 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * What the current subject's detail resolved to.
+ *
+ * [Loading] until the repository has answered for the current subject; [NotFound] once it answered
+ * that there is no cached row for it; [Loaded] otherwise. Previously an `isLoading` flag beside a
+ * nullable `detail`, which could not tell "still loading" from "no such row" — an uncached subject
+ * (reachable by drilling into a related id that was never synced) spun forever with no way to say so.
+ */
+sealed interface SubjectDetailLoadState {
+    data object Loading : SubjectDetailLoadState
+
+    /** The current subject has no cached row — it has not been synced to this device. */
+    data object NotFound : SubjectDetailLoadState
+
+    data class Loaded(val detail: SubjectDetail) : SubjectDetailLoadState
+}
+
 data class SubjectDetailUiState(
-    val isLoading: Boolean = true,
-    val detail: SubjectDetail? = null,
+    val loadState: SubjectDetailLoadState = SubjectDetailLoadState.Loading,
     val relatedSubjects: Map<Long, SubjectSummary> = emptyMap(),
     val backStack: List<Long> = emptyList(),
-    val showPitchAccent: Boolean = true,
-    val restrictAudioToMp3: Boolean = false,
-    val showStrokeOrder: Boolean = true,
-    val hideContextSentenceTranslations: Boolean = true,
     val strokeOrder: StrokeOrderUiState = StrokeOrderUiState.Unavailable,
     /** User asked to see every section on the root subject even though the sheet's reveal mode
      *  would otherwise hide the field matching the in-progress/failed question. Reset on [open]. */
@@ -44,13 +55,19 @@ data class SubjectDetailUiState(
     val assignmentStats: SubjectAssignmentStats? = null,
     /** Null if the subject hasn't been lessoned, or has been lessoned but never reviewed yet. */
     val reviewStats: SubjectReviewStats? = null,
-    /** Scroll offset (px) [SubjectDetailContent] should jump to for the current [detail]'s subject —
+    /** Scroll offset (px) [SubjectDetailContent] should jump to for the current subject's detail —
      *  the recorded offset when returning via [SubjectDetailViewModel.goBack], 0 otherwise. */
     val pendingScrollOffset: Int = 0
 )
 
 /** Intermediate combine result — [SubjectDetailViewModel.uiState]'s detail/related/stroke/stats fields. */
 private data class DetailAndRelated(
+    /**
+     * The subject [detail] was observed for — null when nothing is open. Carried so a null [detail]
+     * can be told apart from "the query for the current subject hasn't answered yet": the former is
+     * a real answer once [subjectId] matches what navigation asked for, the latter is not.
+     */
+    val subjectId: Long?,
     val detail: SubjectDetail?,
     val related: List<SubjectSummary>,
     val strokeOrder: StrokeOrderUiState,
@@ -84,7 +101,6 @@ private data class NavState(
 class SubjectDetailViewModel(
     private val subjectRepository: SubjectRepository,
     private val assignmentRepository: AssignmentRepository,
-    private val settingsRepository: SettingsRepository,
     private val audioPlayer: PronunciationAudioPlayer,
     private val strokeOrderRepository: StrokeOrderRepository,
     private val statsRepository: StatsRepository
@@ -106,12 +122,12 @@ class SubjectDetailViewModel(
                 .distinctUntilChanged()
                 .flatMapLatest { id ->
                     if (id == null) {
-                        flowOf(null)
+                        flowOf(null to null)
                     } else {
-                        subjectRepository.observeSubjectDetail(id)
+                        subjectRepository.observeSubjectDetail(id).map { detail -> id to detail }
                     }
                 }
-                .flatMapLatest { detail ->
+                .flatMapLatest { (requestedId, detail) ->
                     val relatedIds = detail?.let {
                         it.componentSubjectIds + it.amalgamationSubjectIds + it.visuallySimilarSubjectIds
                     }.orEmpty()
@@ -128,13 +144,11 @@ class SubjectDetailViewModel(
                         assignmentStatsFlow,
                         reviewStatsFlow
                     ) { related, strokeOrder, assignmentStats, reviewStats ->
-                        DetailAndRelated(detail, related, strokeOrder, assignmentStats, reviewStats)
+                        DetailAndRelated(requestedId, detail, related, strokeOrder, assignmentStats, reviewStats)
                     }
                 }
                 .combine(navState) { detailAndRelated, nav -> detailAndRelated to nav }
-                .combine(settingsRepository.settings) { pair, settings -> pair to settings }
-                .collect { (pair, settings) ->
-                    val (detailAndRelated, nav) = pair
+                .collect { (detailAndRelated, nav) ->
                     // Only publish states whose loaded detail belongs to the subject the navigation
                     // says is current. On a subject switch the detail pipeline restarts
                     // asynchronously (the old Room flow is cancelled, the new subject's first row is
@@ -154,16 +168,20 @@ class SubjectDetailViewModel(
                     if (detail != null && detail.subjectId != nav.currentSubjectId) return@collect
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            detail = detailAndRelated.detail,
+                            loadState = when {
+                                // Nothing open yet — the sheet is composed a frame before its
+                                // LaunchedEffect calls open(), so this must not read as "missing".
+                                nav.currentSubjectId == null -> SubjectDetailLoadState.Loading
+                                // The detail flow hasn't answered for the subject navigation is
+                                // asking about yet (a switch, or the very first open).
+                                detailAndRelated.subjectId != nav.currentSubjectId -> SubjectDetailLoadState.Loading
+                                detail != null -> SubjectDetailLoadState.Loaded(detail)
+                                else -> SubjectDetailLoadState.NotFound
+                            },
                             relatedSubjects = detailAndRelated.related.associateBy { summary -> summary.subjectId },
                             backStack = nav.backStack,
                             pendingScrollOffset = nav.pendingScrollOffset,
                             forceRevealAll = nav.forceRevealAll,
-                            showPitchAccent = settings.showPitchAccent,
-                            restrictAudioToMp3 = settings.restrictAudioToMp3,
-                            showStrokeOrder = settings.showStrokeOrder,
-                            hideContextSentenceTranslations = settings.hideContextSentenceTranslations,
                             strokeOrder = detailAndRelated.strokeOrder,
                             assignmentStats = detailAndRelated.assignmentStats,
                             reviewStats = detailAndRelated.reviewStats

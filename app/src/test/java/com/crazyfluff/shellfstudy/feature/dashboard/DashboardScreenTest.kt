@@ -9,8 +9,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.fakes.dashboardCallbacks
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
-import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardCallbacks
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardFetch
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreen
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreenTestTags
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardUiState
@@ -35,8 +36,8 @@ class DashboardScreenTest {
     fun showsLoadingIndicator_whileLoading_andNothingIsCachedYet() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = true, username = null),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.InFlight, username = null),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -48,9 +49,9 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isRefreshing = true, username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
+                    fetchState = DashboardFetch.InFlight, username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -66,10 +67,10 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isRefreshing = false, isOffline = true,
+                    fetchState = DashboardFetch.Stale,
                     username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
-                callbacks = DashboardCallbacks(onRefresh = { retried = true }, onStartReview = {}, onLogOut = {})
+                callbacks = dashboardCallbacks(onRefresh = { retried = true }, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -86,10 +87,10 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isRefreshing = false, pendingSyncCount = 3,
+                    fetchState = DashboardFetch.Idle, pendingSyncCount = 3,
                     username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -104,10 +105,10 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isRefreshing = false, isOffline = true, pendingSyncCount = 2, syncBlockedOnAuth = true,
+                    fetchState = DashboardFetch.Stale, pendingSyncCount = 2, syncBlockedOnAuth = true,
                     username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -121,9 +122,9 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isRefreshing = false, username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
+                    fetchState = DashboardFetch.Idle, username = "durtle_fan", level = 12, lessonCount = 5, reviewCount = 23
                 ),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -138,8 +139,8 @@ class DashboardScreenTest {
         var retried = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, errorMessage = "Network error"),
-                callbacks = DashboardCallbacks(onRefresh = { retried = true }, onStartReview = {}, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Failed("Network error")),
+                callbacks = dashboardCallbacks(onRefresh = { retried = true }, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -153,8 +154,8 @@ class DashboardScreenTest {
         var loggedOut = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = { loggedOut = true })
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = { loggedOut = true })
             )
         }
 
@@ -171,8 +172,8 @@ class DashboardScreenTest {
         var openedSettings = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onOpenSettings = { openedSettings = true })
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onOpenSettings = { openedSettings = true })
             )
         }
 
@@ -188,8 +189,8 @@ class DashboardScreenTest {
         var startedLesson = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, lessonCount = 5),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, lessonCount = 5),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })
             )
         }
 
@@ -202,8 +203,8 @@ class DashboardScreenTest {
         var startedReview = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, reviewCount = 5),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = { startedReview = true }, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, reviewCount = 5),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = { startedReview = true }, onLogOut = {})
             )
         }
 
@@ -216,8 +217,8 @@ class DashboardScreenTest {
         var startedLesson = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, lessonCount = 0),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, lessonCount = 0),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })
             )
         }
 
@@ -230,8 +231,8 @@ class DashboardScreenTest {
         var startedReview = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, reviewCount = 0),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = { startedReview = true }, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, reviewCount = 0),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = { startedReview = true }, onLogOut = {})
             )
         }
 
@@ -245,10 +246,10 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isRefreshing = false, username = "x", level = 1,
+                    fetchState = DashboardFetch.Idle, username = "x", level = 1,
                     lessonCount = 0, hasActiveLessonSession = true
                 ),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })
             )
         }
 
@@ -261,10 +262,10 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isRefreshing = false, username = "x", level = 1,
+                    fetchState = DashboardFetch.Idle, username = "x", level = 1,
                     lessonsCompletedToday = 3, dailyLessonGoal = 15
                 ),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -279,8 +280,8 @@ class DashboardScreenTest {
     fun showsDaysOnLevel_inlineWithLevelText() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 12, daysOnCurrentLevel = 6),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 12, daysOnCurrentLevel = 6),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -291,8 +292,8 @@ class DashboardScreenTest {
     fun reviewsCard_showsRenamedLabel_whenSessionActive() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveReviewSession = true),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveReviewSession = true),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -303,8 +304,8 @@ class DashboardScreenTest {
     fun lessonsCard_showsRenamedLabel_whenSessionActive() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveLessonSession = true),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveLessonSession = true),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -315,8 +316,8 @@ class DashboardScreenTest {
     fun searchButton_opensInlineSearchOverlay() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -331,8 +332,8 @@ class DashboardScreenTest {
     fun header_hasNoWordmarkTitle() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -343,8 +344,8 @@ class DashboardScreenTest {
     fun abandonReviewMenuItem_isAbsent_whenNoReviewSessionIsActive() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -357,8 +358,8 @@ class DashboardScreenTest {
         var abandoned = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveReviewSession = true),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true })
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveReviewSession = true),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true })
             )
         }
 
@@ -373,8 +374,8 @@ class DashboardScreenTest {
         var abandoned = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveReviewSession = true),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true })
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveReviewSession = true),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true })
             )
         }
 
@@ -389,8 +390,8 @@ class DashboardScreenTest {
     fun abandonLessonMenuItem_isAbsent_whenNoLessonSessionIsActive() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -403,8 +404,8 @@ class DashboardScreenTest {
         var abandoned = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasActiveLessonSession = true),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonLessonSession = { abandoned = true })
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveLessonSession = true),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonLessonSession = { abandoned = true })
             )
         }
 
@@ -418,8 +419,8 @@ class DashboardScreenTest {
     fun lastSessionSummaryMenuItem_isAbsent_whenNoLastSessionSummaryExists() {
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasLastSessionSummary = false),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasLastSessionSummary = false),
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 
@@ -432,8 +433,8 @@ class DashboardScreenTest {
         var opened = false
         composeTestRule.setContent {
             DashboardScreen(
-                uiState = DashboardUiState(isRefreshing = false, username = "x", level = 1, hasLastSessionSummary = true),
-                callbacks = DashboardCallbacks(
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasLastSessionSummary = true),
+                callbacks = dashboardCallbacks(
                     onRefresh = {}, onStartReview = {}, onLogOut = {},
                     onOpenLastSessionSummary = { opened = true }
                 )
@@ -450,10 +451,10 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
-                    isRefreshing = false, username = "x", level = 1,
+                    fetchState = DashboardFetch.Idle, username = "x", level = 1,
                     hasActiveReviewSession = true, hasActiveLessonSession = true
                 ),
-                callbacks = DashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
+                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {})
             )
         }
 

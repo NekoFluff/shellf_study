@@ -8,6 +8,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
+import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.Job
+import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsActions
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreen
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreenTestTags
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsUiState
@@ -27,65 +30,28 @@ class SettingsScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+    /**
+     * Renders the screen against a recording stand-in for the ViewModel. Rendering assertions pass only
+     * [uiState]; [onNotificationsEnabledChange] is a screen parameter because the route intercepts it
+     * to raise the platform permission prompt.
+     */
     private fun setContent(
         uiState: SettingsUiState,
-        onDailyLessonGoalChange: (Int) -> Unit = {},
-        onLessonBatchSizeChange: (Int) -> Unit = {},
-        onThemeModeChange: (ThemeMode) -> Unit = {},
-        onShowPitchAccentChange: (Boolean) -> Unit = {},
-        onAutoplayPronunciationAudioChange: (Boolean) -> Unit = {},
-        onRestrictAudioToMp3Change: (Boolean) -> Unit = {},
-        onShowSubjectTypeLabelChange: (Boolean) -> Unit = {},
-        onShowTotalTimerChange: (Boolean) -> Unit = {},
-        onShowQuestionTimerChange: (Boolean) -> Unit = {},
-        onUseJapaneseKeyboardChange: (Boolean) -> Unit = {},
-        onCloseEnoughAnswersEnabledChange: (Boolean) -> Unit = {},
-        onShowAnswerReadingPitchAccentChange: (Boolean) -> Unit = {},
-        onHideContextSentenceTranslationsChange: (Boolean) -> Unit = {},
+        actions: SettingsActions = RecordingSettingsActions(),
         onNotificationsEnabledChange: (Boolean) -> Unit = {},
-        onReviewsAvailableEnabledChange: (Boolean) -> Unit = {},
-        onReviewsBacklogEnabledChange: (Boolean) -> Unit = {},
-        onBacklogThresholdChange: (Int) -> Unit = {},
-        onDailyReminderEnabledChange: (Boolean) -> Unit = {},
-        onDailyReminderHourChange: (Int) -> Unit = {},
-        onQuietHoursEnabledChange: (Boolean) -> Unit = {},
-        onQuietHoursStartHourChange: (Int) -> Unit = {},
-        onQuietHoursEndHourChange: (Int) -> Unit = {},
-        onFullRefreshRequested: () -> Unit = {},
+        onOpenLeaderboard: () -> Unit = {},
         onBack: () -> Unit = {}
     ) {
         composeTestRule.setContent {
             SettingsScreen(
                 uiState = uiState,
-                onDailyLessonGoalChange = onDailyLessonGoalChange,
-                onThemeModeChange = onThemeModeChange,
-                onShowPitchAccentChange = onShowPitchAccentChange,
-                onAutoplayPronunciationAudioChange = onAutoplayPronunciationAudioChange,
-                onRestrictAudioToMp3Change = onRestrictAudioToMp3Change,
-                onShowSubjectTypeLabelChange = onShowSubjectTypeLabelChange,
-                onShowTotalTimerChange = onShowTotalTimerChange,
-                onShowQuestionTimerChange = onShowQuestionTimerChange,
-                onShowStrokeOrderChange = {},
-                onUseJapaneseKeyboardChange = onUseJapaneseKeyboardChange,
-                onCloseEnoughAnswersEnabledChange = onCloseEnoughAnswersEnabledChange,
-                onShowAnswerReadingPitchAccentChange = onShowAnswerReadingPitchAccentChange,
-                onHideContextSentenceTranslationsChange = onHideContextSentenceTranslationsChange,
+                actions = actions,
                 onNotificationsEnabledChange = onNotificationsEnabledChange,
-                onReviewsAvailableEnabledChange = onReviewsAvailableEnabledChange,
-                onReviewsBacklogEnabledChange = onReviewsBacklogEnabledChange,
-                onBacklogThresholdChange = onBacklogThresholdChange,
-                onDailyReminderEnabledChange = onDailyReminderEnabledChange,
-                onDailyReminderHourChange = onDailyReminderHourChange,
-                onQuietHoursEnabledChange = onQuietHoursEnabledChange,
-                onQuietHoursStartHourChange = onQuietHoursStartHourChange,
-                onQuietHoursEndHourChange = onQuietHoursEndHourChange,
-                onFullRefreshRequested = onFullRefreshRequested,
-                onLessonBatchSizeChange = onLessonBatchSizeChange,
+                onOpenLeaderboard = onOpenLeaderboard,
                 onBack = onBack
             )
         }
     }
-
     @Test
     fun showsCurrentDailyLessonGoalAndThemeSelection() {
         setContent(uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.DARK))
@@ -96,17 +62,17 @@ class SettingsScreenTest {
 
     @Test
     fun increaseAndDecreaseButtons_invokeCallbackWithAdjustedGoal() {
-        var lastGoal = -1
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
-            onDailyLessonGoalChange = { lastGoal = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.LESSON_GOAL_INCREASE).performClick()
-        assert(lastGoal == 16)
+        assertThat(actions.lastArgumentOf("onDailyLessonGoalChange")).isEqualTo(16)
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.LESSON_GOAL_DECREASE).performClick()
-        assert(lastGoal == 14)
+        assertThat(actions.lastArgumentOf("onDailyLessonGoalChange")).isEqualTo(14)
     }
 
     @Test
@@ -118,147 +84,147 @@ class SettingsScreenTest {
 
     @Test
     fun selectingThemeOption_invokesCallback() {
-        var selectedMode: ThemeMode? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
-            onThemeModeChange = { selectedMode = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.THEME_DARK_OPTION).performClick()
-        assert(selectedMode == ThemeMode.DARK)
+        assertThat(actions.lastArgumentOf("onThemeModeChange")).isEqualTo(ThemeMode.DARK)
     }
 
     @Test
     fun selectingEinkThemeOption_invokesCallback() {
-        var selectedMode: ThemeMode? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
-            onThemeModeChange = { selectedMode = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.THEME_EINK_OPTION).performClick()
-        assert(selectedMode == ThemeMode.EINK)
+        assertThat(actions.lastArgumentOf("onThemeModeChange")).isEqualTo(ThemeMode.EINK)
     }
 
     @Test
     fun togglingPitchAccentSwitch_invokesCallback() {
-        var showPitchAccent: Boolean? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showPitchAccent = true),
-            onShowPitchAccentChange = { showPitchAccent = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.PITCH_ACCENT_TOGGLE).performClick()
-        assert(showPitchAccent == false)
+        assertThat(actions.lastArgumentOf("onShowPitchAccentChange")).isEqualTo(false)
     }
 
     @Test
     fun togglingAutoplayAudioSwitch_invokesCallback() {
-        var autoplay: Boolean? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, autoplayPronunciationAudio = true),
-            onAutoplayPronunciationAudioChange = { autoplay = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE).performScrollTo().performClick()
-        assert(autoplay == false)
+        assertThat(actions.lastArgumentOf("onAutoplayPronunciationAudioChange")).isEqualTo(false)
     }
 
     @Test
     fun togglingMp3OnlyAudioSwitch_invokesCallback() {
-        var restrictToMp3: Boolean? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, restrictAudioToMp3 = false),
-            onRestrictAudioToMp3Change = { restrictToMp3 = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE).performScrollTo().performClick()
-        assert(restrictToMp3 == true)
+        assertThat(actions.lastArgumentOf("onRestrictAudioToMp3Change")).isEqualTo(true)
     }
 
     @Test
     fun togglingShowSubjectTypeLabelSwitch_invokesCallback() {
-        var showLabel: Boolean? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showSubjectTypeLabel = false),
-            onShowSubjectTypeLabelChange = { showLabel = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE).performScrollTo().performClick()
-        assert(showLabel == true)
+        assertThat(actions.lastArgumentOf("onShowSubjectTypeLabelChange")).isEqualTo(true)
     }
 
     @Test
     fun togglingShowTotalTimerSwitch_invokesCallback() {
-        var showTimer: Boolean? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showTotalTimer = false),
-            onShowTotalTimerChange = { showTimer = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_TOTAL_TIMER_TOGGLE).performScrollTo().performClick()
-        assert(showTimer == true)
+        assertThat(actions.lastArgumentOf("onShowTotalTimerChange")).isEqualTo(true)
     }
 
     @Test
     fun togglingShowQuestionTimerSwitch_invokesCallback() {
-        var showTimer: Boolean? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showQuestionTimer = false),
-            onShowQuestionTimerChange = { showTimer = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_QUESTION_TIMER_TOGGLE).performScrollTo().performClick()
-        assert(showTimer == true)
+        assertThat(actions.lastArgumentOf("onShowQuestionTimerChange")).isEqualTo(true)
     }
 
     @Test
     fun togglingUseJapaneseKeyboardSwitch_invokesCallback() {
-        var useJapaneseKeyboard: Boolean? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, useJapaneseKeyboard = false),
-            onUseJapaneseKeyboardChange = { useJapaneseKeyboard = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.JAPANESE_KEYBOARD_TOGGLE).performScrollTo().performClick()
-        assert(useJapaneseKeyboard == true)
+        assertThat(actions.lastArgumentOf("onUseJapaneseKeyboardChange")).isEqualTo(true)
     }
 
     @Test
     fun togglingCloseEnoughAnswersSwitch_invokesCallback() {
-        var closeEnoughEnabled: Boolean? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, closeEnoughAnswersEnabled = true),
-            onCloseEnoughAnswersEnabledChange = { closeEnoughEnabled = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE).performScrollTo().performClick()
-        assert(closeEnoughEnabled == false)
+        assertThat(actions.lastArgumentOf("onCloseEnoughAnswersEnabledChange")).isEqualTo(false)
     }
 
     @Test
     fun togglingAnswerReadingPitchAccentSwitch_invokesCallback() {
-        var showAnswerReadingPitchAccent: Boolean? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showAnswerReadingPitchAccent = false),
-            onShowAnswerReadingPitchAccentChange = { showAnswerReadingPitchAccent = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.ANSWER_READING_PITCH_ACCENT_TOGGLE).performScrollTo().performClick()
-        assert(showAnswerReadingPitchAccent == true)
+        assertThat(actions.lastArgumentOf("onShowAnswerReadingPitchAccentChange")).isEqualTo(true)
     }
 
     @Test
     fun togglingHideContextSentenceTranslationsSwitch_invokesCallback() {
-        var hideContextSentenceTranslations: Boolean? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, hideContextSentenceTranslations = true),
-            onHideContextSentenceTranslationsChange = { hideContextSentenceTranslations = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.HIDE_CONTEXT_SENTENCE_TRANSLATIONS_TOGGLE)
             .performScrollTo().performClick()
-        assert(hideContextSentenceTranslations == false)
+        assertThat(actions.lastArgumentOf("onHideContextSentenceTranslationsChange")).isEqualTo(false)
     }
 
     @Test
@@ -302,72 +268,70 @@ class SettingsScreenTest {
 
     @Test
     fun backlogThresholdStepper_invokesCallbackWithStepOfFive() {
-        var threshold = -1
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 50),
-            onBacklogThresholdChange = { threshold = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE).performScrollTo().performClick()
-        assert(threshold == 55)
+        assertThat(actions.lastArgumentOf("onBacklogThresholdChange")).isEqualTo(55)
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE).performScrollTo().performClick()
-        assert(threshold == 45)
+        assertThat(actions.lastArgumentOf("onBacklogThresholdChange")).isEqualTo(45)
     }
 
     @Test
     fun dailyReminderHourStepper_wrapsAroundMidnight() {
-        var hour = -1
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(notificationsEnabled = true, dailyReminderEnabled = true, dailyReminderHour = 23),
-            onDailyReminderHourChange = { hour = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_HOUR_INCREASE).performScrollTo().performClick()
-        assert(hour == 0)
+        assertThat(actions.lastArgumentOf("onDailyReminderHourChange")).isEqualTo(0)
     }
 
     @Test
     fun quietHoursSteppers_invokeCallbacks() {
-        var start: Int? = null
-        var end: Int? = null
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(notificationsEnabled = true, quietHoursEnabled = true, quietHoursStartHour = 22, quietHoursEndHour = 7),
-            onQuietHoursStartHourChange = { start = it },
-            onQuietHoursEndHourChange = { end = it }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_START_INCREASE).performScrollTo().performClick()
-        assert(start == 23)
+        assertThat(actions.lastArgumentOf("onQuietHoursStartHourChange")).isEqualTo(23)
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_END_DECREASE).performScrollTo().performClick()
-        assert(end == 6)
+        assertThat(actions.lastArgumentOf("onQuietHoursEndHourChange")).isEqualTo(6)
     }
 
     @Test
     fun fullRefreshRow_showsConfirmationBeforeInvokingCallback() {
-        var refreshed = false
-        setContent(uiState = SettingsUiState(), onFullRefreshRequested = { refreshed = true })
+        val actions = RecordingSettingsActions()
+        setContent(uiState = SettingsUiState(), actions = actions)
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_ROW).performScrollTo().performClick()
-        assert(!refreshed)
+        assertThat(actions.calls).doesNotContain("onFullRefreshRequested")
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_CONFIRM_BUTTON).performClick()
-        assert(refreshed)
+        assertThat(actions.calls).contains("onFullRefreshRequested")
     }
 
     @Test
     fun fullRefreshRow_showsProgressAndIsDisabledWhileRefreshing() {
-        var refreshed = false
+        val actions = RecordingSettingsActions()
         setContent(
             uiState = SettingsUiState(isFullRefreshing = true),
-            onFullRefreshRequested = { refreshed = true }
+            actions = actions
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_PROGRESS).performScrollTo().assertIsDisplayed()
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_ROW).performClick()
-        assert(!refreshed)
+        assertThat(actions.calls).doesNotContain("onFullRefreshRequested")
     }
 
     @Test
@@ -376,4 +340,45 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_ERROR_TEXT).performScrollTo().assertIsDisplayed()
     }
+}
+
+/** A [SettingsActions] that records what it was asked to do — see the Lesson and Review tests. */
+private class RecordingSettingsActions : SettingsActions {
+    val calls = mutableListOf<String>()
+    private val arguments = mutableListOf<Any?>()
+
+    /** The argument passed to the most recent [name] call. */
+    fun lastArgumentOf(name: String): Any? = arguments[calls.lastIndexOf(name)]
+
+    private fun record(name: String, argument: Any? = null) {
+        calls += name
+        arguments += argument
+    }
+
+    override fun onDailyLessonGoalChange(goal: Int) = record("onDailyLessonGoalChange", goal)
+    override fun onLessonBatchSizeChange(size: Int) = record("onLessonBatchSizeChange", size)
+    override fun onThemeModeChange(mode: ThemeMode) = record("onThemeModeChange", mode)
+    override fun onShowPitchAccentChange(enabled: Boolean) = record("onShowPitchAccentChange", enabled)
+    override fun onAutoplayPronunciationAudioChange(enabled: Boolean) = record("onAutoplayPronunciationAudioChange", enabled)
+    override fun onRestrictAudioToMp3Change(enabled: Boolean) = record("onRestrictAudioToMp3Change", enabled)
+    override fun onShowSubjectTypeLabelChange(enabled: Boolean) = record("onShowSubjectTypeLabelChange", enabled)
+    override fun onShowTotalTimerChange(enabled: Boolean) = record("onShowTotalTimerChange", enabled)
+    override fun onShowQuestionTimerChange(enabled: Boolean) = record("onShowQuestionTimerChange", enabled)
+    override fun onShowStrokeOrderChange(enabled: Boolean) = record("onShowStrokeOrderChange", enabled)
+    override fun onUseJapaneseKeyboardChange(enabled: Boolean) = record("onUseJapaneseKeyboardChange", enabled)
+    override fun onCloseEnoughAnswersEnabledChange(enabled: Boolean) = record("onCloseEnoughAnswersEnabledChange", enabled)
+    override fun onShowAnswerReadingPitchAccentChange(enabled: Boolean) = record("onShowAnswerReadingPitchAccentChange", enabled)
+    override fun onHideContextSentenceTranslationsChange(enabled: Boolean) = record("onHideContextSentenceTranslationsChange", enabled)
+    override fun onReviewsAvailableEnabledChange(enabled: Boolean) = record("onReviewsAvailableEnabledChange", enabled)
+    override fun onReviewsBacklogEnabledChange(enabled: Boolean) = record("onReviewsBacklogEnabledChange", enabled)
+    override fun onBacklogThresholdChange(threshold: Int) = record("onBacklogThresholdChange", threshold)
+    override fun onDailyReminderEnabledChange(enabled: Boolean) = record("onDailyReminderEnabledChange", enabled)
+    override fun onDailyReminderHourChange(hour: Int): Job {
+        record("onDailyReminderHourChange", hour)
+        return Job()
+    }
+    override fun onQuietHoursEnabledChange(enabled: Boolean) = record("onQuietHoursEnabledChange", enabled)
+    override fun onQuietHoursStartHourChange(hour: Int) = record("onQuietHoursStartHourChange", hour)
+    override fun onQuietHoursEndHourChange(hour: Int) = record("onQuietHoursEndHourChange", hour)
+    override fun onFullRefreshRequested() = record("onFullRefreshRequested")
 }

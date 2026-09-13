@@ -1,4 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.feature.lesson
+import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.LocalOpenSubjectDetail
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
 import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRow
 import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
+import com.crazyfluff.shellfstudy.shared.designsystem.text.LocalShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -59,6 +62,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -77,6 +81,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
+import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
@@ -90,6 +95,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizLoadingContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSummaryDisplay
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionMissedItemsCard
@@ -124,8 +130,6 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
-import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
-import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlin.math.roundToInt
@@ -197,40 +201,6 @@ object LessonScreenTestTags {
     const val FINISH_SESSION_BUTTON = "lesson_finish_session_button"
 }
 
-sealed interface LessonScreenEvent {
-    data class ToggleLessonSelection(val assignmentId: Long) : LessonScreenEvent
-    data class ToggleLessonTypeSelection(val type: SubjectType) : LessonScreenEvent
-    data class SetLessonSort(val sort: LessonSort) : LessonScreenEvent
-    data class SelectFirst(val count: Int) : LessonScreenEvent
-    data object SelectAll : LessonScreenEvent
-    data object SelectNone : LessonScreenEvent
-    data object StartSelectedLessons : LessonScreenEvent
-    data class StudyCardSwiped(val index: Int) : LessonScreenEvent
-    data object NextStudyCard : LessonScreenEvent
-    data object PreviousStudyCard : LessonScreenEvent
-    data class AnswerInputChange(val value: String) : LessonScreenEvent
-    data object Submit : LessonScreenEvent
-    data object DontKnow : LessonScreenEvent
-    data object Undo : LessonScreenEvent
-    data object Continue : LessonScreenEvent
-    data object ToggleDetails : LessonScreenEvent
-    data object CloseDetails : LessonScreenEvent
-    data object Retry : LessonScreenEvent
-    data object StudyOffline : LessonScreenEvent
-    data object Abandon : LessonScreenEvent
-    /** The batch checkpoint's primary action — walks into the next batch's flashcards. */
-    data object ContinueSession : LessonScreenEvent
-    /** The batch checkpoint's "Finishing for now" — keeps the session and leaves the screen. */
-    data object FinishForNow : LessonScreenEvent
-    /** The final checkpoint's optional extra pass over the session's misses. */
-    data object PracticeMissed : LessonScreenEvent
-    /** The final checkpoint's "See results" — declines the extra practice and shows the summary. */
-    data object FinishSession : LessonScreenEvent
-    data object Done : LessonScreenEvent
-    data object Back : LessonScreenEvent
-    data class SearchQueryChange(val query: String) : LessonScreenEvent
-}
-
 @Composable
 fun LessonRoute(
     onSessionComplete: () -> Unit,
@@ -250,38 +220,11 @@ fun LessonRoute(
 
     LessonScreen(
         uiState = uiState,
-        onEvent = { event ->
-            when (event) {
-                is LessonScreenEvent.ToggleLessonSelection -> viewModel.toggleLessonSelection(event.assignmentId)
-                is LessonScreenEvent.ToggleLessonTypeSelection -> viewModel.toggleLessonTypeSelection(event.type)
-                is LessonScreenEvent.SetLessonSort -> viewModel.setLessonSort(event.sort)
-                is LessonScreenEvent.SelectFirst -> viewModel.selectFirst(event.count)
-                LessonScreenEvent.SelectAll -> viewModel.selectAll()
-                LessonScreenEvent.SelectNone -> viewModel.selectNone()
-                LessonScreenEvent.StartSelectedLessons -> viewModel.startSelectedLessons()
-                is LessonScreenEvent.StudyCardSwiped -> viewModel.onStudyCardSwiped(event.index)
-                LessonScreenEvent.NextStudyCard -> viewModel.nextStudyCard()
-                LessonScreenEvent.PreviousStudyCard -> viewModel.previousStudyCard()
-                is LessonScreenEvent.AnswerInputChange -> viewModel.onAnswerInputChange(event.value)
-                LessonScreenEvent.Submit -> viewModel.submitAnswer()
-                LessonScreenEvent.DontKnow -> viewModel.dontKnowAnswer()
-                LessonScreenEvent.Undo -> viewModel.undoLastAnswer()
-                LessonScreenEvent.Continue -> viewModel.onContinue()
-                LessonScreenEvent.ToggleDetails -> viewModel.toggleDetails()
-                LessonScreenEvent.CloseDetails -> viewModel.closeDetails()
-                LessonScreenEvent.Retry -> viewModel.load()
-                LessonScreenEvent.StudyOffline -> viewModel.studyOffline()
-                LessonScreenEvent.Abandon -> viewModel.abandonSession()
-                LessonScreenEvent.ContinueSession -> viewModel.continueSession()
-                LessonScreenEvent.FinishForNow -> viewModel.finishForNow()
-                LessonScreenEvent.PracticeMissed -> viewModel.practiceMissedItems()
-                LessonScreenEvent.FinishSession -> viewModel.finishSessionNow()
-                LessonScreenEvent.Done -> onSessionComplete()
-                LessonScreenEvent.Back -> onBack()
-                is LessonScreenEvent.SearchQueryChange -> searchViewModel.onQueryChange(event.query)
-            }
-        },
-        searchUiState = searchUiState
+        actions = viewModel,
+        onSessionComplete = onSessionComplete,
+        onBack = onBack,
+        searchUiState = searchUiState,
+        onSearchQueryChange = searchViewModel::onQueryChange
     )
 }
 
@@ -289,38 +232,12 @@ fun LessonRoute(
 @Composable
 fun LessonScreen(
     uiState: LessonUiState,
-    onEvent: (LessonScreenEvent) -> Unit,
-    searchUiState: SearchUiState = SearchUiState()
+    actions: LessonActions,
+    onSessionComplete: () -> Unit,
+    onBack: () -> Unit,
+    searchUiState: SearchUiState = SearchUiState(),
+    onSearchQueryChange: (String) -> Unit = {}
 ) {
-    val onToggleLessonSelection: (Long) -> Unit = { onEvent(LessonScreenEvent.ToggleLessonSelection(it)) }
-    val onToggleLessonTypeSelection: (SubjectType) -> Unit = { onEvent(LessonScreenEvent.ToggleLessonTypeSelection(it)) }
-    val onSetLessonSort: (LessonSort) -> Unit = { onEvent(LessonScreenEvent.SetLessonSort(it)) }
-    val onSelectFirst: (Int) -> Unit = { onEvent(LessonScreenEvent.SelectFirst(it)) }
-    val onSelectAll = { onEvent(LessonScreenEvent.SelectAll) }
-    val onSelectNone = { onEvent(LessonScreenEvent.SelectNone) }
-    val onStartSelectedLessons = { onEvent(LessonScreenEvent.StartSelectedLessons) }
-    val onStudyCardSwiped: (Int) -> Unit = { onEvent(LessonScreenEvent.StudyCardSwiped(it)) }
-    val onNextStudyCard = { onEvent(LessonScreenEvent.NextStudyCard) }
-    val onPreviousStudyCard = { onEvent(LessonScreenEvent.PreviousStudyCard) }
-    val onAnswerInputChange: (String) -> Unit = { onEvent(LessonScreenEvent.AnswerInputChange(it)) }
-    val onSubmit = { onEvent(LessonScreenEvent.Submit) }
-    val onDontKnow = { onEvent(LessonScreenEvent.DontKnow) }
-    val onUndo = { onEvent(LessonScreenEvent.Undo) }
-    val onContinue = { onEvent(LessonScreenEvent.Continue) }
-    val onToggleDetails = { onEvent(LessonScreenEvent.ToggleDetails) }
-    val onCloseDetails = { onEvent(LessonScreenEvent.CloseDetails) }
-    val onRetry = { onEvent(LessonScreenEvent.Retry) }
-    val onStudyOffline = { onEvent(LessonScreenEvent.StudyOffline) }
-    val onAbandon = { onEvent(LessonScreenEvent.Abandon) }
-    val onContinueSession = { onEvent(LessonScreenEvent.ContinueSession) }
-    val onFinishForNow = { onEvent(LessonScreenEvent.FinishForNow) }
-    val onPracticeMissed = { onEvent(LessonScreenEvent.PracticeMissed) }
-    val onFinishSession = { onEvent(LessonScreenEvent.FinishSession) }
-    val onDone = { onEvent(LessonScreenEvent.Done) }
-    val onBack = { onEvent(LessonScreenEvent.Back) }
-    val onSearchQueryChange: (String) -> Unit = { onEvent(LessonScreenEvent.SearchQueryChange(it)) }
-
-    val detailSheetState = rememberSubjectDetailSheetState()
     var menuExpanded by remember { mutableStateOf(false) }
     var showAbandonConfirm by remember { mutableStateOf(false) }
     var isSearchActive by remember { mutableStateOf(false) }
@@ -334,11 +251,11 @@ fun LessonScreen(
         else -> false
     }
 
-    // Wrapping Scaffold and SubjectDetailSheetHost in a shared Box — rather than leaving them as
-    // top-level siblings — is what lets the detail sheet's handle overlay the true bottom of the
-    // screen and pick up real navigation-bar insets via its own navigationBarsPadding(), instead of
-    // ending up laid out underneath the system nav bar/gesture area. Mirrors ReviewScreen's
-    // equivalent wrapping Box.
+    // Wrapping Scaffold and the session's own SubjectDetailSheet in a shared Box — rather than
+    // leaving them as top-level siblings — is what lets that sheet's handle overlay the true bottom
+    // of the screen and pick up real navigation-bar insets via its own navigationBarsPadding(),
+    // instead of ending up laid out underneath the system nav bar/gesture area. The app's *browse*
+    // sheet is no longer hosted here; ShellfStudyApp mounts that one, for every screen at once.
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
@@ -392,173 +309,18 @@ fun LessonScreen(
                 title = "Abandon this session?",
                 text = "Finished batches are kept. Lessons in the batch you're on that you haven't finished, and every batch after it, are dropped from this session — they stay available to study later.",
                 confirmLabel = "Abandon",
-                onConfirm = { showAbandonConfirm = false; onAbandon() },
+                onConfirm = { showAbandonConfirm = false; actions.abandonSession() },
                 onDismiss = { showAbandonConfirm = false },
                 confirmButtonTestTag = LessonScreenTestTags.ABANDON_CONFIRM_BUTTON
             )
         }
 
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            when (val phase = uiState.phase) {
-                LessonUiState.Phase.Loading -> {
-                    QuizLoadingContent(loadingIndicatorTestTag = LessonScreenTestTags.LOADING_INDICATOR)
-                }
-
-                is LessonUiState.Phase.Error -> {
-                    QuizErrorContent(
-                        message = phase.message,
-                        onRetry = onRetry,
-                        onStudyOffline = onStudyOffline,
-                        testTags = QuizErrorTestTags(
-                            errorText = LessonScreenTestTags.ERROR_TEXT,
-                            retryButton = LessonScreenTestTags.RETRY_BUTTON,
-                            studyOfflineButton = LessonScreenTestTags.STUDY_OFFLINE_BUTTON
-                        )
-                    )
-                }
-
-                LessonUiState.Phase.NoLessonsAvailable -> {
-                    QuizEmptyQueueContent(
-                        message = "No lessons available right now.",
-                        onDone = onDone,
-                        testTags = QuizEmptyQueueTestTags(
-                            messageText = LessonScreenTestTags.NO_LESSONS_TEXT,
-                            doneButton = LessonScreenTestTags.NO_LESSONS_DONE_BUTTON
-                        )
-                    )
-                }
-
-                is LessonUiState.Phase.Complete -> {
-                    SessionCompleteContent(
-                        title = "Lesson complete!",
-                        subtitle = "Great work. These items will start showing up in your reviews.",
-                        itemsLabel = "Items learned",
-                        averageLabel = "Avg. time per item learned",
-                        itemsCount = phase.sessionItemsLearned,
-                        correctFirstTry = phase.sessionItemsCorrectFirstTry,
-                        totalElapsedMs = phase.sessionTotalElapsedMs,
-                        averageTimePerItemMs = phase.sessionAverageTimePerItemMs,
-                        slowestAnswers = phase.sessionSlowestAnswers.map { it.toSessionAnswerRow() },
-                        missedItems = phase.sessionMissedItems.map { it.toSessionMissedItemRow() },
-                        onDone = onDone,
-                        onSubjectClick = { detailSheetState.show(it) },
-                        testTags = SessionCompleteTestTags(
-                            root = LessonScreenTestTags.SESSION_COMPLETE,
-                            overviewCard = LessonScreenTestTags.SESSION_OVERVIEW_CARD,
-                            itemsText = LessonScreenTestTags.ITEMS_LEARNED_TEXT,
-                            correctFirstTryText = LessonScreenTestTags.CORRECT_FIRST_TRY_TEXT,
-                            timingCard = LessonScreenTestTags.SESSION_TIMING_CARD,
-                            totalTimeText = LessonScreenTestTags.SESSION_TOTAL_TIME_TEXT,
-                            averageTimeText = LessonScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
-                            slowestCard = LessonScreenTestTags.SESSION_SLOWEST_CARD,
-                            missedCard = LessonScreenTestTags.SESSION_MISSED_CARD,
-                            doneButton = LessonScreenTestTags.DONE_BUTTON
-                        )
-                    )
-                }
-
-                is LessonUiState.Phase.Select -> {
-                    LessonSelectionContent(
-                        select = phase,
-                        onToggle = onToggleLessonSelection,
-                        onToggleTypeSelection = onToggleLessonTypeSelection,
-                        onSortChange = onSetLessonSort,
-                        onSelectFirst = onSelectFirst,
-                        onSelectAll = onSelectAll,
-                        onSelectNone = onSelectNone,
-                        onStart = onStartSelectedLessons
-                    )
-                }
-
-                is LessonUiState.Phase.Study -> {
-                    LessonStudyContent(
-                        study = phase,
-                        settings = uiState.settings,
-                        pitchAccentsBySubjectId = uiState.pitchAccentsBySubjectId,
-                        relatedSubjectsById = uiState.relatedSubjectsById,
-                        onNext = onNextStudyCard,
-                        onPrevious = onPreviousStudyCard,
-                        onSwiped = onStudyCardSwiped,
-                        onSubjectClick = { detailSheetState.show(it) }
-                    )
-                }
-
-                is LessonUiState.Phase.Quiz -> {
-                    QuizQuestionContent(
-                        uiState = QuizQuestionUiState(
-                            item = phase.currentItem,
-                            questionType = phase.currentQuestionType,
-                            totalCount = phase.totalQuizCount,
-                            remainingCount = phase.remainingQuizCount,
-                            // Which pass of the session this question belongs to: a plan of several
-                            // batches needs saying out loud, or "3 / 10" reads as the whole session.
-                            sessionContextLabel = when {
-                                phase.round == QuizRound.CLEANUP -> "Extra practice"
-                                phase.batchCount > 1 -> "Batch ${phase.batchIndex + 1} of ${phase.batchCount}"
-                                else -> null
-                            },
-                            answerInput = phase.answerInput,
-                            feedback = phase.feedback,
-                            rankChange = phase.rankChange,
-                            undoCounter = phase.undoCounter,
-                            questionSequence = phase.questionSequence,
-                            answerTypeMismatchCount = phase.answerTypeMismatchCount,
-                            showSubjectTypeLabel = uiState.settings.showSubjectTypeLabel,
-                            showQuestionTimer = uiState.settings.showQuestionTimer,
-                            showTotalTimer = uiState.settings.showTotalTimer,
-                            questionElapsedMs = phase.timing.questionElapsedMs,
-                            questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
-                            questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
-                            sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
-                            sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
-                            useJapaneseKeyboard = uiState.settings.useJapaneseKeyboard,
-                            showAnswerReadingPitchAccent = uiState.settings.showAnswerReadingPitchAccent,
-                            // Pitch accents are folded in from the live map rather than a copy taken
-                            // at grading time — a batch's own quiz needs the same up-to-the-moment
-                            // knowledge its study cards showed. An absent entry has not been looked
-                            // up yet.
-                            answerHint = phase.answerHint?.copy(
-                                pitchAccents = uiState.pitchAccentsBySubjectId[phase.currentItem.subjectId]
-                                    ?: PitchAccentUiState.Unavailable
-                            )
-                        ),
-                        onAnswerInputChange = onAnswerInputChange,
-                        onSubmit = onSubmit,
-                        onDontKnow = onDontKnow,
-                        onContinue = onContinue,
-                        onUndo = onUndo,
-                        testTags = QuizQuestionTestTags(
-                            progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
-                            questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,
-                            totalTimerText = LessonScreenTestTags.TOTAL_TIMER_TEXT,
-                            characters = LessonScreenTestTags.QUIZ_CHARACTERS,
-                            subjectTypeLabel = LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL,
-                            rankChangeText = LessonScreenTestTags.RANK_CHANGE_TEXT,
-                            questionLabel = LessonScreenTestTags.QUESTION_LABEL,
-                            answerField = LessonScreenTestTags.ANSWER_FIELD,
-                            typeMismatchText = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
-                            dontKnowButton = LessonScreenTestTags.DONT_KNOW_BUTTON,
-                            submitButton = LessonScreenTestTags.SUBMIT_BUTTON,
-                            undoButton = LessonScreenTestTags.UNDO_BUTTON,
-                            feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
-                            answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
-                            continueButton = LessonScreenTestTags.CONTINUE_BUTTON,
-                            sessionContextLabel = LessonScreenTestTags.QUIZ_SESSION_CONTEXT_LABEL
-                        )
-                    )
-                }
-
-                is LessonUiState.Phase.BatchComplete -> {
-                    LessonBatchCompleteContent(
-                        checkpoint = phase,
-                        onContinue = onContinueSession,
-                        onFinishForNow = onFinishForNow,
-                        onPracticeMissed = onPracticeMissed,
-                        onFinishSession = onFinishSession,
-                        onSubjectClick = { detailSheetState.show(it) }
-                    )
-                }
-            }
+            LessonPhaseContent(
+                uiState = uiState,
+                actions = actions,
+                onSessionComplete = onSessionComplete
+            )
         }
     }
 
@@ -568,48 +330,193 @@ fun LessonScreen(
         uiState = searchUiState,
         onQueryChange = onSearchQueryChange,
         modifier = Modifier.fillMaxSize(),
-        onSubjectClick = { detailSheetState.show(it) }
     )
-
-    SubjectDetailSheetHost(detailSheetState)
 
     val quizPhase = uiState.phase as? LessonUiState.Phase.Quiz
     if (quizPhase != null) {
-        var lastDetailSubjectId by remember { mutableStateOf<Long?>(null) }
-        var lastDetailQuestionType by remember { mutableStateOf<QuestionType?>(null) }
-        lastDetailSubjectId = quizPhase.currentItem.subjectId
-        lastDetailQuestionType = quizPhase.currentQuestionType
+        SubjectDetailSheet(
+            subjectId = quizPhase.currentItem.subjectId,
+            active = !isSearchActive && quizPhase.feedback != null,
+            expanded = quizPhase.isDetailsExpanded,
+            onToggle = { actions.toggleDetails() },
+            onDismiss = { actions.closeDetails() },
+            revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
+            isAnswered = true,
+            questionType = quizPhase.currentQuestionType.toDetailQuestionType(),
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+    }
+}
 
-        lastDetailSubjectId?.let { subjectId ->
-            lastDetailQuestionType?.let { questionType ->
-                SubjectDetailSheet(
-                    subjectId = subjectId,
-                    active = !isSearchActive && quizPhase.feedback != null,
-                    expanded = quizPhase.isDetailsExpanded,
-                    onToggle = onToggleDetails,
-                    onDismiss = onCloseDetails,
-                    revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
-                    isAnswered = true,
-                    questionType = questionType.toDetailQuestionType(),
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
+/**
+ * The one place that decides which phase renders — everything above it in [LessonScreen] is chrome
+ * (top bar, search overlay, detail sheet), shared by every phase.
+ *
+ * Each branch hands off to the composable that owns that phase, so no single composable declares
+ * every phase's actions. The four `Quiz*`/`SessionComplete*` composables below take state +
+ * callbacks rather than [actions] because they live in `designsystem/` and are shared with Review —
+ * they cannot depend on this feature's state holder.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.LessonPhaseContent(
+    uiState: LessonUiState,
+    actions: LessonActions,
+    onSessionComplete: () -> Unit
+) {
+    val openSubjectDetail = LocalOpenSubjectDetail.current
+    when (val phase = uiState.phase) {
+        LessonUiState.Phase.Loading -> QuizLoadingContent(
+            loadingIndicatorTestTag = LessonScreenTestTags.LOADING_INDICATOR
+        )
+
+        is LessonUiState.Phase.Error -> QuizErrorContent(
+            message = phase.message,
+            onRetry = actions::load,
+            onStudyOffline = actions::studyOffline,
+            testTags = QuizErrorTestTags(
+                errorText = LessonScreenTestTags.ERROR_TEXT,
+                retryButton = LessonScreenTestTags.RETRY_BUTTON,
+                studyOfflineButton = LessonScreenTestTags.STUDY_OFFLINE_BUTTON
+            )
+        )
+
+        LessonUiState.Phase.NoLessonsAvailable -> QuizEmptyQueueContent(
+            message = "No lessons available right now.",
+            onDone = onSessionComplete,
+            testTags = QuizEmptyQueueTestTags(
+                messageText = LessonScreenTestTags.NO_LESSONS_TEXT,
+                doneButton = LessonScreenTestTags.NO_LESSONS_DONE_BUTTON
+            )
+        )
+
+        is LessonUiState.Phase.Complete -> SessionCompleteContent(
+            title = "Lesson complete!",
+            subtitle = "Great work. These items will start showing up in your reviews.",
+            summary = SessionSummaryDisplay(
+                kind = LastSessionKind.LESSON,
+                itemsCount = phase.sessionItemsLearned,
+                correctFirstTry = phase.sessionItemsCorrectFirstTry,
+                totalElapsedMs = phase.sessionTotalElapsedMs,
+                averageTimePerItemMs = phase.sessionAverageTimePerItemMs,
+                slowestAnswers = phase.sessionSlowestAnswers.map { it.toSessionAnswerRow() },
+                missedItems = phase.sessionMissedItems.map { it.toSessionMissedItemRow() }
+            ),
+            onDone = onSessionComplete,
+            onSubjectClick = openSubjectDetail,
+            testTags = SessionCompleteTestTags(
+                root = LessonScreenTestTags.SESSION_COMPLETE,
+                overviewCard = LessonScreenTestTags.SESSION_OVERVIEW_CARD,
+                itemsText = LessonScreenTestTags.ITEMS_LEARNED_TEXT,
+                correctFirstTryText = LessonScreenTestTags.CORRECT_FIRST_TRY_TEXT,
+                timingCard = LessonScreenTestTags.SESSION_TIMING_CARD,
+                totalTimeText = LessonScreenTestTags.SESSION_TOTAL_TIME_TEXT,
+                averageTimeText = LessonScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
+                slowestCard = LessonScreenTestTags.SESSION_SLOWEST_CARD,
+                missedCard = LessonScreenTestTags.SESSION_MISSED_CARD,
+                doneButton = LessonScreenTestTags.DONE_BUTTON
+            )
+        )
+
+        is LessonUiState.Phase.Select -> LessonSelectionContent(select = phase, actions = actions)
+
+        is LessonUiState.Phase.Study -> LessonStudyContent(
+            study = phase,
+            pitchAccentsBySubjectId = uiState.pitchAccentsBySubjectId,
+            relatedSubjectsById = uiState.relatedSubjectsById,
+            actions = actions
+        )
+
+        is LessonUiState.Phase.Quiz -> LessonQuizPhase(
+            phase = phase,
+            pitchAccentsBySubjectId = uiState.pitchAccentsBySubjectId,
+            actions = actions
+        )
+
+        is LessonUiState.Phase.BatchComplete -> LessonBatchCompleteContent(
+            checkpoint = phase,
+            actions = actions,
+        )
     }
-    }
+}
+
+/**
+ * Builds the shared [QuizQuestionContent]'s state from the quiz phase plus the session's display
+ * settings. Lives here rather than inline in [LessonPhaseContent] because the mapping is ~35 lines
+ * and would otherwise dominate the dispatch.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
+    phase: LessonUiState.Phase.Quiz,
+    pitchAccentsBySubjectId: Map<Long, PitchAccentUiState>,
+    actions: LessonActions
+) {
+    QuizQuestionContent(
+        uiState = QuizQuestionUiState(
+            item = phase.currentItem,
+            questionType = phase.currentQuestionType,
+            totalCount = phase.totalQuizCount,
+            remainingCount = phase.remainingQuizCount,
+            // Which pass of the session this question belongs to: a plan of several batches needs
+            // saying out loud, or "3 / 10" reads as the whole session.
+            sessionContextLabel = when {
+                phase.round == QuizRound.CLEANUP -> "Extra practice"
+                phase.batchCount > 1 -> "Batch ${phase.batchIndex + 1} of ${phase.batchCount}"
+                else -> null
+            },
+            answerInput = phase.answerInput,
+            feedback = phase.feedback,
+            rankChange = phase.rankChange,
+            undoCounter = phase.undoCounter,
+            questionSequence = phase.questionSequence,
+            answerTypeMismatchCount = phase.answerTypeMismatchCount,
+            questionElapsedMs = phase.timing.questionElapsedMs,
+            questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
+            questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
+            sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
+            sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
+            // Pitch accents are folded in from the live map rather than a copy taken at grading time
+            // — a batch's own quiz needs the same up-to-the-moment knowledge its study cards showed.
+            // An absent entry has not been looked up yet.
+            answerHint = phase.answerHint?.copy(
+                pitchAccents = pitchAccentsBySubjectId[phase.currentItem.subjectId]
+                    ?: PitchAccentUiState.Unavailable
+            )
+        ),
+        onAnswerInputChange = actions::onAnswerInputChange,
+        onSubmit = actions::submitAnswer,
+        onDontKnow = actions::dontKnowAnswer,
+        onContinue = actions::onContinue,
+        onUndo = actions::undoLastAnswer,
+        testTags = QuizQuestionTestTags(
+            progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
+            questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,
+            totalTimerText = LessonScreenTestTags.TOTAL_TIMER_TEXT,
+            characters = LessonScreenTestTags.QUIZ_CHARACTERS,
+            subjectTypeLabel = LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL,
+            rankChangeText = LessonScreenTestTags.RANK_CHANGE_TEXT,
+            questionLabel = LessonScreenTestTags.QUESTION_LABEL,
+            answerField = LessonScreenTestTags.ANSWER_FIELD,
+            typeMismatchText = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
+            dontKnowButton = LessonScreenTestTags.DONT_KNOW_BUTTON,
+            submitButton = LessonScreenTestTags.SUBMIT_BUTTON,
+            undoButton = LessonScreenTestTags.UNDO_BUTTON,
+            feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
+            answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
+            continueButton = LessonScreenTestTags.CONTINUE_BUTTON,
+            sessionContextLabel = LessonScreenTestTags.QUIZ_SESSION_CONTEXT_LABEL
+        )
+    )
 }
 
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     study: LessonUiState.Phase.Study,
-    settings: LessonUiState.DisplaySettings,
     pitchAccentsBySubjectId: Map<Long, PitchAccentUiState>,
     relatedSubjectsById: Map<Long, SubjectSummary>,
-    onNext: () -> Unit,
-    onPrevious: () -> Unit,
-    onSwiped: (Int) -> Unit,
-    onSubjectClick: (Long) -> Unit
+    actions: LessonActions
 ) {
+    val openSubjectDetail = LocalOpenSubjectDetail.current
     val currentItem = study.studyItems.getOrNull(study.studyIndex) ?: return
     val isLastCard = study.studyIndex == study.studyItems.lastIndex
     val accentColor = subjectColor(currentItem.subjectType)
@@ -623,7 +530,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     }
     LaunchedEffect(pagerState) {
         androidx.compose.runtime.snapshotFlow { pagerState.currentPage }
-            .collect { page -> onSwiped(page) }
+            .collect { page -> actions.onStudyCardSwiped(page) }
     }
 
     Row(
@@ -708,9 +615,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                     kunyomiReadings = item.kunyomiReadings,
                     nanoriReadings = item.nanoriReadings,
                     pronunciationAudios = item.pronunciationAudios,
-                    pitchAccents = pitchAccentsBySubjectId[item.subjectId] ?: PitchAccentUiState.Unavailable,
-                    showPitchAccent = settings.showPitchAccent,
-                    restrictAudioToMp3 = settings.restrictAudioToMp3
+                    pitchAccents = pitchAccentsBySubjectId[item.subjectId] ?: PitchAccentUiState.Unavailable
                 )
                 Text(
                     text = "Level ${item.level} · ${subjectTypeLabel(item.subjectType)}",
@@ -730,7 +635,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
 
             RelatedSubjectsSection(
                 group = componentsGroup(item.subjectType, item.componentSubjectIds, relatedSubjectsById),
-                onSubjectClick = onSubjectClick
+                onSubjectClick = openSubjectDetail
             )
 
             SubjectMnemonicZone(
@@ -744,14 +649,14 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
 
             if (isVocabulary && item.contextSentences.isNotEmpty()) {
                 HorizontalDivider()
-                LessonContextSentencesSection(item.contextSentences, settings.hideContextSentenceTranslations)
+                LessonContextSentencesSection(item.contextSentences)
             }
             visuallySimilarGroup(item.subjectType, item.visuallySimilarSubjectIds, relatedSubjectsById)?.let { group ->
-                RelatedSubjectsSection(group = group, onSubjectClick = onSubjectClick)
+                RelatedSubjectsSection(group = group, onSubjectClick = openSubjectDetail)
             }
             RelatedSubjectsSection(
                 group = usedInGroup(item.amalgamationSubjectIds, relatedSubjectsById),
-                onSubjectClick = onSubjectClick
+                onSubjectClick = openSubjectDetail
             )
         }
     }
@@ -761,12 +666,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         OutlinedButton(
-            onClick = onPrevious,
+            onClick = actions::previousStudyCard,
             enabled = study.studyIndex > 0,
             modifier = Modifier.weight(1f).testTag(LessonScreenTestTags.STUDY_PREVIOUS_BUTTON)
         ) { Text("Back") }
         Button(
-            onClick = onNext,
+            onClick = actions::nextStudyCard,
             modifier = Modifier
                 .weight(1f)
                 .testTag(if (isLastCard) LessonScreenTestTags.START_QUIZ_BUTTON else LessonScreenTestTags.STUDY_NEXT_BUTTON)
@@ -783,12 +688,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteContent(
     checkpoint: LessonUiState.Phase.BatchComplete,
-    onContinue: () -> Unit,
-    onFinishForNow: () -> Unit,
-    onPracticeMissed: () -> Unit,
-    onFinishSession: () -> Unit,
-    onSubjectClick: (Long) -> Unit
+    actions: LessonActions
 ) {
+    val openSubjectDetail = LocalOpenSubjectDetail.current
     val isFinalBatch = checkpoint.batchIndex == checkpoint.batchCount - 1
     Column(
         modifier = Modifier
@@ -824,7 +726,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteCo
                             minWidth = 56.dp,
                             minHeight = 64.dp,
                             maxWidth = 96.dp,
-                            onClick = { onSubjectClick(item.subjectId) }
+                            onClick = { openSubjectDetail(item.subjectId) }
                         )
                     }
                 }
@@ -841,11 +743,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteCo
                 // Plain "Continue", not "Study next 5": the scale is the line above, and the count in
                 // the label was noise on a button whose only job is to move forward.
                 Button(
-                    onClick = onContinue,
+                    onClick = actions::continueSession,
                     modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.CONTINUE_SESSION_BUTTON)
                 ) { Text("Continue") }
                 TextButton(
-                    onClick = onFinishForNow,
+                    onClick = actions::finishForNow,
                     modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.FINISH_FOR_NOW_BUTTON)
                 ) { Text("Finish for now") }
                 Text(
@@ -862,11 +764,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteCo
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Button(
-                    onClick = onPracticeMissed,
+                    onClick = actions::practiceMissedItems,
                     modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.PRACTICE_MISSED_BUTTON)
                 ) { Text("Practice ${next.itemCount} missed") }
                 TextButton(
-                    onClick = onFinishSession,
+                    onClick = actions::finishSessionNow,
                     modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.FINISH_SESSION_BUTTON)
                 ) { Text("See results") }
             }
@@ -925,13 +827,7 @@ private fun LessonSortDropdownButton(
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionContent(
     select: LessonUiState.Phase.Select,
-    onToggle: (Long) -> Unit,
-    onToggleTypeSelection: (SubjectType) -> Unit,
-    onSortChange: (LessonSort) -> Unit,
-    onSelectFirst: (Int) -> Unit,
-    onSelectAll: () -> Unit,
-    onSelectNone: () -> Unit,
-    onStart: () -> Unit
+    actions: LessonActions
 ) {
     val selectedCount = select.selectedAssignmentIds.size
     val total = select.availableLessons.size
@@ -964,7 +860,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                     val allSelected = select.isTypeFullySelected(type)
                     FilterChip(
                         selected = allSelected,
-                        onClick = { onToggleTypeSelection(type) },
+                        onClick = { actions.toggleLessonTypeSelection(type) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -992,7 +888,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                 modifier = Modifier.fillMaxWidth()
             ) {
                 IconButton(
-                    onClick = { onSelectFirst(selectedCount - 1) },
+                    onClick = { actions.selectFirst(selectedCount - 1) },
                     enabled = selectedCount > 0,
                     modifier = Modifier.testTag(LessonScreenTestTags.STEPPER_DECREMENT)
                 ) {
@@ -1000,13 +896,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                 }
                 Slider(
                     value = selectedCount.toFloat(),
-                    onValueChange = { onSelectFirst(it.roundToInt()) },
+                    onValueChange = { actions.selectFirst(it.roundToInt()) },
                     valueRange = 0f..total.toFloat(),
                     steps = (total - 1).coerceAtLeast(0),
                     modifier = Modifier.weight(1f).testTag(LessonScreenTestTags.STEPPER_SLIDER)
                 )
                 IconButton(
-                    onClick = { onSelectFirst(selectedCount + 1) },
+                    onClick = { actions.selectFirst(selectedCount + 1) },
                     enabled = selectedCount < total,
                     modifier = Modifier.testTag(LessonScreenTestTags.STEPPER_INCREMENT)
                 ) {
@@ -1020,7 +916,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
         }
 
         Button(
-            onClick = onStart,
+            onClick = actions::startSelectedLessons,
             enabled = selectedCount > 0,
             modifier = Modifier.fillMaxWidth().testTag(LessonScreenTestTags.START_SELECTED_BUTTON)
         ) {
@@ -1061,12 +957,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     AssistChip(
-                        onClick = onSelectAll,
+                        onClick = actions::selectAll,
                         label = { Text("All") },
                         modifier = Modifier.testTag(LessonScreenTestTags.SELECT_ALL_CHIP)
                     )
                     AssistChip(
-                        onClick = onSelectNone,
+                        onClick = actions::selectNone,
                         label = { Text("None") },
                         modifier = Modifier.testTag(LessonScreenTestTags.SELECT_NONE_CHIP)
                     )
@@ -1074,7 +970,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                 // Order only means anything once the queue mixes types — an all-kanji queue sorts to
                 // itself either way, so the control would just be noise.
                 if (select.availableTypes.size > 1) {
-                    LessonSortDropdownButton(selectedSort = select.sort, onSortChange = onSortChange)
+                    LessonSortDropdownButton(selectedSort = select.sort, onSortChange = actions::setLessonSort)
                 }
             }
         }
@@ -1126,7 +1022,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                                     minHeight = 72.dp,
                                     maxWidth = 112.dp,
                                     modifier = Modifier.testTag(LessonScreenTestTags.lessonCheckboxTag(lessonItem.assignmentId)),
-                                    onClick = { onToggle(lessonItem.assignmentId) }
+                                    onClick = { actions.toggleLessonSelection(lessonItem.assignmentId) }
                                 )
                             }
                         }
@@ -1198,8 +1094,10 @@ private fun LessonGlyphTile(
 }
 
 @Composable
-private fun LessonContextSentencesSection(sentences: List<ContextSentence>, hideTranslations: Boolean) {
-    val shareText = rememberShareText()
+private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
+    val hideTranslations = LocalDisplaySettings.current.hideContextSentenceTranslations
+    val platformShareText = rememberShareText()
+    val shareText = LocalShareText.current ?: platformShareText
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionTitle("Context sentences")
         AkebiSelectableContainer {

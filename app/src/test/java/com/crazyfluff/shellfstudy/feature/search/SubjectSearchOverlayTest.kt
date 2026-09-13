@@ -219,7 +219,6 @@ class SubjectSearchOverlayTest {
                 onActiveChange = {},
                 uiState = SearchUiState(query = "water", results = listOf(sampleResult)),
                 onQueryChange = {},
-                onSubjectClick = {},
                 modifier = Modifier.fillMaxSize()
             )
         }

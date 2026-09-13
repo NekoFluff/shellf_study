@@ -35,6 +35,16 @@ import com.crazyfluff.shellfstudy.shared.quiz.label
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.drop
 
+/**
+ * [QuizAnswerField]'s own test tags. The field used to take these as two loose `String` parameters,
+ * unpacked by its only caller from the [QuizQuestionTestTags] bundle it had already been handed — one
+ * hop of pointless splintering, and two parameters that can only ever travel together.
+ */
+data class QuizAnswerFieldTestTags(
+    val answerField: String,
+    val typeMismatchText: String
+)
+
 /** The answer input shared by review sessions and lesson quizzes — a WaniKani-romaji-aware text
  *  field that shakes and warns when the typed answer looks like the *other* question type (see
  *  [com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer]), rather than silently grading it as a miss. */
@@ -46,8 +56,7 @@ fun QuizAnswerField(
     isAnswered: Boolean,
     answerTypeMismatchCount: Int,
     onSubmit: () -> Unit,
-    answerFieldTestTag: String,
-    typeMismatchTextTestTag: String,
+    testTags: QuizAnswerFieldTestTags,
     focusResetKey: Any?,
     useJapaneseKeyboard: Boolean = false,
     modifier: Modifier = Modifier,
@@ -122,7 +131,7 @@ fun QuizAnswerField(
                 Text(
                     text = "Expecting the ${questionType.label}",
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag(typeMismatchTextTestTag)
+                    modifier = Modifier.testTag(testTags.typeMismatchText)
                 )
             }
         } else null,
@@ -137,6 +146,6 @@ fun QuizAnswerField(
             .fillMaxWidth()
             .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
             .focusRequester(answerFocusRequester)
-            .testTag(answerFieldTestTag)
+            .testTag(testTags.answerField)
     )
 }

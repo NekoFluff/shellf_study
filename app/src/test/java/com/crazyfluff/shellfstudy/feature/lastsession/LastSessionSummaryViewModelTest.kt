@@ -3,11 +3,13 @@ package com.crazyfluff.shellfstudy.feature.lastsession
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
+import com.crazyfluff.shellfstudy.shared.feature.lastsession.LastSessionSummaryUiState
 import com.crazyfluff.shellfstudy.shared.feature.lastsession.LastSessionSummaryViewModel
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
@@ -39,13 +41,11 @@ class LastSessionSummaryViewModelTest {
     }
 
     @Test
-    fun `emits null summary when nothing has been saved`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `emits an empty state when nothing has been saved`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = LastSessionSummaryViewModel(repository)
 
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.summary).isNull()
+            assertThat(awaitSettled()).isEqualTo(LastSessionSummaryUiState.Empty)
         }
     }
 
@@ -66,9 +66,7 @@ class LastSessionSummaryViewModelTest {
         val viewModel = LastSessionSummaryViewModel(repository)
 
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.summary).isEqualTo(summary)
+            assertThat(awaitLoaded()).isEqualTo(summary)
         }
     }
 
@@ -103,9 +101,7 @@ class LastSessionSummaryViewModelTest {
         val viewModel = LastSessionSummaryViewModel(repository)
 
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.summary).isEqualTo(reviewSummary)
+            assertThat(awaitLoaded()).isEqualTo(reviewSummary)
         }
     }
 
@@ -127,9 +123,20 @@ class LastSessionSummaryViewModelTest {
         val viewModel = LastSessionSummaryViewModel(repository)
 
         viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.isLoading) state = awaitItem()
-            assertThat(state.summary?.kind).isEqualTo(LastSessionKind.LESSON)
+            assertThat(awaitLoaded().kind).isEqualTo(LastSessionKind.LESSON)
         }
     }
+
+    /** Advances past [LastSessionSummaryUiState.Loading] to whichever state the load settled on. */
+    private suspend fun ReceiveTurbine<LastSessionSummaryUiState>.awaitSettled(): LastSessionSummaryUiState {
+        var state = awaitItem()
+        while (state is LastSessionSummaryUiState.Loading) state = awaitItem()
+        return state
+    }
+
+    private suspend fun ReceiveTurbine<LastSessionSummaryUiState>.awaitLoaded(): LastSessionSummary =
+        when (val state = awaitSettled()) {
+            is LastSessionSummaryUiState.Loaded -> state.summary
+            else -> error("expected a loaded summary, was $state")
+        }
 }

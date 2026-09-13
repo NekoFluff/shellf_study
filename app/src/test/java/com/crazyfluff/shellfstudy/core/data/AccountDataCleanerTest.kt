@@ -11,7 +11,9 @@ import com.crazyfluff.shellfstudy.fakes.FakeOutboxSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeStudyActivityDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncStateDao
+import com.crazyfluff.shellfstudy.shared.data.AccountCleanupOutcome
 import com.crazyfluff.shellfstudy.shared.data.AccountDataCleaner
+import com.crazyfluff.shellfstudy.shared.data.AccountStore
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
@@ -175,7 +177,7 @@ class AccountDataCleanerTest {
         seedEverything()
 
         val throwing = ThrowingAssignmentDao(assignmentDao)
-        buildCleaner(assignmentDao = throwing).clearAll()
+        val outcome = buildCleaner(assignmentDao = throwing).clearAll()
 
         // The throwing dao's own data survives (its clearAll never completed)...
         assertThat(assignmentDao.getById(1)).isNotNull()
@@ -187,5 +189,38 @@ class AccountDataCleanerTest {
         assertThat(lastSessionSummaryRepository.loadReview()).isNull()
         assertThat(reviewSessionRepository.load()).isNull()
         assertThat(lessonSessionRepository.load()).isNull()
+        // ...and the failure is reported by name rather than swallowed into a Unit.
+        assertThat((outcome as AccountCleanupOutcome.Partial).failures.keys).containsExactly(AccountStore.Assignments)
+    }
+
+    @Test
+    fun `a complete wipe reports Complete`() = runTest {
+        setUp()
+        seedEverything()
+
+        val outcome = buildCleaner().clearAll()
+
+        assertThat(outcome).isEqualTo(AccountCleanupOutcome.Complete)
+    }
+
+    @Test
+    fun `cancellation stops the wipe instead of being recorded as a store failure`() = runTest {
+        setUp()
+        seedEverything()
+
+        // runCatching used to catch CancellationException too, so a cancelled logout walked every
+        // remaining store and then reported success — the caller resumed as if the wipe had finished.
+        val cancelling = object : AssignmentDao by assignmentDao {
+            override suspend fun clearAll() {
+                throw kotlinx.coroutines.CancellationException("logout cancelled")
+            }
+        }
+
+        val thrown = runCatching { buildCleaner(assignmentDao = cancelling).clearAll() }.exceptionOrNull()
+
+        assertThat(thrown).isInstanceOf(kotlinx.coroutines.CancellationException::class.java)
+        // The stores after it were never attempted.
+        assertThat(syncStateDao.get("assignments")).isNotNull()
+        assertThat(reviewSessionRepository.load()).isNotNull()
     }
 }

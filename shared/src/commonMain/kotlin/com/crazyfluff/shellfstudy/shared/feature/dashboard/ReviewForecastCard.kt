@@ -13,11 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -53,6 +49,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
+import com.crazyfluff.shellfstudy.shared.designsystem.components.TitleRowDropdown
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.bucketMomentPhrase
 import com.crazyfluff.shellfstudy.shared.data.model.formatBucketDate
@@ -123,25 +120,34 @@ fun ReviewForecastCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(text = "Review Forecast", style = MaterialTheme.typography.titleMedium)
-                ReviewForecastWindowDropdownButton(selectedWindow = selectedWindow, onWindowChange = onWindowChange)
+                TitleRowDropdown(
+                    selected = selectedWindow,
+                    options = ReviewForecastWindow.entries,
+                    labelOf = { it.label },
+                    onSelect = onWindowChange,
+                    contentDescription = "Change forecast window"
+                )
             }
             Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = summaryText(forecast, selectedIndex, selectedWindow),
-                style = MaterialTheme.typography.bodyMedium,
-                // A fixed brand color rather than MaterialTheme.colorScheme.secondary: in the dark
-                // scheme, secondary maps to a pale tint (see DashboardScreen's SummaryCard comment)
-                // that reads as washed out against a surfaceVariant track and doesn't match the
-                // vivid Kanji color the "Reviews" card elsewhere on this screen uses for the same concept.
-                color = kanjiColor(),
-                modifier = Modifier.testTag(ReviewForecastTestTags.SUMMARY)
-            )
+            val current = forecast
+            if (current == null || !current.isCaughtUp) {
+                Text(
+                    text = summaryText(current, selectedIndex, selectedWindow),
+                    style = MaterialTheme.typography.bodyMedium,
+                    // A fixed brand color rather than MaterialTheme.colorScheme.secondary: in the dark
+                    // scheme, secondary maps to a pale tint (see DashboardScreen's SummaryCard comment)
+                    // that reads as washed out against a surfaceVariant track and doesn't match the
+                    // vivid Kanji color the "Reviews" card elsewhere on this screen uses for the same concept.
+                    color = kanjiColor(),
+                    modifier = Modifier.testTag(ReviewForecastTestTags.SUMMARY)
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             ReviewForecastColorModeChips(selectedColorMode = selectedColorMode, onColorModeChange = onColorModeChange)
             Spacer(modifier = Modifier.height(4.dp))
 
             when {
-                forecast == null ->
+                current == null ->
                     ReviewForecastBarChart(
                         forecast = null,
                         bucketCount = selectedWindow.bucketCount,
@@ -149,9 +155,12 @@ fun ReviewForecastCard(
                         selectedIndex = null,
                         onSelect = {}
                     )
-                forecast.reviewsAvailableNow == 0 && forecast.buckets.all { it.newlyAvailableCount == 0 } -> {
+                current.isCaughtUp -> {
                     Text(
-                        text = "All caught up.",
+                        // The only message in this state — the status line above is suppressed for a
+                        // caught-up forecast — and worded from the shared summary so the phrasing has
+                        // one owner, shared with the reviews-available notification body.
+                        text = reviewForecastSummary(current, selectedWindow.label),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.testTag(ReviewForecastTestTags.EMPTY_STATE)
@@ -159,19 +168,25 @@ fun ReviewForecastCard(
                 }
                 else -> {
                     ReviewForecastBarChart(
-                        forecast = forecast,
+                        forecast = current,
                         bucketCount = selectedWindow.bucketCount,
                         colorMode = selectedColorMode,
                         selectedIndex = selectedIndex,
                         onSelect = { index -> selectedIndex = if (selectedIndex == index) null else index }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    ReviewForecastAxisLabels(forecast)
+                    ReviewForecastAxisLabels(current)
                 }
             }
         }
     }
 }
+
+/** Nothing due now and nothing coming in the window — the card has no chart to draw and no status
+ *  to report beyond "caught up". Used both to pick the placeholder and to suppress the status line
+ *  above it, so the card states that once instead of twice in two slightly different wordings. */
+private val ReviewForecast.isCaughtUp: Boolean
+    get() = reviewsAvailableNow == 0 && buckets.all { it.newlyAvailableCount == 0 }
 
 /** Compact pill toggle between the bar chart's two color breakdowns — mirrors LeaderboardCard's
  *  metric pills. Both breakdowns are always present on [ReviewForecast], so switching here never
@@ -198,50 +213,6 @@ private fun ReviewForecastColorModeChips(
         }
     }
 }
-
-@Composable
-private fun ReviewForecastWindowDropdownButton(
-    selectedWindow: ReviewForecastWindow,
-    onWindowChange: (ReviewForecastWindow) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box(modifier = modifier) {
-        // A plain clickable Row rather than TextButton: Material3 enforces a ~40dp minimum button
-        // height (well above this trigger's own label+icon size), which was inflating the title
-        // row it sits in — the title, vertically centered against that taller sibling, ended up
-        // with several extra dp of dead space below it that no amount of shrinking the explicit
-        // Spacer below could remove, since that space was inside the row, not in the Spacer.
-        Row(
-            modifier = Modifier.clickable(onClick = { expanded = true }),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = selectedWindow.label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Icon(
-                imageVector = Icons.Default.ArrowDropDown,
-                contentDescription = "Change forecast window",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ReviewForecastWindow.entries.forEach { window ->
-                DropdownMenuItem(
-                    text = { Text(window.label) },
-                    onClick = { onWindowChange(window); expanded = false },
-                    trailingIcon = if (window == selectedWindow) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                    } else null
-                )
-            }
-        }
-    }
-}
-
 private fun summaryText(forecast: ReviewForecast?, selectedIndex: Int?, selectedWindow: ReviewForecastWindow): String {
     if (forecast == null) return "Loading…"
     if (selectedIndex != null) {

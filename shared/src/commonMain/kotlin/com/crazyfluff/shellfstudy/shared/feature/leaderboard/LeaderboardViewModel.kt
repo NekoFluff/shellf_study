@@ -3,25 +3,20 @@ package com.crazyfluff.shellfstudy.shared.feature.leaderboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.FriendAdded
 import com.crazyfluff.shellfstudy.shared.data.FriendRepository
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
+import com.crazyfluff.shellfstudy.shared.data.RosterWrite
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
 import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.safeApiCall
 import com.crazyfluff.shellfstudy.shared.network.createFriendWaniKaniApi
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -44,8 +39,6 @@ data class LeaderboardUiState(
     val friends: List<FriendEntry> = emptyList(),
     val isRefreshing: Boolean = false,
     val addFriendForm: AddFriendFormState = AddFriendFormState(),
-    val selectedMetric: LeaderboardMetric = LeaderboardMetric.LEARNED,
-    val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK,
     val refreshErrorMessage: String? = null
 )
 
@@ -53,17 +46,19 @@ class LeaderboardViewModel(
     private val friendRepository: FriendRepository,
     private val friendStatsRepository: FriendStatsRepository,
     private val json: Json
-) : ViewModel() {
+) : ViewModel(), LeaderboardActions {
 
     private val _uiState = MutableStateFlow(LeaderboardUiState())
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val leaderboardFlow = _uiState
-        .map { it.selectedMetric to it.selectedWindow }
-        .distinctUntilChanged()
-        .flatMapLatest { (metric, window) ->
-            friendStatsRepository.observeLeaderboard(metric, window)
-        }
+    // The full-screen leaderboard has no metric/window controls — only the dashboard's compact card
+    // does, and that drives its own ViewModel — so this queries the defaults directly. It used to
+    // route through two `selectedMetric`/`selectedWindow` state fields with mutators that nothing
+    // ever called, which made the state look user-changeable when it was not. Reintroduce them
+    // together with the screen's chips if it ever grows any.
+    private val leaderboardFlow = friendStatsRepository.observeLeaderboard(
+        LeaderboardMetric.LEARNED,
+        LeaderboardWindow.WEEK
+    )
 
     val uiState: StateFlow<LeaderboardUiState> = combine(
         _uiState,
@@ -73,44 +68,37 @@ class LeaderboardViewModel(
         state.copy(leaderboard = leaderboard, friends = friends)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LeaderboardUiState())
 
-    fun onRefresh() {
+    override fun onRefresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true, refreshErrorMessage = null) }
-            val entries = friendRepository.friendsFlow.first()
-            val results = coroutineScope {
-                entries.map { entry -> async { friendStatsRepository.refreshFriend(entry) } }.awaitAll()
-            }
-            val failedCount = results.count { it is ApiResult.Error }
+            // force = true: a pull-to-refresh is the user asking for current figures, so the TTL that
+            // governs the dashboard's background refresh does not apply. The roster read, the fan-out
+            // and the per-friend failure collection all belong to the repository — this method used to
+            // re-implement them, which is how the two callers ended up disagreeing about whether a
+            // friend that failed to refresh should be reported at all.
+            val failures = friendStatsRepository.refreshAllIfStale(force = true)
             _uiState.update {
                 it.copy(
                     isRefreshing = false,
-                    refreshErrorMessage = if (failedCount > 0) {
-                        "Couldn't refresh $failedCount ${if (failedCount == 1) "friend" else "friends"}."
-                    } else {
+                    refreshErrorMessage = if (failures.isEmpty()) {
                         null
+                    } else {
+                        "Couldn't refresh ${failures.size} ${if (failures.size == 1) "friend" else "friends"}."
                     }
                 )
             }
         }
     }
 
-    fun onMetricChange(metric: LeaderboardMetric) {
-        _uiState.update { it.copy(selectedMetric = metric) }
-    }
-
-    fun onWindowChange(window: LeaderboardWindow) {
-        _uiState.update { it.copy(selectedWindow = window) }
-    }
-
-    fun onAddFriendNicknameChange(value: String) {
+    override fun onAddFriendNicknameChange(value: String) {
         _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(nickname = value, error = null, success = false)) }
     }
 
-    fun onAddFriendTokenChange(value: String) {
+    override fun onAddFriendTokenChange(value: String) {
         _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(token = value, error = null)) }
     }
 
-    fun onAddFriendConfirm() {
+    override fun onAddFriendConfirm() {
         val nickname = _uiState.value.addFriendForm.nickname.trim()
         val token = _uiState.value.addFriendForm.token.trim()
         if (nickname.isBlank()) {
@@ -126,18 +114,29 @@ class LeaderboardViewModel(
             val api = createFriendWaniKaniApi(token, json)
             val result = safeApiCall { api.getUser() }
             when (result) {
-                is ApiResult.Success -> {
-                    val entry = friendRepository.addFriend(nickname, token)
-                    val refreshResult = friendStatsRepository.refreshFriend(entry)
-                    _uiState.update {
-                        it.copy(
-                            addFriendForm = AddFriendFormState(isValidating = false, success = true),
-                            refreshErrorMessage = if (refreshResult is ApiResult.Error) {
-                                "Added $nickname, but couldn't fetch their stats yet."
-                            } else {
-                                it.refreshErrorMessage
-                            }
-                        )
+                is ApiResult.Success -> when (val added = friendRepository.addFriend(nickname, token)) {
+                    is FriendAdded.RosterUnreadable -> {
+                        _uiState.update {
+                            it.copy(
+                                addFriendForm = it.addFriendForm.copy(
+                                    isValidating = false,
+                                    error = ROSTER_UNREADABLE_MESSAGE
+                                )
+                            )
+                        }
+                    }
+                    is FriendAdded.Saved -> {
+                        val refreshResult = friendStatsRepository.refreshFriend(added.entry)
+                        _uiState.update {
+                            it.copy(
+                                addFriendForm = AddFriendFormState(isValidating = false, success = true),
+                                refreshErrorMessage = if (refreshResult is ApiResult.Error) {
+                                    "Added $nickname, but couldn't fetch their stats yet."
+                                } else {
+                                    it.refreshErrorMessage
+                                }
+                            )
+                        }
                     }
                 }
                 is ApiResult.Error -> {
@@ -149,18 +148,30 @@ class LeaderboardViewModel(
         }
     }
 
-    fun onRemoveFriend(id: String) {
+    override fun onRemoveFriend(id: String) {
         viewModelScope.launch {
-            friendRepository.removeFriend(id)
-            friendStatsRepository.removeFriendCache(id)
+            when (friendRepository.removeFriend(id)) {
+                // Only drop the cached stats once the roster write actually landed — otherwise the
+                // friend would stay in the roster with their stats deleted behind them.
+                RosterWrite.Saved -> friendStatsRepository.removeFriendCache(id)
+                RosterWrite.RosterUnreadable ->
+                    _uiState.update { it.copy(refreshErrorMessage = ROSTER_UNREADABLE_MESSAGE) }
+            }
         }
     }
 
-    fun onEditNickname(id: String, nickname: String) {
+    override fun onEditNickname(id: String, nickname: String) {
         val trimmed = nickname.trim()
         if (trimmed.isBlank()) return
         viewModelScope.launch {
-            friendRepository.updateNickname(id, trimmed)
+            if (friendRepository.updateNickname(id, trimmed) is RosterWrite.RosterUnreadable) {
+                _uiState.update { it.copy(refreshErrorMessage = ROSTER_UNREADABLE_MESSAGE) }
+            }
         }
     }
 }
+
+/** Shown when a roster edit was refused because what is on disk can't be decoded — the edit was
+ *  dropped rather than saved over the unreadable roster. */
+private const val ROSTER_UNREADABLE_MESSAGE =
+    "Couldn't save your friends list — the data already on this device can't be read."

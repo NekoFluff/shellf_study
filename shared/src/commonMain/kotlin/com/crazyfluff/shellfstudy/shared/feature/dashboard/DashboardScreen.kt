@@ -77,8 +77,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
-import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheetHost
-import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.rememberSubjectDetailSheetState
 import com.crazyfluff.shellfstudy.shared.util.formatRelativeTime
 
 object DashboardScreenTestTags {
@@ -104,23 +102,29 @@ object DashboardScreenTestTags {
 }
 
 /** Bundles [DashboardScreen]'s callback lambdas into one param — the screen otherwise ends up with
- *  a flat dozen-parameter list, most of which are only wired by [DashboardRoute]. */
+ *  a flat dozen-parameter list, most of which are only wired by [DashboardRoute].
+ *
+ *  Every field is required, deliberately. Twelve of them used to default to `{}`, which meant a new
+ *  affordance could be added here and silently left unwired by [DashboardRoute] — the screen would
+ *  render a tappable control that did nothing, and only a hand-written test would notice. With no
+ *  defaults, adding a field breaks the route's compilation and forces the wiring decision. Tests get
+ *  their ergonomics back from `dashboardCallbacks()` in the test fakes, where "silent" is the point. */
 data class DashboardCallbacks(
     val onRefresh: () -> Unit,
     val onStartReview: () -> Unit,
     val onLogOut: () -> Unit,
-    val onStartLesson: () -> Unit = {},
-    val onOpenSettings: () -> Unit = {},
-    val onOpenLeaderboard: () -> Unit = {},
-    val onOpenLastSessionSummary: () -> Unit = {},
-    val onAbandonReviewSession: () -> Unit = {},
-    val onAbandonLessonSession: () -> Unit = {},
-    val onSearchQueryChange: (String) -> Unit = {},
-    val onLevelProgressLevelChange: (Int) -> Unit = {},
-    val onLeaderboardMetricChange: (LeaderboardMetric) -> Unit = {},
-    val onLeaderboardWindowChange: (LeaderboardWindow) -> Unit = {},
-    val onReviewForecastWindowChange: (ReviewForecastWindow) -> Unit = {},
-    val onReviewForecastColorModeChange: (ReviewForecastColorMode) -> Unit = {}
+    val onStartLesson: () -> Unit,
+    val onOpenSettings: () -> Unit,
+    val onOpenLeaderboard: () -> Unit,
+    val onOpenLastSessionSummary: () -> Unit,
+    val onAbandonReviewSession: () -> Unit,
+    val onAbandonLessonSession: () -> Unit,
+    val onSearchQueryChange: (String) -> Unit,
+    val onLevelProgressLevelChange: (Int) -> Unit,
+    val onLeaderboardMetricChange: (LeaderboardMetric) -> Unit,
+    val onLeaderboardWindowChange: (LeaderboardWindow) -> Unit,
+    val onReviewForecastWindowChange: (ReviewForecastWindow) -> Unit,
+    val onReviewForecastColorModeChange: (ReviewForecastColorMode) -> Unit
 )
 
 @Composable
@@ -196,7 +200,6 @@ fun DashboardScreen(
     var isSearchActive by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var abandonConfirm by remember { mutableStateOf<AbandonConfirmKind?>(null) }
-    val detailSheetState = rememberSubjectDetailSheetState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -276,8 +279,8 @@ fun DashboardScreen(
             }
         ) { innerPadding ->
             PullToRefreshBox(
-                // Hardcoded rather than bound to uiState.isRefreshing: the drag-follow arrow
-                // (state.distanceFraction) works regardless of this flag and always snaps away on
+                // Hardcoded rather than bound to uiState.fetchState: the drag-follow arrow
+                // (state.distanceFraction) works regardless of that state and always snaps away on
                 // release, but wiring the real refresh state here would additionally re-pin it as a
                 // spinner for the whole refresh — the status banner below is that signal instead.
                 isRefreshing = false,
@@ -397,7 +400,6 @@ fun DashboardScreen(
                                     maxLevel = uiState.level,
                                     levelUpProgress = uiState.levelUpProgress,
                                     onLevelChange = callbacks.onLevelProgressLevelChange,
-                                    onSubjectClick = { detailSheetState.show(it) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -443,7 +445,6 @@ fun DashboardScreen(
             uiState = searchUiState,
             onQueryChange = callbacks.onSearchQueryChange,
             modifier = Modifier.fillMaxSize(),
-            onSubjectClick = { detailSheetState.show(it) }
         )
 
         when (abandonConfirm) {
@@ -467,7 +468,6 @@ fun DashboardScreen(
         }
     }
 
-    SubjectDetailSheetHost(detailSheetState)
 
 
 }
