@@ -11,18 +11,11 @@ import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 import com.crazyfluff.shellfstudy.shared.data.KeychainTokenCipher
 import com.crazyfluff.shellfstudy.shared.data.getPreferencesDataStore
-import com.crazyfluff.shellfstudy.shared.database.AppDatabase
-import com.crazyfluff.shellfstudy.shared.database.buildAppDatabase
 import com.crazyfluff.shellfstudy.shared.database.getAppDatabaseBuilder
-import com.crazyfluff.shellfstudy.shared.database.friends.FriendsDatabase
-import com.crazyfluff.shellfstudy.shared.database.friends.buildFriendsDatabase
 import com.crazyfluff.shellfstudy.shared.database.friends.getFriendsDatabaseBuilder
-import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDatabase
-import com.crazyfluff.shellfstudy.shared.database.outbox.buildOutboxDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.getOutboxDatabaseBuilder
-import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDatabase
-import com.crazyfluff.shellfstudy.shared.database.studyactivity.buildStudyActivityDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.getStudyActivityDatabaseBuilder
+import com.crazyfluff.shellfstudy.shared.di.registerDatabases
 import com.crazyfluff.shellfstudy.shared.notifications.DefaultNotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationPoster
@@ -37,22 +30,12 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 
 private val iosDatabaseModule = module {
-    single { buildAppDatabase(getAppDatabaseBuilder()) }
-    single { get<AppDatabase>().subjectDao() }
-    single { get<AppDatabase>().assignmentDao() }
-    single { get<AppDatabase>().srsSystemDao() }
-    single { get<AppDatabase>().reviewStatisticDao() }
-    single { get<AppDatabase>().levelProgressionDao() }
-    single { get<AppDatabase>().syncStateDao() }
-
-    single { buildStudyActivityDatabase(getStudyActivityDatabaseBuilder()) }
-    single { get<StudyActivityDatabase>().studyActivityDao() }
-
-    single { buildOutboxDatabase(getOutboxDatabaseBuilder()) }
-    single { get<OutboxDatabase>().outboxDao() }
-
-    single { buildFriendsDatabase(getFriendsDatabaseBuilder()) }
-    single { get<FriendsDatabase>().friendStatsDao() }
+    registerDatabases(
+        appDatabaseBuilder = { getAppDatabaseBuilder() },
+        studyActivityDatabaseBuilder = { getStudyActivityDatabaseBuilder() },
+        outboxDatabaseBuilder = { getOutboxDatabaseBuilder() },
+        friendsDatabaseBuilder = { getFriendsDatabaseBuilder() }
+    )
 }
 
 private val iosDataStoreModule = module {
