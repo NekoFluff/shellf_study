@@ -32,6 +32,8 @@ import platform.Security.SecItemUpdate
 import platform.Security.errSecItemNotFound
 import platform.Security.errSecNotAvailable
 import platform.Security.errSecSuccess
+import platform.Security.kSecAttrAccessible
+import platform.Security.kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 import platform.Security.kSecAttrAccount
 import platform.Security.kSecAttrService
 import platform.Security.kSecClass
@@ -111,18 +113,27 @@ class KeychainTokenCipher : TokenCipher {
         }
         try {
             if (readKeychainItem() != null) {
+                // The match query deliberately does NOT filter on kSecAttrAccessible — an item
+                // created before this attribute was set would otherwise silently fail to match.
+                // `attributes` (what actually gets applied) carries it instead, migrating the item
+                // to the stricter class on the next write.
                 val query = newQuery()
                 val attributes = CFDictionaryCreateMutable(
                     kCFAllocatorDefault, 0, kCFTypeDictionaryKeyCallBacks.ptr, kCFTypeDictionaryValueCallBacks.ptr
                 )
                 CFDictionarySetValue(attributes, kSecValueData, cfData)
+                CFDictionarySetValue(attributes, kSecAttrAccessible, kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
                 val status = SecItemUpdate(query, attributes)
                 CFRelease(query)
                 CFRelease(attributes)
                 check(status == errSecSuccess) { "Keychain update failed: $status" }
             } else {
+                // ThisDeviceOnly: the token must never come back via an encrypted device-to-device
+                // backup/restore onto different hardware — a restore should force re-authentication,
+                // matching the Android Keystore key, which is likewise non-exportable.
                 val query = newQuery()
                 CFDictionarySetValue(query, kSecValueData, cfData)
+                CFDictionarySetValue(query, kSecAttrAccessible, kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
                 val status = SecItemAdd(query, null)
                 CFRelease(query)
                 check(status == errSecSuccess) { "Keychain add failed: $status" }
