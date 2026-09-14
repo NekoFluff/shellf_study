@@ -77,15 +77,15 @@ fun SubjectStatsSection(
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                StatRow(label = "Next review", value = nextReviewText(assignmentStats.nextReviewAt, LocalClock.current.now()))
+                LabelValueRow(label = "Next review", value = nextReviewText(assignmentStats.nextReviewAt, LocalClock.current.now()))
                 if (reviewStats?.lastReviewedAt != null) {
-                    StatRow(label = "Last reviewed", value = formatDateTime(reviewStats.lastReviewedAt))
+                    LabelValueRow(label = "Last reviewed", value = formatDateTime(reviewStats.lastReviewedAt))
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
-                StatRow(label = "Unlocked", value = assignmentStats.unlockedAt?.let(::formatDate) ?: "Not yet")
-                StatRow(label = "Started", value = assignmentStats.startedAt?.let(::formatDate) ?: "Not yet")
-                StatRow(label = "Passed", value = assignmentStats.passedAt?.let(::formatDate) ?: "Not yet")
-                StatRow(label = "Burned", value = assignmentStats.burnedAt?.let(::formatDate) ?: "Not yet")
+                LabelValueRow(label = "Unlocked", value = assignmentStats.unlockedAt?.let(::formatDate) ?: "Not yet")
+                LabelValueRow(label = "Started", value = assignmentStats.startedAt?.let(::formatDate) ?: "Not yet")
+                LabelValueRow(label = "Passed", value = assignmentStats.passedAt?.let(::formatDate) ?: "Not yet")
+                LabelValueRow(label = "Burned", value = assignmentStats.burnedAt?.let(::formatDate) ?: "Not yet")
             }
         }
     }
@@ -130,7 +130,7 @@ private fun QuestionTypeStatsCard(
 }
 
 @Composable
-private fun StatRow(label: String, value: String) {
+private fun LabelValueRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(text = value, style = MaterialTheme.typography.bodyMedium)

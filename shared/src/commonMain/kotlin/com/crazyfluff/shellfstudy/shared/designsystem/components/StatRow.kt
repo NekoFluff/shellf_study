@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 
 // Rounds to one decimal place via integer arithmetic (tenths of a percent) rather than Double
 // formatting, since String.format/"%.1f" aren't available in commonMain.
-fun formatPercentOneDecimal(count: Int, total: Int): String {
+private fun formatPercentOneDecimal(count: Int, total: Int): String {
     if (total <= 0) return "0.0"
     val tenths = (count * 1000 + total / 2) / total
     return "${tenths / 10}.${tenths % 10}"
