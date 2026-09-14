@@ -28,8 +28,14 @@ class FakeSubjectDao : SubjectDao {
 
     override suspend fun getById(id: Long): SubjectEntity? = subjects.value[id]
 
-    override fun observeSearch(query: String): Flow<List<SubjectEntity>> =
-        subjects.map { map -> map.values.filter { it.searchTarget.contains(query, ignoreCase = true) }.take(200) }
+    // The real DAO's query takes a caller-pre-escaped string (backslash-escaped %, _ and \) meant
+    // for `LIKE ... ESCAPE '\'`, matching those characters literally instead of as SQL wildcards —
+    // unescape first so this fake's plain `contains` mirrors that same literal-match behavior
+    // instead of searching for the escape backslashes themselves.
+    override fun observeSearch(query: String): Flow<List<SubjectEntity>> {
+        val unescaped = query.replace("\\_", "_").replace("\\%", "%").replace("\\\\", "\\")
+        return subjects.map { map -> map.values.filter { it.searchTarget.contains(unescaped, ignoreCase = true) }.take(200) }
+    }
 
     override fun observePhoneticallySimilarIds(readingKey: String, excludeId: Long): Flow<List<Long>> =
         subjects.map { map ->

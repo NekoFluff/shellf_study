@@ -60,7 +60,11 @@ interface SubjectDao {
     @Query("SELECT * FROM subjects WHERE id = :id")
     suspend fun getById(id: Long): SubjectEntity?
 
-    @Query("SELECT * FROM subjects WHERE searchTarget LIKE '%' || :query || '%' LIMIT 200")
+    /** [query] must already have its own literal `\`, `%` and `_` characters backslash-escaped by
+     *  the caller (see [com.crazyfluff.shellfstudy.shared.data.SubjectRepository.observeSearch]) —
+     *  Room can't do that for you, and without it a query containing a literal `%`/`_` is
+     *  interpreted as a wildcard instead of matching that literal character. */
+    @Query("SELECT * FROM subjects WHERE searchTarget LIKE '%' || :query || '%' ESCAPE '\\' LIMIT 200")
     fun observeSearch(query: String): Flow<List<SubjectEntity>>
 
     /** Other vocabulary/kana-vocabulary subjects sharing this subject's exact primary reading —

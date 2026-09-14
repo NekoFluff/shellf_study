@@ -113,7 +113,7 @@ class SubjectRepository(
         }
 
     fun observeSearch(query: String): Flow<List<SubjectSummary>> =
-        subjectDao.observeSearch(query.lowercase()).map { entities -> entities.map { it.toSubjectSummary() } }
+        subjectDao.observeSearch(escapeLikeWildcards(query.lowercase())).map { entities -> entities.map { it.toSubjectSummary() } }
 
     fun observeTotalSubjectCount(): Flow<Int> = subjectDao.observeTotalCount()
 
@@ -157,6 +157,14 @@ class SubjectRepository(
 
 private fun buildSearchTarget(characters: String?, slug: String, meanings: List<String>, readings: List<String>): String =
     (listOfNotNull(characters) + slug + meanings + readings).joinToString(" ").lowercase()
+
+/** Escapes a raw search string for use inside [SubjectDao.observeSearch]'s `LIKE ... ESCAPE '\'`
+ *  pattern, so a literal `%` or `_` typed by the user (e.g. searching for a romanization
+ *  containing an underscore) matches that literal character instead of being treated as a SQL
+ *  wildcard. Order matters: the escape character itself must be escaped first, or a `\` inserted
+ *  by escaping a later `%`/`_` would itself be re-escaped. */
+private fun escapeLikeWildcards(query: String): String =
+    query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 /** Katakana-normalized primary reading, for exact-match "phonetically similar" lookups — falls back
  *  to the first reading if none is marked primary, and to "" if there are no readings at all. */
