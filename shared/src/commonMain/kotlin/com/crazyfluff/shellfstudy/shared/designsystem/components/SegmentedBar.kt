@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,7 +37,9 @@ fun SegmentedBar(
     modifier: Modifier = Modifier,
     height: Dp = 8.dp,
     thresholdFraction: Float? = null,
-    thresholdColor: Color = Color.White
+    // Theme-aware rather than a fixed Color.White: that hardcoded default drew a near-invisible
+    // marker over the light/e-ink `surfaceVariant` locked segment it most often sits on.
+    thresholdColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
     Canvas(
         modifier = modifier
