@@ -10,13 +10,12 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.crazyfluff.shellfstudy.shared.data.AUDIO_CACHE_MAX_BYTES
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.io.File
-
-private const val AUDIO_CACHE_MAX_BYTES = 50L * 1024 * 1024
 
 @UnstableApi
 val audioModule = module {

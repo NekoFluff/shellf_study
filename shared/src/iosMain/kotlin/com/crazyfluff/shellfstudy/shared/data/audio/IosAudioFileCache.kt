@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.data.audio
 
+import com.crazyfluff.shellfstudy.shared.data.AUDIO_CACHE_MAX_BYTES
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.database.iosCachesDirectoryPath
 import io.ktor.client.HttpClient
@@ -9,7 +10,6 @@ import okio.FileSystem
 import okio.Path.Companion.toPath
 
 private const val AUDIO_CACHE_DIRECTORY_NAME = "pronunciation_audio"
-internal const val AUDIO_CACHE_MAX_BYTES = 50L * 1024 * 1024
 
 private val CONTENT_TYPE_EXTENSIONS = mapOf(
     "audio/mpeg" to "mp3",
