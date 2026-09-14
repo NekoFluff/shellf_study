@@ -124,4 +124,11 @@ class WaniKaniApi(
      *  mutation is terminally rejected and there's no authoritative response to patch in locally. */
     suspend fun getAssignment(assignmentId: Long): WkResourceItem<AssignmentData> =
         httpClient.get("${baseUrl}assignments/$assignmentId").body()
+
+    /**
+     * Releases the underlying engine's connection pool/dispatcher threads. Only call this on a
+     * short-lived instance created for a single fetch (e.g. [createFriendWaniKaniApi]) — the app's
+     * main [WaniKaniApi] singleton lives for the whole process and must never be closed.
+     */
+    fun close() = httpClient.close()
 }

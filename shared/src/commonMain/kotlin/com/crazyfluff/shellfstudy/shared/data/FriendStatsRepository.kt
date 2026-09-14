@@ -299,8 +299,12 @@ class FriendStatsRepository(
      * offline refresh used to erase a friend's real stats.
      */
     suspend fun refreshFriend(entry: FriendEntry): ApiResult<Unit> {
+        // A fresh HttpClient (own connection pool/dispatcher threads) is built per call, per friend
+        // — closed in `finally` so a leaderboard with several friends doesn't leak one live engine
+        // per friend on every refreshAllIfStale fan-out.
+        var api: WaniKaniApi? = null
         return try {
-            val api = friendApiFactory(friendRepository.decryptToken(entry))
+            api = friendApiFactory(friendRepository.decryptToken(entry))
             when (val result = fetchFriendStats(entry.id, api)) {
                 is ApiResult.Error -> result
                 is ApiResult.Success -> {
@@ -312,6 +316,8 @@ class FriendStatsRepository(
             throw e
         } catch (e: Exception) {
             ApiResult.Error("Couldn't refresh ${entry.nickname}'s stats.", e)
+        } finally {
+            api?.close()
         }
     }
 
