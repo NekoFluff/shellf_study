@@ -1,30 +1,19 @@
 package com.crazyfluff.shellfstudy.shared.navigation
 
-import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavController
-import androidx.navigation.NavOptionsBuilder
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
-private fun NavController.isCurrentDestinationResumed() =
-    currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED
-
-fun <T : Any> NavController.navigateSafely(route: T, builder: NavOptionsBuilder.() -> Unit = {}) {
-    if (isCurrentDestinationResumed()) navigate(route, builder)
-}
-
 /**
  * Pure debounce state machine behind [popBackStackSafely] — split out so its (subtle, already
  * regressed once) logic can be unit-tested without a real [NavController].
  *
- * Not gated on [isCurrentDestinationResumed] (unlike [navigateSafely]): that lifecycle check left
- * a window where a single deliberate tap on e.g. "Back to dashboard" got silently dropped with no
- * retry. But `popBackStack()`'s currentDestination updates synchronously, before Compose
- * recomposes the screen away — so two rapid taps on the same still-visible button each fire a real
- * pop, skipping past the intended destination. A short time debounce blocks the second of two
- * near-simultaneous taps without reintroducing the dropped-single-tap bug.
+ * `popBackStack()`'s currentDestination updates synchronously, before Compose recomposes the
+ * screen away — so two rapid taps on the same still-visible button each fire a real pop, skipping
+ * past the intended destination. A short time debounce blocks the second of two near-simultaneous
+ * taps without dropping a single deliberate tap.
  *
  * Keyed on the destination the *previous* pop landed on, not the route being left — comparing
  * against "where we're leaving from" doesn't work: by the time a rapid second tap on the same

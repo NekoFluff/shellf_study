@@ -58,7 +58,7 @@ fun ShellfStudyNavHost(
         // user was on some other screen when the pending value was set.
         if (targetDestination != null) {
             if (!destination.hasRoute(targetDestination::class)) {
-                navController.navigateSafely(targetDestination)
+                navController.navigate(targetDestination) { launchSingleTop = true }
             }
             onPendingDestinationConsumed()
         }
@@ -68,13 +68,15 @@ fun ShellfStudyNavHost(
         composable<ShellfStudyDestination.Splash> {
             SplashRoute(
                 onNavigateToAuth = {
-                    navController.navigateSafely(ShellfStudyDestination.Auth) {
+                    navController.navigate(ShellfStudyDestination.Auth) {
                         popUpTo<ShellfStudyDestination.Splash> { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
                 onNavigateToDashboard = {
-                    navController.navigateSafely(ShellfStudyDestination.Dashboard) {
+                    navController.navigate(ShellfStudyDestination.Dashboard) {
                         popUpTo<ShellfStudyDestination.Splash> { inclusive = true }
+                        launchSingleTop = true
                     }
                 }
             )
@@ -82,22 +84,24 @@ fun ShellfStudyNavHost(
         composable<ShellfStudyDestination.Auth> {
             AuthRoute(
                 onAuthenticated = {
-                    navController.navigateSafely(ShellfStudyDestination.Dashboard) {
+                    navController.navigate(ShellfStudyDestination.Dashboard) {
                         popUpTo<ShellfStudyDestination.Auth> { inclusive = true }
+                        launchSingleTop = true
                     }
                 }
             )
         }
         composable<ShellfStudyDestination.Dashboard> {
             DashboardRoute(
-                onStartReview = { navController.navigateSafely(ShellfStudyDestination.Review) },
-                onStartLesson = { navController.navigateSafely(ShellfStudyDestination.Lesson) },
-                onOpenSettings = { navController.navigateSafely(ShellfStudyDestination.Settings) },
-                onOpenLeaderboard = { navController.navigateSafely(ShellfStudyDestination.Leaderboard) },
-                onOpenLastSessionSummary = { navController.navigateSafely(ShellfStudyDestination.LastSessionSummary) },
+                onStartReview = { navController.navigate(ShellfStudyDestination.Review) { launchSingleTop = true } },
+                onStartLesson = { navController.navigate(ShellfStudyDestination.Lesson) { launchSingleTop = true } },
+                onOpenSettings = { navController.navigate(ShellfStudyDestination.Settings) { launchSingleTop = true } },
+                onOpenLeaderboard = { navController.navigate(ShellfStudyDestination.Leaderboard) { launchSingleTop = true } },
+                onOpenLastSessionSummary = { navController.navigate(ShellfStudyDestination.LastSessionSummary) { launchSingleTop = true } },
                 onLoggedOut = {
-                    navController.navigateSafely(ShellfStudyDestination.Auth) {
+                    navController.navigate(ShellfStudyDestination.Auth) {
                         popUpTo<ShellfStudyDestination.Dashboard> { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
                 pendingDestination = pendingDestination,
@@ -119,7 +123,7 @@ fun ShellfStudyNavHost(
         composable<ShellfStudyDestination.Settings> {
             SettingsRoute(
                 onBack = { navController.popBackStackSafely() },
-                onOpenLeaderboard = { navController.navigateSafely(ShellfStudyDestination.Leaderboard) }
+                onOpenLeaderboard = { navController.navigate(ShellfStudyDestination.Leaderboard) { launchSingleTop = true } }
             )
         }
         composable<ShellfStudyDestination.Leaderboard> {
