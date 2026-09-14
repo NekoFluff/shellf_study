@@ -189,7 +189,13 @@ class DashboardViewModel(
     private val _dashboardData = MutableStateFlow(DashboardUiState())
     private val selectedProgressLevel = MutableStateFlow<Int?>(null)
     private val currentLevel: Flow<Int?> = _dashboardData.map { it.level }.distinctUntilChanged()
-    private val _leaderboardRefreshing = MutableStateFlow(false)
+    // A count rather than a plain boolean: performForcedRefresh can overlap with itself (a resume-
+    // triggered initial sync racing a fast pull-to-refresh), each launching its own friend-stats
+    // refresh. A shared boolean toggled by each independently would let the first call to finish
+    // flip it back to false while the other's refresh is still in flight, turning off the
+    // leaderboard's loading indicator prematurely.
+    private val leaderboardRefreshCount = MutableStateFlow(0)
+    private val _leaderboardRefreshing: Flow<Boolean> = leaderboardRefreshCount.map { it > 0 }.distinctUntilChanged()
 
     private val sessionSyncState: Flow<SessionSyncState> = combine(
         reviewSessionController.hasActiveSession,
@@ -370,9 +376,12 @@ class DashboardViewModel(
         // respect it, or every app launch would refetch every friend's stats regardless of when
         // they were last fetched.
         viewModelScope.launch {
-            _leaderboardRefreshing.value = true
-            friendStatsRepository.refreshAllIfStale(force = forceFriendStatsRefresh)
-            _leaderboardRefreshing.value = false
+            leaderboardRefreshCount.update { it + 1 }
+            try {
+                friendStatsRepository.refreshAllIfStale(force = forceFriendStatsRefresh)
+            } finally {
+                leaderboardRefreshCount.update { it - 1 }
+            }
         }
 
         dashboardSyncCoordinator.sync(force = true)
