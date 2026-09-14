@@ -54,11 +54,36 @@ fun srsStageColor(stage: SrsStage): Color = when (stage) {
     SrsStage.BURNED -> themeAwareColor(SrsStageColors.Burned, EinkStageColors.Burned, SrsStageColorsDark.Burned)
 }
 
+/** The rounded, translucent-background, colored-border pill shared by [RankChangeChip] and
+ *  [SrsStageChip] — a row holding an optional leading icon then [text] in [color]. */
+@Composable
+private fun StagePillRow(
+    color: Color,
+    text: String,
+    modifier: Modifier = Modifier,
+    leadingIcon: (@Composable () -> Unit)? = null
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .background(color.copy(alpha = 0.15f), StageChipShape)
+            .border(1.dp, color, StageChipShape)
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    ) {
+        if (leadingIcon != null) {
+            leadingIcon()
+            Spacer(modifier = Modifier.width(4.dp))
+        }
+        Text(text = text, color = color, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+private val StageChipShape = RoundedCornerShape(50)
+
 @Composable
 fun RankChangeChip(rankChange: RankChange, modifier: Modifier = Modifier) {
     val fromColor = srsStageColor(rankChange.from)
     val toColor = srsStageColor(rankChange.to)
-    val shape = RoundedCornerShape(50)
 
     // Keyed on rankChange so a brand-new rank change (rather than a recomposition of the same one)
     // restarts every animation below from the start.
@@ -94,27 +119,19 @@ fun RankChangeChip(rankChange: RankChange, modifier: Modifier = Modifier) {
 
     val color = lerp(fromColor, toColor, colorProgress.value)
 
-    Box(modifier = modifier.clip(shape)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .background(color.copy(alpha = 0.15f), shape)
-                .border(1.dp, color, shape)
-                .padding(horizontal = 10.dp, vertical = 4.dp)
-        ) {
-            Icon(
-                imageVector = if (rankChange.isRankUp) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-                contentDescription = if (rankChange.isRankUp) "Rank up" else "Rank down",
-                tint = color,
-                modifier = Modifier.size(16.dp).scale(iconScale.value)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = rankChange.to.displayName,
-                color = color,
-                style = MaterialTheme.typography.labelLarge
-            )
-        }
+    Box(modifier = modifier.clip(StageChipShape)) {
+        StagePillRow(
+            color = color,
+            text = rankChange.to.displayName,
+            leadingIcon = {
+                Icon(
+                    imageVector = if (rankChange.isRankUp) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                    contentDescription = if (rankChange.isRankUp) "Rank up" else "Rank down",
+                    tint = color,
+                    modifier = Modifier.size(16.dp).scale(iconScale.value)
+                )
+            }
+        )
         // A translucent brightness sweep, promotions only — reads on the grayscale e-ink palette as
         // a highlight rather than relying on hue, and demotions stay visually muted by comparison.
         if (rankChange.isRankUp) {
@@ -142,19 +159,5 @@ fun RankChangeChip(rankChange: RankChange, modifier: Modifier = Modifier) {
 @Composable
 fun SrsStageChip(stage: SrsStage, modifier: Modifier = Modifier) {
     val color = srsStageColor(stage)
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(color.copy(alpha = 0.15f))
-            .border(1.dp, color, RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-    ) {
-        Text(
-            text = stage.displayName,
-            color = color,
-            style = MaterialTheme.typography.labelLarge
-        )
-    }
+    StagePillRow(color = color, text = stage.displayName, modifier = modifier.clip(StageChipShape))
 }
