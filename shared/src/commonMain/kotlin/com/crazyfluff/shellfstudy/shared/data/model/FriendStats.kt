@@ -27,6 +27,11 @@ data class ActivityStats(
     }
 }
 
+/** ACCURACY has full sort/format/chart support below (see LeaderboardCard/RaceChartCard) but is
+ *  not one of the selectable chips in LeaderboardCard's `metrics` list, so it's unreachable from
+ *  the UI today. Left wired up rather than removed since every other piece of it is real, working
+ *  code — add it to `metrics` to expose it, or strip the ACCURACY branches everywhere it's
+ *  handled if it's been ruled out for good. */
 enum class LeaderboardMetric(val displayName: String) {
     LEARNED("Lessons"),
     LEVEL("Level"),
