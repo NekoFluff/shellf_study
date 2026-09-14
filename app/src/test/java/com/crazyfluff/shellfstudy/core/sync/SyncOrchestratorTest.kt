@@ -7,6 +7,8 @@ import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
@@ -15,6 +17,8 @@ import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * syncAll() fans the four independent resources out with `async` after the two sequential ones —
@@ -99,6 +103,53 @@ class SyncOrchestratorTest {
         // its absence proves fullRefresh() actually cleared the cursors rather than just bypassing
         // the staleness check the way syncAll(force = true) does.
         assertThat(requestedPaths.none { it.contains("updated_after") }).isTrue()
+    }
+
+    @Test
+    fun `a concurrent fullRefresh waits for an in-flight syncAll instead of racing its cursor clear`() = runTest {
+        repositories.syncStateDao.upsert(
+            SyncStateEntity(resource = "subjects", lastSyncedAt = "2020-01-01T00:00:00Z", lastSyncSuccessAt = "2020-01-01T00:00:00Z")
+        )
+        val firstRequestReceived = CountDownLatch(1)
+        val releaseFirstRequest = CountDownLatch(1)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.path.orEmpty()
+                requestedPaths += path
+                if (path.startsWith("/spaced_repetition_systems")) {
+                    firstRequestReceived.countDown()
+                    releaseFirstRequest.await(2, TimeUnit.SECONDS)
+                }
+                return when {
+                    path.startsWith("/spaced_repetition_systems") -> emptyCollection("srs_system")
+                    path.startsWith("/subjects") -> emptyCollection("kanji")
+                    path.startsWith("/assignments") -> emptyCollection("assignment")
+                    path.startsWith("/review_statistics") -> emptyCollection("review_statistic")
+                    path.startsWith("/level_progressions") -> emptyCollection("level_progression")
+                    else -> emptyResponse(404)
+                }
+            }
+        }
+
+        // Runs on a real dispatcher (not the test scheduler) so it genuinely executes concurrently
+        // with the assertions below instead of being virtual-time-scheduled around them.
+        val syncAllJob = async(Dispatchers.Default) { repositories.syncOrchestrator.syncAll(force = true) }
+        assertThat(firstRequestReceived.await(2, TimeUnit.SECONDS)).isTrue()
+        // syncAll is now parked mid-request, holding the sync mutex.
+
+        val fullRefreshJob = async(Dispatchers.Default) { repositories.syncOrchestrator.fullRefresh() }
+        // No signal to wait on here by design: proving fullRefresh hasn't started yet is exactly
+        // proving a negative, so a bounded real-time pause is unavoidable — mirrors the accepted
+        // real-wait precedent in MainDispatcherRule.settleRealThreadHandoffs.
+        Thread.sleep(200)
+        assertThat(repositories.syncStateDao.get("subjects")).isNotNull() // fullRefresh hasn't cleared cursors yet
+
+        releaseFirstRequest.countDown()
+        assertThat(syncAllJob.await()).isEqualTo(ApiResult.Success(Unit))
+        assertThat(fullRefreshJob.await()).isEqualTo(ApiResult.Success(Unit))
+        // fullRefresh's clear-then-resync only ran (and only completed) after syncAll released the
+        // mutex, so the seeded 2020 cursor is gone, replaced by a freshly-written one.
+        assertThat(repositories.syncStateDao.get("subjects")?.lastSyncedAt).isNotEqualTo("2020-01-01T00:00:00Z")
     }
 
     private fun pathsRequested(): List<String> = requestedPaths.map { it.substringBefore('?') }

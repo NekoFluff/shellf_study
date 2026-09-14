@@ -7,11 +7,13 @@ import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * The single place that sequences a full sync pass across every repository — both the periodic
- * `SyncWorker` and manual triggers (app open, pull-to-refresh) call this instead of duplicating
- * the ordering themselves.
+ * `SyncWorker` and manual triggers (app open, pull-to-refresh, and [fullRefresh]'s cursor reset)
+ * call this instead of duplicating the ordering themselves.
  */
 class SyncOrchestrator(
     private val subjectRepository: SubjectRepository,
@@ -19,7 +21,15 @@ class SyncOrchestrator(
     private val statsRepository: StatsRepository,
     private val syncStateDao: SyncStateDao
 ) {
-    suspend fun syncAll(force: Boolean = false): ApiResult<Unit> = coroutineScope {
+    // syncAll and fullRefresh have independent, legitimate entry points (periodic worker, dashboard
+    // resume/pull-to-refresh, and a manual full-refresh button) that can otherwise overlap in time.
+    // Without serializing them, fullRefresh's cursor clear can race a concurrent syncAll's read of
+    // the very cursors it just cleared, corrupting which `updated_after` value ends up persisted.
+    private val syncMutex = Mutex()
+
+    suspend fun syncAll(force: Boolean = false): ApiResult<Unit> = syncMutex.withLock { syncAllLocked(force) }
+
+    private suspend fun syncAllLocked(force: Boolean): ApiResult<Unit> = coroutineScope {
         // SRS systems and subjects first — everything else references subject IDs, and subjects
         // reference spaced_repetition_system_id.
         val srsResult = subjectRepository.syncSrsSystems(force)
@@ -46,8 +56,8 @@ class SyncOrchestrator(
      * `updated_after=null` full refetch — for recovering from a local mapping bug (data that's
      * wrong on-device despite being unchanged on WaniKani), not routine use.
      */
-    suspend fun fullRefresh(): ApiResult<Unit> {
+    suspend fun fullRefresh(): ApiResult<Unit> = syncMutex.withLock {
         syncStateDao.clearAll()
-        return syncAll(force = true)
+        syncAllLocked(force = true)
     }
 }
