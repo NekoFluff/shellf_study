@@ -45,6 +45,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
+import com.crazyfluff.shellfstudy.shared.designsystem.components.StatRow
 import com.crazyfluff.shellfstudy.shared.designsystem.components.TitleRowDropdown
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.bucketMomentPhrase
@@ -107,6 +108,22 @@ fun ReviewForecastCard(
     // within each bar, never the bar count, so a tapped index stays valid across it.
     var selectedIndex by remember(selectedWindow) { mutableStateOf<Int?>(null) }
 
+    // Resolved once here (rather than inside ReviewForecastBarChart) so both the chart and the
+    // numeric breakdown list below it share identical colors without calling these theme-aware
+    // functions twice.
+    val typeColors = mapOf(
+        SubjectType.RADICAL to subjectColor(SubjectType.RADICAL),
+        SubjectType.KANJI to subjectColor(SubjectType.KANJI),
+        SubjectType.VOCABULARY to subjectColor(SubjectType.VOCABULARY)
+    )
+    val stageColors = mapOf(
+        ItemSpreadBucket.APPRENTICE to srsStageColor(representativeStage(ItemSpreadBucket.APPRENTICE)),
+        ItemSpreadBucket.GURU to srsStageColor(representativeStage(ItemSpreadBucket.GURU)),
+        ItemSpreadBucket.MASTER to srsStageColor(representativeStage(ItemSpreadBucket.MASTER)),
+        ItemSpreadBucket.ENLIGHTENED to srsStageColor(representativeStage(ItemSpreadBucket.ENLIGHTENED)),
+        ItemSpreadBucket.BURNED to srsStageColor(representativeStage(ItemSpreadBucket.BURNED))
+    )
+
     Card(modifier = modifier.fillMaxWidth().testTag(ReviewForecastTestTags.CARD)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -148,7 +165,9 @@ fun ReviewForecastCard(
                         bucketCount = selectedWindow.bucketCount,
                         colorMode = selectedColorMode,
                         selectedIndex = null,
-                        onSelect = {}
+                        onSelect = {},
+                        typeColors = typeColors,
+                        stageColors = stageColors
                     )
                 current.isCaughtUp -> {
                     Text(
@@ -167,10 +186,20 @@ fun ReviewForecastCard(
                         bucketCount = selectedWindow.bucketCount,
                         colorMode = selectedColorMode,
                         selectedIndex = selectedIndex,
-                        onSelect = { index -> selectedIndex = if (selectedIndex == index) null else index }
+                        onSelect = { index -> selectedIndex = if (selectedIndex == index) null else index },
+                        typeColors = typeColors,
+                        stageColors = stageColors
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     ReviewForecastAxisLabels(current)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ReviewForecastBreakdownList(
+                        forecast = current,
+                        selectedIndex = selectedIndex,
+                        colorMode = selectedColorMode,
+                        typeColors = typeColors,
+                        stageColors = stageColors
+                    )
                 }
             }
         }
@@ -256,6 +285,76 @@ private fun representativeStage(bucket: ItemSpreadBucket): SrsStage = when (buck
     ItemSpreadBucket.BURNED -> SrsStage.BURNED
 }
 
+/** Display label for a subject-type breakdown row — matches [countsByStackOrder]'s folding of
+ *  kana-only vocabulary into the vocabulary segment/label. */
+private fun SubjectType.breakdownLabel(): String = when (this) {
+    SubjectType.RADICAL -> "Radical"
+    SubjectType.KANJI -> "Kanji"
+    else -> "Vocabulary"
+}
+
+/** Display label for a "next SRS stage" breakdown row — same wording as ItemSpreadCard's own
+ *  stage labels, so the two cards read consistently. */
+private fun ItemSpreadBucket.breakdownLabel(): String = when (this) {
+    ItemSpreadBucket.LOCKED -> "Locked"
+    ItemSpreadBucket.APPRENTICE -> "Apprentice"
+    ItemSpreadBucket.GURU -> "Guru"
+    ItemSpreadBucket.MASTER -> "Master"
+    ItemSpreadBucket.ENLIGHTENED -> "Enlightened"
+    ItemSpreadBucket.BURNED -> "Burned"
+}
+
+/** One row of [ReviewForecastBreakdownList] — a label, its swatch color, and its count within
+ *  whichever bucket (or window-wide sum) is currently active. */
+private data class BreakdownEntry(val label: String, val color: Color, val count: Int)
+
+/** Sums a per-bucket counts map across "now" plus every bucket in the forecast — the window-wide
+ *  total shown when no bar is tapped. Element-wise: e.g. all buckets' Kanji counts added together,
+ *  keyed the same way the per-bucket maps already are. */
+private fun <K> sumAcrossWindow(now: Map<K, Int>, buckets: List<Map<K, Int>>): Map<K, Int> {
+    val total = mutableMapOf<K, Int>()
+    (listOf(now) + buckets).forEach { counts ->
+        counts.forEach { (key, count) -> total[key] = (total[key] ?: 0) + count }
+    }
+    return total
+}
+
+@Composable
+private fun ReviewForecastBreakdownList(
+    forecast: ReviewForecast,
+    selectedIndex: Int?,
+    colorMode: ReviewForecastColorMode,
+    typeColors: Map<SubjectType, Color>,
+    stageColors: Map<ItemSpreadBucket, Color>
+) {
+    val entries: List<BreakdownEntry> = when (colorMode) {
+        ReviewForecastColorMode.SUBJECT_TYPE -> {
+            val counts = when (selectedIndex) {
+                null -> sumAcrossWindow(forecast.availableNowCountsByType, forecast.buckets.map { it.countsByType })
+                0 -> forecast.availableNowCountsByType
+                else -> forecast.buckets[selectedIndex - 1].countsByType
+            }
+            countsByStackOrder(counts).map { (type, count) ->
+                BreakdownEntry(label = type.breakdownLabel(), color = typeColors.getValue(type), count = count)
+            }
+        }
+        ReviewForecastColorMode.SRS_STAGE -> {
+            val counts = when (selectedIndex) {
+                null -> sumAcrossWindow(forecast.availableNowCountsByNextStage, forecast.buckets.map { it.countsByNextStage })
+                0 -> forecast.availableNowCountsByNextStage
+                else -> forecast.buckets[selectedIndex - 1].countsByNextStage
+            }
+            countsByStageStackOrder(counts).map { (bucket, count) ->
+                BreakdownEntry(label = bucket.breakdownLabel(), color = stageColors.getValue(bucket), count = count)
+            }
+        }
+    }
+    val total = entries.sumOf { it.count }
+    entries.filter { it.count > 0 }.forEach { entry ->
+        StatRow(color = entry.color, label = entry.label, count = entry.count, total = total)
+    }
+}
+
 /** Everything the tap handler in [ReviewForecastBarChart] needs to resolve a screen offset to a
  *  bar index, bundled so one [rememberUpdatedState] keeps all of it current — see that composable's
  *  comment for why the handler can't just capture these values directly. */
@@ -272,24 +371,10 @@ private fun ReviewForecastBarChart(
     bucketCount: Int,
     colorMode: ReviewForecastColorMode,
     selectedIndex: Int?,
-    onSelect: (Int) -> Unit
+    onSelect: (Int) -> Unit,
+    typeColors: Map<SubjectType, Color>,
+    stageColors: Map<ItemSpreadBucket, Color>
 ) {
-    // Resolved here (composable scope) rather than inside the Canvas draw lambda, since
-    // subjectColor()/srsStageColor() are theme-aware (dark/e-ink) and DrawScope isn't a composable
-    // context. Base colors only — the alpha (dimmed/full/lighter) that depends on tap state and bar
-    // position is applied per-segment down in the draw loop below.
-    val typeColors = mapOf(
-        SubjectType.RADICAL to subjectColor(SubjectType.RADICAL),
-        SubjectType.KANJI to subjectColor(SubjectType.KANJI),
-        SubjectType.VOCABULARY to subjectColor(SubjectType.VOCABULARY)
-    )
-    val stageColors = mapOf(
-        ItemSpreadBucket.APPRENTICE to srsStageColor(representativeStage(ItemSpreadBucket.APPRENTICE)),
-        ItemSpreadBucket.GURU to srsStageColor(representativeStage(ItemSpreadBucket.GURU)),
-        ItemSpreadBucket.MASTER to srsStageColor(representativeStage(ItemSpreadBucket.MASTER)),
-        ItemSpreadBucket.ENLIGHTENED to srsStageColor(representativeStage(ItemSpreadBucket.ENLIGHTENED)),
-        ItemSpreadBucket.BURNED to srsStageColor(representativeStage(ItemSpreadBucket.BURNED))
-    )
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val yLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)

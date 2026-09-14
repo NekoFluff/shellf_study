@@ -1,10 +1,12 @@
 package com.crazyfluff.shellfstudy.feature.dashboard
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
@@ -12,6 +14,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -160,5 +163,94 @@ class ReviewForecastCardTest {
         }
 
         composeTestRule.onNodeWithTag(ReviewForecastTestTags.CHART).assertIsDisplayed()
+    }
+
+    /** Distinct type counts on "now" vs. every bucket, so the default (nothing tapped) breakdown's
+     *  window-wide sum can be told apart from either "now" alone or a single bucket alone. */
+    private fun typeBreakdownForecast(): ReviewForecast = ReviewForecast(
+        reviewsAvailableNow = 5,
+        availableNowCountsByType = mapOf(SubjectType.RADICAL to 3, SubjectType.KANJI to 2),
+        buckets = (1..ReviewForecastWindow.DAY.bucketCount).map { index ->
+            ReviewForecastBucket(
+                hoursFromNow = index,
+                availableAt = Clock.System.now(),
+                newlyAvailableCount = 2,
+                countsByType = mapOf(SubjectType.KANJI to 1, SubjectType.VOCABULARY to 1)
+            )
+        }
+    )
+
+    @Test
+    fun breakdownList_defaultShowsSumAcrossWholeWindow() {
+        // 24 buckets × (1 Kanji + 1 Vocabulary) plus "now"'s 3 Radical/2 Kanji.
+        composeTestRule.setContent {
+            ReviewForecastCard(forecast = typeBreakdownForecast(), selectedColorMode = ReviewForecastColorMode.SUBJECT_TYPE)
+        }
+
+        composeTestRule.onNodeWithText("Radical: 3").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Kanji: 26").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Vocabulary: 24").assertIsDisplayed()
+    }
+
+    @Test
+    fun breakdownList_tappingNow_showsOnlyAvailableNowCounts_andHidesZeroSegments() {
+        composeTestRule.setContent {
+            ReviewForecastCard(forecast = typeBreakdownForecast(), selectedColorMode = ReviewForecastColorMode.SUBJECT_TYPE)
+        }
+
+        // offset.x = 0 always resolves to bar index 0 ("now"), regardless of bar width math.
+        composeTestRule.onNodeWithTag(ReviewForecastTestTags.CHART).performTouchInput {
+            down(Offset(0f, height / 2f))
+            up()
+        }
+
+        composeTestRule.onNodeWithText("Radical: 3").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Kanji: 2").assertIsDisplayed()
+        // Vocabulary is 0 in availableNowCountsByType — must not appear once "now" is selected.
+        composeTestRule.onNodeWithText("Vocabulary: 0").assertDoesNotExist()
+    }
+
+    @Test
+    fun breakdownList_tappingABar_showsThatBucketsOwnCounts() {
+        composeTestRule.setContent {
+            ReviewForecastCard(forecast = typeBreakdownForecast(), selectedColorMode = ReviewForecastColorMode.SUBJECT_TYPE)
+        }
+
+        // offset.x at the far right edge always resolves to the last bar index: barWidth is
+        // computed from a narrower "bars only" width (total width minus the reserved y-axis label
+        // column), so dividing the full node width by that smaller step always overshoots past
+        // barCount - 1 and gets coerced back to it.
+        composeTestRule.onNodeWithTag(ReviewForecastTestTags.CHART).performTouchInput {
+            down(Offset(width - 1f, height / 2f))
+            up()
+        }
+
+        composeTestRule.onNodeWithText("Kanji: 1").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Vocabulary: 1").assertIsDisplayed()
+        // Radical is 0 in every bucket (only "now" has any) — must not appear once a bucket is selected.
+        composeTestRule.onNodeWithText("Radical: 0").assertDoesNotExist()
+    }
+
+    @Test
+    fun breakdownList_srsStageMode_defaultShowsSumAcrossWholeWindow() {
+        val forecast = ReviewForecast(
+            reviewsAvailableNow = 2,
+            availableNowCountsByNextStage = mapOf(ItemSpreadBucket.BURNED to 2),
+            buckets = (1..ReviewForecastWindow.DAY.bucketCount).map { index ->
+                ReviewForecastBucket(
+                    hoursFromNow = index,
+                    availableAt = Clock.System.now(),
+                    newlyAvailableCount = 3,
+                    countsByNextStage = mapOf(ItemSpreadBucket.GURU to 2, ItemSpreadBucket.MASTER to 1)
+                )
+            }
+        )
+        composeTestRule.setContent {
+            ReviewForecastCard(forecast = forecast, selectedColorMode = ReviewForecastColorMode.SRS_STAGE)
+        }
+
+        composeTestRule.onNodeWithText("Guru: 48").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Master: 24").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Burned: 2").assertIsDisplayed()
     }
 }

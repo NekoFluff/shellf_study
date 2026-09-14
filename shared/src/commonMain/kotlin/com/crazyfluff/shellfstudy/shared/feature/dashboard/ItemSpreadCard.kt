@@ -1,23 +1,15 @@
 package com.crazyfluff.shellfstudy.shared.feature.dashboard
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -25,6 +17,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SegmentedBar
+import com.crazyfluff.shellfstudy.shared.designsystem.components.StatRow
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.srsStageColor
 
 object ItemSpreadTestTags {
@@ -64,7 +57,7 @@ fun ItemSpreadCard(spread: ItemSpread?, modifier: Modifier = Modifier) {
             } else {
                 val total = spread?.totalCount ?: 0
                 segments.filter { it.count > 0 }.forEach { segment ->
-                    StatRow(segment, total = total)
+                    StatRow(color = segment.color, label = segment.label, count = segment.count, total = total)
                 }
             }
         }
@@ -80,32 +73,3 @@ private fun ItemSpreadBar(segments: List<SpreadSegment>) {
     )
 }
 
-// Rounds to one decimal place via integer arithmetic (tenths of a percent) rather than Double
-// formatting, since String.format/"%.1f" aren't available in commonMain.
-private fun formatPercentOneDecimal(count: Int, total: Int): String {
-    if (total <= 0) return "0.0"
-    val tenths = (count * 1000 + total / 2) / total
-    return "${tenths / 10}.${tenths % 10}"
-}
-
-@Composable
-private fun StatRow(segment: SpreadSegment, total: Int) {
-    val percent = formatPercentOneDecimal(segment.count, total)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-    ) {
-        Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(segment.color))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = "${segment.label}: ${segment.count}",
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = "$percent%",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
