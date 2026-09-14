@@ -1,10 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.database.friends
 
-import androidx.room.Room
 import androidx.room.RoomDatabase
-import com.crazyfluff.shellfstudy.shared.database.iosDocumentDirectoryPath
+import com.crazyfluff.shellfstudy.shared.database.iosRoomDatabaseBuilder
 
-fun getFriendsDatabaseBuilder(): RoomDatabase.Builder<FriendsDatabase> {
-    val dbFilePath = "${iosDocumentDirectoryPath()}/$FRIENDS_DATABASE_FILE_NAME"
-    return Room.databaseBuilder<FriendsDatabase>(name = dbFilePath)
-}
+fun getFriendsDatabaseBuilder(): RoomDatabase.Builder<FriendsDatabase> =
+    iosRoomDatabaseBuilder(FRIENDS_DATABASE_FILE_NAME)

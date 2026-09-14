@@ -1,10 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.database.studyactivity
 
-import androidx.room.Room
 import androidx.room.RoomDatabase
-import com.crazyfluff.shellfstudy.shared.database.iosDocumentDirectoryPath
+import com.crazyfluff.shellfstudy.shared.database.iosRoomDatabaseBuilder
 
-fun getStudyActivityDatabaseBuilder(): RoomDatabase.Builder<StudyActivityDatabase> {
-    val dbFilePath = "${iosDocumentDirectoryPath()}/$STUDY_ACTIVITY_DATABASE_FILE_NAME"
-    return Room.databaseBuilder<StudyActivityDatabase>(name = dbFilePath)
-}
+fun getStudyActivityDatabaseBuilder(): RoomDatabase.Builder<StudyActivityDatabase> =
+    iosRoomDatabaseBuilder(STUDY_ACTIVITY_DATABASE_FILE_NAME)
