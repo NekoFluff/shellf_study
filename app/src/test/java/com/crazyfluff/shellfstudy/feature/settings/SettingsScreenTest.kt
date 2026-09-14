@@ -83,6 +83,34 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun backlogThresholdStepper_decreaseButton_disabledAtMinimum() {
+        setContent(
+            uiState = SettingsUiState(
+                notificationsEnabled = true,
+                reviewsBacklogEnabled = true,
+                backlogThreshold = 5
+            )
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE)
+            .performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
+    fun backlogThresholdStepper_increaseButton_disabledAtMaximum() {
+        setContent(
+            uiState = SettingsUiState(
+                notificationsEnabled = true,
+                reviewsBacklogEnabled = true,
+                backlogThreshold = 500
+            )
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE)
+            .performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
     fun selectingThemeOption_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(

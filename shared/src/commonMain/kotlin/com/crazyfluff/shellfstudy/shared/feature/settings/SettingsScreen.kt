@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.rememberPermissionRequest
+import com.crazyfluff.shellfstudy.shared.data.BACKLOG_THRESHOLD_RANGE
 import com.crazyfluff.shellfstudy.shared.data.DAILY_LESSON_GOAL_RANGE
 import com.crazyfluff.shellfstudy.shared.data.LESSON_BATCH_SIZE_RANGE
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
@@ -339,7 +340,9 @@ private fun ToggleRow(
     }
 }
 
-/** A +/- stepper, same shape as the daily-lesson-goal control above, wrapping hour values 0-23. */
+/** A +/- stepper, same shape as the daily-lesson-goal control above. [range] disables the relevant
+ *  button once a step would go past it — left null (the default) for a cyclic value like an hour,
+ *  which has no real min/max to disable against. */
 @Composable
 private fun StepperRow(
     label: String,
@@ -347,6 +350,7 @@ private fun StepperRow(
     onValueChange: (Int) -> Unit,
     testTags: StepperRowTestTags,
     step: Int = 1,
+    range: IntRange? = null,
     valueLabel: (Int) -> String = { it.toString() }
 ) {
     Row(
@@ -358,6 +362,7 @@ private fun StepperRow(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconButton(
                 onClick = { onValueChange(value - step) },
+                enabled = range == null || value > range.first,
                 modifier = Modifier.testTag(testTags.decrease)
             ) {
                 Icon(Icons.Default.Remove, contentDescription = "Decrease $label")
@@ -369,6 +374,7 @@ private fun StepperRow(
             )
             IconButton(
                 onClick = { onValueChange(value + step) },
+                enabled = range == null || value < range.last,
                 modifier = Modifier.testTag(testTags.increase)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Increase $label")
@@ -656,7 +662,8 @@ private fun NotificationsSection(
                     value = uiState.backlogThreshold,
                     onValueChange = actions::onBacklogThresholdChange,
                     testTags = SettingsScreenTestTags.BACKLOG_THRESHOLD_TAGS,
-                    step = 5
+                    step = 5,
+                    range = BACKLOG_THRESHOLD_RANGE
                 )
             }
 

@@ -26,6 +26,11 @@ val LESSON_BATCH_SIZE_RANGE = 1..20
  *  same two numbers as its enable bounds. */
 val DAILY_LESSON_GOAL_RANGE = 1..99
 
+/** Bounds [AppSettings.backlogThreshold] — shared with [SettingsRepository.setBacklogThreshold]'s
+ *  own clamp and the settings screen's stepper, so its enable bounds can't drift out of sync with
+ *  what a value actually gets clamped to on save. */
+val BACKLOG_THRESHOLD_RANGE = 5..500
+
 enum class ThemeMode { SYSTEM, LIGHT, DARK, EINK }
 
 data class AppSettings(
@@ -197,7 +202,7 @@ class SettingsRepository(
     }
 
     suspend fun setBacklogThreshold(threshold: Int) {
-        dataStore.edit { it[backlogThresholdKey] = threshold.coerceIn(5, 500) }
+        dataStore.edit { it[backlogThresholdKey] = threshold.coerceIn(BACKLOG_THRESHOLD_RANGE) }
     }
 
     suspend fun setDailyReminderEnabled(enabled: Boolean) {
