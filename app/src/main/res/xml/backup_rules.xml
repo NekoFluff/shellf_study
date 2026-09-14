@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Governs Auto Backup on API 23-30 (ignored on API 31+, which instead reads
+   data_extraction_rules.xml). Only shellf_study.db is excluded: it's a pure mirror of the
+   WaniKani API (subjects/assignments/review-statistics), fully repopulated by the next sync, so
+   there's no reason to spend backup quota on it. Everything else holds something the server
+   can't hand back on its own — outbox.db has pending review/lesson submissions not yet synced,
+   friends_cache.db has the user's own hand-entered friend list, review_history.db has the local
+   study-streak log (no server equivalent), and the shared preferences DataStore holds settings
+   alongside the Keystore-encrypted API token (harmless to restore: the encryption key never
+   leaves the original device, so a restored blob simply fails to decrypt and the user is
+   prompted to sign in again).
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="database" path="shellf_study.db"/>
+    <exclude domain="database" path="shellf_study.db-wal"/>
+    <exclude domain="database" path="shellf_study.db-shm"/>
 </full-backup-content>

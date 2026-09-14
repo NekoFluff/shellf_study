@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   Governs Auto Backup and device-to-device transfer on API 31+. See backup_rules.xml (the
+   API 23-30 equivalent) for why only shellf_study.db is excluded — everything else here holds
+   something the server can't hand back on its own. Both <cloud-backup> and <device-transfer> are
+   listed explicitly: omitting <device-transfer> would make it fall back to including everything,
+   ignoring the <cloud-backup> exclusion.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="database" path="shellf_study.db"/>
+        <exclude domain="database" path="shellf_study.db-wal"/>
+        <exclude domain="database" path="shellf_study.db-shm"/>
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="database" path="shellf_study.db"/>
+        <exclude domain="database" path="shellf_study.db-wal"/>
+        <exclude domain="database" path="shellf_study.db-shm"/>
     </device-transfer>
-    -->
 </data-extraction-rules>
