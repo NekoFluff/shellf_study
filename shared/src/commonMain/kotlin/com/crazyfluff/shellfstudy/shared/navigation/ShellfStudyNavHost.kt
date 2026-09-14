@@ -1,13 +1,9 @@
 package com.crazyfluff.shellfstudy.shared.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthRoute
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardRoute
@@ -17,7 +13,6 @@ import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonRoute
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewRoute
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsRoute
 import com.crazyfluff.shellfstudy.shared.feature.splash.SplashRoute
-import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
 import kotlinx.serialization.Serializable
 
 sealed interface ShellfStudyDestination {
@@ -37,33 +32,8 @@ fun ShellfStudyNavHost(
     pendingDestination: String? = null,
     onPendingDestinationConsumed: () -> Unit = {}
 ) {
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    LaunchedEffect(pendingDestination, currentBackStackEntry) {
-        if (pendingDestination == null) return@LaunchedEffect
-        val destination = currentBackStackEntry?.destination ?: return@LaunchedEffect
-        if (destination.hasRoute<ShellfStudyDestination.Auth>() || destination.hasRoute<ShellfStudyDestination.Splash>()) {
-            return@LaunchedEffect
-        }
-
-        val targetDestination = when (pendingDestination) {
-            NotificationDeepLink.DESTINATION_REVIEW -> ShellfStudyDestination.Review
-            NotificationDeepLink.DESTINATION_LESSON -> ShellfStudyDestination.Lesson
-            else -> null
-        }
-        // A DESTINATION_DASHBOARD (or any other unrecognized) pending value is deliberately left
-        // unconsumed here — navigating to Dashboard doesn't create a fresh screen/ViewModel the way
-        // Review/Lesson do, so DashboardRoute's own effect is what actually reacts to it (a refresh,
-        // not a nav change) once it's the composed screen, and consumes it itself at that point.
-        // Consuming it unconditionally from here would clear it before Dashboard ever sees it if the
-        // user was on some other screen when the pending value was set.
-        if (targetDestination != null) {
-            if (!destination.hasRoute(targetDestination::class)) {
-                navController.navigate(targetDestination) { launchSingleTop = true }
-            }
-            onPendingDestinationConsumed()
-        }
-    }
-
+    // pendingDestination only ever carries DESTINATION_DASHBOARD today (see NotificationDeepLink) —
+    // DashboardRoute below is handed it directly and consumes it itself once composed.
     NavHost(navController = navController, startDestination = ShellfStudyDestination.Splash) {
         composable<ShellfStudyDestination.Splash> {
             SplashRoute(

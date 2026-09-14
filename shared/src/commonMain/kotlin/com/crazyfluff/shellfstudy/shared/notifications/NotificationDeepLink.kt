@@ -8,7 +8,5 @@ package com.crazyfluff.shellfstudy.shared.notifications
  */
 object NotificationDeepLink {
     const val EXTRA_DESTINATION = "notification_destination"
-    const val DESTINATION_REVIEW = "review"
-    const val DESTINATION_LESSON = "lesson"
     const val DESTINATION_DASHBOARD = "dashboard"
 }
