@@ -538,8 +538,17 @@ class LessonViewModel(
         // it left off.
         val questionStartedAt = questionTiming.restart()
         // LessonSessionRepository.load() — reached here via sessionController.load() — guarantees a
-        // non-empty quizQueue for a QUIZ-phase snapshot (see its resumability check).
-        val next = requireNotNull(quizQueue.current) { "resumeQuizPhase: persisted QUIZ session had an empty queue despite the repository's resumability check" }
+        // non-empty quizQueue for a QUIZ-phase snapshot (see its resumability check), but this is
+        // reached from init/loadOrResume(), so a violated invariant here (a future repository bug, a
+        // manual DB edit, a partial migration) must degrade the same way every other corrupt-snapshot
+        // case in this function does, rather than crash the ViewModel on app launch.
+        val next = quizQueue.current
+        if (next == null) {
+            sessionController.complete()
+            clearSessionState()
+            fetchFreshQueue()
+            return
+        }
         sessionController.begin()
         _uiState.update {
             it.copy(
