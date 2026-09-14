@@ -13,6 +13,7 @@ import com.crazyfluff.shellfstudy.fakes.FakeNotificationScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.shared.notifications.DefaultNotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.notifications.DeferredNotificationCategory
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationChannels
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationStateRepository
 import com.google.common.truth.Truth.assertThat
@@ -211,5 +212,55 @@ class DefaultNotificationCoordinatorTest {
         assertThat(notificationScheduler.cancelAllCallCount).isEqualTo(1)
         assertThat(notificationPoster.cancelled).hasSize(3)
         assertThat(notificationStateRepository.state.first().lastNotifiedReviewCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `evaluateStudyReminder posts when not quiet and streak is inactive today`() = runTest {
+        enableNotifications()
+        settingsRepository.setQuietHoursEnabled(false)
+
+        coordinator.evaluateStudyReminder()
+
+        assertThat(notificationPoster.posted.map { it.channelId }).contains(NotificationChannels.STUDY_REMINDER)
+    }
+
+    @Test
+    fun `evaluateStudyReminder does nothing once the streak is already active today`() = runTest {
+        enableNotifications()
+        settingsRepository.setQuietHoursEnabled(false)
+        statsRepository.markStudyActivityToday()
+
+        coordinator.evaluateStudyReminder()
+
+        assertThat(notificationPoster.posted).isEmpty()
+    }
+
+    @Test
+    fun `evaluateStudyReminder does not re-post on a second evaluation the same day`() = runTest {
+        enableNotifications()
+        settingsRepository.setQuietHoursEnabled(false)
+
+        coordinator.evaluateStudyReminder()
+        coordinator.evaluateStudyReminder()
+
+        assertThat(notificationPoster.posted.count { it.channelId == NotificationChannels.STUDY_REMINDER }).isEqualTo(1)
+    }
+
+    @Test
+    fun `evaluateStudyReminder defers past quiet hours instead of silently dropping forever`() = runTest {
+        enableNotifications()
+        // A 23-hour window starting at the current hour always covers "now", regardless of when
+        // this test runs — this is the case where the user's fixed reminder hour happens to fall
+        // inside quiet hours every single day.
+        val nowHour = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).hour
+        settingsRepository.setQuietHoursEnabled(true)
+        settingsRepository.setQuietHoursStartHour(nowHour)
+        settingsRepository.setQuietHoursEndHour((nowHour + 23) % 24)
+
+        coordinator.evaluateStudyReminder()
+
+        assertThat(notificationPoster.posted).isEmpty()
+        assertThat(notificationScheduler.deferredNotifications.map { it.first })
+            .containsExactly(DeferredNotificationCategory.STUDY_REMINDER)
     }
 }

@@ -5,8 +5,9 @@ import kotlin.time.Instant
 /** Categories that can be deferred past quiet hours via [NotificationScheduler.scheduleDeferredNotification]. */
 object DeferredNotificationCategory {
     const val BACKLOG = "backlog"
+    const val STUDY_REMINDER = "study_reminder"
 
-    val ALL = listOf(BACKLOG)
+    val ALL = listOf(BACKLOG, STUDY_REMINDER)
 }
 
 /**

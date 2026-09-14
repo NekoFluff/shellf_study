@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import java.io.IOException
 
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
@@ -48,6 +49,27 @@ class DeferredNotificationWorkerTest {
 
         assertThat(result).isEqualTo(ListenableWorker.Result.success())
         assertThat(coordinator.evaluateReviewsAndBacklogCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `STUDY_REMINDER category triggers evaluateStudyReminder`() = runTest {
+        val coordinator = FakeNotificationCoordinator()
+
+        val result = buildWorker(coordinator, DeferredNotificationCategory.STUDY_REMINDER).doWork()
+
+        assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        assertThat(coordinator.evaluateStudyReminderCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `retries instead of crashing when the evaluation throws`() = runTest {
+        val coordinator = FakeNotificationCoordinator().apply {
+            throwOnEvaluateReviewsAndBacklog = IOException("offline")
+        }
+
+        val result = buildWorker(coordinator, DeferredNotificationCategory.BACKLOG).doWork()
+
+        assertThat(result).isEqualTo(ListenableWorker.Result.retry())
     }
 
     @Test

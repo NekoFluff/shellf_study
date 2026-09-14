@@ -17,9 +17,9 @@ class ReviewNotificationWorker(
     private val notificationCoordinator: NotificationCoordinator
 ) : CoroutineWorker(appContext, params) {
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = runCatching {
         notificationCoordinator.evaluateReviewsAndBacklog()
         notificationCoordinator.rescheduleNextReviewCheck()
-        return Result.success()
-    }
+        Result.success()
+    }.getOrElse { Result.retry() }
 }

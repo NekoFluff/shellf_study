@@ -132,7 +132,16 @@ class DefaultNotificationCoordinator(
         if (state.lastStreakReminderSentDate == today) return
 
         val now = Clock.System.now()
-        if (isQuiet(settings, now)) return // the next daily-reminder wakeup already lands at a fixed local hour
+        if (isQuiet(settings, now)) {
+            // The fixed local reminder hour can itself fall inside quiet hours (e.g. an evening
+            // reminder hour with quiet hours starting earlier that evening), which would otherwise
+            // silently skip every day forever since tomorrow's wakeup lands at that same hour.
+            notificationScheduler.scheduleDeferredNotification(
+                DeferredNotificationCategory.STUDY_REMINDER,
+                quietHoursEnd(settings, now)
+            )
+            return
+        }
         notificationPoster.post(NotificationBuilder.studyReminder(streak.currentStreakDays))
         notificationStateRepository.recordStreakReminderSent(today)
     }
