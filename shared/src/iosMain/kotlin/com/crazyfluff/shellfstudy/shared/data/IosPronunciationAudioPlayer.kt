@@ -70,6 +70,11 @@ class IosPronunciationAudioPlayer(
             error = null
         )
 
+        // Never invalidated — harmless only because this class is a Koin app-lifetime singleton
+        // (see IosModules.kt), so the timer's lifetime already matches the process's. Would leak if
+        // this were ever constructed per-screen/scoped instead; add an invalidate()/dispose() path
+        // (on both this class and the PronunciationAudioPlayer interface, for parity with Android)
+        // if that ever changes.
         NSTimer.scheduledTimerWithTimeInterval(
             interval = 0.2,
             repeats = true
