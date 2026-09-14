@@ -87,7 +87,13 @@ class RealPronunciationAudioPlayer(
     }
 
     override fun play(audio: PronunciationAudio) {
-        audioManager.requestAudioFocus(focusRequest)
+        // A denied request (e.g. an active phone call holding exclusive focus) means the OS has
+        // decided this shouldn't play right now — previously ignored, so playback proceeded
+        // regardless with no ducking and no other indication the request was denied.
+        if (audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_FAILED) {
+            _state.value = PlaybackState.ERROR
+            return
+        }
         exoPlayer.setMediaItem(MediaItem.fromUri(audio.url))
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
