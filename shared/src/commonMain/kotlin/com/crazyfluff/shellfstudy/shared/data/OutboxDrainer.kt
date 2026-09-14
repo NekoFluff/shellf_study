@@ -66,6 +66,12 @@ class OutboxDrainer(
                     }
                     if (result.isTerminalRejection) {
                         markTerminal(row, result.message)
+                        // Best-effort reconciliation, result deliberately ignored: if this refetch
+                        // itself fails (e.g. offline at this exact moment), the assignment's local
+                        // cache is left stale until the next periodic sync re-fetches it wholesale
+                        // — there's no separate "needs reconciliation" bookkeeping to retry just
+                        // this one row sooner, and the terminal rejection above is recorded either
+                        // way, so it's not worth failing (or retrying) the whole drain over.
                         assignmentRepository.refetchAssignment(assignmentId(row))
                         continue
                     }
