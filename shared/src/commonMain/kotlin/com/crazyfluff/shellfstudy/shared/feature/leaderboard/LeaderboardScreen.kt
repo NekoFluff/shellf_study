@@ -43,7 +43,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,8 +54,8 @@ import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
 import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 import com.crazyfluff.shellfstudy.shared.data.model.friendRosterIndex
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
+import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberPushUpTextFieldState
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserColor
-import kotlinx.coroutines.flow.drop
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -324,26 +323,16 @@ private fun AddFriendDialog(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                // Owned locally rather than driven by `value`/`onValueChange` directly so these
-                // fields go through Compose's modern text-input pipeline instead of the legacy
-                // CoreTextField path, whose IME cursor-anchor bookkeeping has a framework crash
-                // (see LegacyCursorAnchorInfoBuilder). Neither value is ever reset from outside
-                // while this dialog is open — it's torn down and rebuilt fresh on next open — so a
-                // one-time initial value is enough, no need for continuous two-way sync.
-                val nicknameFieldState = rememberTextFieldState(form.nickname)
-                LaunchedEffect(nicknameFieldState) {
-                    snapshotFlow { nicknameFieldState.text.toString() }.drop(1).collect(actions::onAddFriendNicknameChange)
-                }
+                // Neither value is ever reset from outside while this dialog is open — it's torn
+                // down and rebuilt fresh on next open — so a one-time initial value is enough.
+                val nicknameFieldState = rememberPushUpTextFieldState(form.nickname, actions::onAddFriendNicknameChange)
                 OutlinedTextField(
                     state = nicknameFieldState,
                     label = { Text("Nickname") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                val tokenFieldState = rememberTextFieldState(form.token)
-                LaunchedEffect(tokenFieldState) {
-                    snapshotFlow { tokenFieldState.text.toString() }.drop(1).collect(actions::onAddFriendTokenChange)
-                }
+                val tokenFieldState = rememberPushUpTextFieldState(form.token, actions::onAddFriendTokenChange)
                 OutlinedTextField(
                     state = tokenFieldState,
                     label = { Text("API token") },
@@ -377,14 +366,10 @@ private fun EditNicknameDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    // Only read at Save time (never pushed up on every keystroke), and TextFieldState.text is
+    // itself Compose-observable, so the enabled check below can read it directly with no
+    // mirrored state or effect needed.
     val nicknameFieldState = rememberTextFieldState(initialNickname)
-    // Only read at Save time, so unlike the fields above this needs no push-up effect — but it
-    // still needs a live value for the Save button's enabled check, hence collectAsState-by-hand
-    // via a plain remembered var kept in sync with the field.
-    var nickname by remember { mutableStateOf(initialNickname) }
-    LaunchedEffect(nicknameFieldState) {
-        snapshotFlow { nicknameFieldState.text.toString() }.drop(1).collect { nickname = it }
-    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit nickname") },
@@ -396,7 +381,10 @@ private fun EditNicknameDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(nickname) }, enabled = nickname.isNotBlank()) {
+            TextButton(
+                onClick = { onConfirm(nicknameFieldState.text.toString()) },
+                enabled = nicknameFieldState.text.isNotBlank()
+            ) {
                 Text("Save")
             }
         },
