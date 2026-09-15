@@ -49,6 +49,11 @@ internal class PopBackStackDebouncer(
 private val popBackStackDebouncer = PopBackStackDebouncer()
 
 fun NavController.popBackStackSafely() {
+    // popBackStack() has no built-in refusal for this, unlike the system back button (which NavHost
+    // only wires up when there's somewhere to go back to): call it with nothing below the current
+    // entry and it pops the entry AND the graph's own implicit root off, leaving the back stack
+    // empty and the NavHost with nothing to render.
+    if (previousBackStackEntry == null) return
     val currentRoute = currentBackStackEntry?.destination?.route
     if (popBackStackDebouncer.shouldSuppress(currentRoute)) return
     popBackStack()

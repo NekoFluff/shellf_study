@@ -107,6 +107,9 @@ dependencies {
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.junit)
     testImplementation(libs.androidx.media3.test.utils)
+    // Only :shared depends on this (as `implementation`, not `api`) — pulled in directly here for
+    // PopBackStackSafelyTest, which drives a real NavHostController.
+    testImplementation(libs.navigation.compose.multiplatform)
 
     // Instrumented tests
     androidTestImplementation(platform(libs.androidx.compose.bom))
