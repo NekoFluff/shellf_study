@@ -131,9 +131,11 @@ private fun QuizSessionSummary<ReviewItem>.toCompletePhase() = ReviewUiState.Pha
 
 private typealias ItemProgress = QuizItemProgress<ReviewItem>
 
-/** How many distinct items can be in flight (started but not yet fully answered) at once — matches
- *  WaniKani's own review session, which stops introducing new items once 10 are already being
- *  worked on. Fixed rather than a setting, same as upstream. See ReviewViewModel.admitNextQuestion. */
+/** How many distinct items can be in flight (admitted into the queue's working set) at once —
+ *  matches WaniKani's own review session, which stops introducing new items once 10 are already
+ *  being worked on. Fixed rather than a setting, same as upstream. Enforced by QuizQueue itself: see
+ *  [buildQueue]'s `cap` argument (initial admission) and [gradeAnswer]'s `queue.admitNext` call
+ *  (admits one more whenever an item finishes and frees a slot). */
 private const val MAX_IN_FLIGHT_REVIEW_ITEMS = 10
 
 /** Shared by [ReviewViewModel.gradeAnswer]'s synchronous rank-change prediction and
@@ -327,20 +329,26 @@ class ReviewViewModel(
         // into the future the moment it's finished (applyOptimisticReviewResult), so by the time
         // the user pauses and resumes it may no longer be "due" even though it's still part of
         // this session's progress tally.
-        val neededIds = (persisted.queue.map { it.assignmentId } + persisted.progress.map { it.assignmentId }).toSet()
+        val neededIds = (
+            persisted.queue.map { it.assignmentId } + persisted.reserve.map { it.assignmentId } +
+                persisted.progress.map { it.assignmentId }
+            ).toSet()
         val itemsById = assignmentRepository.getReviewItems(neededIds).associateBy { it.assignmentId }
 
-        // A *queue* entry referencing an item we can no longer look up (e.g. app storage was
-        // cleared) is genuinely unrecoverable — rebuilding its PendingQuestion needs the full
+        // A *queue*/*reserve* entry referencing an item we can no longer look up (e.g. app storage
+        // was cleared) is genuinely unrecoverable — rebuilding its PendingQuestion needs the full
         // ReviewItem. Fall back to a fresh fetch rather than crash on that.
-        if (persisted.queue.any { it.assignmentId !in itemsById }) {
+        if ((persisted.queue + persisted.reserve).any { it.assignmentId !in itemsById }) {
             sessionController.complete()
             fetchFreshQueue()
             return
         }
 
         queue.restore(
-            persisted.queue.map { entry ->
+            inFlight = persisted.queue.map { entry ->
+                PendingQuestion(itemsById.getValue(entry.assignmentId), QuestionType.valueOf(entry.questionType))
+            },
+            reserve = persisted.reserve.map { entry ->
                 PendingQuestion(itemsById.getValue(entry.assignmentId), QuestionType.valueOf(entry.questionType))
             }
         )
@@ -383,7 +391,7 @@ class ReviewViewModel(
         sessionTiming.resume()
 
         items.forEach { item -> progressByAssignmentId[item.assignmentId] = ItemProgress(item) }
-        queue.build(items, typesFor = { item -> questionTypesFor(item.subjectType) })
+        queue.build(items, typesFor = { item -> questionTypesFor(item.subjectType) }, cap = MAX_IN_FLIGHT_REVIEW_ITEMS)
         totalQuestions = queue.size
 
         if (queue.isEmpty) {
@@ -525,6 +533,12 @@ class ReviewViewModel(
                     QuestionType.MEANING -> itemProgress.meaningDone = true
                     QuestionType.READING -> itemProgress.readingDone = true
                 }
+                // Not done yet — this item has a still-pending sibling question type. Push it to the
+                // back rather than leaving it wherever it landed when admitted, so it isn't the entry
+                // most likely to be drawn again right away.
+                if (!isFullyDone(item, itemProgress)) {
+                    queue.moveMatchingToBack { it.item.assignmentId == item.assignmentId }
+                }
             } else {
                 when (type) {
                     QuestionType.MEANING -> itemProgress.recordIncorrectMeaning()
@@ -532,6 +546,10 @@ class ReviewViewModel(
                 }
                 queue.requeue(PendingQuestion(item, type))
             }
+            // No-ops unless this answer just finished an item and freed its slot, and reserve still
+            // has more waiting — see MAX_IN_FLIGHT_REVIEW_ITEMS's doc comment. Safe to call
+            // unconditionally rather than only when a slot might have freed.
+            queue.admitNext(MAX_IN_FLIGHT_REVIEW_ITEMS)
 
             // Whether this answer was the very last one due — if so, commitGradeDurably completes
             // the session outright instead of saving a snapshot of the now-empty queue. That snapshot
@@ -657,20 +675,6 @@ class ReviewViewModel(
         return progress.meaningDone && (!requiresReading || progress.readingDone)
     }
 
-    /** Enforces [MAX_IN_FLIGHT_REVIEW_ITEMS] on whatever advanceToNextQuestion is about to draw next
-     *  — recomputed from progressByAssignmentId every time rather than tracked as separate state, so
-     *  a resumed session re-derives the same in-flight set the paused one had for free. "In flight"
-     *  means started (hasAnyProgress) but not yet finished (isFullyDone) — a completed item frees its
-     *  slot even though its progress entry is never cleared. */
-    private fun admitNextQuestionWithinCap() {
-        val inFlightCount = progressByAssignmentId.values.count { it.hasAnyProgress && !isFullyDone(it.item, it) }
-        queue.capInFlight(
-            isStarted = { item -> progressByAssignmentId[item.assignmentId]?.hasAnyProgress == true },
-            inFlightCount = inFlightCount,
-            cap = MAX_IN_FLIGHT_REVIEW_ITEMS
-        )
-    }
-
     override fun onContinue() {
         viewModelScope.launch { advanceToNextQuestion() }
     }
@@ -754,7 +758,6 @@ class ReviewViewModel(
         // (process death, or navigating away and back), treating that the same as an implicit
         // Continue, since undo only works on the live in-memory session.
         commitPendingSubmission()
-        admitNextQuestionWithinCap()
         val next = queue.current
         if (next == null) {
             sessionController.complete()
@@ -797,6 +800,7 @@ class ReviewViewModel(
      *  snapshot, not the whole segment since the last pause. */
     private fun currentPersistSnapshot(): PersistedReviewSession = PersistedReviewSession(
         queue = queue.toList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
+        reserve = queue.reserveList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
         progress = progressByAssignmentId.map { (id, p) ->
             PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
         },

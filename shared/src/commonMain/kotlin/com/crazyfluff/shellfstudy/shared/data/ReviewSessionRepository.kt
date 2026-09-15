@@ -10,6 +10,13 @@ import kotlinx.serialization.json.Json
 @Serializable
 data class PersistedReviewSession(
     val queue: List<PersistedQuestion>,
+    // Items not yet admitted into the in-flight working set (see QuizQueue.reserveList) — capped
+    // review sessions hold the rest of the due queue here until an in-flight item finishes. Defaults
+    // to empty for data persisted before this field existed: under the old flat-queue model, `queue`
+    // already held everything, so an empty reserve on migration is exactly correct — nothing was ever
+    // held back to begin with. That one in-progress session simply finishes without the in-flight cap
+    // applied (nothing left in reserve to admit from); a fresh session afterward gets the cap normally.
+    val reserve: List<PersistedQuestion> = emptyList(),
     val progress: List<PersistedItemProgress>,
     val totalQuestions: Int,
     // Active time accumulated so far, excluding any time spent away from the session (backgrounded,
@@ -46,15 +53,16 @@ class ReviewSessionRepository(
 
     override suspend fun save(session: PersistedReviewSession) = store.save(session)
 
-    /** A snapshot with an empty queue and no pending submission is a corrupted leftover, not a
-     *  resumable session — see [PersistedReviewSession]'s doc comment on why this can happen (a save
-     *  racing a completion-time clear). An empty queue *with* a pending submission is legitimate —
-     *  it means the session reached its last question but the user hadn't tapped Continue yet, so
-     *  resuming must still commit that submission — see [PersistedReviewSession.pendingSubmissionAssignmentId].
-     *  Self-heals the corrupted case by clearing storage so it doesn't keep reappearing. */
+    /** A snapshot with nothing left in flight or reserve and no pending submission is a corrupted
+     *  leftover, not a resumable session — see [PersistedReviewSession]'s doc comment on why this can
+     *  happen (a save racing a completion-time clear). Empty *with* a pending submission is
+     *  legitimate — it means the session reached its last question but the user hadn't tapped
+     *  Continue yet, so resuming must still commit that submission — see
+     *  [PersistedReviewSession.pendingSubmissionAssignmentId]. Self-heals the corrupted case by
+     *  clearing storage so it doesn't keep reappearing. */
     override suspend fun load(): PersistedReviewSession? {
         val loaded = store.load() ?: return null
-        if (loaded.queue.isEmpty() && loaded.pendingSubmissionAssignmentId == null) {
+        if (loaded.queue.isEmpty() && loaded.reserve.isEmpty() && loaded.pendingSubmissionAssignmentId == null) {
             store.clear()
             return null
         }
