@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material3.Button
@@ -29,8 +32,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
@@ -54,6 +59,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.label
+import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
 
 private val RankChangeChipWarmupValue = RankChange(from = SrsStage.APPRENTICE_1, to = SrsStage.APPRENTICE_2)
 
@@ -73,13 +79,18 @@ data class QuizQuestionTestTags(
     val undoButton: String,
     val feedbackText: String,
     val answerDetailText: String,
+    val revealButton: String,
     val continueButton: String,
     /** The optional "Batch 2 of 4"-style label in the progress row. */
     val sessionContextLabel: String
 ) {
     /** [QuizAnswerField]'s sub-bundle, so the field takes one parameter rather than two loose tags. */
     val answerFieldTags: QuizAnswerFieldTestTags
-        get() = QuizAnswerFieldTestTags(answerField = answerField, typeMismatchText = typeMismatchText)
+        get() = QuizAnswerFieldTestTags(
+            answerField = answerField,
+            typeMismatchText = typeMismatchText,
+            questionLabel = questionLabel
+        )
 }
 
 /** The reading, its live pitch-accent answer, and the audio clip that survived the caller's own
@@ -113,6 +124,10 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     // still be undone up to that point — Lesson has no such pending-submission window, so it leaves
     // this at the default and undo stays incorrect-only there.
     val allowUndoAfterCorrect: Boolean = false,
+    // Whether the correct-answer text is visible for the current (wrong) feedback — gated behind an
+    // extra tap when "require tap to reveal answer" is on. Always true for correct/close-match
+    // answers and give-ups, and whenever the setting is off — see the ViewModel's gradeAnswer.
+    val answerRevealed: Boolean = true,
     // The reading/pitch-accent/audio hint for the just-graded reading question. Whether it is shown
     // at all is a display setting, read from LocalDisplaySettings where the hint is consumed.
     val answerHint: AnswerReadingHint? = null,
@@ -136,6 +151,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
     onDontKnow: () -> Unit,
     onContinue: () -> Unit,
     onUndo: () -> Unit,
+    onReveal: () -> Unit,
     testTags: QuizQuestionTestTags
 ) {
     val item = uiState.item
@@ -231,7 +247,11 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
         val answerHint = uiState.answerHint
         val showAnswerHint = display.showAnswerReadingPitchAccent &&
             questionType == QuestionType.READING &&
-            answerHint != null
+            answerHint != null &&
+            // Also covers Lesson: its live pitch-accent map isn't itself scoped to grading/reveal,
+            // so without this the diagram (and the reading text in ReadingRow, which already gives
+            // the answer away on its own) could show before the answer is otherwise revealed.
+            uiState.answerRevealed
         AnimatedVisibility(
             visible = showAnswerHint,
             // Slides down from above (unlike RankChangeChip's slide-up-from-below below the glyph)
@@ -329,12 +349,6 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
     ) {
-        Text(
-            text = "What is the ${questionType.label}?",
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.testTag(testTags.questionLabel)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
         val feedbackForField = uiState.feedback
         val canUndo = feedbackForField != null && (!feedbackForField.isCorrect || uiState.allowUndoAfterCorrect)
         QuizAnswerField(
@@ -394,24 +408,47 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
                 modifier = Modifier.testTag(testTags.feedbackText)
             )
             feedbackDetailPrefix(feedback)?.let { prefix ->
-                // Capped at a fixed height + internally scrollable rather than left unbounded:
-                // an item with many accepted synonyms could otherwise grow past this
-                // non-scrolling Column's bounds and push the Continue button down underneath
-                // the swipe-up handle's reserved space below, silently stealing its taps.
-                ExpandableAnswerListText(
-                    joined = feedback.correctAnswer,
-                    resetKey = feedback,
-                    prefix = prefix,
-                    expandedMaxHeight = 96.dp,
-                    modifier = Modifier.testTag(testTags.answerDetailText)
-                )
+                if (uiState.answerRevealed) {
+                    // Capped at a fixed height + internally scrollable rather than left unbounded:
+                    // an item with many accepted synonyms could otherwise grow past this
+                    // non-scrolling Column's bounds and push the Continue button down underneath
+                    // the swipe-up handle's reserved space below, silently stealing its taps.
+                    ExpandableAnswerListText(
+                        joined = feedback.correctAnswer,
+                        resetKey = feedback,
+                        prefix = prefix,
+                        expandedMaxHeight = 96.dp,
+                        modifier = Modifier.testTag(testTags.answerDetailText)
+                    )
+                } else {
+                    // Redacted the same way ContextSentenceRow hides a translation: the real text is
+                    // laid out (so the bar's width/height matches what tapping reveals, no jump) but
+                    // painted transparent behind an opaque rounded-rect fill, with the tap wired to
+                    // onReveal instead of a local isRevealed flag — Continue's own lock depends on the
+                    // ViewModel's answerRevealed, not just what's on screen here.
+                    Text(
+                        text = "$prefix ${formatAnswerList(feedback.correctAnswer, expanded = false).text}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Transparent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .testTag(testTags.revealButton)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .clickable(onClick = onReveal)
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(16.dp))
             GatedContinueButton(
                 feedback = feedback,
                 onContinue = onContinue,
                 continueButtonTestTag = testTags.continueButton,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                revealed = uiState.answerRevealed
             )
         }
 

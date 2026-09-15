@@ -154,6 +154,7 @@ object LessonScreenTestTags {
     const val DONT_KNOW_BUTTON = "lesson_dont_know_button"
     const val FEEDBACK_TEXT = "lesson_feedback_text"
     const val ANSWER_DETAIL_TEXT = "lesson_answer_detail_text"
+    const val REVEAL_BUTTON = "lesson_reveal_button"
     const val QUIZ_SUBJECT_TYPE_LABEL = "lesson_quiz_subject_type_label"
     const val QUESTION_LABEL = "lesson_question_label"
     const val UNDO_BUTTON = "lesson_undo_button"
@@ -462,6 +463,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
             // Pitch accents are folded in from the live map rather than a copy taken at grading time
             // — a batch's own quiz needs the same up-to-the-moment knowledge its study cards showed.
             // An absent entry has not been looked up yet.
+            answerRevealed = phase.answerRevealed,
             answerHint = phase.answerHint?.copy(
                 pitchAccents = pitchAccentsBySubjectId[phase.currentItem.subjectId]
                     ?: PitchAccentUiState.Unavailable
@@ -472,6 +474,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
         onDontKnow = actions::dontKnowAnswer,
         onContinue = actions::onContinue,
         onUndo = actions::undoLastAnswer,
+        onReveal = actions::revealAnswer,
         testTags = QuizQuestionTestTags(
             progressCount = LessonScreenTestTags.QUIZ_PROGRESS_COUNT,
             questionTimerText = LessonScreenTestTags.QUESTION_TIMER_TEXT,
@@ -487,6 +490,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
             undoButton = LessonScreenTestTags.UNDO_BUTTON,
             feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
             answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
+            revealButton = LessonScreenTestTags.REVEAL_BUTTON,
             continueButton = LessonScreenTestTags.CONTINUE_BUTTON,
             sessionContextLabel = LessonScreenTestTags.QUIZ_SESSION_CONTEXT_LABEL
         )

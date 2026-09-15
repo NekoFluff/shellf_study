@@ -86,6 +86,7 @@ class ReviewScreenTest {
         remainingCount: Int = 0,
         isWrappingUp: Boolean = false,
         timing: QuizTimingUiState = QuizTimingUiState(),
+        answerRevealed: Boolean = true,
         answerReading: String? = null,
         answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
         answerReadingAudio: PronunciationAudio? = null
@@ -104,6 +105,7 @@ class ReviewScreenTest {
             remainingCount = remainingCount,
             isWrappingUp = isWrappingUp,
             timing = timing,
+            answerRevealed = answerRevealed,
             answerHint = answerReading?.let {
                 AnswerReadingHint(reading = it, pitchAccents = answerPitchAccents, audio = answerReadingAudio)
             }
@@ -214,7 +216,7 @@ class ReviewScreenTest {
         state = activeState(totalCount = 1, remainingCount = 1, answerInput = "", questionSequence = 1)
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).assertTextEquals("答え", "")
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_FIELD).assertTextEquals("MEANING", "")
     }
 
     @Test
@@ -365,6 +367,26 @@ class ReviewScreenTest {
     }
 
     @Test
+    fun answerReadingPitchAccentHint_absentWhileGated() {
+        setScreen(
+            activeState(
+                questionType = QuestionType.READING,
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = false, correctAnswer = "みず"),
+                answerRevealed = false,
+                answerReading = "みず",
+                answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
+            ),
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = true),
+        )
+
+        // The reading itself (not just the pitch-accent diagram) already gives the answer away, so
+        // both stay hidden until the answer is explicitly revealed.
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.REVEAL_BUTTON).assertIsDisplayed()
+    }
+
+    @Test
     fun answerDetailText_overAnswerCountCap_tapExpandsThenCollapses() {
         setScreen(
             activeState(
@@ -512,6 +534,63 @@ class ReviewScreenTest {
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Water")
             )
         )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.CONTINUE_BUTTON).assertIsEnabled()
+    }
+
+    @Test
+    fun revealButton_shownInsteadOfAnswerText_whenGated_andInvokesCallback() {
+        val actions = RecordingReviewActions()
+        setScreen(
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Water"),
+                answerRevealed = false
+            ),
+            actions = actions
+        )
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.REVEAL_BUTTON).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.ANSWER_DETAIL_TEXT).assertDoesNotExist()
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.REVEAL_BUTTON).performClick()
+        assertThat(actions.calls).contains("revealAnswer")
+    }
+
+    @Test
+    fun continueButton_staysDisabled_untilAnswerIsRevealed_evenAfterTheLockTimerElapses() {
+        composeTestRule.mainClock.autoAdvance = false
+        setScreen(
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Water"),
+                answerRevealed = false
+            )
+        )
+
+        composeTestRule.mainClock.advanceTimeBy(1300)
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.CONTINUE_BUTTON).assertIsNotEnabled()
+    }
+
+    @Test
+    fun continueButton_becomesEnabledImmediately_onceAGatedAnswerIsRevealed_noLockTimerNeeded() {
+        composeTestRule.mainClock.autoAdvance = false
+        val feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Water")
+        var state by mutableStateOf(
+            activeState(totalCount = 1, remainingCount = 1, feedback = feedback, answerRevealed = false)
+        )
+        composeTestRule.setContent {
+            ReviewScreen(uiState = state, actions = RecordingReviewActions(), onSessionComplete = {}, onBack = {})
+        }
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.CONTINUE_BUTTON).assertIsNotEnabled()
+
+        // Same feedback instance, only answerRevealed flips — mirrors what revealAnswer() does in
+        // the ViewModel. Only a single frame is allowed through: a gated answer skips the timed
+        // lock/ring entirely, so Continue must already be enabled the moment it's revealed, not
+        // after the (skipped) 1200ms lock would have elapsed.
+        state = activeState(totalCount = 1, remainingCount = 1, feedback = feedback, answerRevealed = true)
+        composeTestRule.mainClock.advanceTimeByFrame()
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.CONTINUE_BUTTON).assertIsEnabled()
     }
@@ -857,6 +936,7 @@ private class RecordingReviewActions : ReviewActions {
     override fun dontKnowAnswer() = record("dontKnowAnswer")
     override fun onContinue() = record("onContinue")
     override fun undoLastAnswer() = record("undoLastAnswer")
+    override fun revealAnswer() = record("revealAnswer")
     override fun toggleDetails() = record("toggleDetails")
     override fun closeDetails() = record("closeDetails")
     override fun wrapUp() = record("wrapUp")

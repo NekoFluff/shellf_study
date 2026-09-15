@@ -35,6 +35,8 @@ interface ReviewActions {
 
     fun undoLastAnswer()
 
+    fun revealAnswer()
+
     fun toggleDetails()
 
     fun closeDetails()

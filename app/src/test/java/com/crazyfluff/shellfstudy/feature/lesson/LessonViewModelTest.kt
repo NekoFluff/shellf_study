@@ -365,6 +365,157 @@ class LessonViewModelTest {
     }
 
     @Test
+    fun `require tap to reveal answer withholds a wrong reading question's answer hint until revealed`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setShowAnswerReadingPitchAccent(true)
+        settingsRepository.setRequireTapToRevealReadingAnswer(true)
+        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange("Testword")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            // A genuine miss, not a typo — graded incorrect (see the undo test above using the
+            // same fixture/wrong reading).
+            viewModel.onAnswerInputChange("けんい")
+            awaitItem()
+            viewModel.submitAnswer()
+            var quiz = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.feedback?.isCorrect).isFalse()
+            assertThat(quiz.answerRevealed).isFalse()
+            assertThat(quiz.answerHint).isNull()
+
+            viewModel.revealAnswer()
+            quiz = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.answerRevealed).isTrue()
+            assertThat(quiz.answerHint?.reading).isEqualTo("けんあ")
+        }
+    }
+
+    @Test
+    fun `require tap to reveal answer withholds a wrong reading question's pronunciation audio until revealed`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealReadingAnswer(true)
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJsonWithAudio()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange(if ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(feedbackState.feedback?.isCorrect).isFalse()
+            assertThat(pronunciationAudioPlayer.playedAudios).isEmpty()
+
+            viewModel.revealAnswer()
+            awaitItem()
+        }
+
+        assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
+        assertThat(pronunciationAudioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
+    }
+
+    @Test
+    fun `require tap to reveal meaning answer does not gate a wrong reading answer`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJsonWithAudio()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange(if ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            val quiz = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.feedback?.isCorrect).isFalse()
+            assertThat(quiz.answerRevealed).isTrue()
+        }
+    }
+
+    @Test
+    fun `require tap to reveal reading answer does not gate a wrong meaning answer`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealReadingAnswer(true)
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJsonWithAudio()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            state = awaitItem() // quiz begins
+
+            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.MEANING) {
+                viewModel.onAnswerInputChange(if ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            val quiz = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.feedback?.isCorrect).isFalse()
+            assertThat(quiz.answerRevealed).isTrue()
+        }
+    }
+
+    @Test
     fun `resuming a persisted quiz session still resolves the answer hint's pitch accents`() = runTest(mainDispatcherRule.dispatcher) {
         settingsRepository.setShowAnswerReadingPitchAccent(true)
         // buildTestRepositories' PitchAccentRepository is backed by a FakePitchAccentBundledSource,
@@ -902,6 +1053,85 @@ class LessonViewModelTest {
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
             assertThat(feedbackState.feedback?.isCorrect).isFalse()
             assertThat(feedbackState.remainingQuizCount).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `require tap to reveal answer gates a wrong answer's text until revealAnswer is called`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            var quiz = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.feedback?.isCorrect).isFalse()
+            assertThat(quiz.answerRevealed).isFalse()
+
+            viewModel.revealAnswer()
+            quiz = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.answerRevealed).isTrue()
+        }
+    }
+
+    @Test
+    fun `giving up always reveals the answer regardless of the require-tap setting`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.dontKnowAnswer()
+            val quiz = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.feedback?.isCorrect).isFalse()
+            assertThat(quiz.answerRevealed).isTrue()
+        }
+    }
+
+    @Test
+    fun `a correct close-match answer is never gated by the require-tap setting`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            // "Mouth" (the correct answer) with the last two letters transposed — a close match,
+            // still graded correct with closeEnoughAnswersEnabled at its default (true).
+            viewModel.onAnswerInputChange("Mouht")
+            awaitItem()
+            viewModel.submitAnswer()
+            val quiz = awaitItem().phase as LessonUiState.Phase.Quiz
+            assertThat(quiz.feedback?.isCorrect).isTrue()
+            assertThat(quiz.answerRevealed).isTrue()
         }
     }
 

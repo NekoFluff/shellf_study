@@ -78,6 +78,8 @@ object SettingsScreenTestTags {
     const val STROKE_ORDER_TOGGLE = "settings_stroke_order_toggle"
     const val JAPANESE_KEYBOARD_TOGGLE = "settings_use_japanese_keyboard_toggle"
     const val CLOSE_ENOUGH_ANSWERS_TOGGLE = "settings_close_enough_answers_toggle"
+    const val REQUIRE_TAP_TO_REVEAL_MEANING_ANSWER_TOGGLE = "settings_require_tap_to_reveal_meaning_answer_toggle"
+    const val REQUIRE_TAP_TO_REVEAL_READING_ANSWER_TOGGLE = "settings_require_tap_to_reveal_reading_answer_toggle"
     const val ANSWER_READING_PITCH_ACCENT_TOGGLE = "settings_answer_reading_pitch_accent_toggle"
     const val HIDE_CONTEXT_SENTENCE_TRANSLATIONS_TOGGLE = "settings_hide_context_sentence_translations_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
@@ -611,6 +613,20 @@ private fun ReviewsSection(
             checked = uiState.closeEnoughAnswersEnabled,
             onCheckedChange = actions::onCloseEnoughAnswersEnabledChange,
             testTag = SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE
+        )
+        ToggleRow(
+            label = "Require a tap to reveal meaning answers",
+            description = "On a wrong meaning answer, shows whether you were right or wrong first, then requires a separate tap to reveal the correct meaning — so you can keep thinking about it before you see it.",
+            checked = uiState.requireTapToRevealMeaningAnswer,
+            onCheckedChange = actions::onRequireTapToRevealMeaningAnswerChange,
+            testTag = SettingsScreenTestTags.REQUIRE_TAP_TO_REVEAL_MEANING_ANSWER_TOGGLE
+        )
+        ToggleRow(
+            label = "Require a tap to reveal reading answers",
+            description = "On a wrong reading answer, shows whether you were right or wrong first, then requires a separate tap to reveal the correct reading (and its audio/pitch-accent hint, if enabled below) — so you can keep thinking about it before you see it.",
+            checked = uiState.requireTapToRevealReadingAnswer,
+            onCheckedChange = actions::onRequireTapToRevealReadingAnswerChange,
+            testTag = SettingsScreenTestTags.REQUIRE_TAP_TO_REVEAL_READING_ANSWER_TOGGLE
         )
         ToggleRow(
             label = "Show reading & pitch accent on answer",

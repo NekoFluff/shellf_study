@@ -54,6 +54,13 @@ object SrsStageColorsDark {
 val CorrectAnswerColor = SubjectTypeColors.Radical
 val CorrectAnswerColorDark = Color(0xFF2E2E2E)
 
+/** Reading/meaning at-a-glance colors — a teal and a marigold gold, pulled into the same vivid,
+ *  fully-saturated family as [SubjectTypeColors] (Radical/Kanji/Vocabulary) so the cue feels native
+ *  rather than bolted on, while staying outside every hue already claimed on the quiz screen
+ *  (subject type, SRS stage, pitch accent). */
+val QuestionTypeReadingColor = Color(0xFF00897B)
+val QuestionTypeMeaningColor = Color(0xFFE0A526)
+
 /** Pitch-accent-pattern colors — Heiban/Nakadaka/Odaka rotated from Smouldering Durtles' original
  *  pink/blue/green assignment so Heiban reads as blue and Nakadaka as green (Atamadaka's orange is
  *  unchanged); the same three hues just swap patterns, keeping all four still fully distinct. */

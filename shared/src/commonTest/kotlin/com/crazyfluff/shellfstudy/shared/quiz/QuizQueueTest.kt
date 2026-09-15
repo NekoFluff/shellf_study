@@ -58,6 +58,48 @@ class QuizQueueTest {
     }
 
     @Test
+    fun capInFlight_belowCap_leavesFrontUnchanged() {
+        val queue = QuizQueue<String>()
+        // After build(shuffle=false): A-MEANING, B-MEANING
+        queue.build(listOf("A", "B"), typesFor = { listOf(QuestionType.MEANING) }, shuffle = false)
+        // "B" is started, "A" is not — but inFlightCount (1) is below cap (2), so the not-yet-started
+        // front is left alone.
+        queue.capInFlight(isStarted = { it == "B" }, inFlightCount = 1, cap = 2)
+        assertEquals(PendingQuestion("A", QuestionType.MEANING), queue.current)
+    }
+
+    @Test
+    fun capInFlight_atCap_swapsInTheFirstAlreadyStartedEntry() {
+        val queue = QuizQueue<String>()
+        // After build(shuffle=false): A-MEANING, B-MEANING, C-MEANING
+        queue.build(listOf("A", "B", "C"), typesFor = { listOf(QuestionType.MEANING) }, shuffle = false)
+        // Front (A) isn't started; B and C are. At cap, the not-yet-started front must be swapped out
+        // for the first already-started entry (B) instead of introducing A.
+        queue.capInFlight(isStarted = { it == "B" || it == "C" }, inFlightCount = 2, cap = 2)
+        assertEquals(PendingQuestion("B", QuestionType.MEANING), queue.current)
+    }
+
+    @Test
+    fun capInFlight_atCap_leavesFrontUnchanged_whenFrontIsAlreadyStarted() {
+        val queue = QuizQueue<String>()
+        queue.build(listOf("A", "B"), typesFor = { listOf(QuestionType.MEANING) }, shuffle = false)
+        val before = queue.toList()
+        queue.capInFlight(isStarted = { it == "A" }, inFlightCount = 5, cap = 5)
+        assertEquals(before, queue.toList())
+    }
+
+    @Test
+    fun capInFlight_atCap_leavesFrontUnchanged_whenNothingElseIsStarted() {
+        val queue = QuizQueue<String>()
+        // Nothing has been started yet (e.g. the very first question of a session) — there's no
+        // already-started entry to swap in, so the not-yet-started front must still be offered.
+        queue.build(listOf("A", "B"), typesFor = { listOf(QuestionType.MEANING) }, shuffle = false)
+        val before = queue.toList()
+        queue.capInFlight(isStarted = { false }, inFlightCount = 10, cap = 10)
+        assertEquals(before, queue.toList())
+    }
+
+    @Test
     fun retainCurrentAndMatching_keepsCurrentAndMatchingRest_dropsNonMatching() {
         val queue = QuizQueue<String>()
         // After build(shuffle=false): A-MEANING, B-MEANING, C-MEANING

@@ -207,6 +207,7 @@ class LessonScreenTest {
         remainingQuizCount: Int = 0,
         questionSequence: Int = 0,
         timing: QuizTimingUiState = QuizTimingUiState(),
+        answerRevealed: Boolean = true,
         answerReading: String? = null,
         answerPitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
         answerReadingAudio: PronunciationAudio? = null
@@ -221,6 +222,7 @@ class LessonScreenTest {
             remainingQuizCount = remainingQuizCount,
             questionSequence = questionSequence,
             timing = timing,
+            answerRevealed = answerRevealed,
             answerHint = answerReading?.let {
                 AnswerReadingHint(reading = it, audio = answerReadingAudio)
             }
@@ -896,7 +898,7 @@ class LessonScreenTest {
         )
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_FIELD).assertTextEquals("答え", "")
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_FIELD).assertTextEquals("MEANING", "")
     }
 
     @Test
@@ -1126,6 +1128,26 @@ class LessonScreenTest {
     }
 
     @Test
+    fun quizPhase_answerReadingPitchAccentHint_absentWhileGated() {
+        setScreen(
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.READING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                feedback = AnswerFeedback(isCorrect = false, correctAnswer = "みず"),
+                answerRevealed = false,
+                answerReading = "みず",
+                answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))
+            ),
+            displaySettings = DisplaySettings(showAnswerReadingPitchAccent = true),
+        )
+
+        // The reading itself (not just the pitch-accent diagram) already gives the answer away, so
+        // both stay hidden until the answer is explicitly revealed.
+        composeTestRule.onAllNodesWithTag(PitchAccentTestTags.ROOT).assertCountEquals(0)
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.REVEAL_BUTTON).assertIsDisplayed()
+    }
+
+    @Test
     fun quizPhase_answerReadingPitchAccentHint_playButton_playsTheAnswerReadingClip() {
         val audio = PronunciationAudio(
             url = "https://api.wanikani.com/audio/mizu.mp3",
@@ -1214,6 +1236,73 @@ class LessonScreenTest {
         composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).assertIsNotEnabled()
 
         composeTestRule.mainClock.advanceTimeBy(1300)
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).assertIsEnabled()
+    }
+
+    @Test
+    fun quizPhase_revealButton_shownInsteadOfAnswerText_whenGated_andInvokesCallback() {
+        val actions = RecordingLessonActions()
+        setScreen(
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Mouth"),
+                answerRevealed = false
+            ),
+            actions = actions
+        )
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.REVEAL_BUTTON).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.ANSWER_DETAIL_TEXT).assertDoesNotExist()
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.REVEAL_BUTTON).performClick()
+        assertThat(actions.calls).contains("revealAnswer")
+    }
+
+    @Test
+    fun quizPhase_continueButton_staysDisabled_untilAnswerIsRevealed_evenAfterTheLockTimerElapses() {
+        composeTestRule.mainClock.autoAdvance = false
+        setScreen(
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Mouth"),
+                answerRevealed = false
+            )
+        )
+
+        composeTestRule.mainClock.advanceTimeBy(1300)
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).assertIsNotEnabled()
+    }
+
+    @Test
+    fun quizPhase_continueButton_becomesEnabledImmediately_onceAGatedAnswerIsRevealed_noLockTimerNeeded() {
+        composeTestRule.mainClock.autoAdvance = false
+        val feedback = AnswerFeedback(isCorrect = false, correctAnswer = "Mouth")
+        var state by mutableStateOf(
+            quizState(
+                currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+                totalQuizCount = 1, remainingQuizCount = 1,
+                feedback = feedback, answerRevealed = false
+            )
+        )
+        composeTestRule.setContent {
+            LessonScreen(uiState = state, actions = RecordingLessonActions(), onSessionComplete = {}, onBack = {})
+        }
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).assertIsNotEnabled()
+
+        // Same feedback instance, only answerRevealed flips — mirrors what revealAnswer() does in
+        // the ViewModel. Only a single frame is allowed through: a gated answer skips the timed
+        // lock/ring entirely, so Continue must already be enabled the moment it's revealed, not
+        // after the (skipped) 1200ms lock would have elapsed.
+        state = quizState(
+            currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
+            totalQuizCount = 1, remainingQuizCount = 1,
+            feedback = feedback, answerRevealed = true
+        )
+        composeTestRule.mainClock.advanceTimeByFrame()
+
         composeTestRule.onNodeWithTag(LessonScreenTestTags.CONTINUE_BUTTON).assertIsEnabled()
     }
 
@@ -1567,6 +1656,7 @@ private class RecordingLessonActions : LessonActions {
     override fun submitAnswer() = record("submitAnswer")
     override fun dontKnowAnswer() = record("dontKnowAnswer")
     override fun undoLastAnswer() = record("undoLastAnswer")
+    override fun revealAnswer() = record("revealAnswer")
     override fun onContinue() = record("onContinue")
     override fun toggleDetails() = record("toggleDetails")
     override fun closeDetails() = record("closeDetails")

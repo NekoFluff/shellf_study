@@ -30,6 +30,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
+import com.crazyfluff.shellfstudy.shared.quiz.requiresTapToRevealAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
@@ -95,6 +96,11 @@ data class ReviewUiState(
             // really are different rendering modes).
             val isWrappingUp: Boolean = false,
             val timing: QuizTimingUiState = QuizTimingUiState(),
+            // Whether the correct-answer text is visible for the current (wrong) feedback. Always
+            // true except right after a wrong submit while the "require tap to reveal answer"
+            // setting is on — see gradeAnswer/revealAnswer. Give-ups and correct/close-match answers
+            // are never gated, so this stays true for them regardless of the setting.
+            val answerRevealed: Boolean = true,
             // The reading + pitch-accent patterns + audio for the just-graded reading question. The
             // reading/audio are published with the feedback (see gradeAnswer); the pitch patterns are
             // *observed* live for as long as this question is the current one (see
@@ -124,6 +130,11 @@ private fun QuizSessionSummary<ReviewItem>.toCompletePhase() = ReviewUiState.Pha
 )
 
 private typealias ItemProgress = QuizItemProgress<ReviewItem>
+
+/** How many distinct items can be in flight (started but not yet fully answered) at once — matches
+ *  WaniKani's own review session, which stops introducing new items once 10 are already being
+ *  worked on. Fixed rather than a setting, same as upstream. See ReviewViewModel.admitNextQuestion. */
+private const val MAX_IN_FLIGHT_REVIEW_ITEMS = 10
 
 /** Shared by [ReviewViewModel.gradeAnswer]'s synchronous rank-change prediction and
  *  [ReviewViewModel.commitPendingSubmission]'s later, authoritative recomputation — keeps the two
@@ -421,7 +432,10 @@ class ReviewViewModel(
                 AnswerOutcome.TypeMismatch ->
                     updateActive { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
                 is AnswerOutcome.Graded ->
-                    gradeAnswer(item, type, outcome.isCorrect, candidates, expandDetails = false, wasCloseMatch = outcome.wasCloseMatch)
+                    gradeAnswer(
+                        item, type, outcome.isCorrect, candidates, expandDetails = false,
+                        wasCloseMatch = outcome.wasCloseMatch
+                    )
             }
         }
     }
@@ -435,7 +449,53 @@ class ReviewViewModel(
 
         gradingGuard.launchIfIdle {
             val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-            gradeAnswer(item, type, isCorrect = false, candidates, expandDetails = false)
+            gradeAnswer(item, type, isCorrect = false, candidates, expandDetails = false, isGiveUp = true)
+        }
+    }
+
+    /** Reveals a gated wrong answer's correct-answer text — see [ReviewUiState.Phase.Active.answerRevealed].
+     *  No-op if there's nothing gated right now (already revealed, or no feedback showing). Doesn't
+     *  need [gradingGuard]: it mutates only display state, not grading/SRS state — but a reading
+     *  question's audio/pitch-accent hint were themselves withheld at grading time (see
+     *  [publishReadingRevealEffects]), so revealing now is what actually triggers them. */
+    override fun revealAnswer() {
+        val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
+        if (active.feedback == null || active.answerRevealed) return
+        updateActive { it.copy(answerRevealed = true) }
+        val item = active.currentItem
+        val type = active.currentQuestionType
+        val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
+        publishReadingRevealEffects(item, type, candidates, latestSettings)
+    }
+
+    /** The autoplay audio and reading/pitch-accent hint for a just-graded (and, if gated, now
+     *  revealed) reading question — held back while a wrong answer's text is still gated behind
+     *  "require tap to reveal answer" (see [gradeAnswer]/[revealAnswer]), so a learner can't hear or
+     *  see the correct reading before choosing to look at the answer. */
+    private fun publishReadingRevealEffects(item: ReviewItem, type: QuestionType, candidates: List<String>, settings: AppSettings) {
+        if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
+            candidates.firstOrNull()?.let { reading ->
+                pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
+            }
+        }
+
+        // The reading and its audio are snapshots (subject audio can't change mid-session); the pitch
+        // patterns are watched live off `pitchAccentHintKey` (see init), which is set *after* the
+        // reading is published so the collector's first emission always finds it in place.
+        val characters = item.characters
+        if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType) && characters != null) {
+            val answerReading = item.readings.firstOrNull()
+            // Selected here, where the item and the settings are already in hand, so the hint's row
+            // only has to render whatever clip this produced — null when none survives the filter.
+            val answerReadingAudio = answerReading?.let { reading ->
+                selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
+            }
+            updateActive {
+                it.copy(
+                    answerHint = answerReading?.let { reading -> AnswerReadingHint(reading = reading, audio = answerReadingAudio) }
+                )
+            }
+            pitchAccentHintKey.value = answerReading?.let { PitchAccentHintKey(item.assignmentId, characters, it) }
         }
     }
 
@@ -445,8 +505,15 @@ class ReviewViewModel(
         isCorrect: Boolean,
         candidates: List<String>,
         expandDetails: Boolean,
-        wasCloseMatch: Boolean = false
+        wasCloseMatch: Boolean = false,
+        isGiveUp: Boolean = false
     ) {
+        // Whether this grade is visible right away, or gated behind an explicit revealAnswer() tap —
+        // see ReviewUiState.Phase.Active.answerRevealed. Computed once up front since both the
+        // published feedback state and the reveal-effects gate below must agree on it. Meaning and
+        // reading each have their own setting (requiresTapToRevealAnswer), so this can gate one
+        // question type and not the other.
+        val revealedNow = isCorrect || isGiveUp || !requiresTapToRevealAnswer(latestSettings, type)
         val (snapshot, queueIsEmpty) = run {
             val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress(item) }
             val questionElapsedMs = questionTiming.freeze()
@@ -495,6 +562,7 @@ class ReviewViewModel(
             updateActive {
                 it.copy(
                     feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
+                    answerRevealed = revealedNow,
                     remainingCount = queue.size,
                     isDetailsExpanded = it.isDetailsExpanded || expandDetails,
                     rankChange = newRankChange ?: it.rankChange,
@@ -508,35 +576,13 @@ class ReviewViewModel(
 
             snapshot to queueIsEmpty
         }
-        // Reads the field kept warm by the settings collector in init{} instead of
-        // `settingsRepository.settings.first()` — see `latestSettings`'s doc comment for why a
-        // fresh Flow collection here measurably janked the post-submit animation.
-        val settings = latestSettings
-        if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
-            candidates.firstOrNull()?.let { reading ->
-                pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
-            }
-        }
-
-        // Both halves of the hint are published synchronously here now — there is no fetch left to
-        // resolve late, so none of the old "did the user already move on?" guard is needed. The
-        // reading and its audio are snapshots (subject audio can't change mid-session); the pitch
-        // patterns are watched live off `pitchAccentHintKey` (see init), which is set *after* the
-        // reading is published so the collector's first emission always finds it in place.
-        val characters = item.characters
-        if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType) && characters != null) {
-            val answerReading = item.readings.firstOrNull()
-            // Selected here, where the item and the settings are already in hand, so the hint's row
-            // only has to render whatever clip this produced — null when none survives the filter.
-            val answerReadingAudio = answerReading?.let { reading ->
-                selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
-            }
-            updateActive {
-                it.copy(
-                    answerHint = answerReading?.let { reading -> AnswerReadingHint(reading = reading, audio = answerReadingAudio) }
-                )
-            }
-            pitchAccentHintKey.value = answerReading?.let { PitchAccentHintKey(item.assignmentId, characters, it) }
+        // Withheld entirely while gated (revealedNow == false) — a wrong reading answer's audio/hint
+        // wait for revealAnswer() to trigger them instead, same as its answer text.
+        if (revealedNow) {
+            // Reads the field kept warm by the settings collector in init{} instead of
+            // `settingsRepository.settings.first()` — see `latestSettings`'s doc comment for why a
+            // fresh Flow collection here measurably janked the post-submit animation.
+            publishReadingRevealEffects(item, type, candidates, latestSettings)
         }
 
         commitGradeDurably(snapshot, queueIsEmpty)
@@ -590,6 +636,7 @@ class ReviewViewModel(
                     // answer never had one, so this is a no-op in that branch.
                     rankChange = if (feedback.isCorrect) null else it.rankChange,
                     answerHint = null,
+                    answerRevealed = true,
                     answerInput = "",
                     remainingCount = queue.size,
                     undoCounter = it.undoCounter + 1,
@@ -608,6 +655,20 @@ class ReviewViewModel(
     private fun isFullyDone(item: ReviewItem, progress: ItemProgress): Boolean {
         val requiresReading = item.subjectType != SubjectType.RADICAL && item.subjectType != SubjectType.KANA_VOCABULARY
         return progress.meaningDone && (!requiresReading || progress.readingDone)
+    }
+
+    /** Enforces [MAX_IN_FLIGHT_REVIEW_ITEMS] on whatever advanceToNextQuestion is about to draw next
+     *  — recomputed from progressByAssignmentId every time rather than tracked as separate state, so
+     *  a resumed session re-derives the same in-flight set the paused one had for free. "In flight"
+     *  means started (hasAnyProgress) but not yet finished (isFullyDone) — a completed item frees its
+     *  slot even though its progress entry is never cleared. */
+    private fun admitNextQuestionWithinCap() {
+        val inFlightCount = progressByAssignmentId.values.count { it.hasAnyProgress && !isFullyDone(it.item, it) }
+        queue.capInFlight(
+            isStarted = { item -> progressByAssignmentId[item.assignmentId]?.hasAnyProgress == true },
+            inFlightCount = inFlightCount,
+            cap = MAX_IN_FLIGHT_REVIEW_ITEMS
+        )
     }
 
     override fun onContinue() {
@@ -693,6 +754,7 @@ class ReviewViewModel(
         // (process death, or navigating away and back), treating that the same as an implicit
         // Continue, since undo only works on the live in-memory session.
         commitPendingSubmission()
+        admitNextQuestionWithinCap()
         val next = queue.current
         if (next == null) {
             sessionController.complete()

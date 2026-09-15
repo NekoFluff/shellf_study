@@ -71,6 +71,7 @@ object ReviewScreenTestTags {
     const val DONT_KNOW_BUTTON = "review_dont_know_button"
     const val FEEDBACK_TEXT = "review_feedback_text"
     const val ANSWER_DETAIL_TEXT = "review_answer_detail_text"
+    const val REVEAL_BUTTON = "review_reveal_button"
     const val RANK_CHANGE_TEXT = "review_rank_change_text"
     const val CONTINUE_BUTTON = "review_continue_button"
     const val UNDO_BUTTON = "review_undo_button"
@@ -364,6 +365,7 @@ private fun ColumnScope.ReviewActivePhase(
             sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
             sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
             allowUndoAfterCorrect = true,
+            answerRevealed = phase.answerRevealed,
             answerHint = phase.answerHint
         ),
         onAnswerInputChange = actions::onAnswerInputChange,
@@ -371,6 +373,7 @@ private fun ColumnScope.ReviewActivePhase(
         onDontKnow = actions::dontKnowAnswer,
         onContinue = actions::onContinue,
         onUndo = actions::undoLastAnswer,
+        onReveal = actions::revealAnswer,
         testTags = QuizQuestionTestTags(
             progressCount = ReviewScreenTestTags.PROGRESS_COUNT,
             questionTimerText = ReviewScreenTestTags.QUESTION_TIMER_TEXT,
@@ -386,6 +389,7 @@ private fun ColumnScope.ReviewActivePhase(
             undoButton = ReviewScreenTestTags.UNDO_BUTTON,
             feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
             answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
+            revealButton = ReviewScreenTestTags.REVEAL_BUTTON,
             continueButton = ReviewScreenTestTags.CONTINUE_BUTTON,
             // Review has no session context to name — its queue is the whole session.
             sessionContextLabel = ReviewScreenTestTags.SESSION_CONTEXT_LABEL

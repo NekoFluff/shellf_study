@@ -231,6 +231,30 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun togglingRequireTapToRevealMeaningAnswerSwitch_invokesCallback() {
+        val actions = RecordingSettingsActions()
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, requireTapToRevealMeaningAnswer = false),
+            actions = actions
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.REQUIRE_TAP_TO_REVEAL_MEANING_ANSWER_TOGGLE).performScrollTo().performClick()
+        assertThat(actions.lastArgumentOf("onRequireTapToRevealMeaningAnswerChange")).isEqualTo(true)
+    }
+
+    @Test
+    fun togglingRequireTapToRevealReadingAnswerSwitch_invokesCallback() {
+        val actions = RecordingSettingsActions()
+        setContent(
+            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, requireTapToRevealReadingAnswer = false),
+            actions = actions
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.REQUIRE_TAP_TO_REVEAL_READING_ANSWER_TOGGLE).performScrollTo().performClick()
+        assertThat(actions.lastArgumentOf("onRequireTapToRevealReadingAnswerChange")).isEqualTo(true)
+    }
+
+    @Test
     fun togglingAnswerReadingPitchAccentSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
@@ -395,6 +419,8 @@ private class RecordingSettingsActions : SettingsActions {
     override fun onShowStrokeOrderChange(enabled: Boolean) = record("onShowStrokeOrderChange", enabled)
     override fun onUseJapaneseKeyboardChange(enabled: Boolean) = record("onUseJapaneseKeyboardChange", enabled)
     override fun onCloseEnoughAnswersEnabledChange(enabled: Boolean) = record("onCloseEnoughAnswersEnabledChange", enabled)
+    override fun onRequireTapToRevealMeaningAnswerChange(enabled: Boolean) = record("onRequireTapToRevealMeaningAnswerChange", enabled)
+    override fun onRequireTapToRevealReadingAnswerChange(enabled: Boolean) = record("onRequireTapToRevealReadingAnswerChange", enabled)
     override fun onShowAnswerReadingPitchAccentChange(enabled: Boolean) = record("onShowAnswerReadingPitchAccentChange", enabled)
     override fun onHideContextSentenceTranslationsChange(enabled: Boolean) = record("onHideContextSentenceTranslationsChange", enabled)
     override fun onReviewsAvailableEnabledChange(enabled: Boolean) = record("onReviewsAvailableEnabledChange", enabled)

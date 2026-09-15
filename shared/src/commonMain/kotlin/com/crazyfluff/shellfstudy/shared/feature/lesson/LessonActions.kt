@@ -52,6 +52,8 @@ interface LessonActions {
 
     fun undoLastAnswer()
 
+    fun revealAnswer()
+
     fun onContinue()
 
     fun toggleDetails()

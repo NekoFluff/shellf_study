@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,13 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.IntOffset
-import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.RomajiOutputTransformation
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalJapaneseFontFamily
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.questionTypeColor
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.label
 import kotlin.math.roundToInt
@@ -42,7 +44,8 @@ import kotlinx.coroutines.flow.drop
  */
 data class QuizAnswerFieldTestTags(
     val answerField: String,
-    val typeMismatchText: String
+    val typeMismatchText: String,
+    val questionLabel: String
 )
 
 /** The answer input shared by review sessions and lesson quizzes — a WaniKani-romaji-aware text
@@ -113,7 +116,16 @@ fun QuizAnswerField(
 
     OutlinedTextField(
         state = fieldState,
-        label = { JapaneseText("答え") },
+        // Doubles as the reading/meaning cue: the field itself asks the question, rather than a
+        // separate label line repeating what this text already says.
+        label = {
+            Text(
+                text = questionType.label.uppercase(),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.testTag(testTags.questionLabel)
+            )
+        },
         // Only reading questions ever contain kana (typed via a Japanese IME, or live-converted
         // from romaji by outputTransformation above) — meaning answers are plain English, so they
         // keep the ambient Latin font instead of picking up Noto Sans JP unconditionally.
@@ -142,6 +154,13 @@ fun QuizAnswerField(
             } else null
         ),
         onKeyboardAction = KeyboardActionHandler { if (!isAnswered) onSubmit() },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = questionTypeColor(questionType),
+            unfocusedBorderColor = questionTypeColor(questionType),
+            cursorColor = questionTypeColor(questionType),
+            focusedLabelColor = questionTypeColor(questionType),
+            unfocusedLabelColor = questionTypeColor(questionType)
+        ),
         modifier = modifier
             .fillMaxWidth()
             .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }

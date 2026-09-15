@@ -206,6 +206,30 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `onRequireTapToRevealMeaningAnswerChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().requireTapToRevealMeaningAnswer).isFalse()
+
+            viewModel.onRequireTapToRevealMeaningAnswerChange(true)
+            assertThat(awaitItem().requireTapToRevealMeaningAnswer).isTrue()
+        }
+    }
+
+    @Test
+    fun `onRequireTapToRevealReadingAnswerChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().requireTapToRevealReadingAnswer).isFalse()
+
+            viewModel.onRequireTapToRevealReadingAnswerChange(true)
+            assertThat(awaitItem().requireTapToRevealReadingAnswer).isTrue()
+        }
+    }
+
+    @Test
     fun `uiState reflects opt-in notification defaults`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
         viewModel.uiState.test {

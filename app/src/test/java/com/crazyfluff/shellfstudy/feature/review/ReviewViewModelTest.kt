@@ -1202,6 +1202,210 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `require tap to reveal answer gates a wrong answer's text until revealAnswer is called`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            var settled = awaitItem()
+            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
+            var active = settled.phase as ReviewUiState.Phase.Active
+            assertThat(active.feedback?.isCorrect).isFalse()
+            assertThat(active.answerRevealed).isFalse()
+
+            viewModel.revealAnswer()
+            active = awaitItem().phase as ReviewUiState.Phase.Active
+            assertThat(active.answerRevealed).isTrue()
+        }
+    }
+
+    @Test
+    fun `giving up always reveals the answer regardless of the require-tap setting`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            viewModel.dontKnowAnswer()
+            var settled = awaitItem()
+            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
+            val active = settled.phase as ReviewUiState.Phase.Active
+            assertThat(active.feedback?.isCorrect).isFalse()
+            assertThat(active.answerRevealed).isTrue()
+        }
+    }
+
+    @Test
+    fun `a correct close-match answer is never gated by the require-tap setting`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            // "Mouth" (the correct answer) with the last two letters transposed — a close match,
+            // still graded correct with closeEnoughAnswersEnabled at its default (true).
+            viewModel.onAnswerInputChange("Mouht")
+            awaitItem()
+            viewModel.submitAnswer()
+            var settled = awaitItem()
+            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
+            val active = settled.phase as ReviewUiState.Phase.Active
+            assertThat(active.feedback?.isCorrect).isTrue()
+            assertThat(active.answerRevealed).isTrue()
+        }
+    }
+
+    @Test
+    fun `require tap to reveal answer withholds a wrong reading question's pronunciation audio until revealed`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealReadingAnswer(true)
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            var settled = awaitItem()
+            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
+            assertThat((settled.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
+            assertThat(pronunciationAudioPlayer.playedAudios).isEmpty()
+
+            viewModel.revealAnswer()
+            awaitItem()
+        }
+
+        assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
+        assertThat(pronunciationAudioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
+    }
+
+    @Test
+    fun `require tap to reveal answer withholds a wrong reading question's answer hint until revealed`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setShowAnswerReadingPitchAccent(true)
+        settingsRepository.setRequireTapToRevealReadingAnswer(true)
+        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
+            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange("Testword")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            // A genuine miss, not a typo — graded incorrect (see the undo test above using the
+            // same fixture/wrong reading).
+            viewModel.onAnswerInputChange("けんい")
+            awaitItem()
+            viewModel.submitAnswer()
+            var settled = awaitItem()
+            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
+            var active = settled.phase as ReviewUiState.Phase.Active
+            assertThat(active.feedback?.isCorrect).isFalse()
+            assertThat(active.answerRevealed).isFalse()
+            assertThat(active.answerHint).isNull()
+
+            viewModel.revealAnswer()
+            active = awaitItem().phase as ReviewUiState.Phase.Active
+            assertThat(active.answerRevealed).isTrue()
+            assertThat(active.answerHint?.reading).isEqualTo("けんあ")
+        }
+    }
+
+    @Test
+    fun `require tap to reveal meaning answer does not gate a wrong reading answer`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
+                viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            var settled = awaitItem()
+            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
+            val active = settled.phase as ReviewUiState.Phase.Active
+            assertThat(active.feedback?.isCorrect).isFalse()
+            assertThat(active.answerRevealed).isTrue()
+        }
+    }
+
+    @Test
+    fun `require tap to reveal reading answer does not gate a wrong meaning answer`() = runTest(mainDispatcherRule.dispatcher) {
+        settingsRepository.setRequireTapToRevealReadingAnswer(true)
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.MEANING) {
+                viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
+                awaitItem()
+                viewModel.submitAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            var settled = awaitItem()
+            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
+            val active = settled.phase as ReviewUiState.Phase.Active
+            assertThat(active.feedback?.isCorrect).isFalse()
+            assertThat(active.answerRevealed).isTrue()
+        }
+    }
+
+    @Test
     fun `session summary reports missed items, slowest answers capped at five, and non-negative timing`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
 
@@ -1729,6 +1933,83 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `no more than 10 distinct items are ever in flight at once`() = runTest(mainDispatcherRule.dispatcher) {
+        // 12 meaning-only radicals, always answered wrong so none of them ever completes and frees
+        // its slot — the queue's draw order is shuffled, so this drives enough questions to be sure
+        // every item would have been introduced by now if nothing were capping them.
+        val itemCount = 12
+        dispatch(jsonResponse(manyRadicalAssignmentsJson(itemCount)), jsonResponse(manyRadicalSubjectsJson(itemCount)))
+
+        val viewModel = createViewModel()
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            val seenAssignmentIds = mutableSetOf<Long>()
+            repeat(60) {
+                seenAssignmentIds.add((state.phase as ReviewUiState.Phase.Active).currentItem.assignmentId)
+                viewModel.dontKnowAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+
+            // Never-finishing items keep the in-flight set permanently full, so exactly the cap's
+            // worth of distinct items should ever have been drawn — never all 12.
+            assertThat(seenAssignmentIds).hasSize(10)
+        }
+    }
+
+    @Test
+    fun `finishing an in-flight item admits a new one instead of staying capped`() = runTest(mainDispatcherRule.dispatcher) {
+        val itemCount = 11
+        dispatch(jsonResponse(manyRadicalAssignmentsJson(itemCount)), jsonResponse(manyRadicalSubjectsJson(itemCount)))
+
+        val viewModel = createViewModel()
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            val seenAssignmentIds = mutableSetOf<Long>()
+            // Saturate the cap by always answering wrong, stopping the moment a 10th distinct item
+            // has been drawn (any further draws must be one of those same 10 while capped).
+            while (seenAssignmentIds.size < 10) {
+                seenAssignmentIds.add((state.phase as ReviewUiState.Phase.Active).currentItem.assignmentId)
+                viewModel.dontKnowAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+            }
+            assertThat(seenAssignmentIds).hasSize(10)
+
+            // Whichever item is current now must be one of the 10 in-flight ones (the cap holds) —
+            // answer it correctly to finish it and free its slot. Its subject_id is its assignment id
+            // minus 100 (see manyRadicalSubjectsJson), and "Meaning<N>" is its only accepted meaning.
+            val finishedSubjectIndex = (state.phase as ReviewUiState.Phase.Active).currentItem.assignmentId - 100
+            viewModel.onAnswerInputChange("Meaning$finishedSubjectIndex")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+            viewModel.onContinue()
+            state = awaitItem()
+            seenAssignmentIds.add((state.phase as ReviewUiState.Phase.Active).currentItem.assignmentId)
+
+            // Finishing one in-flight item frees its slot — the 11th item (never yet seen while the
+            // cap held at exactly 10) must eventually be introduced.
+            var safetyCounter = 0
+            while (seenAssignmentIds.size < 11 && safetyCounter < 30) {
+                safetyCounter++
+                viewModel.dontKnowAnswer()
+                awaitItem()
+                viewModel.onContinue()
+                state = awaitItem()
+                seenAssignmentIds.add((state.phase as ReviewUiState.Phase.Active).currentItem.assignmentId)
+            }
+            assertThat(seenAssignmentIds).hasSize(11)
+        }
+    }
+
+    @Test
     fun `an auth error during load sets an error message and clears the loading state`() = runTest(mainDispatcherRule.dispatcher) {
         // 401 is an auth error — fetchFreshQueue surfaces Phase.Error instead of auto-falling back,
         // so loading clears and the error is visible. Loading and Error are disjoint sealed variants.
@@ -1885,6 +2166,53 @@ class ReviewViewModelTest {
           ]
         }
     """.trimIndent()
+
+    /** [count] distinct radical assignments — meaning-only, single-question items, so each one's
+     *  own completeness is controlled by a single answer. Used to exercise the in-flight cap, which
+     *  needs enough distinct items in the queue at once to actually saturate it. */
+    private fun manyRadicalAssignmentsJson(count: Int): String {
+        val entries = (0 until count).joinToString(",\n") { i ->
+            """
+            {
+              "id": ${100 + i}, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/${100 + i}",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": $i, "subject_type": "radical",
+                "srs_stage": 1, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
+              }
+            }
+            """.trimIndent()
+        }
+        return """
+            {
+              "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": $count,
+              "data": [$entries]
+            }
+        """.trimIndent()
+    }
+
+    private fun manyRadicalSubjectsJson(count: Int): String {
+        val entries = (0 until count).joinToString(",\n") { i ->
+            """
+            {
+              "id": $i, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/$i",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "radical-$i",
+                "characters": "$i",
+                "meanings": [{"meaning": "Meaning$i", "primary": true, "accepted_meaning": true}],
+                "readings": []
+              }
+            }
+            """.trimIndent()
+        }
+        return """
+            {
+              "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": $count,
+              "data": [$entries]
+            }
+        """.trimIndent()
+    }
 
     private fun radicalAssignmentsJson() = """
         {

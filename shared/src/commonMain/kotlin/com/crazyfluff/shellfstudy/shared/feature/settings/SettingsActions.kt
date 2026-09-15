@@ -48,6 +48,10 @@ interface SettingsActions {
 
     fun onHideContextSentenceTranslationsChange(enabled: Boolean)
 
+    fun onRequireTapToRevealMeaningAnswerChange(enabled: Boolean)
+
+    fun onRequireTapToRevealReadingAnswerChange(enabled: Boolean)
+
     fun onReviewsAvailableEnabledChange(enabled: Boolean)
 
     fun onReviewsBacklogEnabledChange(enabled: Boolean)

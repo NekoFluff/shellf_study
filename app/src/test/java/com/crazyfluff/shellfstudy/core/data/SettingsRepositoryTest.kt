@@ -40,6 +40,8 @@ class SettingsRepositoryTest {
             assertThat(settings.closeEnoughAnswersEnabled).isTrue()
             assertThat(settings.showAnswerReadingPitchAccent).isFalse()
             assertThat(settings.hideContextSentenceTranslations).isTrue()
+            assertThat(settings.requireTapToRevealMeaningAnswer).isFalse()
+            assertThat(settings.requireTapToRevealReadingAnswer).isFalse()
         }
     }
 
@@ -106,6 +108,28 @@ class SettingsRepositoryTest {
 
         repository.settings.test {
             assertThat(awaitItem().closeEnoughAnswersEnabled).isFalse()
+        }
+    }
+
+    @Test
+    fun `setRequireTapToRevealMeaningAnswer persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setRequireTapToRevealMeaningAnswer(true)
+
+        repository.settings.test {
+            assertThat(awaitItem().requireTapToRevealMeaningAnswer).isTrue()
+        }
+    }
+
+    @Test
+    fun `setRequireTapToRevealReadingAnswer persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setRequireTapToRevealReadingAnswer(true)
+
+        repository.settings.test {
+            assertThat(awaitItem().requireTapToRevealReadingAnswer).isTrue()
         }
     }
 

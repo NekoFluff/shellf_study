@@ -31,6 +31,8 @@ data class SettingsUiState(
     val closeEnoughAnswersEnabled: Boolean = true,
     val showAnswerReadingPitchAccent: Boolean = false,
     val hideContextSentenceTranslations: Boolean = true,
+    val requireTapToRevealMeaningAnswer: Boolean = false,
+    val requireTapToRevealReadingAnswer: Boolean = false,
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
@@ -74,6 +76,8 @@ class SettingsViewModel(
             closeEnoughAnswersEnabled = app.closeEnoughAnswersEnabled,
             showAnswerReadingPitchAccent = app.showAnswerReadingPitchAccent,
             hideContextSentenceTranslations = app.hideContextSentenceTranslations,
+            requireTapToRevealMeaningAnswer = app.requireTapToRevealMeaningAnswer,
+            requireTapToRevealReadingAnswer = app.requireTapToRevealReadingAnswer,
             notificationsEnabled = notif.notificationsEnabled,
             reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
             reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
@@ -142,6 +146,14 @@ class SettingsViewModel(
 
     override fun onHideContextSentenceTranslationsChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setHideContextSentenceTranslations(enabled) }
+    }
+
+    override fun onRequireTapToRevealMeaningAnswerChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setRequireTapToRevealMeaningAnswer(enabled) }
+    }
+
+    override fun onRequireTapToRevealReadingAnswerChange(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setRequireTapToRevealReadingAnswer(enabled) }
     }
 
     /**

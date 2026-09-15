@@ -37,6 +37,20 @@ class QuizQueue<T> {
         if (index >= 0) entries.addFirst(entries.removeAt(index))
     }
 
+    /** Caps how many distinct items can be in flight at once — mirrors WaniKani's own review
+     *  session, which stops introducing new items once a fixed number are already being worked on
+     *  (see ReviewViewModel.MAX_IN_FLIGHT_REVIEW_ITEMS). If [inFlightCount] has already reached
+     *  [cap] and the front entry belongs to an item [isStarted] says hasn't been started yet, the
+     *  front is swapped for the first already-started entry instead, so that one is drawn next. A
+     *  no-op below [cap], and left alone if every remaining entry is for a not-yet-started item —
+     *  there's nothing else left to offer in that case. */
+    fun capInFlight(isStarted: (T) -> Boolean, inFlightCount: Int, cap: Int) {
+        if (inFlightCount < cap) return
+        if (entries.isEmpty() || isStarted(entries.first().item)) return
+        val index = entries.indexOfFirst { isStarted(it.item) }
+        if (index > 0) entries.addFirst(entries.removeAt(index))
+    }
+
     fun retainCurrentAndMatching(predicate: (PendingQuestion<T>) -> Boolean) {
         val current = entries.firstOrNull()
         val rest = entries.drop(1).filter(predicate)

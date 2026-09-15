@@ -47,7 +47,9 @@ data class AppSettings(
     val useJapaneseKeyboard: Boolean = false,
     val closeEnoughAnswersEnabled: Boolean = true,
     val showAnswerReadingPitchAccent: Boolean = false,
-    val hideContextSentenceTranslations: Boolean = true
+    val hideContextSentenceTranslations: Boolean = true,
+    val requireTapToRevealMeaningAnswer: Boolean = false,
+    val requireTapToRevealReadingAnswer: Boolean = false
 )
 
 data class NotificationSettings(
@@ -79,6 +81,8 @@ class SettingsRepository(
     private val closeEnoughAnswersEnabledKey = booleanPreferencesKey("close_enough_answers_enabled")
     private val showAnswerReadingPitchAccentKey = booleanPreferencesKey("show_answer_reading_pitch_accent")
     private val hideContextSentenceTranslationsKey = booleanPreferencesKey("hide_context_sentence_translations")
+    private val requireTapToRevealMeaningAnswerKey = booleanPreferencesKey("require_tap_to_reveal_meaning_answer")
+    private val requireTapToRevealReadingAnswerKey = booleanPreferencesKey("require_tap_to_reveal_reading_answer")
 
     private val notificationsEnabledKey = booleanPreferencesKey("notifications_enabled")
     private val reviewsAvailableEnabledKey = booleanPreferencesKey("notif_reviews_available_enabled")
@@ -114,7 +118,9 @@ class SettingsRepository(
             useJapaneseKeyboard = prefs[useJapaneseKeyboardKey] ?: false,
             closeEnoughAnswersEnabled = prefs[closeEnoughAnswersEnabledKey] ?: true,
             showAnswerReadingPitchAccent = prefs[showAnswerReadingPitchAccentKey] ?: false,
-            hideContextSentenceTranslations = prefs[hideContextSentenceTranslationsKey] ?: true
+            hideContextSentenceTranslations = prefs[hideContextSentenceTranslationsKey] ?: true,
+            requireTapToRevealMeaningAnswer = prefs[requireTapToRevealMeaningAnswerKey] ?: false,
+            requireTapToRevealReadingAnswer = prefs[requireTapToRevealReadingAnswerKey] ?: false
         )
     }.distinctUntilChanged()
 
@@ -187,6 +193,14 @@ class SettingsRepository(
 
     suspend fun setHideContextSentenceTranslations(enabled: Boolean) {
         dataStore.edit { it[hideContextSentenceTranslationsKey] = enabled }
+    }
+
+    suspend fun setRequireTapToRevealMeaningAnswer(enabled: Boolean) {
+        dataStore.edit { it[requireTapToRevealMeaningAnswerKey] = enabled }
+    }
+
+    suspend fun setRequireTapToRevealReadingAnswer(enabled: Boolean) {
+        dataStore.edit { it[requireTapToRevealReadingAnswerKey] = enabled }
     }
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {

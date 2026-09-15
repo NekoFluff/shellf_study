@@ -42,15 +42,29 @@ fun GatedContinueButton(
     feedback: AnswerFeedback,
     onContinue: () -> Unit,
     continueButtonTestTag: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Whether the answer text has been revealed — see QuizQuestionUiState.answerRevealed. Continue
+    // stays locked until this is true, on top of the timed ring below, so "require tap to reveal
+    // answer" can't be skipped past without ever seeing the answer. Always true when there's
+    // nothing gated (correct/close-match/give-up, or the setting off).
+    revealed: Boolean = true
 ) {
+    // Snapshotted once per feedback instance, before any reveal happens: whether this answer
+    // needed an explicit reveal tap at all ("require tap to reveal answer" was on and this was a
+    // genuine wrong answer, not a give-up). Tapping Reveal already forced the user to stop and look
+    // at the answer, so the timed ring/pop below — which exist only to stop a reflexively fast tap
+    // from blowing past feedback nobody has registered yet — would just be redundant friction on
+    // top of that pause. An ungated wrong answer (the setting off, or dontKnowAnswer's give-up)
+    // still gets the full timed lock, unchanged from before this setting existed.
+    val wasGated = remember(feedback) { !revealed }
+
     // Drives the ring directly (rather than deriving it from a separately-toggled "unlocked"
     // boolean) so it actually animates 0->1 while it's visible, and unlocking happens in sync with
     // it visually finishing — not the instant before it, which just hid a ring stuck at 0.
-    val lockProgress = remember(feedback) { Animatable(if (feedback.isCorrect) 1f else 0f) }
-    val continueUnlocked = feedback.isCorrect || lockProgress.value >= 1f
+    val lockProgress = remember(feedback) { Animatable(if (feedback.isCorrect || wasGated) 1f else 0f) }
+    val continueUnlocked = feedback.isCorrect || if (wasGated) revealed else lockProgress.value >= 1f
     LaunchedEffect(feedback) {
-        if (!feedback.isCorrect) {
+        if (!feedback.isCorrect && !wasGated) {
             lockProgress.snapTo(0f)
             lockProgress.animateTo(1f, animationSpec = tween(ContinueLockMs))
         }
@@ -60,10 +74,11 @@ fun GatedContinueButton(
     // outline, rather than silently flipping enabled underneath a static button — a quick
     // dip-then-overshoot-then-settle scale reads as the button visibly arriving, echoing the
     // ring's own sense of building up to completion. Correct answers unlock instantly (no ring to
-    // finish), so they skip the pop rather than playing it for no visible reason.
+    // finish), so they skip the pop rather than playing it for no visible reason — same for a
+    // gated answer, which has no ring to echo either.
     val popScale = remember(feedback) { Animatable(1f) }
     LaunchedEffect(feedback, continueUnlocked) {
-        if (continueUnlocked && !feedback.isCorrect) {
+        if (continueUnlocked && !feedback.isCorrect && !wasGated) {
             popScale.snapTo(ContinuePopOvershoot)
             popScale.animateTo(1f, animationSpec = ContinuePopSpring)
         }
@@ -81,7 +96,7 @@ fun GatedContinueButton(
                 .scale(popScale.value)
                 .drawWithContent {
                     drawContent()
-                    if (!continueUnlocked) {
+                    if (!continueUnlocked && !wasGated) {
                         // Traces the button's own outline (not a small separate ring) — empty at
                         // 0%, all the way around at 100% — in the color the button will become the
                         // instant it unlocks, so the ring reads as that color "arriving" rather

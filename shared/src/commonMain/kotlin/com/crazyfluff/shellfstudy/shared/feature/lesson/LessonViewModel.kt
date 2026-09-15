@@ -49,6 +49,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
 import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
+import com.crazyfluff.shellfstudy.shared.quiz.requiresTapToRevealAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
@@ -166,6 +167,10 @@ data class LessonUiState(
             val totalQuizCount: Int = 0,
             val remainingQuizCount: Int = 0,
             val timing: QuizTimingUiState = QuizTimingUiState(),
+            // Whether the correct-answer text is visible for the current (wrong) feedback — see
+            // ReviewUiState.Phase.Active.answerRevealed for the full explanation. Mirrors the same
+            // gating here.
+            val answerRevealed: Boolean = true,
             // Reading + audio for the just-graded reading question, published together at grading
             // time. Pitch accents aren't carried here — the screen reads those live off
             // [LessonUiState.pitchAccentsBySubjectId] and folds them into this hint at render time.
@@ -948,7 +953,57 @@ class LessonViewModel(
         val type = quiz.currentQuestionType
         val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
         gradingGuard.launchIfIdle {
-            gradeAnswer(item, type, isCorrect = false, candidates)
+            gradeAnswer(item, type, isCorrect = false, candidates, isGiveUp = true)
+        }
+    }
+
+    /** Reveals a gated wrong answer's correct-answer text — see
+     *  [LessonUiState.Phase.Quiz.answerRevealed]. No-op if there's nothing gated right now. Doesn't
+     *  need [gradingGuard]: it mutates only display state, not grading/SRS state — but a reading
+     *  question's audio/hint were themselves withheld at grading time (see
+     *  [publishReadingRevealEffects]), so revealing now is what actually triggers them. */
+    override fun revealAnswer() {
+        val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
+        if (quiz.feedback == null || quiz.answerRevealed) return
+        updateQuiz { it.copy(answerRevealed = true) }
+        val item = quiz.currentItem
+        val type = quiz.currentQuestionType
+        val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
+        publishReadingRevealEffects(item, type, candidates, latestSettings)
+    }
+
+    /** The autoplay audio and reading hint for a just-graded (and, if gated, now revealed) reading
+     *  question — held back while a wrong answer's text is still gated behind "require tap to
+     *  reveal answer" (see [gradeAnswer]/[revealAnswer]), so a learner can't hear or see the correct
+     *  reading before choosing to look at the answer. The pitch patterns themselves are gated
+     *  separately at render time (QuizQuestionContent reads them live off
+     *  [LessonUiState.pitchAccentsBySubjectId], which isn't scoped to grading/reveal at all). */
+    private fun publishReadingRevealEffects(item: LessonItem, type: QuestionType, candidates: List<String>, settings: AppSettings) {
+        // isPitchAccentEligible (matching the live collection's own filter) is enforced explicitly
+        // here too — a kanji/radical item's map entry would simply be absent, but answerReading itself
+        // has no such natural gate, so without this check it would still surface the reading (with no
+        // pitch accent alongside it) for a kanji reading question, which the shared vocabulary-only
+        // scoping rule says it shouldn't.
+        val answerReading = if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType)) {
+            item.readings.firstOrNull()
+        } else {
+            null
+        }
+        // Selected here, where the item and the settings are already in hand, so the hint's row only
+        // has to render whatever clip this produced — null when none survives the mp3-only filter.
+        // The pitch patterns are *not* copied here: the hint reads them live off
+        // LessonUiState.pitchAccentsBySubjectId, so a write from any source reaches it in place.
+        val answerReadingAudio = answerReading?.let { reading ->
+            selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
+        }
+        updateQuiz {
+            it.copy(answerHint = answerReading?.let { reading -> AnswerReadingHint(reading = reading, audio = answerReadingAudio) })
+        }
+
+        if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
+            candidates.firstOrNull()?.let { reading ->
+                pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
+            }
         }
     }
 
@@ -989,6 +1044,7 @@ class LessonViewModel(
                     // check was a fact about the *word*, which hasn't changed — same treatment
                     // SubjectDetailViewModel gives it across an unrelated uiState change.
                     answerHint = null,
+                    answerRevealed = true,
                     answerInput = "",
                     remainingQuizCount = quizQueue.size,
                     undoCounter = it.undoCounter + 1,
@@ -1007,7 +1063,8 @@ class LessonViewModel(
         type: QuestionType,
         isCorrect: Boolean,
         candidates: List<String>,
-        wasCloseMatch: Boolean = false
+        wasCloseMatch: Boolean = false,
+        isGiveUp: Boolean = false
     ) {
         val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { LessonItemProgress(item) }
         val questionElapsedMs = questionTiming.freeze()
@@ -1057,42 +1114,28 @@ class LessonViewModel(
         // Reads the field kept warm by the settings collector in init{} instead of
         // `settingsRepository.settings.first()` — see `latestSettings`'s doc comment.
         val settings = latestSettings
-        // isPitchAccentEligible (matching the live collection's own filter) is enforced explicitly
-        // here too — a kanji/radical item's map entry would simply be absent, but answerReading itself
-        // has no such natural gate, so without this check it would still surface the reading (with no
-        // pitch accent alongside it) for a kanji reading question, which the shared vocabulary-only
-        // scoping rule says it shouldn't.
-        val answerReading = if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType)) {
-            item.readings.firstOrNull()
-        } else {
-            null
-        }
-        // Selected here, where the item and the settings are already in hand, so the hint's row only
-        // has to render whatever clip this produced — null when none survives the mp3-only filter.
-        // The pitch patterns are *not* copied here: the hint reads them live off
-        // LessonUiState.pitchAccentsBySubjectId, so a write from any source reaches it in place.
-        val answerReadingAudio = answerReading?.let { reading ->
-            selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
-        }
+        // Whether this grade is visible right away, or gated behind an explicit revealAnswer() tap —
+        // see LessonUiState.Phase.Quiz.answerRevealed.
+        val revealedNow = isCorrect || isGiveUp || !requiresTapToRevealAnswer(settings, type)
 
         updateQuiz {
             it.copy(
                 feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
+                answerRevealed = revealedNow,
                 remainingQuizCount = quizQueue.size,
                 rankChange = newRankChange ?: it.rankChange,
                 // Freezes the "time on this question" display the instant feedback appears, rather
                 // than letting it keep ticking while the feedback/Continue screen is up — matches
                 // the elapsedMs recorded for the slowest-answers summary above, stamped at this
                 // same moment.
-                timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null),
-                answerHint = answerReading?.let { reading -> AnswerReadingHint(reading = reading, audio = answerReadingAudio) }
+                timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null)
             )
         }
 
-        if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
-            candidates.firstOrNull()?.let { reading ->
-                pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
-            }
+        // Withheld entirely while gated — a wrong reading answer's audio/hint wait for
+        // revealAnswer() to trigger them instead, same as its answer text.
+        if (revealedNow) {
+            publishReadingRevealEffects(item, type, candidates, settings)
         }
 
         commitGradeDurably(isNewlyStarted, item, snapshot, queueIsEmpty)
