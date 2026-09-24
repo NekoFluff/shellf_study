@@ -39,27 +39,83 @@ class SrsStageCalculatorTest {
 
     @Test
     fun incorrectAnswerAtApprenticeDropsOneStage() {
-        assertEquals(2, SrsStageCalculator.nextStageOnIncorrect(3, srsSystem))
+        assertEquals(2, SrsStageCalculator.nextStageOnIncorrect(3, incorrect = 1, srsSystem = srsSystem))
+    }
+
+    /**
+     * WaniKani's penalty doubles at Guru I, and `ceil(incorrect / 2)` means a *pair* of misses costs
+     * the same as one — so every Guru-and-above miss costs exactly two stages, never the 3- or
+     * 4-stage plunge the old hardcoded table produced for Master/Enlightened.
+     */
+    @Test
+    fun incorrectAnswerAtGuruOrAboveAlwaysDropsExactlyTwoStages() {
+        for (stage in 5..9) {
+            assertEquals(
+                stage - 2,
+                SrsStageCalculator.nextStageOnIncorrect(stage, incorrect = 1, srsSystem = srsSystem),
+                "one miss from stage $stage"
+            )
+            assertEquals(
+                stage - 2,
+                SrsStageCalculator.nextStageOnIncorrect(stage, incorrect = 2, srsSystem = srsSystem),
+                "two misses from stage $stage (ceil(2/2) == ceil(1/2))"
+            )
+        }
     }
 
     @Test
-    fun incorrectAnswerAtGuruDropsTwoStages() {
-        assertEquals(4, SrsStageCalculator.nextStageOnIncorrect(6, srsSystem))
+    fun incorrectAnswerAtMasterDropsToGuruOne() {
+        assertEquals(5, SrsStageCalculator.nextStageOnIncorrect(7, incorrect = 1, srsSystem = srsSystem))
     }
 
     @Test
-    fun incorrectAnswerAtMasterDropsThreeStages() {
-        assertEquals(4, SrsStageCalculator.nextStageOnIncorrect(7, srsSystem))
-    }
-
-    @Test
-    fun incorrectAnswerAtEnlightenedDropsFourStages() {
-        assertEquals(4, SrsStageCalculator.nextStageOnIncorrect(8, srsSystem))
+    fun incorrectAnswerAtEnlightenedDropsToGuruTwo() {
+        assertEquals(6, SrsStageCalculator.nextStageOnIncorrect(8, incorrect = 1, srsSystem = srsSystem))
     }
 
     @Test
     fun incorrectAnswerNeverDropsBelowTheStartingStage() {
-        assertEquals(1, SrsStageCalculator.nextStageOnIncorrect(1, srsSystem))
+        assertEquals(1, SrsStageCalculator.nextStageOnIncorrect(1, incorrect = 1, srsSystem = srsSystem))
+        // Even a triple miss floors rather than going negative.
+        assertEquals(1, SrsStageCalculator.nextStageOnIncorrect(5, incorrect = 9, srsSystem = srsSystem))
+    }
+
+    @Test
+    fun incorrectAnswerAtGuruIDropsTwoStages() {
+        assertEquals(3, SrsStageCalculator.nextStageOnIncorrect(5, incorrect = 1, srsSystem = srsSystem))
+    }
+
+    @Test
+    fun eachAdditionalPairOfMissesCostsAnotherPenaltyStep() {
+        // Guru I (5): ceil(n/2) * 2, floored at 1.
+        assertEquals(3, SrsStageCalculator.nextStageOnIncorrect(5, incorrect = 1, srsSystem = srsSystem))
+        assertEquals(3, SrsStageCalculator.nextStageOnIncorrect(5, incorrect = 2, srsSystem = srsSystem))
+        assertEquals(1, SrsStageCalculator.nextStageOnIncorrect(5, incorrect = 3, srsSystem = srsSystem))
+        assertEquals(1, SrsStageCalculator.nextStageOnIncorrect(5, incorrect = 4, srsSystem = srsSystem))
+        // Apprentice III (3) is below Guru, so the penalty factor stays 1.
+        assertEquals(2, SrsStageCalculator.nextStageOnIncorrect(3, incorrect = 1, srsSystem = srsSystem))
+        assertEquals(2, SrsStageCalculator.nextStageOnIncorrect(3, incorrect = 2, srsSystem = srsSystem))
+        assertEquals(1, SrsStageCalculator.nextStageOnIncorrect(3, incorrect = 3, srsSystem = srsSystem))
+    }
+
+    /** A grade with no wrong answers must not demote, however it reached this function. */
+    @Test
+    fun zeroIncorrectLeavesTheStageUnchanged() {
+        for (stage in 1..9) {
+            assertEquals(stage, SrsStageCalculator.nextStageOnIncorrect(stage, incorrect = 0, srsSystem = srsSystem))
+        }
+    }
+
+    /**
+     * The full WaniKani demotion table, stage by stage — the regression lock for the rank-down chip.
+     * Source: WaniKani knowledge base "WaniKani's SRS Stages".
+     */
+    @Test
+    fun oneMissMatchesWaniKaniPublishedDemotionTable() {
+        val expected = mapOf(1 to 1, 2 to 1, 3 to 2, 4 to 3, 5 to 3, 6 to 4, 7 to 5, 8 to 6, 9 to 7)
+        expected.forEach { (from, to) ->
+            assertEquals(to, SrsStageCalculator.nextStageOnIncorrect(from, incorrect = 1, srsSystem = srsSystem), "from $from")
+        }
     }
 
     @Test
@@ -111,10 +167,5 @@ class SrsStageCalculatorTest {
     @Test
     fun correctAnswerAtStartingStageAdvancesToNextStage() {
         assertEquals(2, SrsStageCalculator.nextStageOnCorrect(1, srsSystem))
-    }
-
-    @Test
-    fun incorrectAnswerAtGuruIDropsTwoStages() {
-        assertEquals(3, SrsStageCalculator.nextStageOnIncorrect(5, srsSystem))
     }
 }

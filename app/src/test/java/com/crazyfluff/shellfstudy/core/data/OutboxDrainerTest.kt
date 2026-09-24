@@ -78,6 +78,37 @@ class OutboxDrainerTest {
         )
 
     @Test
+    fun `drain posts the row's real wrong-answer counts, not a flattened 0 or 1`() = runTest {
+        // WaniKani computes the ending stage from ceil(incorrect / 2) * penalty, so the counts on the
+        // row must reach the API intact — collapsing them back to booleans here would silently
+        // reintroduce the under-reporting this was fixed for.
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.path.orEmpty()
+                return when {
+                    request.method == "POST" && path.startsWith("/reviews") -> jsonResponse(reviewResultJson(101, 1, 5, 3))
+                    else -> emptyResponse(404)
+                }
+            }
+        }
+        repositories.outboxDao.insertReviewSubmission(
+            PendingReviewSubmissionEntity(
+                assignmentId = 101, subjectId = 1,
+                incorrectMeaningAnswers = 2, incorrectReadingAnswers = 1,
+                gradedAt = "2026-01-01T00:00:00.000000Z"
+            )
+        )
+
+        val outcome = buildDrainer().drain()
+
+        assertThat(outcome).isEqualTo(DrainOutcome.SUCCESS)
+        val body = server.takeRequest().body.readUtf8()
+        assertThat(body).contains("\"incorrect_meaning_answers\":2")
+        assertThat(body).contains("\"incorrect_reading_answers\":1")
+        assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
+    }
+
+    @Test
     fun `drains a pending lesson start successfully and deletes the row`() = runTest {
         queueLesson(assignmentId = 101, subjectId = 1)
         server.enqueue(jsonResponse(startedAssignmentJson(id = 101, subjectId = 1)))
