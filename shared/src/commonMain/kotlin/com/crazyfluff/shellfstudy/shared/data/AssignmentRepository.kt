@@ -75,6 +75,21 @@ private fun nextStageBucketFor(currentSrsStage: Int): ItemSpreadBucket {
     return bucketFor(nextStage)
 }
 
+/** The one place a [ReviewGrade] turns into a resulting SRS stage. Both the optimistic local write
+ *  ([AssignmentRepository.applyOptimisticReviewResult]) and the synchronous UI prediction
+ *  ([AssignmentRepository.computeReviewRankChange]) go through this, so the chip, the cached stage,
+ *  and the `incorrect_*_answers` posted to WaniKani can't disagree about the outcome.
+ *
+ *  Branches on [ReviewGrade.totalIncorrect] rather than [ReviewGrade.isFullyCorrect] deliberately:
+ *  the count is what WaniKani's penalty is computed from, so keying the decision off the same value
+ *  removes any way for the two to disagree. */
+private fun ReviewGrade.nextStage(currentStage: Int, srsSystem: SrsSystemEntity): Int =
+    if (totalIncorrect == 0) {
+        SrsStageCalculator.nextStageOnCorrect(currentStage, srsSystem)
+    } else {
+        SrsStageCalculator.nextStageOnIncorrect(currentStage, totalIncorrect, srsSystem)
+    }
+
 private fun Instant.truncatedToHour(): Instant = Instant.fromEpochSeconds((epochSeconds / 3600) * 3600)
 
 /** Owns the full assignment mirror — SRS progress for every subject the user has encountered. */
@@ -132,11 +147,7 @@ class AssignmentRepository(
     suspend fun applyOptimisticReviewResult(assignmentId: Long, srsSystemId: Long, grade: ReviewGrade): RankChange? {
         val assignment = assignmentDao.getById(assignmentId) ?: return null
         val srsSystem = srsSystemById(srsSystemId) ?: return null
-        val nextStage = if (grade.isFullyCorrect) {
-            SrsStageCalculator.nextStageOnCorrect(assignment.srsStage, srsSystem)
-        } else {
-            SrsStageCalculator.nextStageOnIncorrect(assignment.srsStage, srsSystem)
-        }
+        val nextStage = grade.nextStage(assignment.srsStage, srsSystem)
         assignmentDao.upsertAll(listOf(assignment.withStageTransition(nextStage, srsSystem, Clock.System.now())))
         return RankChange(SrsStage.fromRaw(assignment.srsStage), SrsStage.fromRaw(nextStage))
     }
@@ -182,11 +193,7 @@ class AssignmentRepository(
      */
     fun computeReviewRankChange(item: ReviewItem, grade: ReviewGrade): RankChange? {
         val srsSystem = srsSystemCache?.get(item.srsSystemId) ?: return null
-        val nextStage = if (grade.isFullyCorrect) {
-            SrsStageCalculator.nextStageOnCorrect(item.srsStage, srsSystem)
-        } else {
-            SrsStageCalculator.nextStageOnIncorrect(item.srsStage, srsSystem)
-        }
+        val nextStage = grade.nextStage(item.srsStage, srsSystem)
         return RankChange(SrsStage.fromRaw(item.srsStage), SrsStage.fromRaw(nextStage))
     }
 

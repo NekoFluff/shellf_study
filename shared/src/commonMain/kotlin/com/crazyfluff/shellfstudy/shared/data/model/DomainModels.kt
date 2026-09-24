@@ -59,11 +59,29 @@ data class ReviewItem(
     val srsSystemId: Long = 0
 ) : QuizDisplayItem
 
+/**
+ * One item's outcome for a review session — which questions were answered correctly, and how many
+ * wrong attempts each took. The counts are not decoration: WaniKani's demotion rule is
+ * `ceil(incorrect / 2) * penalty`, so a single wrong answer and a triple wrong answer on the same
+ * question produce different ending stages. This shape is the single source of truth for both the
+ * local rank-change prediction and the `incorrect_*_answers` posted to WaniKani, so the two can't
+ * disagree about how far an item fell.
+ *
+ * [incorrectMeaning]/[incorrectReading] default to match the booleans, and callers that know the real
+ * counts should override them. The defaults keep short-hand construction (e.g. in tests) honest.
+ */
 data class ReviewGrade(
     val meaningCorrect: Boolean,
-    val readingCorrect: Boolean
+    val readingCorrect: Boolean,
+    val incorrectMeaning: Int = if (meaningCorrect) 0 else 1,
+    val incorrectReading: Int = if (readingCorrect) 0 else 1
 ) {
-    val isFullyCorrect: Boolean get() = meaningCorrect && readingCorrect
+    /** A clean pass — no wrong answers anywhere. Deliberately derived from the counts, not the
+     *  booleans, so "was anything wrong" can only ever have one answer. */
+    val isFullyCorrect: Boolean get() = incorrectMeaning == 0 && incorrectReading == 0
+
+    /** Total wrong answers given for this item in the session — the numerator of WaniKani's penalty. */
+    val totalIncorrect: Int get() = incorrectMeaning + incorrectReading
 }
 
 data class LessonItem(

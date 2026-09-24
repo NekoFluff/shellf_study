@@ -29,14 +29,16 @@ class WaniKaniRepository(
     }
 
     /** Network-only — no local DB side effects. Only called by the outbox sync worker; the UI path
-     *  writes to the outbox instead and never calls this directly. */
+     *  writes to the outbox instead and never calls this directly. Posts the grade's real wrong-answer
+     *  counts, which WaniKani's demotion rule (`ceil(incorrect / 2) * penalty`) depends on — sending a
+     *  collapsed 0/1 would under-report every item missed more than once. */
     suspend fun submitReview(assignmentId: Long, grade: ReviewGrade): ApiResult<ReviewResultData> = safeApiCall {
         api.submitReview(
             ReviewSubmissionRequest(
                 ReviewSubmissionBody(
                     assignmentId = assignmentId,
-                    incorrectMeaningAnswers = if (grade.meaningCorrect) 0 else 1,
-                    incorrectReadingAnswers = if (grade.readingCorrect) 0 else 1
+                    incorrectMeaningAnswers = grade.incorrectMeaning,
+                    incorrectReadingAnswers = grade.incorrectReading
                 )
             )
         ).data

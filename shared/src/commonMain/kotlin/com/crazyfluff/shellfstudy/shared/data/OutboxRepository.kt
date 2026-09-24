@@ -31,8 +31,11 @@ class OutboxRepository(
             PendingReviewSubmissionEntity(
                 assignmentId = assignmentId,
                 subjectId = subjectId,
-                incorrectMeaningAnswers = if (grade.meaningCorrect) 0 else 1,
-                incorrectReadingAnswers = if (grade.readingCorrect) 0 else 1,
+                // The real wrong-answer counts, not a flattened 0/1 — WaniKani's demotion rule is
+                // ceil(incorrect / 2) * penalty, so how many times a question was missed changes the
+                // ending stage. See ReviewGrade and SrsStageCalculator.nextStageOnIncorrect.
+                incorrectMeaningAnswers = grade.incorrectMeaning,
+                incorrectReadingAnswers = grade.incorrectReading,
                 gradedAt = Clock.System.now().toString()
             )
         )

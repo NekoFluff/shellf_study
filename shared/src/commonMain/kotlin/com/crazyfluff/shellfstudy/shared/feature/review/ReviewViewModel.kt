@@ -140,9 +140,16 @@ private const val MAX_IN_FLIGHT_REVIEW_ITEMS = 10
 
 /** Shared by [ReviewViewModel.gradeAnswer]'s synchronous rank-change prediction and
  *  [ReviewViewModel.commitPendingSubmission]'s later, authoritative recomputation — keeps the two
- *  from drifting if the grading formula ever changes. */
+ *  from drifting if the grading formula ever changes. Carries the real wrong-answer counts rather
+ *  than deriving them from the booleans: WaniKani's demotion rule is `ceil(incorrect / 2) * penalty`,
+ *  so the count decides how far a missed item falls. */
 private fun ItemProgress.toReviewGrade(): ReviewGrade =
-    ReviewGrade(meaningCorrect = !hadIncorrectMeaning, readingCorrect = !hadIncorrectReading)
+    ReviewGrade(
+        meaningCorrect = !hadIncorrectMeaning,
+        readingCorrect = !hadIncorrectReading,
+        incorrectMeaning = incorrectMeaningAttempts,
+        incorrectReading = incorrectReadingAttempts
+    )
 
 /**
  * Identifies the word whose pitch accent the current question's hint should be watching — null
@@ -362,6 +369,10 @@ class ReviewViewModel(
                 readingDone = p.readingDone
                 hadIncorrectMeaning = p.hadIncorrectMeaning
                 hadIncorrectReading = p.hadIncorrectReading
+                // Snapshots written before the counts were persisted carry 0 with the flag still
+                // true; the boolean setters above already floored the count at 1 for exactly that
+                // case, so this only ever raises it to a genuinely-recorded count.
+                restoreIncorrectCounts(p.incorrectMeaningCount, p.incorrectReadingCount)
             }
         }
         totalQuestions = persisted.totalQuestions
@@ -802,7 +813,10 @@ class ReviewViewModel(
         queue = queue.toList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
         reserve = queue.reserveList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
         progress = progressByAssignmentId.map { (id, p) ->
-            PersistedItemProgress(id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading)
+            PersistedItemProgress(
+                id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading,
+                p.incorrectMeaningAttempts, p.incorrectReadingAttempts
+            )
         },
         totalQuestions = totalQuestions,
         sessionActiveElapsedMs = sessionTiming.currentElapsedMs(),

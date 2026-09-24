@@ -7,6 +7,10 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
+/** Guru I — the stage at which WaniKani's demotion penalty doubles, and the stage that counts
+ *  toward level progression. */
+private const val GURU_STAGE_POSITION = 5
+
 /**
  * Predicts the next SRS stage locally, before any network round trip — used to patch the cached
  * assignment immediately when an item is graded/started, so the UI reflects progress instantly
@@ -19,17 +23,31 @@ object SrsStageCalculator {
     fun nextStageOnCorrect(currentStage: Int, srsSystem: SrsSystemEntity): Int =
         (currentStage + 1).coerceAtMost(srsSystem.burningStagePosition)
 
-    /** Mirrors WaniKani's own SRS penalty table: Apprentice drops 1 stage, Guru drops 2, Master
-     *  drops 3, Enlightened drops 4 — never below the starting (unlocked-review) stage. */
-    fun nextStageOnIncorrect(currentStage: Int, srsSystem: SrsSystemEntity): Int {
-        val decrement = when {
-            currentStage <= srsSystem.startingStagePosition -> 0
-            currentStage <= 4 -> 1
-            currentStage <= 6 -> 2
-            currentStage == 7 -> 3
-            else -> 4
-        }
-        return (currentStage - decrement).coerceAtLeast(srsSystem.startingStagePosition)
+    /**
+     * WaniKani's own published demotion rule (knowledge base, "WaniKani's SRS Stages"):
+     *
+     *     newStage = max(startingStage, currentStage - ceil(incorrect / 2) * penalty)
+     *     penalty  = 2 when currentStage >= Guru I (5), else 1
+     *
+     * Two consequences worth spelling out, because neither is obvious from the arithmetic:
+     *
+     *  - `ceil(incorrect / 2)` means a *pair* of misses costs the same as one, so the penalty only
+     *    ever doubles at Guru and above. That is why a single miss on a Guru+ item costs exactly two
+     *    stages (Guru I -> Apprentice III, Master -> Guru I, Enlightened -> Guru II) and never the
+     *    3- or 4-stage plunge this used to hardcode for Master/Enlightened/Burned.
+     *  - The floor is WaniKani's start-of-reviews stage (1), not zero: a miss at Apprentice I costs
+     *    nothing. The caller's `from != to` guard is what suppresses the chip in that case.
+     *
+     * [incorrect] is the number of wrong answers given for this item *in this session*, which
+     * WaniKani receives in `incorrect_meaning_answers` + `incorrect_reading_answers`. Passing a
+     * boolean-derived 0/1 here (the old behaviour) silently under-drops any item the user missed
+     * more than once, so callers must thread the real count through.
+     */
+    fun nextStageOnIncorrect(currentStage: Int, incorrect: Int, srsSystem: SrsSystemEntity): Int {
+        if (incorrect <= 0) return currentStage
+        val penalty = if (currentStage >= GURU_STAGE_POSITION) 2 else 1
+        val adjustment = (incorrect + 1) / 2 // ceil(incorrect / 2), integer arithmetic
+        return (currentStage - adjustment * penalty).coerceAtLeast(srsSystem.startingStagePosition)
     }
 
     /** Null if [stagePosition] is burned (or otherwise has no interval) — the item never becomes due again. */

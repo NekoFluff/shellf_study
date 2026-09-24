@@ -39,7 +39,14 @@ class OutboxDrainer(
         submit = { row ->
             waniKaniRepository.submitReview(
                 row.assignmentId,
-                ReviewGrade(meaningCorrect = row.incorrectMeaningAnswers == 0, readingCorrect = row.incorrectReadingAnswers == 0)
+                // Counts preserved end-to-end, not collapsed back to booleans: the row is the durable
+                // record of how many wrong answers WaniKani must be told about.
+                ReviewGrade(
+                    meaningCorrect = row.incorrectMeaningAnswers == 0,
+                    readingCorrect = row.incorrectReadingAnswers == 0,
+                    incorrectMeaning = row.incorrectMeaningAnswers,
+                    incorrectReading = row.incorrectReadingAnswers
+                )
             )
         },
         onSuccess = { row, data ->
