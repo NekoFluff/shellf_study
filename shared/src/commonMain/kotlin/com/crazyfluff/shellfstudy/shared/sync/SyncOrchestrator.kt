@@ -5,6 +5,8 @@ import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.ResourceSync
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.safeApiCall
+import com.crazyfluff.shellfstudy.shared.data.ASSIGNMENTS_RESUME_STALENESS
+import com.crazyfluff.shellfstudy.shared.data.ASSIGNMENTS_STALENESS
 import com.crazyfluff.shellfstudy.shared.data.SyncResources
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.completeResourceSync
@@ -34,26 +36,32 @@ class SyncOrchestrator(
     private val syncMutex = Mutex()
 
     suspend fun syncAll(force: Boolean = false): ApiResult<Unit> = trackingSyncActivity {
-        syncMutex.withLock { syncAllLocked(force = force, forceAssignments = false) }
+        syncMutex.withLock { syncAllLocked(force = force, resumeAssignments = false) }
     }
 
     /**
-     * [syncAll] with assignments forced and every other resource left staleness-gated.
+     * [syncAll] for the dashboard's resume path: assignments on a short freshness window, every other
+     * resource left on its normal one.
      *
-     * The dashboard's resume path needs exactly that combination: it refetches the banner counts from
-     * `/summary` on every resume, but `syncAll(force = false)` only refetches assignments once
-     * `ASSIGNMENTS_STALENESS` has elapsed — leaving the forecast, item-spread and level-progress cards
-     * (all derived from the local assignments table) trailing the banner by up to an hour.
+     * The resume path has to keep the forecast, item-spread and level-progress cards level with the
+     * banner counts, which come from `/summary` and are already fresh by the time those cards render.
+     * `syncAll(force = false)` alone would let assignments trail by up to
+     * [com.crazyfluff.shellfstudy.shared.data.ASSIGNMENTS_STALENESS], so the resume path used a shorter
+     * window instead.
      *
-     * This exists as a parameter rather than as "call `syncAll(force = false)` and then also call
-     * `assignmentRepository.syncAssignments(force = true)`", which is what the dashboard used to do.
-     * That fetched and rewrote the assignments table twice on every resume — the second pass superseding
-     * the first — and each rewrite is its own Room write operation and therefore its own invalidation
-     * broadcast to every observable assignments query. Forcing the resource *within* the pass still
-     * reuses its saved `updated_after` cursor, so this stays an incremental fetch, not a full resync.
+     * It previously *forced* assignments outright, which bypasses the staleness gate completely. That
+     * gate is not a nicety: the write re-inserts every returned row with `INSERT OR REPLACE`, and on an
+     * account with a few thousand assignments that is thousands of row rewrites maintaining five
+     * indexes each, on every single return to the dashboard — measured as the session's worst frames,
+     * 272 ms and 244 ms, both on a fully-loaded dashboard. Nothing needed refreshing in either case;
+     * the user had just come back from grading, and the optimistic local write had already put their
+     * progress on screen.
+     *
+     * The name is kept from when it forced, because the distinction it encodes — "this is the resume
+     * path, treat assignments differently" — is still the point.
      */
-    suspend fun syncAllForcingAssignments(): ApiResult<Unit> = trackingSyncActivity {
-        syncMutex.withLock { syncAllLocked(force = false, forceAssignments = true) }
+    suspend fun syncAllForResume(): ApiResult<Unit> = trackingSyncActivity {
+        syncMutex.withLock { syncAllLocked(force = false, resumeAssignments = true) }
     }
 
     /**
@@ -101,7 +109,7 @@ class SyncOrchestrator(
      * same order, so a concurrent reader inside the transaction never observes an assignment whose
      * subject row does not exist yet.
      */
-    private suspend fun syncAllLocked(force: Boolean, forceAssignments: Boolean): ApiResult<Unit> {
+    private suspend fun syncAllLocked(force: Boolean, resumeAssignments: Boolean): ApiResult<Unit> {
         // Each fetch is wrapped individually rather than letting the coroutineScope propagate the
         // first failure. `awaitAll` over bare `async` blocks aborts the whole scope on the first
         // throw, cancelling its siblings — so one failing resource would silently stop the others
@@ -111,7 +119,20 @@ class SyncOrchestrator(
         val fetched: List<ApiResult<ResourceSync<*>?>> = coroutineScope {
             val srs = async { safeApiCall { subjectRepository.fetchSrsSystems(force) } }
             val subjects = async { safeApiCall { subjectRepository.fetchSubjects(force) } }
-            val assignments = async { safeApiCall { assignmentRepository.fetchAssignments(force || forceAssignments) } }
+            val assignments = async {
+                safeApiCall {
+                    assignmentRepository.fetchAssignments(
+                        force = force,
+                        // The resume path gets a short window rather than an unconditional force — see
+                        // syncAllForResume.
+                        staleness = if (resumeAssignments) {
+                            ASSIGNMENTS_RESUME_STALENESS
+                        } else {
+                            ASSIGNMENTS_STALENESS
+                        }
+                    )
+                }
+            }
             val reviewStatistics = async { safeApiCall { statsRepository.fetchReviewStatistics(force) } }
             val levelProgressions = async { safeApiCall { statsRepository.fetchLevelProgressions(force) } }
             listOf(srs, subjects, assignments, reviewStatistics, levelProgressions).awaitAll()
@@ -155,7 +176,7 @@ class SyncOrchestrator(
     suspend fun fullRefresh(): ApiResult<Unit> = trackingSyncActivity {
         syncMutex.withLock {
             syncStateDao.clearAll()
-            syncAllLocked(force = true, forceAssignments = false)
+            syncAllLocked(force = true, resumeAssignments = false)
         }
     }
 }

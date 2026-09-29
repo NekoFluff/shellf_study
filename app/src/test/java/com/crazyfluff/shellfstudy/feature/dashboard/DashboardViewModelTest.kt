@@ -31,6 +31,9 @@ import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeFriendStatsDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
@@ -313,8 +316,22 @@ class DashboardViewModelTest {
         assertThat(requests.count { it.path.orEmpty().startsWith("/summary") }).isAtLeast(1)
     }
 
+    /**
+     * The guarantee that matters: returning to the dashboard refetches assignments, so the forecast,
+     * item-spread and level-progress cards (all derived from the local assignments table) cannot trail
+     * the banner counts, which come from `/summary` and are fresh by the time those cards render.
+     *
+     * This replaces a test called "a later resume force-refreshes assignments even while still inside
+     * the staleness window", which pinned the *mechanism* — an unconditional force — rather than the
+     * guarantee. The mechanism was expensive: an incremental fetch still returns whatever WaniKani has
+     * touched, and the write re-inserts every returned row with `INSERT OR REPLACE`, which on an
+     * account with a few thousand assignments means thousands of row rewrites maintaining five indexes
+     * each. Measured on-device as the session's worst frames, 272 ms and 244 ms, both on a dashboard
+     * where nothing needed refreshing. The mechanism is now a short freshness window rather than a
+     * force; the guarantee is unchanged, which is what this asserts.
+     */
     @Test
-    fun `a later resume force-refreshes assignments even while still inside the staleness window`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a later resume refetches assignments so the derived cards cannot trail the banner`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
         val viewModel = createViewModel()
 
@@ -328,11 +345,11 @@ class DashboardViewModelTest {
             // second resume's requests are counted below.
             generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
 
-            // dashboardSyncCoordinator.sync(force = false) alone would skip assignments here — the
-            // cold-start sync above just set its lastSyncSuccessAt to "now", well inside
-            // ASSIGNMENTS_STALENESS (1 hour). onDashboardResumed() runs syncAssignments(force =
-            // true) before fetchUserAndSummary(), so waiting for lastSyncedAtMillis to advance
-            // again proves that force-refresh already completed by the time we drain requests.
+            // A resume long enough after the cold-start sync that assignments are stale again. The
+            // elapsed time is simulated by clearing the recorded sync, since the window is half a
+            // minute and a test cannot wait for it.
+            repositories.syncStateDao.clearAll()
+
             viewModel.onDashboardResumed()
             while (state.lastSyncedAtMillis == coldStartSyncedAt) state = awaitItem()
             cancelAndIgnoreRemainingEvents()
@@ -341,6 +358,16 @@ class DashboardViewModelTest {
         val requests = generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
         assertThat(requests.count { it.path.orEmpty().startsWith("/assignments") }).isAtLeast(1)
     }
+
+    // The freshness window's other side — that a resume while assignments are still fresh does not
+    // refetch them — is pinned in DashboardResumeSyncTest, at the sync layer.
+    //
+    // Deliberately not asserted here. A ViewModel-level version was written and removed: this class
+    // runs on an UnconfinedTestDispatcher while Ktor delivers responses on real IO threads, so any
+    // assertion about which requests have arrived after a resume is a race. It passed or failed
+    // depending on scheduling rather than on the behaviour, which is worse than no test — the first
+    // version silently could not fail at all, because runTest's virtual clock never advances
+    // Clock.System, so the window never elapsed.
 
     @Test
     fun `seeds cached username and counts before the network refresh resolves, then updates them once it does`() = runTest(mainDispatcherRule.dispatcher) {

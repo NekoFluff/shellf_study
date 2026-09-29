@@ -30,7 +30,15 @@ class SyncOrchestratorTest {
 
     private lateinit var server: MockWebServer
     private lateinit var repositories: TestRepositories
-    private val requestedPaths = mutableListOf<String>()
+    /**
+     * Recorded from MockWebServer's dispatcher thread(s) and read from the test thread, so it must be
+     * synchronised. It was a plain `mutableListOf`, and under a full-suite run the test that asserts a
+     * failing resource was still requested intermittently lost that entry — the write and the read had
+     * no happens-before relationship, and dispatcher threads are not the test's coroutine.
+     *
+     * Passes in isolation and fails occasionally in a full suite, which is the signature.
+     */
+    private val requestedPaths = java.util.Collections.synchronizedList(mutableListOf<String>())
     private var reviewStatisticsShouldFail = false
 
     @Before
@@ -102,7 +110,7 @@ class SyncOrchestratorTest {
         // A non-null cursor would show up as `?updated_after=...` on every cursor-bearing request —
         // its absence proves fullRefresh() actually cleared the cursors rather than just bypassing
         // the staleness check the way syncAll(force = true) does.
-        assertThat(requestedPaths.none { it.contains("updated_after") }).isTrue()
+        assertThat(pathsRequested().none { it.contains("updated_after") }).isTrue()
     }
 
     @Test
@@ -202,7 +210,10 @@ class SyncOrchestratorTest {
         assertThat(repositories.syncTransactionRunner.transactionCount).isEqualTo(afterFirstPass)
     }
 
-    private fun pathsRequested(): List<String> = requestedPaths.map { it.substringBefore('?') }
+    /** Snapshot under the list's own lock — iterating a synchronizedList outside one is still unsafe. */
+    private fun pathsRequested(): List<String> = synchronized(requestedPaths) {
+        requestedPaths.toList()
+    }.map { it.substringBefore('?') }
 
     private fun emptyCollection(objectType: String) = jsonResponse(
         """{"object":"$objectType","url":"https://api.wanikani.com/v2/$objectType","data":[]}"""

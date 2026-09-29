@@ -20,8 +20,8 @@ class DashboardSyncCoordinator(
     suspend fun sync(force: Boolean): ApiResult<Unit> = syncOrchestrator.syncAll(force)
 
     /** [sync] with assignments forced but the other resources left staleness-gated — the resume path's
-     *  combination. See [SyncOrchestrator.syncAllForcingAssignments]. */
-    suspend fun syncForcingAssignments(): ApiResult<Unit> = syncOrchestrator.syncAllForcingAssignments()
+     *  combination. See [SyncOrchestrator.syncAllForResume]. */
+    suspend fun syncForResume(): ApiResult<Unit> = syncOrchestrator.syncAllForResume()
 
     /**
      * `/user` and `/summary` in parallel. They are independent endpoints with no ordering requirement

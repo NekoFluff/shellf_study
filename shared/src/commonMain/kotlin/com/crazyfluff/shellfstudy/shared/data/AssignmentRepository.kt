@@ -49,10 +49,32 @@ import kotlinx.datetime.atTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
-private val ASSIGNMENTS_STALENESS = 1.hours
+internal val ASSIGNMENTS_STALENESS = 1.hours
+
+/**
+ * How stale assignments may be before the dashboard's resume path refetches them.
+ *
+ * Short on purpose. Normal syncing uses the hour-long [ASSIGNMENTS_STALENESS], but the resume path has
+ * to keep the forecast, item-spread and level-progress cards level with the banner counts, which come
+ * from `/summary` and are therefore already fresh by the time those cards render.
+ *
+ * The gap this closes: the resume path used to *force* assignments unconditionally, which bypasses the
+ * staleness gate entirely. An incremental fetch still returns whatever WaniKani has touched, and the
+ * write re-inserts every one of those rows with `INSERT OR REPLACE` — on an account at a few thousand
+ * assignments that is thousands of row rewrites maintaining five indexes each, every time the user
+ * comes back to the dashboard. The gate exists precisely to avoid paying that when nothing has changed,
+ * and forcing it defeated the gate.
+ *
+ * Half a minute rather than zero: a resume moments after a sync skips the rewrite, while a resume after
+ * a real gap still refreshes. Session work does not depend on this — grades apply optimistically to the
+ * local table immediately, so the user's own progress is already on screen.
+ */
+internal val ASSIGNMENTS_RESUME_STALENESS = 30.seconds
 
 /** Guru or higher is what counts toward leveling up. */
 private val GURU_SRS_STAGE = SrsStage.GURU_1.raw
@@ -136,12 +158,15 @@ class AssignmentRepository(
      * [com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator] can fetch every resource and then
      * write them all inside one transaction. Null when they are fresh enough to skip.
      */
-    internal suspend fun fetchAssignments(force: Boolean = false): ResourceSync<List<AssignmentEntity>>? =
+    internal suspend fun fetchAssignments(
+        force: Boolean = false,
+        staleness: Duration = ASSIGNMENTS_STALENESS
+    ): ResourceSync<List<AssignmentEntity>>? =
         fetchResourceSync(
             syncStateDao = syncStateDao,
             resource = SyncResources.ASSIGNMENTS,
             force = force,
-            staleness = ASSIGNMENTS_STALENESS,
+            staleness = staleness,
             countRows = { it.size },
             fetch = { cursor ->
                 collectAllPages(
