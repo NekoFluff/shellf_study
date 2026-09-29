@@ -267,7 +267,6 @@ val viewModelModule = module {
             assignmentStatsRepository = get(),
             statsRepository = get(),
             outboxRepository = get(),
-            outboxSyncScheduler = get(),
             friendStatsRepository = get(),
             logoutCoordinator = get(),
             dashboardSyncCoordinator = get(),

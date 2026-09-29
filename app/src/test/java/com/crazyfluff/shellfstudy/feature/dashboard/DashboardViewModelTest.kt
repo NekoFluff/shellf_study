@@ -181,7 +181,6 @@ class DashboardViewModelTest {
                     assignmentStatsRepository = repositories.assignmentStatsRepository,
                     statsRepository = repositories.statsRepository,
                     outboxRepository = outboxRepository,
-                    outboxSyncScheduler = repositories.outboxSyncScheduler,
                     friendStatsRepository = friendStatsRepository,
                     logoutCoordinator = logoutCoordinator,
                     dashboardSyncCoordinator = dashboardSyncCoordinator,

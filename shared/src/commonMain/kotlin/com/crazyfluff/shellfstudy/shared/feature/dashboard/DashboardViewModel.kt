@@ -11,7 +11,6 @@ import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
-import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
@@ -182,7 +181,6 @@ class DashboardViewModel(
     private val assignmentStatsRepository: AssignmentStatsRepository,
     private val statsRepository: StatsRepository,
     private val outboxRepository: OutboxRepository,
-    private val outboxSyncScheduler: OutboxSyncScheduler,
     private val friendStatsRepository: FriendStatsRepository,
     private val logoutCoordinator: LogoutCoordinator,
     private val dashboardSyncCoordinator: DashboardSyncCoordinator,
@@ -424,6 +422,10 @@ class DashboardViewModel(
             }
         }
 
+        // The pass's own result isn't surfaced: the user and summary fetch that follows fails the
+        // same ways (offline, auth) and is what decides what the banner says. A failure only the
+        // pass hit — one resource erroring — leaves that resource's cache as it was, and the
+        // next pass retries it.
         dashboardSyncCoordinator.sync(force = true)
 
         val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()
@@ -467,7 +469,7 @@ class DashboardViewModel(
 
     fun onDashboardResumed() {
         viewModelScope.launch {
-            outboxSyncScheduler.requestImmediateSync()
+            outboxRepository.requestSyncNow()
 
             if (!hasCompletedInitialSync) {
                 hasCompletedInitialSync = true
