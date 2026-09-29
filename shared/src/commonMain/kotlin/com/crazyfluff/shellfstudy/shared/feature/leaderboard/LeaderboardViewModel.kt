@@ -111,7 +111,13 @@ class LeaderboardViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(isValidating = true, error = null)) }
             val api = createFriendWaniKaniApi(token, json)
-            val result = safeApiCall { api.getUser() }
+            // Closed in a finally: this is a throw-away client for one validation call, and without
+            // it every add-friend attempt leaks an engine's connection pool and dispatcher threads.
+            val result = try {
+                safeApiCall { api.getUser() }
+            } finally {
+                api.close()
+            }
             when (result) {
                 is ApiResult.Success -> when (val added = friendRepository.addFriend(nickname, token)) {
                     is FriendAdded.RosterUnreadable -> {

@@ -4,7 +4,17 @@ import io.ktor.client.plugins.ResponseException
 
 sealed interface ApiResult<out T> {
     data class Success<T>(val data: T) : ApiResult<T>
-    data class Error(val message: String, val throwable: Throwable? = null) : ApiResult<Nothing>
+
+    /**
+     * [status] is the HTTP status when the failure came from a response, and null for a transport
+     * failure or a locally-detected one (see [isAuthError]/[isTerminalRejection], which used to
+     * recover it by casting [throwable] back to Ktor's exception type).
+     */
+    data class Error(
+        val message: String,
+        val throwable: Throwable? = null,
+        val status: Int? = null
+    ) : ApiResult<Nothing>
 }
 
 inline fun <T, R> ApiResult<T>.map(transform: (T) -> R): ApiResult<R> = when (this) {
@@ -14,7 +24,7 @@ inline fun <T, R> ApiResult<T>.map(transform: (T) -> R): ApiResult<R> = when (th
 
 /** True only for a confirmed 401 — distinguishes an actually-invalid token from a network/server hiccup. */
 val ApiResult.Error.isAuthError: Boolean
-    get() = (throwable as? ResponseException)?.response?.status?.value == 401
+    get() = statusOf(this) == 401
 
 /**
  * A definitive 4xx rejection (e.g. 422 — already recorded elsewhere) that will never succeed on
@@ -31,8 +41,11 @@ val ApiResult.Error.isAuthError: Boolean
  * good: the graded review was never submitted, and only the local optimistic stage remained.
  */
 val ApiResult.Error.isTerminalRejection: Boolean
-    get() = (throwable as? ResponseException)?.response?.status?.value
-        ?.let { it in 400..499 && it !in NON_TERMINAL_CLIENT_ERRORS } ?: false
+    get() = statusOf(this)?.let { it in 400..499 && it !in NON_TERMINAL_CLIENT_ERRORS } ?: false
+
+/** [ApiResult.Error.status], falling back to the response carried by [ApiResult.Error.throwable]. */
+private fun statusOf(error: ApiResult.Error): Int? =
+    error.status ?: (error.throwable as? ResponseException)?.response?.status?.value
 
 /** Client errors the drain must not retire a row over: handled separately, or transient. */
 private val NON_TERMINAL_CLIENT_ERRORS = setOf(401, 408, 429)

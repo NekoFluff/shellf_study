@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
@@ -54,6 +55,15 @@ fun createWaniKaniHttpClient(
         // Matches Retrofit's default suspend-fun behavior: throw on non-2xx rather than returning
         // the error body as if it were a success (SafeApiCall.kt catches the resulting exception).
         expectSuccess = true
+        // Without these, a stalled socket hangs the request forever. That is worse than a failed
+        // fetch here because SyncOrchestrator holds a mutex for the whole pass: one hung request
+        // blocks every later sync, and the outbox drain behind it, until the process restarts. The
+        // request ceiling is generous because a subjects page can hold 1000 items on a slow link.
+        install(HttpTimeout) {
+            requestTimeoutMillis = 60_000
+            connectTimeoutMillis = 15_000
+            socketTimeoutMillis = 30_000
+        }
         install(ContentNegotiation) { json(json) }
         install(Logging) { level = LogLevel.INFO }
         installWaniKaniAuthHeaders(tokenProvider)

@@ -9,6 +9,8 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class WaniKaniApiTest {
 
@@ -41,6 +43,39 @@ class WaniKaniApiTest {
 
         assertEquals("alex", response.data.username)
         assertEquals(5, response.data.level)
+    }
+
+    /**
+     * `pages.next_url` comes from the server and the auth plugin attaches the API token to whatever is
+     * requested, so a cursor naming another host would hand that token to it. The cursor is refused
+     * before the request is made, not after.
+     */
+    @Test
+    fun getAssignmentsPageRefusesACursorOutsideTheApiOrigin() = runTest {
+        val requested = mutableListOf<String>()
+        val api = apiCapturing(
+            response = """{"object":"collection","url":"https://api.wanikani.com/v2/assignments","data":[]}""",
+            onRequest = { requested += it.url.toString() }
+        )
+
+        assertFailsWith<PaginationException> {
+            api.getAssignmentsPage("https://evil.example/v2/assignments?page_after_id=1")
+        }
+
+        assertTrue(requested.isEmpty(), "the off-origin cursor was fetched: $requested")
+    }
+
+    @Test
+    fun getAssignmentsPageFollowsACursorOnTheApiOrigin() = runTest {
+        val requested = mutableListOf<String>()
+        val api = apiCapturing(
+            response = """{"object":"collection","url":"https://api.wanikani.com/v2/assignments","data":[]}""",
+            onRequest = { requested += it.url.toString() }
+        )
+
+        api.getAssignmentsPage("https://api.wanikani.com/v2/assignments?page_after_id=1")
+
+        assertEquals(listOf("https://api.wanikani.com/v2/assignments?page_after_id=1"), requested)
     }
 
     @Test

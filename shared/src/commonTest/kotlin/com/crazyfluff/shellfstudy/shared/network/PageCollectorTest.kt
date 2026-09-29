@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.shared.network
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class PageCollectorTest {
@@ -46,6 +47,48 @@ class PageCollectorTest {
         val result = collectAllPages(firstPage = { page }, nextPage = { error("should not be called") })
 
         assertTrue(result.isEmpty())
+    }
+
+    /**
+     * A cursor that comes back twice is a loop, not progress: WaniKani's cursor is `page_after_id`, so
+     * the same URL means the same page was served again. Following it would append that page's items
+     * forever, and a walk that never ends holds the sync mutex for the life of the process.
+     */
+    @Test
+    fun collectAllPagesRefusesToFollowTheSameCursorTwice() = runTest {
+        val page = collectionResponse(items = listOf(1), nextUrl = "page2")
+        val requestedUrls = mutableListOf<String>()
+
+        val failure = assertFailsWith<PaginationException> {
+            collectAllPages(
+                firstPage = { page },
+                nextPage = { url ->
+                    requestedUrls += url
+                    page
+                }
+            )
+        }
+
+        assertTrue(failure.message!!.contains("page2"))
+        assertEquals(listOf("page2"), requestedUrls)
+    }
+
+    /** The second guard: a cursor that keeps advancing without ever ending. */
+    @Test
+    fun collectAllPagesStopsAfterTheMaximumNumberOfPages() = runTest {
+        var pagesServed = 0
+
+        assertFailsWith<PaginationException> {
+            collectAllPages(
+                firstPage = { collectionResponse(items = listOf(1), nextUrl = "page1") },
+                nextPage = { url ->
+                    pagesServed++
+                    collectionResponse(items = listOf(1), nextUrl = "$url-more")
+                }
+            )
+        }
+
+        assertEquals(MAX_PAGES, pagesServed)
     }
 
     private fun collectionResponse(items: List<Int>, nextUrl: String?): WkCollectionResponse<Int> =

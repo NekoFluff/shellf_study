@@ -60,7 +60,7 @@ class WaniKaniApi(
 
     /** Follows an assignments collection's `pages.next_url` — see [collectAllPages]. */
     suspend fun getAssignmentsPage(url: String): WkCollectionResponse<AssignmentData> =
-        httpClient.get(url).body()
+        httpClient.get(validatedPageUrl(url)).body()
 
     suspend fun getLevelProgressions(): WkCollectionResponse<LevelProgressionData> =
         httpClient.get("${baseUrl}level_progressions").body()
@@ -79,7 +79,7 @@ class WaniKaniApi(
 
     /** Follows a subjects collection's `pages.next_url` — see [collectAllPages]. */
     suspend fun getSubjectsPage(url: String): WkCollectionResponse<SubjectData> =
-        httpClient.get(url).body()
+        httpClient.get(validatedPageUrl(url)).body()
 
     suspend fun getSpacedRepetitionSystems(
         ids: List<Long>? = null,
@@ -124,6 +124,19 @@ class WaniKaniApi(
      *  mutation is terminally rejected and there's no authoritative response to patch in locally. */
     suspend fun getAssignment(assignmentId: Long): WkResourceItem<AssignmentData> =
         httpClient.get("${baseUrl}assignments/$assignmentId").body()
+
+    /**
+     * `next_url` is supplied by the server, and the auth plugin attaches the API token to whatever is
+     * requested — so following it unchecked would hand the user's token to any host a tampered or
+     * misconfigured response names. The API's cursors are always on the same origin as the request
+     * that produced them, so anything else is refused rather than fetched.
+     */
+    private fun validatedPageUrl(url: String): String {
+        if (!url.startsWith(baseUrl)) {
+            throw PaginationException("Refusing to follow a page cursor outside $baseUrl.")
+        }
+        return url
+    }
 
     /**
      * Releases the underlying engine's connection pool/dispatcher threads. Only call this on a
