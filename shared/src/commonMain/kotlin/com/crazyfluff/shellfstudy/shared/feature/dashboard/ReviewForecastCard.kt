@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,6 +57,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import com.crazyfluff.shellfstudy.shared.designsystem.components.PillSelector
 
 object ReviewForecastTestTags {
     const val CARD = "review_forecast_card"
@@ -221,22 +220,17 @@ private fun ReviewForecastColorModeChips(
     onColorModeChange: (ReviewForecastColorMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ReviewForecastColorMode.entries.forEach { mode ->
-            val selected = mode == selectedColorMode
-            FilterChip(
-                selected = selected,
-                onClick = { onColorModeChange(mode) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                border = if (selected) null else FilterChipDefaults.filterChipBorder(enabled = true, selected = false),
-                label = { Text(text = mode.label, style = MaterialTheme.typography.labelSmall) }
-            )
-        }
-    }
+    PillSelector(
+        options = ReviewForecastColorMode.entries,
+        selected = selectedColorMode,
+        onSelect = onColorModeChange,
+        label = COLOR_MODE_LABEL,
+        modifier = modifier
+    )
 }
+
+/** Stable label lookup — see [PillSelector]'s note on why this is not a lambda literal. */
+private val COLOR_MODE_LABEL: (ReviewForecastColorMode) -> String = { it.label }
 private fun summaryText(forecast: ReviewForecast?, selectedIndex: Int?, selectedWindow: ReviewForecastWindow): String {
     if (forecast == null) return "Loading…"
     if (selectedIndex != null) {

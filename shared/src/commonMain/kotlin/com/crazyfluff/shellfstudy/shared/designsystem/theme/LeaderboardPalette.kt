@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.theme
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -16,21 +17,31 @@ import androidx.compose.ui.graphics.Color
  */
 @Composable
 fun leaderboardUserColor(rosterIndex: Int): Color {
-    val palette = leaderboardUserPalette()
+    val palette = rememberLeaderboardUserPalette()
     return palette[rosterIndex.mod(palette.size)]
 }
 
-/** Six-slot palette behind [leaderboardUserColor] — first three slots reuse the app's three subject
- *  colors, the rest are chosen to stay distinguishable from them and from each other. */
+/**
+ * Six-slot palette behind [leaderboardUserColor] — first three slots reuse the app's three subject
+ * colors, the rest are chosen to stay distinguishable from them and from each other.
+ *
+ * Remembered because this is called per row, per chart line and per legend entry: the list was
+ * rebuilt on every one of those calls, several dozen allocations per frame while a chart animates.
+ */
 @Composable
-private fun leaderboardUserPalette(): List<Color> {
+private fun rememberLeaderboardUserPalette(): List<Color> {
     val isEink = LocalEinkTheme.current
-    return listOf(
-        kanjiColor(),
-        radicalColor(),
-        vocabularyColor(),
-        if (isEink) EinkExtraColors.Slot4 else Color(0xFFE65100),
-        if (isEink) EinkExtraColors.Slot5 else Color(0xFF00695C),
-        if (isEink) EinkExtraColors.Slot6 else Color(0xFF1565C0),
-    )
+    val kanji = kanjiColor()
+    val radical = radicalColor()
+    val vocabulary = vocabularyColor()
+    return remember(isEink, kanji, radical, vocabulary) {
+        listOf(
+            kanji,
+            radical,
+            vocabulary,
+            if (isEink) EinkExtraColors.Slot4 else Color(0xFFE65100),
+            if (isEink) EinkExtraColors.Slot5 else Color(0xFF00695C),
+            if (isEink) EinkExtraColors.Slot6 else Color(0xFF1565C0),
+        )
+    }
 }

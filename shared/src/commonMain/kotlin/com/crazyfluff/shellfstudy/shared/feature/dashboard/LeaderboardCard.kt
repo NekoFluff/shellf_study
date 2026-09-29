@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +35,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.designsystem.components.TitleRowDropdown
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserColor
+import com.crazyfluff.shellfstudy.shared.designsystem.components.PillSelector
 
 
 private val metrics = listOf(LeaderboardMetric.LEARNED, LeaderboardMetric.BURNED, LeaderboardMetric.LEVEL)
@@ -50,6 +49,9 @@ object LeaderboardCardTestTags {
     const val ROW = "leaderboard_row"
     const val SEE_ALL = "leaderboard_see_all"
 }
+
+/** Stable label lookup — see [PillSelector]'s note on why this is not a lambda literal. */
+private val METRIC_LABEL: (LeaderboardMetric) -> String = { it.displayName }
 
 @Composable
 fun LeaderboardCard(
@@ -98,32 +100,16 @@ fun LeaderboardCard(
             }
 
             // Compact metric pills
-            Row(
+            PillSelector(
+                options = metrics,
+                selected = selectedMetric,
+                onSelect = onMetricChange,
+                label = METRIC_LABEL,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
-                    .padding(bottom = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                metrics.forEach { metric ->
-                    val selected = metric == selectedMetric
-                    FilterChip(
-                        selected = selected,
-                        onClick = { onMetricChange(metric) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        border = if (selected) null else FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = false
-                        ),
-                        label = {
-                            Text(text = metric.displayName, style = MaterialTheme.typography.labelSmall)
-                        }
-                    )
-                }
-            }
+                    .padding(bottom = 4.dp)
+            )
 
             val displayEntries = leaderboard.entries.take(MAX_VISIBLE_ENTRIES)
             displayEntries.forEachIndexed { index, entry ->
