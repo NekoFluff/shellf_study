@@ -39,6 +39,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerOutcome
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
+import com.crazyfluff.shellfstudy.shared.quiz.toPendingQuestionOrNull
 import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
@@ -512,10 +513,12 @@ class LessonViewModel(
     }
 
     private suspend fun resumeQuizPhase(persisted: PersistedLessonSession) {
-        // itemsById was resolved from the whole plan in resumeFromPersisted, so a queue entry can only
-        // miss if the snapshot references an assignment outside its own plan — genuinely corrupt,
-        // rather than merely "no longer due for lesson".
-        if (persisted.quizQueue.any { it.assignmentId !in itemsById }) {
+        // itemsById was resolved from the whole plan in resumeFromPersisted, so an entry can only fail
+        // to rebuild if the snapshot references an assignment outside its own plan, or carries a
+        // question type this build no longer knows — genuinely corrupt in both cases, rather than
+        // merely "no longer due for lesson".
+        val restoredQueue = persisted.quizQueue.mapNotNull { it.toPendingQuestionOrNull(itemsById) }
+        if (restoredQueue.size != persisted.quizQueue.size) {
             sessionController.complete()
             clearSessionState()
             fetchFreshQueue()
@@ -529,11 +532,7 @@ class LessonViewModel(
             .distinct()
             .mapNotNull { itemsById[it] }
 
-        quizQueue.restore(
-            persisted.quizQueue.map { entry ->
-                PendingQuestion(itemsById.getValue(entry.assignmentId), QuestionType.valueOf(entry.questionType))
-            }
-        )
+        quizQueue.restore(restoredQueue)
         startedAssignmentIds.clear()
         restoreProgressAndAnswers(persisted)
         // Restores the session's accumulated active time rather than restarting the clock — this is
@@ -607,7 +606,8 @@ class LessonViewModel(
         answeredQuestions.addAll(
             persisted.answeredQuestions.mapNotNull { p ->
                 val item = itemsById[p.assignmentId] ?: return@mapNotNull null
-                AnsweredQuestionRecord(item, QuestionType.valueOf(p.questionType), p.isCorrect, p.elapsedMs)
+                val type = QuestionType.fromPersisted(p.questionType) ?: return@mapNotNull null
+                AnsweredQuestionRecord(item, type, p.isCorrect, p.elapsedMs)
             }
         )
         totalQuizCount = persisted.totalQuizCount

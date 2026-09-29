@@ -8,10 +8,13 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /**
- * Tests for [durationUntilNextMidnight] — the piece of [dailyRolloverTicks] that can be tested
- * deterministically, since it's a pure function of `now` rather than reading `Clock.System` itself.
- * [dailyRolloverTicks] backs the day-boundary rollover in [AssignmentRepository.observeLessonsCompletedToday],
- * [StatsRepository.observeStudyStreak], and [FriendStatsRepository]'s self leaderboard stats.
+ * Tests for [durationUntilNextMidnight] and [durationUntilNextHour] — the pieces of
+ * [dailyRolloverTicks] and [hourlyRolloverTicks] that can be tested deterministically, since they are
+ * pure functions of `now` rather than readers of `Clock.System` themselves. [dailyRolloverTicks] backs
+ * the day-boundary rollover in [AssignmentRepository.observeLessonsCompletedToday],
+ * [StatsRepository.observeStudyStreak], and [FriendStatsRepository]'s self leaderboard stats;
+ * [hourlyRolloverTicks] backs the hour-boundary re-subscription in
+ * [AssignmentRepository.observeReviewForecast] and [AssignmentRepository.observeReviewDueCount].
  */
 class DateRolloverTest {
 
@@ -36,5 +39,23 @@ class DateRolloverTest {
         val now = Instant.parse("2026-08-15T00:00:00Z")
         val result = durationUntilNextMidnight(now, tz)
         assertEquals(24.hours, result)
+    }
+
+    @Test
+    fun justBeforeTheHour_returnsTheBufferOnly() {
+        val now = Instant.parse("2026-08-15T13:59:59Z")
+        assertEquals(6.seconds, durationUntilNextHour(now))
+    }
+
+    @Test
+    fun exactlyOnTheHour_returnsAFullHourPlusTheBuffer() {
+        val now = Instant.parse("2026-08-15T14:00:00Z")
+        assertEquals(3605.seconds, durationUntilNextHour(now))
+    }
+
+    @Test
+    fun justAfterTheHour_returnsAlmostAFullHourPlusTheBuffer() {
+        val now = Instant.parse("2026-08-15T14:00:07Z")
+        assertEquals(3598.seconds, durationUntilNextHour(now))
     }
 }

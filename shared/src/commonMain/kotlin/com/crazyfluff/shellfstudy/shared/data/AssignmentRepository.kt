@@ -32,7 +32,6 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.WkResourceItem
 import com.crazyfluff.shellfstudy.shared.network.collectAllPages
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,7 +39,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -296,8 +294,15 @@ class AssignmentRepository(
     /** Local, immediately-reactive count of reviews due — see [observeReviewQueue] for the full
      *  items. Used by the dashboard to reconcile against the WaniKani `/summary` count, which can
      *  briefly lag behind a review just graded on this device (its outbox submission hasn't
-     *  reached the server yet). */
-    fun observeReviewDueCount(): Flow<Int> = assignmentDao.observeDueForReviewCount(Clock.System.now().toString())
+     *  reached the server yet).
+     *
+     *  Re-subscribes on [hourlyRolloverTicks] because the DAO query takes `now` as a parameter:
+     *  without it the predicate keeps the timestamp from first collection, so a dashboard left open
+     *  across an hour boundary keeps counting reviews that came due since — which is exactly when the
+     *  local count is the one being trusted (offline, or with submissions still in the outbox). */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeReviewDueCount(): Flow<Int> = hourlyRolloverTicks()
+        .flatMapLatest { now -> assignmentDao.observeDueForReviewCount(now.toString()) }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeReviewQueue(): Flow<List<ReviewItem>> =
@@ -422,26 +427,15 @@ class AssignmentRepository(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeReviewForecast(window: ReviewForecastWindow = ReviewForecastWindow.DAY): Flow<ReviewForecast> {
-        // Re-subscribe to the DAO at every hour boundary. The DAO query parameters (nowIso) are
-        // baked in at subscription time — Room re-fires the query on table writes but can't update
-        // the `availableAt <= :nowIso` predicate itself. Without re-subscribing, reviews that
-        // become available when the clock hour rolls over stay stuck in "upcoming" instead of
-        // moving to "available now", even though the review count (fetched from the API) updates
-        // correctly. The ticker fires immediately on first collection, then sleeps to the next
-        // hour boundary (+5 s buffer) so the re-subscription cost is minimal.
+        // Re-subscribe to the DAO at every hour boundary — see hourlyRolloverTicks for why the
+        // baked-in `availableAt <= :nowIso` predicate needs it. Without that, reviews that become
+        // available when the clock hour rolls over stay stuck in "upcoming" instead of moving to
+        // "available now", even though the review count (fetched from the API) updates correctly.
         // WaniKani assignments only ever become available on the hour, so buckets are aligned to
         // clock-hour boundaries (not rolling 1h windows from `now`) — otherwise a bucket labeled
         // e.g. "3 PM" would actually span 2:47-3:47, and the label would read an hour behind the
         // reviews it describes.
-        val hourBoundaryTicker = flow<Unit> {
-            while (true) {
-                emit(Unit)
-                val secondsIntoHour = Clock.System.now().epochSeconds % 3600
-                delay((3600 - secondsIntoHour + 5L) * 1000L)
-            }
-        }
-        return hourBoundaryTicker.flatMapLatest {
-            val now = Clock.System.now()
+        return hourlyRolloverTicks().flatMapLatest { now ->
             val nowIso = now.toString()
             val currentHourStart = now.truncatedToHour()
             combine(

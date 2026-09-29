@@ -195,6 +195,36 @@ class OutboxDrainerTest {
         assertThat(repositories.outboxDao.allReviewSubmissions().first().status).isEqualTo(OutboxStatus.PENDING.name)
     }
 
+    /**
+     * The API rate-limits at 60 requests a minute, so a long session's drain can be throttled through
+     * no fault of its own. 429 is a 4xx, and the drain used to treat every 4xx except 401 as terminal
+     * — which retired the row as `FAILED_TERMINAL`, and since the drain only reads `PENDING` rows it
+     * was never tried again. The graded review was lost for good while the local assignment kept the
+     * optimistic stage it had been given.
+     */
+    @Test
+    fun `a rate-limited review stays pending rather than being retired as terminal`() = runTest {
+        queueReview(assignmentId = 102, subjectId = 2)
+        server.enqueue(emptyResponse(429))
+
+        val outcome = buildDrainer().drain()
+
+        assertThat(outcome).isEqualTo(DrainOutcome.RETRY)
+        assertThat(repositories.outboxDao.allReviewSubmissions().first().status).isEqualTo(OutboxStatus.PENDING.name)
+    }
+
+    /** Same reasoning as 429: a request timeout is transient, not a rejection. */
+    @Test
+    fun `a timed-out review stays pending rather than being retired as terminal`() = runTest {
+        queueReview(assignmentId = 102, subjectId = 2)
+        server.enqueue(emptyResponse(408))
+
+        val outcome = buildDrainer().drain()
+
+        assertThat(outcome).isEqualTo(DrainOutcome.RETRY)
+        assertThat(repositories.outboxDao.allReviewSubmissions().first().status).isEqualTo(OutboxStatus.PENDING.name)
+    }
+
     private fun startedAssignmentJson(id: Long, subjectId: Long) = """
         {
           "id": $id, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/$id",

@@ -13,6 +13,7 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /** How long until [zone]'s next local midnight after [now]. */
@@ -41,3 +42,35 @@ internal fun dailyRolloverTicks(): Flow<LocalDate> = flow {
         delay(durationUntilNextMidnight(Clock.System.now(), zone))
     }
 }
+
+/**
+ * Emits "now" immediately, then again as each clock hour rolls over.
+ *
+ * A Room query comparing against a timestamp baked in at subscription time cannot see the hour pass
+ * on its own: Room re-runs it when its table is written, but the `availableAt <= :nowIso` predicate
+ * keeps whatever value it was subscribed with. Re-subscribing on this ticker is what moves reviews
+ * from "upcoming" to "available now" — and what keeps a due *count* from freezing at whatever it was
+ * when the screen was first composed for as long as the process lives.
+ *
+ * WaniKani only ever makes an assignment available on the hour, so a clock-hour tick is exactly the
+ * granularity required. The five-second buffer past the boundary keeps the re-subscription off the
+ * instant the hour flips, where a reading could still land in the previous hour.
+ */
+internal fun hourlyRolloverTicks(): Flow<Instant> = flow {
+    while (true) {
+        emit(Clock.System.now())
+        delay(durationUntilNextHour(Clock.System.now()))
+    }
+}
+
+/** How long until the next clock hour after [now], plus [HOUR_TICK_BUFFER] past the boundary. */
+internal fun durationUntilNextHour(now: Instant): Duration {
+    val secondsIntoHour = now.epochSeconds % 3600
+    return (3600 - secondsIntoHour + HOUR_TICK_BUFFER.inWholeSeconds).seconds
+}
+
+/**
+ * Wait past the boundary rather than up to it: a reader that wakes exactly on the hour can still take
+ * its reading from the previous hour, which is the failure the ticker exists to prevent.
+ */
+private val HOUR_TICK_BUFFER = 5.seconds

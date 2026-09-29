@@ -19,6 +19,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerOutcome
 import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
+import com.crazyfluff.shellfstudy.shared.quiz.toPendingQuestionOrNull
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
@@ -343,23 +344,19 @@ class ReviewViewModel(
             ).toSet()
         val itemsById = assignmentRepository.getReviewItems(neededIds).associateBy { it.assignmentId }
 
-        // A *queue*/*reserve* entry referencing an item we can no longer look up (e.g. app storage
-        // was cleared) is genuinely unrecoverable — rebuilding its PendingQuestion needs the full
-        // ReviewItem. Fall back to a fresh fetch rather than crash on that.
-        if ((persisted.queue + persisted.reserve).any { it.assignmentId !in itemsById }) {
+        // A *queue*/*reserve* entry referencing an item we can no longer look up (e.g. app storage was
+        // cleared), or carrying a question type this build no longer knows, is genuinely unrecoverable
+        // — rebuilding its PendingQuestion needs both. Fall back to a fresh fetch rather than crash on
+        // that. Rebuilt in one pass and compared by size so the two conditions cannot drift apart.
+        val restoredInFlight = persisted.queue.mapNotNull { it.toPendingQuestionOrNull(itemsById) }
+        val restoredReserve = persisted.reserve.mapNotNull { it.toPendingQuestionOrNull(itemsById) }
+        if (restoredInFlight.size != persisted.queue.size || restoredReserve.size != persisted.reserve.size) {
             sessionController.complete()
             fetchFreshQueue()
             return
         }
 
-        queue.restore(
-            inFlight = persisted.queue.map { entry ->
-                PendingQuestion(itemsById.getValue(entry.assignmentId), QuestionType.valueOf(entry.questionType))
-            },
-            reserve = persisted.reserve.map { entry ->
-                PendingQuestion(itemsById.getValue(entry.assignmentId), QuestionType.valueOf(entry.questionType))
-            }
-        )
+        queue.restore(inFlight = restoredInFlight, reserve = restoredReserve)
         progressByAssignmentId.clear()
         persisted.progress.forEach { p ->
             // itemsById was resolved by id above, so this only misses for the same
@@ -382,7 +379,8 @@ class ReviewViewModel(
         answeredQuestions.addAll(
             persisted.answeredQuestions.mapNotNull { p ->
                 val item = itemsById[p.assignmentId] ?: return@mapNotNull null
-                AnsweredQuestionRecord(item, QuestionType.valueOf(p.questionType), p.isCorrect, p.elapsedMs)
+                val type = QuestionType.fromPersisted(p.questionType) ?: return@mapNotNull null
+                AnsweredQuestionRecord(item, type, p.isCorrect, p.elapsedMs)
             }
         )
         // Restores the session's accumulated active time rather than restarting the clock — this is
@@ -402,7 +400,14 @@ class ReviewViewModel(
         sessionTiming.elapsedMs = 0L
         sessionTiming.resume()
 
-        items.forEach { item -> progressByAssignmentId[item.assignmentId] = ItemProgress(item) }
+        // Progress is created on demand (gradeAnswer's getOrPut) rather than seeded for every item.
+        // Seeding meant a queue of a few hundred due reviews retained a few hundred ItemProgress
+        // objects for the life of the session and — worse — serialized every one of them into the
+        // persisted snapshot on *every* persist, which happens after each answer. Only attempted
+        // items are worth carrying, and the readers already tolerate a missing entry: sessionSummary
+        // filters on hasAnyProgress, completedQuestionCount sums zero for an absent one, and wrapUp
+        // treats "no entry" as "never attempted".
+        //
         // Read straight from the DataStore rather than the `latestSettings` field the per-answer
         // paths use: this runs once, during the loading spinner, so the extra read costs nothing,
         // and `latestSettings` isn't reliable here — loadOrResume() (called first in init) can build

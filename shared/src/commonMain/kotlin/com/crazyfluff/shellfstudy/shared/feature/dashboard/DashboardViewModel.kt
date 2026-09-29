@@ -287,10 +287,11 @@ class DashboardViewModel(
         { imperative, sessionSync, progress, levelDependent, localCounts ->
             // While offline, `imperative.reviewCount`/`lessonCount` are whatever /summary last
             // reported — possibly hours stale — so trust the local assignments table instead; it's
-            // queried live against `availableAt <= now` (same source the review forecast uses) and
-            // is always current regardless of connectivity. While online, only clamp to the local
-            // count when the outbox still has unsent rows — that's exactly the window where a
-            // just-completed session's submissions haven't reached the server yet, so /summary's
+            // queried against `availableAt <= now` and re-subscribed at every hour boundary (see
+            // AssignmentRepository.observeReviewDueCount), so it stays current regardless of
+            // connectivity and of how long this ViewModel has been alive. While online, only clamp to
+            // the local count when the outbox still has unsent rows — that's exactly the window where
+            // a just-completed session's submissions haven't reached the server yet, so /summary's
             // count is known-stale. Once the outbox drains, trust the freshly-fetched remote count
             // outright again — the local assignments table isn't guaranteed to be resynced on every
             // dashboard resume, so clamping unconditionally would let a merely-unsynced local cache
