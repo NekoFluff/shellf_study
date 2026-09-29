@@ -64,6 +64,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import kotlin.time.Duration.Companion.seconds
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class DashboardViewModelTest {
 
@@ -191,15 +193,23 @@ class DashboardViewModelTest {
     }
 
     /** Every non-user/summary resource defaults to an empty collection when a test doesn't care about it. */
+    /**
+     * [gate], when given, is awaited before the response is returned — the mock server has its own
+     * threads, so without it a refresh can land before the test has observed the cached state it is
+     * asserting on. That made "cached first, then remote" a race that passed on a quiet machine and
+     * failed under load.
+     */
     private fun dispatchByPath(
         userResponse: MockResponse,
         summaryResponse: MockResponse,
         assignmentsResponse: MockResponse = jsonResponse(emptyCollectionJson()),
         subjectsResponse: MockResponse = jsonResponse(emptyCollectionJson()),
-        levelProgressionsResponse: MockResponse = jsonResponse(emptyCollectionJson())
+        levelProgressionsResponse: MockResponse = jsonResponse(emptyCollectionJson()),
+        gate: CountDownLatch? = null
     ) {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
+                gate?.await(5, TimeUnit.SECONDS)
                 val path = request.path.orEmpty()
                 return when {
                     path.startsWith("/user") -> userResponse
@@ -373,7 +383,10 @@ class DashboardViewModelTest {
         dashboardCacheRepository.save(
             username = "cached_user", level = 1, lessonCount = 9, reviewCount = 9, syncedAtMillis = 1_000L
         )
-        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        // Held until the cached state has been observed, so this asserts the order rather than
+        // whichever side of the race won.
+        val refreshGate = CountDownLatch(1)
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()), gate = refreshGate)
         val viewModel = createViewModel()
         viewModel.onDashboardResumed()
 
@@ -384,6 +397,7 @@ class DashboardViewModelTest {
             assertThat(state.lastSyncedAtMillis).isEqualTo(1_000L)
             assertThat(state.fetchState).isEqualTo(DashboardFetch.InFlight)
 
+            refreshGate.countDown()
             while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
             assertThat(state.username).isEqualTo("durtle_fan")
             assertThat(state.lastSyncedAtMillis).isNotEqualTo(1_000L)
