@@ -1,5 +1,5 @@
 [versions]
-agp = "9.3.1"
+agp = "9.3.3"
 # Android SDK levels and the JVM bytecode target live here rather than in each module: :app and
 # :shared both read them, and minSdk in particular used to be written out twice — a value that has to
 # be identical for the two modules to link at all.
