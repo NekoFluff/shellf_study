@@ -59,7 +59,7 @@ class OutboxDrainerTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     private fun buildDrainer() = OutboxDrainer(
@@ -89,7 +89,7 @@ class OutboxDrainerTest {
         // reintroduce the under-reporting this was fixed for.
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
+                val path = request.target.orEmpty()
                 return when {
                     request.method == "POST" && path.startsWith("/reviews") -> jsonResponse(reviewResultJson(101, 1, 5, 3))
                     else -> emptyResponse(404)
@@ -107,7 +107,7 @@ class OutboxDrainerTest {
         val outcome = buildDrainer().drain()
 
         assertThat(outcome).isEqualTo(DrainOutcome.SUCCESS)
-        val body = server.takeRequest().body.readUtf8()
+        val body = server.takeRequest().body!!.utf8()
         assertThat(body).contains("\"incorrect_meaning_answers\":2")
         assertThat(body).contains("\"incorrect_reading_answers\":1")
         assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
@@ -121,7 +121,7 @@ class OutboxDrainerTest {
         val reviewPosts = AtomicInteger()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
-                if (request.method == "POST" && request.path.orEmpty().startsWith("/reviews")) {
+                if (request.method == "POST" && request.target.orEmpty().startsWith("/reviews")) {
                     reviewPosts.incrementAndGet()
                     Thread.sleep(200)
                     return jsonResponse(reviewResultJson(101, 1, 1, 2))
@@ -157,7 +157,7 @@ class OutboxDrainerTest {
         // Lesson must POST before review, since the assignment has to exist server-side first.
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
+                val path = request.target.orEmpty()
                 return when {
                     request.method == "PUT" && path.contains("/start") -> jsonResponse(startedAssignmentJson(101, 1))
                     request.method == "POST" && path.startsWith("/reviews") -> jsonResponse(reviewResultJson(101, 1, 1, 2))
@@ -196,7 +196,7 @@ class OutboxDrainerTest {
     fun `a terminal lesson rejection is marked and the drain continues to reviews`() = runTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
+                val path = request.target.orEmpty()
                 return when {
                     request.method == "PUT" && path.contains("/start") -> emptyResponse(422)
                     request.method == "GET" && path.startsWith("/assignments") -> jsonResponse(singleAssignmentJson(101, 1, 1))
@@ -268,8 +268,8 @@ class OutboxDrainerTest {
     fun `a review the server rejects with a 500 does not block the reviews queued behind it`() = runTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
-                val body = request.body.readUtf8()
+                val path = request.target.orEmpty()
+                val body = request.body!!.utf8()
                 return when {
                     request.method == "POST" && path.startsWith("/reviews") && body.contains("102") ->
                         emptyResponse(500)

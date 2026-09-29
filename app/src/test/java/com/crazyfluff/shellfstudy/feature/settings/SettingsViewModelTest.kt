@@ -354,7 +354,7 @@ class SettingsViewModelTest {
             assertThat(finalState.isFullRefreshing).isFalse()
             assertThat(finalState.fullRefreshError).isNull()
         }
-        server.shutdown()
+        server.close()
     }
 
     @Test
@@ -376,6 +376,6 @@ class SettingsViewModelTest {
             assertThat(finalState.isFullRefreshing).isFalse()
             assertThat(finalState.fullRefreshError).isNotNull()
         }
-        server.shutdown()
+        server.close()
     }
 }

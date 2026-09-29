@@ -117,7 +117,7 @@ class SubjectDetailViewModelTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     /** The state before anything has been opened — [SubjectDetailLoadState.Loading], since no

@@ -56,7 +56,7 @@ class OutboxSyncWorkerTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     private fun buildWorker(): OutboxSyncWorker {

@@ -131,7 +131,7 @@ class DashboardViewModelTest {
         // `UncaughtExceptionsBeforeTest` in whichever test runs next.
         viewModelStore.clear()
         mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
-        server.shutdown()
+        server.close()
     }
 
     private fun createViewModel(): DashboardViewModel {
@@ -210,7 +210,7 @@ class DashboardViewModelTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 gate?.await(5, TimeUnit.SECONDS)
-                val path = request.path.orEmpty()
+                val path = request.target.orEmpty()
                 return when {
                     path.startsWith("/user") -> userResponse
                     path.startsWith("/summary") -> summaryResponse
@@ -292,8 +292,8 @@ class DashboardViewModelTest {
         // counting by path (rather than server.requestCount, which also counts sync's
         // assignments/subjects/level_progressions calls) confirms that's fixed.
         val requests = generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
-        assertThat(requests.count { it.path.orEmpty().startsWith("/user") }).isEqualTo(1)
-        assertThat(requests.count { it.path.orEmpty().startsWith("/summary") }).isEqualTo(1)
+        assertThat(requests.count { it.target.orEmpty().startsWith("/user") }).isEqualTo(1)
+        assertThat(requests.count { it.target.orEmpty().startsWith("/summary") }).isEqualTo(1)
     }
 
     @Test
@@ -321,8 +321,8 @@ class DashboardViewModelTest {
 
         assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isAtLeast(1)
         val requests = generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
-        assertThat(requests.count { it.path.orEmpty().startsWith("/user") }).isAtLeast(1)
-        assertThat(requests.count { it.path.orEmpty().startsWith("/summary") }).isAtLeast(1)
+        assertThat(requests.count { it.target.orEmpty().startsWith("/user") }).isAtLeast(1)
+        assertThat(requests.count { it.target.orEmpty().startsWith("/summary") }).isAtLeast(1)
     }
 
     /**
@@ -365,7 +365,7 @@ class DashboardViewModelTest {
         }
 
         val requests = generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
-        assertThat(requests.count { it.path.orEmpty().startsWith("/assignments") }).isAtLeast(1)
+        assertThat(requests.count { it.target.orEmpty().startsWith("/assignments") }).isAtLeast(1)
     }
 
     // The freshness window's other side — that a resume while assignments are still fresh does not

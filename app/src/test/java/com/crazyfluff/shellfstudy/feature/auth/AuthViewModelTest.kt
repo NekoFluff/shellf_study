@@ -65,7 +65,7 @@ class AuthViewModelTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     private fun createViewModel() =

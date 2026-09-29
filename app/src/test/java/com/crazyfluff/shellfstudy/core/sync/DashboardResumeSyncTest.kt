@@ -48,7 +48,7 @@ class DashboardResumeSyncTest {
 
     /** One real assignment row, so the resume path has something it could rewrite. */
     private fun assignmentsReturnOneRow() = waniKaniCollectionDispatcher { request ->
-        if (request.path.orEmpty().startsWith("/assignments")) {
+        if (request.target.orEmpty().startsWith("/assignments")) {
             jsonResponse(
                 """{"object":"collection","url":"https://api.wanikani.com/v2/assignments","total_count":1,"data":[
                    {"id":1,"object":"assignment","url":"https://api.wanikani.com/v2/assignments/1",
@@ -63,7 +63,7 @@ class DashboardResumeSyncTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     /**

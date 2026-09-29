@@ -45,7 +45,7 @@ class SyncWriteVolumeTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     /**
@@ -104,9 +104,9 @@ class SyncWriteVolumeTest {
     fun `a pass with real data writes each changed resource exactly once`() = runTest {
         server.dispatcher = waniKaniCollectionDispatcher { request ->
             when {
-                request.path.orEmpty().startsWith("/subjects") ->
+                request.target.orEmpty().startsWith("/subjects") ->
                     collectionOfOne("kanji", subjectJson(id = 1))
-                request.path.orEmpty().startsWith("/assignments") ->
+                request.target.orEmpty().startsWith("/assignments") ->
                     collectionOfOne("assignment", assignmentJson(id = 1, subjectId = 1))
                 else -> null
             }

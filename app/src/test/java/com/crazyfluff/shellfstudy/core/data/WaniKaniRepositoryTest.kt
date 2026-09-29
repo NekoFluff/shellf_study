@@ -28,7 +28,7 @@ class WaniKaniRepositoryTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     @Test
@@ -76,7 +76,7 @@ class WaniKaniRepositoryTest {
 
         assertThat(result).isInstanceOf(ApiResult.Success::class.java)
         val request = server.takeRequest()
-        assertThat(request.body.readUtf8()).contains("\"incorrect_reading_answers\":1")
+        assertThat(request.body!!.utf8()).contains("\"incorrect_reading_answers\":1")
     }
 
     @Test

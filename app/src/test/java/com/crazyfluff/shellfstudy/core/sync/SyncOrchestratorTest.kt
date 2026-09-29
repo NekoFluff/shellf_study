@@ -43,7 +43,7 @@ class SyncOrchestratorTest {
     fun setUp() {
         server = MockWebServer()
         server.dispatcher = waniKaniCollectionDispatcher { request ->
-            val path = request.path.orEmpty()
+            val path = request.target.orEmpty()
             requestedPaths += path
             if (reviewStatisticsShouldFail && path.startsWith("/review_statistics")) emptyResponse(500) else null
         }
@@ -53,7 +53,7 @@ class SyncOrchestratorTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     @Test
@@ -131,7 +131,7 @@ class SyncOrchestratorTest {
         val firstRequestReceived = CountDownLatch(1)
         val releaseFirstRequest = CountDownLatch(1)
         server.dispatcher = waniKaniCollectionDispatcher { request ->
-            val path = request.path.orEmpty()
+            val path = request.target.orEmpty()
             requestedPaths += path
             if (path.startsWith("/spaced_repetition_systems")) {
                 firstRequestReceived.countDown()

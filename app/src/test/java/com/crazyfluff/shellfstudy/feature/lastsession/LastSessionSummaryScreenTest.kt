@@ -135,7 +135,7 @@ class LastSessionSummaryScreenTest {
     @After
     fun tearDownKoin() {
         stopKoin()
-        server.shutdown()
+        server.close()
     }
 
     @Test

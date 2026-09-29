@@ -22,7 +22,7 @@ fun waniKaniCollectionDispatcher(
 ): Dispatcher = object : Dispatcher() {
     override fun dispatch(request: RecordedRequest): MockResponse {
         stub(request)?.let { return it }
-        val path = request.path.orEmpty()
+        val path = request.target.orEmpty()
         return when {
             path.startsWith("/spaced_repetition_systems") -> emptyCollection("srs_system")
             path.startsWith("/subjects") -> emptyCollection("kanji")

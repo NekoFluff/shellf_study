@@ -42,7 +42,7 @@ class RankChangeChipVerificationTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     private fun reviewItemAtSrsStage(stage: Int) = ReviewItem(

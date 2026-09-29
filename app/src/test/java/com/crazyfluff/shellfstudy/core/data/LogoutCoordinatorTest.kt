@@ -124,7 +124,7 @@ class LogoutCoordinatorTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     @Test

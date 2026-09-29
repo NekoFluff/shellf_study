@@ -69,7 +69,7 @@ class FriendStatsRefreshTest {
     fun setUp() {
         server = MockWebServer()
         server.dispatcher = waniKaniCollectionDispatcher { request ->
-            val path = request.path.orEmpty()
+            val path = request.target.orEmpty()
             requestedPaths += path
             when {
                 shouldFail(path) -> emptyResponse(failingCode)
@@ -106,7 +106,7 @@ class FriendStatsRefreshTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     @Test

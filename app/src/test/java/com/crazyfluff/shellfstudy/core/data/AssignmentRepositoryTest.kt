@@ -57,7 +57,7 @@ class AssignmentRepositoryTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     @Test
@@ -138,7 +138,7 @@ class AssignmentRepositoryTest {
         assertThat(result).isInstanceOf(ApiResult.Success::class.java)
         val request = server.takeRequest()
         assertThat(request.method).isEqualTo("PUT")
-        assertThat(request.path).contains("/assignments/777/start")
+        assertThat(request.target).contains("/assignments/777/start")
     }
 
     @Test

@@ -171,7 +171,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     private fun TestScope.createViewModel(
@@ -187,7 +187,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     /** Routes by path — refreshing the review queue now syncs subjects and assignments, in either order. */
     private fun dispatch(assignmentsResponse: MockResponse, subjectsResponse: MockResponse, reviewResponse: MockResponse? = null) {
         server.dispatcher = waniKaniCollectionDispatcher { request ->
-            val path = request.path.orEmpty()
+            val path = request.target.orEmpty()
             when {
                 request.method == "POST" && path.startsWith("/reviews") -> reviewResponse ?: jsonResponse(reviewResultJson())
                 path.startsWith("/assignments") -> assignmentsResponse

@@ -32,7 +32,7 @@ class SyncWorkerTest {
     fun setUp() {
         server = MockWebServer()
         server.dispatcher = waniKaniCollectionDispatcher { request ->
-            if (reviewStatisticsShouldFail && request.path.orEmpty().startsWith("/review_statistics")) {
+            if (reviewStatisticsShouldFail && request.target.orEmpty().startsWith("/review_statistics")) {
                 emptyCollection("review_statistic", 500)
             } else {
                 null
@@ -45,7 +45,7 @@ class SyncWorkerTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     private fun buildWorker(): SyncWorker {

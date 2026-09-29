@@ -191,7 +191,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     private fun TestScope.createViewModel() = LessonViewModel(
@@ -240,7 +240,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
         startResponse: MockResponse? = null
     ) {
         server.dispatcher = waniKaniCollectionDispatcher { request ->
-            val path = request.path.orEmpty()
+            val path = request.target.orEmpty()
             when {
                 path.contains("/start") -> startResponse ?: jsonResponse(startAssignmentResultJson())
                 path.startsWith("/assignments") -> assignmentsResponse

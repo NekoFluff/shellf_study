@@ -33,7 +33,7 @@ class SubjectRepositoryTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        server.close()
     }
 
     @Test
@@ -113,7 +113,7 @@ class SubjectRepositoryTest {
 
         assertThat(result).isInstanceOf(ApiResult.Success::class.java)
         val request = server.takeRequest()
-        assertThat(request.path).doesNotContain("ids=")
+        assertThat(request.target).doesNotContain("ids=")
 
         repository.observeTotalSubjectCount().test {
             assertThat(awaitItem()).isEqualTo(1)
