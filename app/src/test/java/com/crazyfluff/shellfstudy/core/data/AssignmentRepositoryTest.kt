@@ -21,6 +21,10 @@ import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.todayIn
 import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Before
@@ -276,6 +280,42 @@ class AssignmentRepositoryTest {
             assertThat(awaitItem()).isEqualTo(1)
         }
     }
+
+    /**
+     * The regression behind a reported false "13 lessons completed today" on a day with none.
+     *
+     * The cutoff is local midnight, so an assignment started earlier *on the same UTC date* but
+     * before local midnight belongs to yesterday and must not be counted. With the original
+     * implementation — which stamped the local date onto a UTC midnight — this case was counted, and
+     * on a device at UTC-7 it swept in everything from 17:00 the previous afternoon onwards.
+     *
+     * Built from local time rather than a hardcoded offset so the test means the same thing wherever
+     * it runs: [anHourBeforeLocalMidnight] is unambiguously "yesterday" and [anHourAfterLocalMidnight]
+     * unambiguously "today", whatever the zone.
+     */
+    @Test
+    fun `observeLessonsCompletedToday excludes the previous local day`() = runTest {
+        val zone = TimeZone.currentSystemDefault()
+        val justBeforeMidnight = localMidnightInstant(zone).minus(1.hours)
+        val justAfterMidnight = localMidnightInstant(zone).plus(1.hours)
+
+        server.enqueue(jsonResponse(assignmentJson(id = 1, startedAt = justBeforeMidnight.toString())))
+        repository.syncAssignments(force = true)
+
+        repository.observeLessonsCompletedToday().test {
+            // Yesterday's lesson: not counted.
+            assertThat(awaitItem()).isEqualTo(0)
+
+            // Today's lesson: counted, which also proves the flow is live rather than stuck at 0.
+            server.enqueue(jsonResponse(assignmentJson(id = 2, startedAt = justAfterMidnight.toString())))
+            repository.syncAssignments(force = true)
+            assertThat(awaitItem()).isEqualTo(1)
+        }
+    }
+
+    /** The instant local midnight begins today, in [zone]. */
+    private fun localMidnightInstant(zone: TimeZone): Instant =
+        Clock.System.todayIn(zone).atTime(0, 0).toInstant(zone)
 
     @Test
     fun `observeLevelUpProgress counts guru-or-higher kanji out of the total`() = runTest {

@@ -45,6 +45,9 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.atTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
@@ -90,14 +93,29 @@ private fun ReviewGrade.nextStage(currentStage: Int, srsSystem: SrsSystemEntity)
 
 private fun Instant.truncatedToHour(): Instant = Instant.fromEpochSeconds((epochSeconds / 3600) * 3600)
 
-/** Local midnight for [date] as a string comparable against the `startedAt` values WaniKani returns.
+/**
+ * The instant of local midnight starting [date], as a string comparable against the `startedAt`
+ * values WaniKani returns.
  *
- *  Built by hand rather than via `toString()` on a parsed instant: the comparison in
- *  [AssignmentDao.observeStartedSinceCount] is lexicographic, and every `startedAt` WaniKani writes
- *  carries an explicit zero fraction (`2023-04-04T07:56:05.000000Z`). `Instant.toString()` drops a
- *  zero fraction entirely and emits a variable number of fractional digits otherwise, either of which
- *  makes `'.' < 'Z'` decide the comparison instead of the digits. */
-internal fun localMidnightIso(date: LocalDate): String = "$date" + "T00:00:00.000000Z"
+ * The date is resolved *in [zone]*, not appended to a literal `T00:00:00Z`. Those differ by the
+ * zone's offset, and the difference is not academic: stamping the date onto a UTC midnight makes the
+ * cutoff hours too early for every zone behind UTC, so "lessons completed today" counts everything
+ * since late yesterday afternoon. On a device in America/Phoenix (UTC-7) this turned a true count of
+ * 0 into 13, because 13 assignments were started between 17:00 and midnight the previous local day.
+ *
+ * Rendered by hand rather than via `Instant.toString()`: the comparison in
+ * [AssignmentDao.observeStartedSinceCount] is lexicographic, and every `startedAt` WaniKani writes
+ * carries an explicit zero fraction (`2023-04-04T07:56:05.000000Z`). `Instant.toString()` drops a
+ * zero fraction entirely and emits a variable number of fractional digits otherwise, so the digits
+ * would stop deciding the comparison and `'.' < 'Z'` would instead.
+ */
+internal fun localMidnightIso(date: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): String {
+    val midnight = date.atTime(0, 0).toInstant(zone).toString()
+    // `toString()` yields e.g. "2026-09-28T07:00:00Z" for a whole-second instant; pad it to the
+    // canonical six-digit fraction, and pass anything already carrying a fraction through unchanged.
+    val withoutZulu = midnight.removeSuffix("Z")
+    return if ('.' in withoutZulu) "$withoutZulu" + "Z" else "$withoutZulu" + ".000000Z"
+}
 
 /** Owns the full assignment mirror — SRS progress for every subject the user has encountered. */
 class AssignmentRepository(
