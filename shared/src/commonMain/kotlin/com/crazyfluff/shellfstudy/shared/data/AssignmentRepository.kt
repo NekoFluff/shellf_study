@@ -310,7 +310,9 @@ class AssignmentRepository(
             if (assignments.isEmpty()) {
                 flowOf(emptyList())
             } else {
-                subjectDao.observeByIds(assignments.map { it.subjectId }).map { subjects ->
+                // Chunked: this is the unbounded one — every due assignment's subject id, which on an
+                // account with a long backlog is more bound variables than old SQLite accepts.
+                chunkedIds(assignments.map { it.subjectId }) { subjectDao.observeByIds(it) }.map { subjects ->
                     buildReviewItems(assignments, subjects)
                 }
             }
@@ -321,9 +323,9 @@ class AssignmentRepository(
      *  graduated out of [observeReviewQueue]'s due filter. */
     suspend fun getReviewItems(assignmentIds: Collection<Long>): List<ReviewItem> {
         if (assignmentIds.isEmpty()) return emptyList()
-        val assignments = assignmentDao.getByIds(assignmentIds.toList())
+        val assignments = chunkedIdsOnce(assignmentIds.toList()) { assignmentDao.getByIds(it) }
         if (assignments.isEmpty()) return emptyList()
-        val subjects = subjectDao.observeByIds(assignments.map { it.subjectId }).first()
+        val subjects = chunkedIds(assignments.map { it.subjectId }) { subjectDao.observeByIds(it) }.first()
         return buildReviewItems(assignments, subjects)
     }
 
@@ -358,7 +360,7 @@ class AssignmentRepository(
             if (assignments.isEmpty()) {
                 flowOf(emptyList())
             } else {
-                subjectDao.observeByIds(assignments.map { it.subjectId }).map { subjects ->
+                chunkedIds(assignments.map { it.subjectId }) { subjectDao.observeByIds(it) }.map { subjects ->
                     buildLessonItems(assignments, subjects)
                 }
             }
@@ -369,9 +371,9 @@ class AssignmentRepository(
      *  been started out of [observeLessonQueue]'s due filter. */
     suspend fun getLessonItems(assignmentIds: Collection<Long>): List<LessonItem> {
         if (assignmentIds.isEmpty()) return emptyList()
-        val assignments = assignmentDao.getByIds(assignmentIds.toList())
+        val assignments = chunkedIdsOnce(assignmentIds.toList()) { assignmentDao.getByIds(it) }
         if (assignments.isEmpty()) return emptyList()
-        val subjects = subjectDao.observeByIds(assignments.map { it.subjectId }).first()
+        val subjects = chunkedIds(assignments.map { it.subjectId }) { subjectDao.observeByIds(it) }.first()
         return buildLessonItems(assignments, subjects)
     }
 

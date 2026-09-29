@@ -17,7 +17,7 @@ import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
-import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
+import com.crazyfluff.shellfstudy.shared.database.ReviewAccuracyTotals
 import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsDao
 import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsEntity
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
@@ -212,8 +212,12 @@ class FriendStatsRepository(
      */
     private val friendApiFactory: (String) -> WaniKaniApi = { token -> createFriendWaniKaniApi(token, json) }
 ) {
-    // Pre-built self-stats flow; shared across all observeLeaderboard subscriptions so Room
-    // doesn't open duplicate queries when metric/window changes (only the re-sort changes).
+    // The self-stats figures, recomputed whenever one of their sources changes.
+    //
+    // Not `shareIn`'d, despite what this comment claimed for a while: the only collectors are the
+    // dashboard's leaderboard card and the leaderboard screen, which are never on screen at the same
+    // time, so sharing would buy one subscription instead of one — at the cost of a repository-owned
+    // CoroutineScope that would outlive every screen and have to be cancelled somewhere.
     //
     // The four DAO flows only re-emit on a DB write, so combining with dailyRolloverTicks is what
     // actually rolls the "learned/burned today" figures over at local midnight — otherwise, on a
@@ -222,11 +226,11 @@ class FriendStatsRepository(
     private val selfStatsFlow: Flow<FriendStats> = combine(
         selfAssignmentDao.observeAllBurnedTimestamps(),
         selfAssignmentDao.observeAllStartedTimestamps(),
-        selfReviewStatisticDao.observeAll(),
+        selfReviewStatisticDao.observeAccuracyTotals(),
         selfLevelProgressionDao.observeAll(),
         dailyRolloverTicks()
-    ) { burnedTs, startedTs, statistics, progressions, _ ->
-        buildSelfStats(burnedTs, startedTs, statistics, progressions)
+    ) { burnedTs, startedTs, accuracyTotals, progressions, _ ->
+        buildSelfStats(burnedTs, startedTs, accuracyTotals, progressions)
     }.flowOn(defaultDispatcher)
 
     fun observeLeaderboard(
@@ -434,15 +438,15 @@ class FriendStatsRepository(
     private fun buildSelfStats(
         burnedTimestamps: List<String>,
         startedTimestamps: List<String>,
-        statistics: List<ReviewStatisticEntity>,
+        accuracyTotals: ReviewAccuracyTotals,
         progressions: List<LevelProgressionEntity>
     ): FriendStats {
         val nowMillis = Clock.System.now().toEpochMilliseconds()
 
-        val totalCorrect = statistics.sumOf { it.meaningCorrect + it.readingCorrect }.toFloat()
-        val totalAttempts = statistics.sumOf {
-            it.meaningCorrect + it.meaningIncorrect + it.readingCorrect + it.readingIncorrect
-        }
+        // Summed by SQLite — see ReviewStatisticDao.observeAccuracyTotals. Null means the table is
+        // empty, which is the "unknown accuracy" case rather than a 0% one.
+        val totalCorrect = (accuracyTotals.correct ?: 0L).toFloat()
+        val totalAttempts = (accuracyTotals.attempts ?: 0L).toFloat()
 
         val sortedProgressions = progressions
             .mapNotNull { p -> p.unlockedAt?.let { p.level to it } }

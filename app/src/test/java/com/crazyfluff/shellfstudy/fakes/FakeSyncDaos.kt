@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.fakes
 
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
+import com.crazyfluff.shellfstudy.shared.database.ReviewAccuracyTotals
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
@@ -50,6 +51,19 @@ class FakeReviewStatisticDao(private val writeLog: SyncWriteLog? = null) : Revie
     }
 
     override fun observeAll(): Flow<List<ReviewStatisticEntity>> = statistics.map { it.values.toList() }
+
+    override fun observeAccuracyTotals(): Flow<ReviewAccuracyTotals> = statistics.map { map ->
+        if (map.isEmpty()) {
+            ReviewAccuracyTotals(correct = null, attempts = null)
+        } else {
+            ReviewAccuracyTotals(
+                correct = map.values.sumOf { (it.meaningCorrect + it.readingCorrect).toLong() },
+                attempts = map.values.sumOf {
+                    (it.meaningCorrect + it.meaningIncorrect + it.readingCorrect + it.readingIncorrect).toLong()
+                }
+            )
+        }
+    }
 
     override fun observeBySubjectId(subjectId: Long): Flow<ReviewStatisticEntity?> = statistics.map { map ->
         map.values.firstOrNull { it.subjectId == subjectId }

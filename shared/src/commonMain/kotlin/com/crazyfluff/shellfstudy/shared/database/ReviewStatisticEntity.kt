@@ -29,6 +29,14 @@ data class ReviewStatisticEntity(
     val lastReviewedAt: String? = null
 )
 
+/**
+ * The self-stats accuracy figure, summed in SQL.
+ *
+ * Both are null only for an empty table: SQLite's `SUM` over no rows is null, which is how the caller
+ * tells "no reviews yet" (accuracy unknown) from a genuine 0%.
+ */
+data class ReviewAccuracyTotals(val correct: Long?, val attempts: Long?)
+
 @Dao
 interface ReviewStatisticDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -39,6 +47,20 @@ interface ReviewStatisticDao {
 
     @Query("SELECT * FROM review_statistics")
     fun observeAll(): Flow<List<ReviewStatisticEntity>>
+
+    /**
+     * Totals for the leaderboard's self accuracy, without materializing a row per subject.
+     *
+     * The self-stats flow used to read [observeAll] — every review-statistic row, fourteen columns
+     * each, several thousand on a mature account — to add up two integers. The sum is the only thing
+     * it wanted, so it happens where the rows are.
+     */
+    @Query(
+        "SELECT SUM(meaningCorrect + readingCorrect) AS correct, " +
+            "SUM(meaningCorrect + meaningIncorrect + readingCorrect + readingIncorrect) AS attempts " +
+            "FROM review_statistics"
+    )
+    fun observeAccuracyTotals(): Flow<ReviewAccuracyTotals>
 
     /** The subject detail view's accuracy/streak/last-reviewed source. */
     @Query("SELECT * FROM review_statistics WHERE subjectId = :subjectId LIMIT 1")

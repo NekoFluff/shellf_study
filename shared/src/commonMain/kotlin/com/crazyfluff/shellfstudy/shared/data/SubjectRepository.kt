@@ -150,7 +150,7 @@ class SubjectRepository(
 
     /** Resolves a set of related-subject IDs (components/amalgamations/visually-similar) into tiles. */
     fun observeSubjectSummaries(ids: List<Long>): Flow<List<SubjectSummary>> =
-        subjectDao.observeByIds(ids).map { entities -> entities.map { it.toSubjectSummary() } }
+        chunkedIds(ids) { subjectDao.observeByIds(it) }.map { entities -> entities.map { it.toSubjectSummary() } }
 
     /**
      * Flow-based so an open detail sheet live-updates if a background sync refreshes this subject.
