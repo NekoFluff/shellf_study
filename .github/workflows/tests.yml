@@ -51,6 +51,13 @@ jobs:
           }
           EOF
 
+      # Compiles commonMain for every target's shared metadata, which is the only check that runs
+      # without an Apple host. It is not ceremony: `System.nanoTime()` sat in commonMain for a commit
+      # while all 1100+ JVM tests passed, because Android has `System` and Kotlin/Native does not —
+      # the metadata compile is what fails on that, and it can run on Linux.
+      - name: Compile common metadata (catches platform-only APIs in commonMain)
+        run: ./gradlew :shared:compileCommonMainKotlinMetadata
+
       - name: Run shared (commonTest) unit tests
         run: ./gradlew :shared:testAndroidHostTest
 

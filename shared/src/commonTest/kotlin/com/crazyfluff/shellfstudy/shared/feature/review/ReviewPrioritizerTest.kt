@@ -46,7 +46,7 @@ class ReviewPrioritizerTest {
     }
 
     @Test
-    fun `everything outside the level-up tier shares one tier, so due order survives among them`() {
+    fun `everything outside the level-up tier shares one tier so due order survives among them`() {
         val select = ReviewPrioritizer.tierSelector(currentLevel = 3)
         assertEquals(
             select(item(1, level = 3, srsStage = 1, subjectType = SubjectType.VOCABULARY)),

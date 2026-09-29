@@ -33,7 +33,7 @@ class LocalMidnightIsoTest {
      * midnight UTC. This is the exact case that produced the reported "13 lessons" false count.
      */
     @Test
-    fun `uses the zone's offset, not a UTC midnight`() {
+    fun `uses the zone's offset not a UTC midnight`() {
         assertEquals("2026-09-28T07:00:00.000000Z", localMidnightIso(LocalDate(2026, 9, 28), phoenix))
     }
 

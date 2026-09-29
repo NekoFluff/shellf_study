@@ -19,7 +19,7 @@ import kotlin.test.assertNotEquals
 class JankStateKeyTest {
 
     @Test
-    fun `changes when a value changes, at constant tag count`() {
+    fun `changes when a value changes at constant tag count`() {
         val before = listOf("screen" to "review", "phase" to "loading", "answer" to "n/a")
         val after = listOf("screen" to "review", "phase" to "active", "answer" to "answering")
 

@@ -102,3 +102,17 @@ dependencies {
     add("androidMainImplementation", platform(libs.androidx.compose.bom))
     add("androidMainImplementation", "androidx.compose.foundation:foundation")
 }
+
+// AGP's lint reads the KSP-generated sources but does not declare them as inputs, so Gradle fails the
+// whole invocation with an implicit-dependency validation error the moment KSP and lint run together —
+// which is every `./gradlew build` after a change to commonTest. Both sides are affected: the model
+// generation (`generateAndroidHostTestLintModel`) and the analysis (`lintAnalyzeAndroidHostTest`). CI
+// never saw it because it runs the two test tasks and never `build`, and the compile break that
+// preceded this fix masked it locally.
+//
+// Only the Android KSP tasks are named: they are the ones whose output lint reads, and depending on
+// all of them would drag the iOS targets' KSP into an Android lint run.
+val androidKspTasks = tasks.matching { it.name == "kspAndroidMain" || it.name == "kspAndroidHostTest" }
+tasks.matching { it.name.startsWith("lint") || it.name.endsWith("LintModel") }.configureEach {
+    dependsOn(androidKspTasks)
+}

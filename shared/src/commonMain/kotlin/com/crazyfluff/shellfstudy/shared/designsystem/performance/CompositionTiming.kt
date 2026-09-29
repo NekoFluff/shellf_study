@@ -1,9 +1,10 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.performance
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
+import androidx.compose.runtime.staticCompositionLocalOf
+import kotlin.time.TimeSource
 
 /**
  * Where composition timings are sent. Defaults to doing nothing, so shared code carries no platform
@@ -18,7 +19,26 @@ val LocalCompositionRecorder = compositionLocalOf<(name: String, nanos: Long) ->
 val LocalCompositionTimingEnabled = compositionLocalOf { false }
 
 /**
- * Times how long the composable this is applied to takes to compose, reporting under [name].
+ * The monotonic clock [TimedComposition] reads, in nanoseconds.
+ *
+ * Monotonic rather than wall-clock, because a duration must not move when the system clock does, and
+ * a [TimeSource] rather than `System.nanoTime()`, because this file is `commonMain` — `System` does
+ * not exist on Kotlin/Native. The JVM tests could not see that; the iOS and metadata compiles could.
+ *
+ * Overridable so the measurement is testable without a device or a real clock: a test supplies a
+ * counter it advances itself and asserts exactly what each composable reported, rather than asserting
+ * loose bounds around wall-clock noise.
+ */
+val LocalCompositionClock = staticCompositionLocalOf<() -> Long> {
+    val origin = TimeSource.Monotonic.markNow()
+    // Assigned to a val rather than left as the block's trailing expression: a bare lambda there is
+    // parsed as a trailing argument to `markNow()`.
+    val read: () -> Long = { origin.elapsedNow().inWholeNanoseconds }
+    read
+}
+
+/**
+ * Times how long [content] takes to compose, reporting under [name].
  *
  * ## Why this exists
  *
@@ -29,35 +49,45 @@ val LocalCompositionTimingEnabled = compositionLocalOf { false }
  *
  * ## What it measures, and what it does not
  *
- * `composed {}` runs on each recomposition of the composable it is applied to, and [SideEffect] runs
- * after that composition commits, so together they bracket one component's composition. Because
- * Compose skips a composable whose inputs are unchanged, a component that did not recompose records
- * nothing — which is the useful part: totals distinguish "intrinsically expensive" from "recomposing
- * when it should not".
+ * The clock is read immediately before and immediately after `content()` returns, so the figure is
+ * this subtree's own composition. It does **not** include layout or draw: a card can be cheap to
+ * compose and expensive to lay out (a measure-heavy FlowRow, say), and that cost lands in the frame
+ * timing rather than here. Neither does it include nested subcomposition — `LazyColumn` items that
+ * have not composed yet, for instance. Composition is the first thing to rule out, not the last.
  *
- * It does **not** measure layout or draw. A card can be cheap to compose and expensive to lay out (a
- * measure-heavy FlowRow, for instance); that cost lands in the frame timing and not here. Composition
- * is the first thing to rule out, not the last.
+ * A composable that is skipped records nothing, which is the useful part: the totals separate
+ * "intrinsically expensive" from "recomposing when it should not".
  *
- * ## Cost
+ * ## Why this is a composable and not a `Modifier`
  *
- * When no platform has enabled it this returns [Modifier] unchanged: no `composed`, no clock read, no
- * allocation, nothing for the harness to perturb.
+ * This began as `Modifier.timedComposition`, which cannot work. A modifier cannot bracket the
+ * composition of the content it is attached to: `Modifier.composed`'s factory block runs *before*
+ * that content composes, and the `SideEffect` it registered runs after the *whole* composition
+ * commits — so each card's figure was really "time from this card until the end of the pass", every
+ * card absorbing everything composed after it. Three cards that each burned 20 ms reported 61 ms,
+ * 41 ms and 21 ms, which is also why the first measured ranking came out in tree order and summed to
+ * far more than the frame it was meant to explain.
+ *
+ * The `composed` element was not free either, contrary to what this file used to claim. It has no
+ * `equals`, so a modifier chain containing one is never equal to the chain built by the previous
+ * composition — which made every card carrying one non-skippable, so it recomposed whenever its
+ * parent did. The instrumentation was inflating what it was built to measure. This wrapper emits no
+ * layout node, so it is invisible to layout and to skipping; when timing is off it costs one
+ * composition-local read.
  */
-fun Modifier.timedComposition(name: String): Modifier =
-    this.composed {
-        // Read inside `composed`: a composition local read is a composable call, and `timedComposition`
-        // itself is an ordinary function. When timing is off this returns the receiver unchanged, so
-        // the only cost in a normal build is the local read.
-        if (!LocalCompositionTimingEnabled.current) {
-            Modifier
-        } else {
-            // Read outside `remember` deliberately. A `remember` keyed on the name would capture the
-            // first composition and reuse it forever — the exact bug that froze the state tags — and
-            // keying on nothing would still skip recompositions, which is what is being measured.
-            val recorder = LocalCompositionRecorder.current
-            val startedAt = System.nanoTime()
-            SideEffect { recorder(name, System.nanoTime() - startedAt) }
-            Modifier
-        }
+@Composable
+fun TimedComposition(name: String, content: @Composable () -> Unit) {
+    if (!LocalCompositionTimingEnabled.current) {
+        content()
+        return
     }
+
+    val clock = LocalCompositionClock.current
+    val recorder = LocalCompositionRecorder.current
+    val startedAt = clock()
+    content()
+    val elapsedNanos = clock() - startedAt
+    // Recorded from a SideEffect so nothing happens during composition itself, and so a composition
+    // that is discarded before it commits reports nothing rather than a measurement of work undone.
+    SideEffect { recorder(name, elapsedNanos) }
+}

@@ -4,6 +4,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -52,7 +53,7 @@ class SrsStageColorContrastTest {
         assertTrue(
             below.isEmpty(),
             "these are too close to the dark surface to read as a distinct UI component: " +
-                below.joinToString { "${it.name}=${"%.2f".format(contrastRatio(it.dark, darkSurface))}:1" }
+                below.joinToString { "${it.name}=${twoDecimals(contrastRatio(it.dark, darkSurface))}:1" }
         )
     }
 
@@ -76,7 +77,7 @@ class SrsStageColorContrastTest {
     }
 
     @Test
-    fun `the light palette is unchanged, including the stages still below the bar`() {
+    fun `the light palette is unchanged including the stages still below the bar`() {
         val below = stages.filter { contrastRatio(it.light, lightSurface) < MIN_UI_CONTRAST }
             .map { it.name }.toSet()
         assertEquals(lightStageColoursBelowBar, below)
@@ -103,7 +104,7 @@ class SrsStageColorContrastTest {
             washedOut.isEmpty(),
             "these clear the contrast bar by desaturating, which breaks the palette's progression: " +
                 washedOut.joinToString {
-                    "${it.name}=${"%.2f".format(saturation(it.dark))} of ${"%.2f".format(saturation(it.light))}"
+                    "${it.name}=${twoDecimals(saturation(it.dark))} of ${twoDecimals(saturation(it.light))}"
                 }
         )
     }
@@ -140,4 +141,14 @@ class SrsStageColorContrastTest {
             return 0.2126 * channel(color.red) + 0.7152 * channel(color.green) + 0.0722 * channel(color.blue)
         }
     }
+}
+
+/**
+ * Two decimals without `String.format`, which does not exist on Kotlin/Native — and `commonTest`
+ * compiles for iOS as well as the JVM, so a JVM-only call here breaks the iOS test target rather than
+ * the assertions it is used in. Only ever fed non-negative ratios and saturations.
+ */
+private fun twoDecimals(value: Double): String {
+    val hundredths = (value * 100).roundToInt()
+    return "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
 }

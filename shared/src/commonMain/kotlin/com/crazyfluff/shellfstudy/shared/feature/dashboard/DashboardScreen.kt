@@ -57,12 +57,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.koin.compose.viewmodel.koinViewModel
-import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
-import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardContentState
-import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardUiState
-import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.JANK_STATE_SCREEN
-import com.crazyfluff.shellfstudy.shared.designsystem.performance.timedComposition
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.TimedComposition
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankState
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
@@ -440,100 +436,113 @@ fun DashboardScreen(
 
                             Spacer(modifier = Modifier.height(24.dp))
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)
-                                    .timedComposition("summaryCards"),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                SummaryCard(
-                                    // Kept to one short word — see the matching comment on the
-                                    // Reviews card below; the same wrap-height concern applies here.
-                                    label = if (uiState.hasActiveLessonSession) "Resume" else "Lessons",
-                                    count = uiState.lessonCount,
-                                    // Fixed brand color rather than MaterialTheme.colorScheme.tertiary:
-                                    // the dark color scheme maps tertiary to a pale tint meant for
-                                    // small accents, not a full-bleed card fill — with white text on
-                                    // top that read as washed out. This card should look the same
-                                    // vivid blue in both themes.
-                                    color = radicalColor(),
-                                    onClick = callbacks.onStartLesson,
-                                    enabled = uiState.isLessonsCardEnabled,
-                                    badge = {
-                                        LessonsTodayBadge(
-                                            completed = uiState.lessonsCompletedToday,
-                                            goal = uiState.dailyLessonGoal
-                                        )
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                        .testTag(DashboardScreenTestTags.LESSON_COUNT)
-                                )
-                                SummaryCard(
-                                    // Kept to one short word — "Resume Session" wrapped to two lines in
-                                    // this half-width card, growing it taller than the "Lessons" card
-                                    // next to it (each Card sizes to its own content by default).
-                                    label = if (uiState.hasActiveReviewSession) "Resume" else "Reviews",
-                                    count = uiState.reviewCount,
-                                    color = kanjiColor(),
-                                    onClick = callbacks.onStartReview,
-                                    enabled = uiState.isReviewsCardEnabled,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                        .testTag(DashboardScreenTestTags.REVIEW_COUNT)
-                                )
+                            TimedComposition("summaryCards") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    SummaryCard(
+                                        // Kept to one short word — see the matching comment on the
+                                        // Reviews card below; the same wrap-height concern applies here.
+                                        label = if (uiState.hasActiveLessonSession) "Resume" else "Lessons",
+                                        count = uiState.lessonCount,
+                                        // Fixed brand color rather than MaterialTheme.colorScheme.tertiary:
+                                        // the dark color scheme maps tertiary to a pale tint meant for
+                                        // small accents, not a full-bleed card fill — with white text on
+                                        // top that read as washed out. This card should look the same
+                                        // vivid blue in both themes.
+                                        color = radicalColor(),
+                                        onClick = callbacks.onStartLesson,
+                                        enabled = uiState.isLessonsCardEnabled,
+                                        badge = {
+                                            LessonsTodayBadge(
+                                                completed = uiState.lessonsCompletedToday,
+                                                goal = uiState.dailyLessonGoal
+                                            )
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .testTag(DashboardScreenTestTags.LESSON_COUNT)
+                                    )
+                                    SummaryCard(
+                                        // Kept to one short word — "Resume Session" wrapped to two lines in
+                                        // this half-width card, growing it taller than the "Lessons" card
+                                        // next to it (each Card sizes to its own content by default).
+                                        label = if (uiState.hasActiveReviewSession) "Resume" else "Reviews",
+                                        count = uiState.reviewCount,
+                                        color = kanjiColor(),
+                                        onClick = callbacks.onStartReview,
+                                        enabled = uiState.isReviewsCardEnabled,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .testTag(DashboardScreenTestTags.REVIEW_COUNT)
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(24.dp))
-                            ReviewForecastCard(
-                                forecast = uiState.reviewForecast,
-                                selectedWindow = uiState.selectedForecastWindow,
-                                onWindowChange = callbacks.onReviewForecastWindowChange,
-                                selectedColorMode = uiState.selectedForecastColorMode,
-                                onColorModeChange = callbacks.onReviewForecastColorModeChange,
-                                modifier = Modifier.fillMaxWidth().timedComposition("reviewForecastCard")
-                            )
+                            TimedComposition("reviewForecastCard") {
+                                ReviewForecastCard(
+                                    forecast = uiState.reviewForecast,
+                                    selectedWindow = uiState.selectedForecastWindow,
+                                    onWindowChange = callbacks.onReviewForecastWindowChange,
+                                    selectedColorMode = uiState.selectedForecastColorMode,
+                                    onColorModeChange = callbacks.onReviewForecastColorModeChange,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
 
                             if (uiState.levelProgress != null) {
                                 Spacer(modifier = Modifier.height(16.dp))
-                                LevelProgressCard(
-                                    progress = uiState.levelProgress,
-                                    maxLevel = uiState.level,
-                                    levelUpProgress = uiState.levelUpProgress,
-                                    onLevelChange = callbacks.onLevelProgressLevelChange,
-                                    modifier = Modifier.fillMaxWidth().timedComposition("levelProgressCard")
-                                )
+                                TimedComposition("levelProgressCard") {
+                                    LevelProgressCard(
+                                        progress = uiState.levelProgress,
+                                        maxLevel = uiState.level,
+                                        levelUpProgress = uiState.levelUpProgress,
+                                        onLevelChange = callbacks.onLevelProgressLevelChange,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
 
                             if (uiState.completionProjection != null) {
                                 Spacer(modifier = Modifier.height(16.dp))
-                                CompletionProjectionCard(
-                                    projection = uiState.completionProjection,
-                                    modifier = Modifier.fillMaxWidth().timedComposition("completionProjectionCard")
-                                )
+                                TimedComposition("completionProjectionCard") {
+                                    CompletionProjectionCard(
+                                        projection = uiState.completionProjection,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
-                            ItemSpreadCard(spread = uiState.itemSpread, modifier = Modifier.fillMaxWidth().timedComposition("itemSpreadCard"))
+                            TimedComposition("itemSpreadCard") {
+                                ItemSpreadCard(spread = uiState.itemSpread, modifier = Modifier.fillMaxWidth())
+                            }
 
                             if (uiState.leaderboard != null) {
                                 Spacer(modifier = Modifier.height(16.dp))
-                                LeaderboardCard(
-                                    leaderboard = uiState.leaderboard,
-                                    isLoading = uiState.leaderboardLoading,
-                                    onMetricChange = callbacks.onLeaderboardMetricChange,
-                                    onWindowChange = callbacks.onLeaderboardWindowChange,
-                                    onSeeAll = callbacks.onOpenLeaderboard,
-                                    selectedMetric = uiState.selectedMetric,
-                                    selectedWindow = uiState.selectedWindow,
-                                    modifier = Modifier.fillMaxWidth().timedComposition("leaderboardCard")
-                                )
+                                TimedComposition("leaderboardCard") {
+                                    LeaderboardCard(
+                                        leaderboard = uiState.leaderboard,
+                                        isLoading = uiState.leaderboardLoading,
+                                        onMetricChange = callbacks.onLeaderboardMetricChange,
+                                        onWindowChange = callbacks.onLeaderboardWindowChange,
+                                        onSeeAll = callbacks.onOpenLeaderboard,
+                                        selectedMetric = uiState.selectedMetric,
+                                        selectedWindow = uiState.selectedWindow,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                                 Spacer(modifier = Modifier.height(16.dp))
-                                RaceChartCard(
-                                    leaderboard = uiState.leaderboard,
-                                    modifier = Modifier.fillMaxWidth().timedComposition("raceChartCard")
-                                )
+                                TimedComposition("raceChartCard") {
+                                    RaceChartCard(
+                                        leaderboard = uiState.leaderboard,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
                         }
                     }
@@ -568,9 +577,6 @@ fun DashboardScreen(
             null -> Unit
         }
     }
-
-
-
 }
 
 @Composable
