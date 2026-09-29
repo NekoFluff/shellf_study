@@ -638,6 +638,23 @@ abstract class QuizSessionContractTest<STATE : Any> {
         assertThat(loadPersistedSession()).isNull()
     }
 
+    /**
+     * The per-question clock freezes at the value it had when the answer was graded — what the
+     * feedback screen keeps showing instead of ticking on — and the next question starts from zero
+     * rather than inheriting it. The kanji fixtures give both features a genuine next question: a
+     * meaning question followed by the same item's reading question.
+     */
+    protected fun gradingFreezesTheQuestionClockAndTheNextQuestionResetsIt() = quizSession(kanjiQueue) {
+        assertThat(questionOnScreen.timing.questionElapsedMs).isNull()
+
+        type(questionOnScreen.answers.first())
+        submit()
+        assertThat(awaitGraded().timing.questionElapsedMs).isNotNull()
+
+        continueToNextQuestion()
+        assertThat(awaitQuestion().timing.questionElapsedMs).isNull()
+    }
+
     private companion object {
         /** The pronunciation the kanji in the audio-carrying fixtures carries. */
         const val KANJI_AUDIO_URL = "https://api.wanikani.com/audio/mizu.mp3"

@@ -1160,28 +1160,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
-    fun `submitting an answer freezes questionElapsedMs, and advancing to the next question resets it`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            assertThat((state.phase as ReviewUiState.Phase.Active).timing.questionElapsedMs).isNull()
-
-            val answer = if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
-            viewModel.onAnswerInputChange(answer)
-            awaitItem()
-            viewModel.submitAnswer()
-            val feedbackState = awaitItem()
-            assertThat((feedbackState.phase as ReviewUiState.Phase.Active).timing.questionElapsedMs).isNotNull()
-
-            viewModel.onContinue()
-            val nextState = awaitItem()
-            assertThat((nextState.phase as ReviewUiState.Phase.Active).timing.questionElapsedMs).isNull()
-        }
-    }
+    fun `submitting an answer freezes questionElapsedMs, and advancing to the next question resets it`() = gradingFreezesTheQuestionClockAndTheNextQuestionResetsIt()
 
     @Test
     fun `undo clears the frozen questionElapsedMs`() = runTest(mainDispatcherRule.dispatcher) {

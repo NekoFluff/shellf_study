@@ -742,38 +742,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     }
 
     @Test
-    fun `submitting an answer freezes questionElapsedMs, and advancing to the next question resets it`() = runTest(mainDispatcherRule.dispatcher) {
-        // Two single-question (radical) items, so answering the first correctly advances to a
-        // genuine next question rather than completing the session — the reset only happens on
-        // that "next question" path, not the session-complete one.
-        dispatch(jsonResponse(twoRadicalAssignmentsJson()), jsonResponse(twoRadicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            awaitItem() // studyIndex 1
-            viewModel.nextStudyCard()
-            val quizState = awaitItem().phase as LessonUiState.Phase.Quiz // quiz begins
-            assertThat(quizState.timing.questionElapsedMs).isNull()
-
-            val item = quizState.currentItem
-            viewModel.onAnswerInputChange(item.meanings.first())
-            awaitItem()
-            viewModel.submitAnswer()
-            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.timing.questionElapsedMs).isNotNull()
-
-            viewModel.onContinue()
-            val nextState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(nextState.timing.questionElapsedMs).isNull()
-        }
-    }
+    fun `submitting an answer freezes questionElapsedMs, and advancing to the next question resets it`() = gradingFreezesTheQuestionClockAndTheNextQuestionResetsIt()
 
     @Test
     fun `dontKnowAnswer grades as incorrect and requeues`() = runTest(mainDispatcherRule.dispatcher) {
