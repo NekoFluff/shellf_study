@@ -208,22 +208,39 @@ private fun SubjectTypeProgressRow(
                     .alpha(animatedAlpha)
                     .semantics { if (!showDetail) hideFromAccessibility() }
             ) {
-                // wrapContentHeight(unbounded = true) measures this Column at its natural height
-                // regardless of the Box's own animated (and often zero) height above, so the burst of
-                // chip layout/measurement always happens — the Box just clips the drawn result.
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight(unbounded = true, align = Alignment.Top)
-                        .onSizeChanged { size -> naturalHeightPx = size.height }
-                ) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.fillMaxWidth().testTag(LevelProgressTestTags.DETAIL_PREFIX + entry.subjectType.name)
+                // Mounted only while expanded. This grid used to be composed unconditionally so that
+                // the "Show more" tap wouldn't be the moment that every chip's glyph autosize
+                // measurement — and, for each glyph-less radical, a network fetch plus an SVG decode —
+                // ran for the first time. That reasoning was sound but solved the wrong problem: it
+                // moved a one-off cost on tap into a recurring cost on *every* data-driven
+                // recomposition of the dashboard, and the dashboard's data recomposes often (a sync
+                // lands, a count reconciles, a session write invalidates a table). On a mid-level
+                // account this card holds a few hundred items, so it was composing a few hundred chips
+                // — and measuring each one — for a grid that was clipped to zero height and could not
+                // be seen or tapped.
+                //
+                // Deferring is the better trade: the burst now happens once, when the user actually
+                // asks for the detail, instead of on every unrelated state change. The animation is
+                // unaffected — naturalHeightPx is captured by the onSizeChanged below on the same
+                // frame the grid is first laid out, which is what animateIntAsState is animating
+                // toward.
+                if (showDetail) {
+                    // wrapContentHeight(unbounded = true) measures this Column at its natural height
+                    // regardless of the Box's own animated (and often zero) height above.
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight(unbounded = true, align = Alignment.Top)
+                            .onSizeChanged { size -> naturalHeightPx = size.height }
                     ) {
-                        entry.items.forEach { item -> LevelItemChip(item, enabled = showDetail, onClick = openSubjectDetail) }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth().testTag(LevelProgressTestTags.DETAIL_PREFIX + entry.subjectType.name)
+                        ) {
+                            entry.items.forEach { item -> LevelItemChip(item, onClick = openSubjectDetail) }
+                        }
                     }
                 }
             }
@@ -245,7 +262,7 @@ private fun SubjectTypeProgressRow(
  *  *alongside* a real glyph, not only for glyph-less radicals, so characterImageUrl alone isn't a
  *  reliable "no real character" signal. */
 @Composable
-private fun LevelItemChip(item: LevelItem, enabled: Boolean, onClick: (Long) -> Unit) {
+private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
     val accent = subjectColor(item.subjectType)
     val backgroundModifier = if (item.passed) {
         Modifier.background(accent, RoundedCornerShape(8.dp))
@@ -260,10 +277,9 @@ private fun LevelItemChip(item: LevelItem, enabled: Boolean, onClick: (Long) -> 
         // wedged above the dots pinned to the bottom edge, leaving a big hollow gap above it.
         .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
         .then(backgroundModifier)
-        // This chip is always composed (even while the detail area is clipped to zero height, see
-        // SubjectTypeProgressRow), so clicks must be gated explicitly rather than relying on the
-        // chip being unhittable while invisible.
-        .clickable(enabled = enabled) { onClick(item.subjectId) }
+        // No enabled gate: this chip is only composed while its row is expanded (see
+        // SubjectTypeProgressRow), so it is always visible and hittable when it exists.
+        .clickable { onClick(item.subjectId) }
         .testTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + item.subjectId)
 
     // Glyph and its sub-stage dots are one centered block, so the glyph is genuinely vertical-

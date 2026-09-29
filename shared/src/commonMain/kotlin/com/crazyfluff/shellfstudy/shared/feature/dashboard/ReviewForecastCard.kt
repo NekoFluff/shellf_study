@@ -381,32 +381,45 @@ private fun ReviewForecastBarChart(
     val textMeasurer = rememberTextMeasurer()
     val yLabelStyle = TextStyle(fontSize = 9.sp, color = yLabelColor)
 
-    // bucketCount only matters for the forecast == null skeleton below (drawn while genuinely
-    // loading, sized to whichever window is currently selected) — once real data arrives, bar
-    // count always comes from forecast.buckets.size itself, never from the selected window, so a
-    // forecast that hasn't caught up to a just-changed window can't be indexed past its own end.
-    val counts: List<Int> = listOf(forecast?.reviewsAvailableNow ?: 0) +
-        (forecast?.buckets?.map { it.newlyAvailableCount } ?: List(bucketCount) { 0 })
+    // Memoized on its real inputs. These are pure derivations of the forecast and the selected colour
+    // mode, but they were rebuilt inline on every recomposition — which is not just wasted
+    // allocation: segmentsByBar is captured by the Canvas draw lambda below, and the Canvas node
+    // redraws whenever that capture changes, so each unrelated recomposition of this card forced a
+    // full redraw of up to 121 bars.
+    val counts: List<Int> = remember(forecast, bucketCount) {
+        // bucketCount only matters for the forecast == null skeleton below (drawn while genuinely
+        // loading, sized to whichever window is currently selected) — once real data arrives, bar
+        // count always comes from forecast.buckets.size itself, never from the selected window, so a
+        // forecast that hasn't caught up to a just-changed window can't be indexed past its own end.
+        listOf(forecast?.reviewsAvailableNow ?: 0) +
+            (forecast?.buckets?.map { it.newlyAvailableCount } ?: List(bucketCount) { 0 })
+    }
     // Each bar's segments pre-resolved to (base color, count) pairs, bottom-to-top, so the draw
     // loop below stays agnostic to whether the underlying key was a SubjectType or an
     // ItemSpreadBucket — it only ever deals in Color from this point on.
-    val segmentsByBar: List<List<Pair<Color, Int>>> = when (colorMode) {
-        ReviewForecastColorMode.SUBJECT_TYPE ->
-            (listOf(forecast?.availableNowCountsByType ?: emptyMap()) +
-                (forecast?.buckets?.map { it.countsByType } ?: List(bucketCount) { emptyMap() }))
-                .map { byType -> countsByStackOrder(byType).map { (type, count) -> typeColors.getValue(type) to count } }
-        ReviewForecastColorMode.SRS_STAGE ->
-            (listOf(forecast?.availableNowCountsByNextStage ?: emptyMap()) +
-                (forecast?.buckets?.map { it.countsByNextStage } ?: List(bucketCount) { emptyMap() }))
-                .map { byStage -> countsByStageStackOrder(byStage).map { (stage, count) -> stageColors.getValue(stage) to count } }
+    val segmentsByBar: List<List<Pair<Color, Int>>> = remember(forecast, bucketCount, colorMode, typeColors, stageColors) {
+        when (colorMode) {
+            ReviewForecastColorMode.SUBJECT_TYPE ->
+                (listOf(forecast?.availableNowCountsByType ?: emptyMap()) +
+                    (forecast?.buckets?.map { it.countsByType } ?: List(bucketCount) { emptyMap() }))
+                    .map { byType -> countsByStackOrder(byType).map { (type, count) -> typeColors.getValue(type) to count } }
+            ReviewForecastColorMode.SRS_STAGE ->
+                (listOf(forecast?.availableNowCountsByNextStage ?: emptyMap()) +
+                    (forecast?.buckets?.map { it.countsByNextStage } ?: List(bucketCount) { emptyMap() }))
+                    .map { byStage -> countsByStageStackOrder(byStage).map { (stage, count) -> stageColors.getValue(stage) to count } }
+        }
     }
     val maxCount = (counts.maxOrNull() ?: 0).coerceAtLeast(1)
     val barCount = counts.size
 
     // Pre-measure all three Y-axis labels to determine how wide the label column needs to be.
-    val yFractions = listOf(0.25f, 0.5f, 0.75f)
-    val yMeasured = yFractions.map { fraction ->
-        textMeasurer.measure((maxCount * fraction).toInt().toString(), style = yLabelStyle)
+    // Measured values are memoized on the label text and style so a recomposition doesn't re-run text
+    // layout three times; measure() is cached internally, but the list and the maxOf scan were not.
+    val yFractions = remember { listOf(0.25f, 0.5f, 0.75f) }
+    val yMeasured = remember(maxCount, yLabelStyle, textMeasurer) {
+        yFractions.map { fraction ->
+            textMeasurer.measure((maxCount * fraction).toInt().toString(), style = yLabelStyle)
+        }
     }
     val yLabelColumnWidth = yMeasured.maxOf { it.size.width }.toFloat()
     val yLabelGap = 4.dp

@@ -74,10 +74,11 @@ class LevelProgressCardTest {
     fun tappingExpandToggle_revealsItemChipsInsteadOfRemainingCount() {
         composeTestRule.setContent { LevelProgressCard(progress = sampleProgress) }
 
-        // The detail grid is now pre-warmed (composed ahead of the tap so its glyph/image work
-        // doesn't land on the tap frame) rather than absent — collapsed means clipped to zero
-        // height, not un-composed.
-        composeTestRule.onNodeWithTag(LevelProgressTestTags.DETAIL_PREFIX + "KANJI").assertIsNotDisplayed()
+        // Collapsed means the grid is not composed at all — not merely clipped to zero height. It is
+        // mounted on expand, so a mid-level account's few hundred chips (each one a glyph autosize
+        // measurement, and a fetch plus SVG decode for glyph-less radicals) cost nothing until the
+        // user asks for them, instead of on every dashboard recomposition.
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.DETAIL_PREFIX + "KANJI").assertDoesNotExist()
 
         composeTestRule.onNodeWithTag(LevelProgressTestTags.EXPAND_TOGGLE_BUTTON).performClick()
 

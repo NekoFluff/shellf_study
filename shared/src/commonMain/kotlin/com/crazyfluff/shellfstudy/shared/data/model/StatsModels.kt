@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.data.model
 
+import androidx.compose.runtime.Immutable
+
 import kotlinx.datetime.LocalDate
 
 data class StudyStreak(
@@ -8,6 +10,7 @@ data class StudyStreak(
 )
 
 /** "How much longer until I've seen the whole library" — a DashboardViewModel-level derivation. */
+@Immutable
 data class CompletionProjection(
     val totalItems: Int,
     val itemsSeen: Int,

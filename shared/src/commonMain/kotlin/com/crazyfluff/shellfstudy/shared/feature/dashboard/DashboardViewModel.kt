@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.feature.dashboard
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
@@ -50,6 +51,7 @@ import kotlinx.datetime.todayIn
 import kotlin.math.ceil
 import kotlin.time.Clock
 
+@Immutable
 data class DashboardUiState(
     val fetchState: DashboardFetch = DashboardFetch.InFlight,
     val username: String? = null,

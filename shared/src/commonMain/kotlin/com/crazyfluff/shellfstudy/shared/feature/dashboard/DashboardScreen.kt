@@ -137,7 +137,6 @@ fun DashboardRoute(
     searchViewModel: SearchViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val searchUiState by searchViewModel.uiState.collectAsState()
 
     LaunchedEffect(uiState.isLoggedOut) {
         if (uiState.isLoggedOut) onLoggedOut()
@@ -163,26 +162,100 @@ fun DashboardRoute(
         }
     }
 
-    DashboardScreen(
-        uiState = uiState,
-        callbacks = DashboardCallbacks(
-            onRefresh = viewModel::refresh,
+    DashboardWithSearch(
+        callbacks = rememberDashboardCallbacks(
+            viewModel = viewModel,
+            searchViewModel = searchViewModel,
             onStartReview = onStartReview,
             onStartLesson = onStartLesson,
             onOpenSettings = onOpenSettings,
             onOpenLeaderboard = onOpenLeaderboard,
             onOpenLastSessionSummary = onOpenLastSessionSummary,
-            onLogOut = viewModel::logOut,
-            onAbandonReviewSession = viewModel::abandonReviewSession,
-            onAbandonLessonSession = viewModel::abandonLessonSession,
-            onSearchQueryChange = searchViewModel::onQueryChange,
-            onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
-            onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange,
-            onLeaderboardWindowChange = viewModel::onLeaderboardWindowChange,
-            onReviewForecastWindowChange = viewModel::onReviewForecastWindowChange,
-            onReviewForecastColorModeChange = viewModel::onReviewForecastColorModeChange
+            onLogOut = onLoggedOut
         ),
-        searchUiState = searchUiState
+        uiState = uiState,
+        searchViewModel = searchViewModel
+    )
+}
+
+/**
+ * Collects the search overlay's state *below* the dashboard, so a keystroke recomposes only the
+ * overlay.
+ *
+ * Collecting [SearchViewModel.uiState] up in [DashboardRoute] put the whole dashboard inside the
+ * reading scope of a value that changes on every character typed. The overlay is an opaque
+ * full-screen layer, so the dashboard underneath is invisible while that happens — yet each
+ * keystroke re-ran the entire screen (both Canvas charts, the level chip grid) to produce pixels
+ * nobody could see.
+ *
+ * Taking [uiState] as a parameter rather than re-collecting it here keeps the dashboard's own
+ * recomposition scope in [DashboardRoute], where the ViewModel lives. [callbacks] is the remembered
+ * bundle from [rememberDashboardCallbacks], so passing it through this layer stays referentially
+ * stable and the dashboard still skips when search state changes.
+ */
+@Composable
+private fun DashboardWithSearch(
+    callbacks: DashboardCallbacks,
+    uiState: DashboardUiState,
+    searchViewModel: SearchViewModel
+) {
+    val searchUiState by searchViewModel.uiState.collectAsState()
+    DashboardScreen(uiState = uiState, callbacks = callbacks, searchUiState = searchUiState)
+}
+
+/**
+ * Builds the screen's callback bundle once per distinct set of inputs instead of once per
+ * recomposition.
+ *
+ * A fresh [DashboardCallbacks] each time is not just an allocation: the bundle is compared by
+ * `equals`, and its function fields are distinct instances each construction, so a new bundle is
+ * never equal to the previous one. That made the bundle a permanently-changing parameter and
+ * defeated skipping for every card that receives it — the reported symptom was the whole dashboard
+ * re-executing (both Canvas charts, the level chip grid) on state changes that only affected one
+ * card, or on none at all.
+ *
+ * The navigation lambdas are captured deliberately. They are values from
+ * [ShellfStudyNavHost][com.crazyfluff.shellfstudy.shared.navigation.ShellfStudyNavHost]'s call sites,
+ * which close over the same `NavHostController` for the life of the graph, so holding the first one
+ * resolved cannot call into anything stale. The two ViewModels are stable across recomposition for
+ * the same reason — the destination's `ViewModelStore` outlives its composition.
+ */
+@Composable
+private fun rememberDashboardCallbacks(
+    viewModel: DashboardViewModel,
+    searchViewModel: SearchViewModel,
+    onStartReview: () -> Unit,
+    onStartLesson: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenLeaderboard: () -> Unit,
+    onOpenLastSessionSummary: () -> Unit,
+    onLogOut: () -> Unit
+): DashboardCallbacks = remember(
+    viewModel,
+    searchViewModel,
+    onStartReview,
+    onStartLesson,
+    onOpenSettings,
+    onOpenLeaderboard,
+    onOpenLastSessionSummary,
+    onLogOut
+) {
+    DashboardCallbacks(
+        onRefresh = viewModel::refresh,
+        onStartReview = onStartReview,
+        onStartLesson = onStartLesson,
+        onOpenSettings = onOpenSettings,
+        onOpenLeaderboard = onOpenLeaderboard,
+        onOpenLastSessionSummary = onOpenLastSessionSummary,
+        onLogOut = viewModel::logOut,
+        onAbandonReviewSession = viewModel::abandonReviewSession,
+        onAbandonLessonSession = viewModel::abandonLessonSession,
+        onSearchQueryChange = searchViewModel::onQueryChange,
+        onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
+        onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange,
+        onLeaderboardWindowChange = viewModel::onLeaderboardWindowChange,
+        onReviewForecastWindowChange = viewModel::onReviewForecastWindowChange,
+        onReviewForecastColorModeChange = viewModel::onReviewForecastColorModeChange
     )
 }
 
@@ -442,7 +515,6 @@ fun DashboardScreen(
             onQueryChange = callbacks.onSearchQueryChange,
             modifier = Modifier.fillMaxSize(),
         )
-
         when (abandonConfirm) {
             AbandonConfirmKind.Review -> ConfirmationDialog(
                 title = "Abandon review session?",

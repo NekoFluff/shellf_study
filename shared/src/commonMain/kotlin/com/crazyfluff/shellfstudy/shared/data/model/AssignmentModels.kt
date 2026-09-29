@@ -1,8 +1,10 @@
 package com.crazyfluff.shellfstudy.shared.data.model
 
+import androidx.compose.runtime.Immutable
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlin.time.Instant
 
+@Immutable
 data class ReviewForecastBucket(
     val hoursFromNow: Int,
     val availableAt: Instant,
@@ -14,6 +16,7 @@ data class ReviewForecastBucket(
     val countsByNextStage: Map<ItemSpreadBucket, Int> = emptyMap()
 )
 
+@Immutable
 data class ReviewForecast(
     val reviewsAvailableNow: Int,
     val buckets: List<ReviewForecastBucket>,
@@ -74,6 +77,7 @@ enum class ItemSpreadBucket { LOCKED, APPRENTICE, GURU, MASTER, ENLIGHTENED, BUR
  *  types are broken out in a chart, so its count folds into vocabulary's at those call sites. */
 fun SubjectType.foldKana(): SubjectType = if (this == SubjectType.KANA_VOCABULARY) SubjectType.VOCABULARY else this
 
+@Immutable
 data class ItemSpread(
     val lockedCount: Int,
     val apprenticeCount: Int,
@@ -86,6 +90,7 @@ data class ItemSpread(
     val totalCount: Int get() = lockedCount + apprenticeCount + guruCount + masterCount + enlightenedCount + burnedCount
 }
 
+@Immutable
 data class LevelItem(
     val subjectId: Long,
     val subjectType: SubjectType,
@@ -101,6 +106,7 @@ data class LevelItem(
     val characterImageUrl: String? = null
 )
 
+@Immutable
 data class SubjectTypeProgress(
     val subjectType: SubjectType,
     val items: List<LevelItem>
@@ -109,6 +115,7 @@ data class SubjectTypeProgress(
     val totalCount: Int get() = items.size
 }
 
+@Immutable
 data class LevelProgress(
     val level: Int,
     val breakdown: List<SubjectTypeProgress>

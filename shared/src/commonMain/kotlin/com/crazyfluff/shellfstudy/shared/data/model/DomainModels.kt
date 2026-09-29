@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.data.model
 
+import androidx.compose.runtime.Immutable
+
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlin.math.ceil
 import kotlinx.serialization.Serializable
@@ -9,12 +11,14 @@ data class WaniKaniUser(
     val level: Int
 )
 
+@Immutable
 data class DashboardSummary(
     val lessonCount: Int,
     val reviewCount: Int
 )
 
 /** Progress toward WaniKani's level-up requirement: 90% of a level's kanji at Guru or higher. */
+@Immutable
 data class LevelUpProgress(
     val kanjiGuruedOrHigher: Int,
     val kanjiTotal: Int

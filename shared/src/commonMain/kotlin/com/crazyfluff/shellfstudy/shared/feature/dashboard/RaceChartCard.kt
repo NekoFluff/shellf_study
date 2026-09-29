@@ -92,6 +92,16 @@ private fun formatMonthYear(epochMillis: Long): String {
  */
 private data class ChartSeries<T>(val entry: FriendStats, val color: Color, val points: List<T>)
 
+/** [LevelRaceChart]'s memoized derivation — the per-user polylines plus the X-axis span they share.
+ *  Held as one value so a single `remember` covers the whole computation. [globalMinMs] is carried
+ *  along because the drawing and hit-testing below map a timestamp to an x position with it. */
+private data class LevelRaceData(
+    val series: List<ChartSeries<Pair<Long, Int>>>,
+    val globalMinMs: Long,
+    val timeRange: Long,
+    val numDays: Int
+)
+
 /**
  * Pinch-to-zoom/pan math shared by both charts below. Content is conceptually [viewportWPx] wide
  * at scale 1 (i.e. the whole window fits on screen with no panning needed — the chart always
@@ -140,7 +150,14 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
     val usersWithData = leaderboard.entries.filter { it.levelTimeline.isNotEmpty() }
     if (usersWithData.isEmpty()) return
 
-    val nowMillis = LocalClock.current.now().toEpochMilliseconds()
+    // The clock is read *outside* the remember below: LocalClock.current is a CompositionLocal read,
+    // which is a composable operation and therefore not allowed inside a remember calculation.
+    val clock = LocalClock.current
+    // Read once per leaderboard revision rather than once per recomposition. It positions every point
+    // on the X axis, so it is an input to the memo below — a value that advanced on each
+    // recomposition would invalidate that memo every time and make it worse than useless. Day-level
+    // precision is all this chart draws; a leaderboard refresh is what re-reads the clock.
+    val nowMillis = remember(leaderboard.window) { clock.now().toEpochMilliseconds() }
     val window = leaderboard.window
     val windowStartMs = when (window) {
         LeaderboardWindow.WEEK -> nowMillis - 7 * DAY_MS_CHART
@@ -158,34 +175,63 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
     val tooltipBg = MaterialTheme.colorScheme.surfaceContainerHigh
     val tooltipFg = MaterialTheme.colorScheme.onSurface
 
-    val userSeries = usersWithData.mapNotNull { user ->
-        val daysSinceStart = user.daysSinceStart ?: return@mapNotNull null
-        val startMs = nowMillis - daysSinceStart * DAY_MS_CHART
-        val allPoints = user.levelTimeline.map { pt -> startMs + pt.daysSinceStart * DAY_MS_CHART to pt.level }
+    // Hoisted out of the remember below, like the clock: leaderboardUserColor reads the e-ink theme
+    // local, so calling it inside a remember calculation is a composable call from a non-composable
+    // scope. Resolving every roster index's colour up front also means the memo keys on a plain map
+    // rather than on a composable invocation.
+    val userColors = usersWithData.associate { it.rosterIndex to leaderboardUserColor(it.rosterIndex) }
 
-        val points = if (window == LeaderboardWindow.ALL_TIME) {
-            allPoints + listOf(nowMillis to user.level)
-        } else {
-            val preWindow = allPoints.lastOrNull { (ms, _) -> ms <= windowStartMs }
-            val inWindow = allPoints.filter { (ms, _) -> ms > windowStartMs }
-            val startLevel = preWindow?.second ?: allPoints.firstOrNull()?.second ?: user.level
-            buildList {
-                add(windowStartMs to startLevel)
-                addAll(inWindow)
-                if (last().first < nowMillis) add(nowMillis to user.level)
+    // Memoized as one unit: the series, the time range and the day count all come out of the same
+    // walk over every user's level timeline, and building each polyline allocates a point pair per
+    // timeline entry. Its only inputs are the leaderboard and the window bounds derived above, so
+    // nothing else in this card's scope can invalidate it.
+    val raceData = remember(usersWithData, userColors, window, windowStartMs, nowMillis) {
+        val series = usersWithData.mapNotNull { user ->
+            val daysSinceStart = user.daysSinceStart ?: return@mapNotNull null
+            val startMs = nowMillis - daysSinceStart * DAY_MS_CHART
+            val allPoints = user.levelTimeline.map { pt -> startMs + pt.daysSinceStart * DAY_MS_CHART to pt.level }
+
+            val points = if (window == LeaderboardWindow.ALL_TIME) {
+                allPoints + listOf(nowMillis to user.level)
+            } else {
+                val preWindow = allPoints.lastOrNull { (ms, _) -> ms <= windowStartMs }
+                val inWindow = allPoints.filter { (ms, _) -> ms > windowStartMs }
+                val startLevel = preWindow?.second ?: allPoints.firstOrNull()?.second ?: user.level
+                buildList {
+                    add(windowStartMs to startLevel)
+                    addAll(inWindow)
+                    if (last().first < nowMillis) add(nowMillis to user.level)
+                }
             }
+            ChartSeries(
+                entry = user,
+                color = userColors.getValue(user.rosterIndex),
+                points = points
+            )
         }
-        ChartSeries(entry = user, color = leaderboardUserColor(user.rosterIndex), points = points)
+        if (series.isEmpty()) {
+            null
+        } else {
+            val globalMinMs = if (window == LeaderboardWindow.ALL_TIME) {
+                series.minOf { it.points.first().first }
+            } else {
+                windowStartMs
+            }
+            val range = (nowMillis - globalMinMs).coerceAtLeast(1L)
+            LevelRaceData(
+                series = series,
+                globalMinMs = globalMinMs,
+                timeRange = range,
+                numDays = (range / DAY_MS_CHART).toInt().coerceAtLeast(1)
+            )
+        }
     }
-    if (userSeries.isEmpty()) return
-
-    val globalMinMs = if (window == LeaderboardWindow.ALL_TIME) {
-        userSeries.minOf { it.points.first().first }
-    } else {
-        windowStartMs
-    }
-    val timeRange = (nowMillis - globalMinMs).coerceAtLeast(1L)
-    val numDays = (timeRange / DAY_MS_CHART).toInt().coerceAtLeast(1)
+    // usersWithData can be non-empty while every user lacks a daysSinceStart, which is the case the
+    // original `if (userSeries.isEmpty()) return` caught.
+    val userSeries = raceData?.series ?: return
+    val globalMinMs = raceData.globalMinMs
+    val timeRange = raceData.timeRange
+    val numDays = raceData.numDays
 
     // Defaults to "now" so today's levels are visible with no interaction at all.
     var selectedMs by remember(leaderboard.window) { mutableStateOf(nowMillis) }
@@ -377,10 +423,19 @@ private fun ActivityWindowChart(
 ) {
     if (leaderboard.entries.isEmpty()) return
 
-    val nowMillis = LocalClock.current.now().toEpochMilliseconds()
+    // The clock is read *outside* the remember below: LocalClock.current is a CompositionLocal read,
+    // which is a composable operation and therefore not allowed inside a remember calculation.
+    val clock = LocalClock.current
+    val nowMillis = remember(leaderboard.window) { clock.now().toEpochMilliseconds() }
     val entries = leaderboard.entries
 
-    val bars = buildActivityBars(entries, leaderboard.metric, leaderboard.window, nowMillis)
+    // Memoized: buildActivityBars produces one ActivityBar per bucket and resolves the system time
+    // zone once per bar to format its label (see formatShortDate). For the year and all-time windows
+    // that is a few hundred objects and as many time-zone lookups, rebuilt on every recomposition
+    // before this — including the ones caused by state changes that have nothing to do with the chart.
+    val bars = remember(entries, leaderboard.metric, leaderboard.window, nowMillis) {
+        buildActivityBars(entries, leaderboard.metric, leaderboard.window, nowMillis)
+    }
     if (bars.isEmpty()) return
 
     val subtitle = activityChartSubtitle(leaderboard.window)
@@ -394,13 +449,26 @@ private fun ActivityWindowChart(
 
     // Each entry paired with its own cumulative series, so every user's identity travels with their
     // line, dots and legend swatch instead of being re-looked-up by list position.
-    val series: List<ChartSeries<Int>> = entries.mapIndexed { ui, entry ->
-        val cumulative = bars.map { bar -> bar.counts.getOrElse(ui) { 0 } }
-            .runningFold(0) { acc, v -> acc + v }
-            .drop(1)
-        ChartSeries(entry = entry, color = leaderboardUserColor(entry.rosterIndex), points = cumulative)
+    //
+    // Hoisted out of the remember below for the same reason as the level chart's colours.
+    val userColors = entries.associate { it.rosterIndex to leaderboardUserColor(it.rosterIndex) }
+
+    // Memoized together with maxVal because both walk the same bars x users grid: this is O(users x
+    // bars) and allocated a fresh list per user per recomposition, up to a few thousand ints for the
+    // all-time window.
+    val (series, maxVal) = remember(bars, entries, userColors) {
+        val built: List<ChartSeries<Int>> = entries.mapIndexed { ui, entry ->
+            val cumulative = bars.map { bar -> bar.counts.getOrElse(ui) { 0 } }
+                .runningFold(0) { acc, v -> acc + v }
+                .drop(1)
+            ChartSeries(
+                entry = entry,
+                color = userColors.getValue(entry.rosterIndex),
+                points = cumulative
+            )
+        }
+        built to (built.flatMap { it.points }.maxOrNull()?.coerceAtLeast(1) ?: 1)
     }
-    val maxVal = series.flatMap { it.points }.maxOrNull()?.coerceAtLeast(1) ?: 1
     val numPoints = bars.size
 
     // Default to the most recent bar so "today"'s numbers are visible with no interaction at

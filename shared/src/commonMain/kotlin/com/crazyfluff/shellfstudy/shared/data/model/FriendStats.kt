@@ -1,9 +1,12 @@
 package com.crazyfluff.shellfstudy.shared.data.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+@Immutable
 data class LevelTimelinePoint(val daysSinceStart: Int, val level: Int)
 
+@Immutable
 @Serializable
 data class ActivityBuckets(
     val weekDays: List<Int> = List(7) { 0 },       // index 0 = 6 days ago, index 6 = today
@@ -12,6 +15,7 @@ data class ActivityBuckets(
     val allTimeMonths: List<Int> = emptyList()     // index 0 = earliest month, last index = current month
 )
 
+@Immutable
 data class ActivityStats(
     val today: Int = 0,
     val week: Int = 0,
@@ -61,6 +65,7 @@ const val SELF_ROSTER_INDEX = 0
  */
 fun friendRosterIndex(friendIndex: Int): Int = friendIndex + 1
 
+@Immutable
 data class FriendStats(
     val friendEntryId: String,
     val nickname: String,
@@ -79,6 +84,7 @@ data class FriendStats(
     val burnedBuckets: ActivityBuckets = ActivityBuckets()
 )
 
+@Immutable
 data class Leaderboard(
     val entries: List<FriendStats>,
     val metric: LeaderboardMetric,
