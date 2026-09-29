@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthScreen
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthScreenTestTags
+import com.crazyfluff.shellfstudy.shared.feature.auth.AuthStep
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthUiState
 import org.junit.Rule
 import org.junit.Test
@@ -105,7 +106,7 @@ class AuthScreenTest {
     fun showsErrorMessage_whenPresent() {
         composeTestRule.setContent {
             AuthScreen(
-                uiState = AuthUiState(errorMessage = "Invalid API token."),
+                uiState = AuthUiState(step = AuthStep.Editing(error = "Invalid API token.")),
                 onTokenInputChange = {},
                 onSubmit = {}
             )

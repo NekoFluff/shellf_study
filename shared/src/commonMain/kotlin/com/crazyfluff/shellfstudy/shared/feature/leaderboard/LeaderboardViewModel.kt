@@ -28,10 +28,23 @@ import kotlinx.serialization.json.Json
 data class AddFriendFormState(
     val nickname: String = "",
     val token: String = "",
-    val isValidating: Boolean = false,
-    val error: String? = null,
-    val success: Boolean = false
-)
+    val status: AddFriendStatus = AddFriendStatus.Editing()
+) {
+    val isValidating: Boolean get() = status == AddFriendStatus.Validating
+    val error: String? get() = (status as? AddFriendStatus.Editing)?.error
+    val success: Boolean get() = status == AddFriendStatus.Added
+}
+
+sealed interface AddFriendStatus {
+    /** Filling the form in, showing why the last attempt failed if it did. */
+    data class Editing(val error: String? = null) : AddFriendStatus
+
+    /** The friend's token is being checked against WaniKani. */
+    data object Validating : AddFriendStatus
+
+    /** Saved — the dialog closes. */
+    data object Added : AddFriendStatus
+}
 
 data class LeaderboardUiState(
     val leaderboard: Leaderboard? = null,
@@ -90,26 +103,26 @@ class LeaderboardViewModel(
     }
 
     override fun onAddFriendNicknameChange(value: String) {
-        _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(nickname = value, error = null, success = false)) }
+        _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(nickname = value, status = AddFriendStatus.Editing())) }
     }
 
     override fun onAddFriendTokenChange(value: String) {
-        _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(token = value, error = null)) }
+        _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(token = value, status = AddFriendStatus.Editing())) }
     }
 
     override fun onAddFriendConfirm() {
         val nickname = _uiState.value.addFriendForm.nickname.trim()
         val token = _uiState.value.addFriendForm.token.trim()
         if (nickname.isBlank()) {
-            _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(error = "Please enter a nickname.")) }
+            _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(status = AddFriendStatus.Editing(error = "Please enter a nickname."))) }
             return
         }
         if (token.isBlank()) {
-            _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(error = "Please enter an API token.")) }
+            _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(status = AddFriendStatus.Editing(error = "Please enter an API token."))) }
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(isValidating = true, error = null)) }
+            _uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(status = AddFriendStatus.Validating)) }
             val api = createFriendWaniKaniApi(token, json)
             // Closed in a finally: this is a throw-away client for one validation call, and without
             // it every add-friend attempt leaks an engine's connection pool and dispatcher threads.
@@ -124,8 +137,7 @@ class LeaderboardViewModel(
                         _uiState.update {
                             it.copy(
                                 addFriendForm = it.addFriendForm.copy(
-                                    isValidating = false,
-                                    error = ROSTER_UNREADABLE_MESSAGE
+                                    status = AddFriendStatus.Editing(error = ROSTER_UNREADABLE_MESSAGE)
                                 )
                             )
                         }
@@ -134,7 +146,7 @@ class LeaderboardViewModel(
                         val refreshResult = friendStatsRepository.refreshFriend(added.entry)
                         _uiState.update {
                             it.copy(
-                                addFriendForm = AddFriendFormState(isValidating = false, success = true),
+                                addFriendForm = AddFriendFormState(status = AddFriendStatus.Added),
                                 refreshErrorMessage = if (refreshResult is ApiResult.Error) {
                                     "Added $nickname, but couldn't fetch their stats yet."
                                 } else {
@@ -146,7 +158,7 @@ class LeaderboardViewModel(
                 }
                 is ApiResult.Error -> {
                     _uiState.update {
-                        it.copy(addFriendForm = it.addFriendForm.copy(isValidating = false, error = result.message))
+                        it.copy(addFriendForm = it.addFriendForm.copy(status = AddFriendStatus.Editing(error = result.message)))
                     }
                 }
             }

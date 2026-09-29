@@ -339,9 +339,9 @@ private fun AddFriendDialog(
                     modifier = Modifier.fillMaxWidth(),
                     isError = form.error != null
                 )
-                if (form.error != null) {
+                form.error?.let { error ->
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(form.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }
         },

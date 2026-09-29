@@ -65,10 +65,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().dailyLessonGoal).isEqualTo(15)
+            assertThat(awaitItem().app.dailyLessonGoal).isEqualTo(15)
 
             viewModel.onDailyLessonGoalChange(20)
-            assertThat(awaitItem().dailyLessonGoal).isEqualTo(20)
+            assertThat(awaitItem().app.dailyLessonGoal).isEqualTo(20)
         }
     }
 
@@ -78,10 +78,10 @@ class SettingsViewModelTest {
 
         viewModel.uiState.test {
             // Defaults to the pre-setting behavior, so an existing install sees no change on upgrade.
-            assertThat(awaitItem().reviewPriority).isEqualTo(ReviewPriority.DEFAULT)
+            assertThat(awaitItem().app.reviewPriority).isEqualTo(ReviewPriority.DEFAULT)
 
             viewModel.onReviewPriorityChange(ReviewPriority.RANK_UP)
-            assertThat(awaitItem().reviewPriority).isEqualTo(ReviewPriority.RANK_UP)
+            assertThat(awaitItem().app.reviewPriority).isEqualTo(ReviewPriority.RANK_UP)
         }
 
         assertThat(settingsRepository.settings.first().reviewPriority).isEqualTo(ReviewPriority.RANK_UP)
@@ -92,10 +92,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().themeMode).isEqualTo(ThemeMode.SYSTEM)
+            assertThat(awaitItem().app.themeMode).isEqualTo(ThemeMode.SYSTEM)
 
             viewModel.onThemeModeChange(ThemeMode.DARK)
-            assertThat(awaitItem().themeMode).isEqualTo(ThemeMode.DARK)
+            assertThat(awaitItem().app.themeMode).isEqualTo(ThemeMode.DARK)
         }
     }
 
@@ -104,10 +104,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().themeMode).isEqualTo(ThemeMode.SYSTEM)
+            assertThat(awaitItem().app.themeMode).isEqualTo(ThemeMode.SYSTEM)
 
             viewModel.onThemeModeChange(ThemeMode.EINK)
-            assertThat(awaitItem().themeMode).isEqualTo(ThemeMode.EINK)
+            assertThat(awaitItem().app.themeMode).isEqualTo(ThemeMode.EINK)
         }
     }
 
@@ -116,10 +116,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().showPitchAccent).isTrue()
+            assertThat(awaitItem().app.showPitchAccent).isTrue()
 
             viewModel.onShowPitchAccentChange(false)
-            assertThat(awaitItem().showPitchAccent).isFalse()
+            assertThat(awaitItem().app.showPitchAccent).isFalse()
         }
     }
 
@@ -128,10 +128,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().autoplayPronunciationAudio).isTrue()
+            assertThat(awaitItem().app.autoplayPronunciationAudio).isTrue()
 
             viewModel.onAutoplayPronunciationAudioChange(false)
-            assertThat(awaitItem().autoplayPronunciationAudio).isFalse()
+            assertThat(awaitItem().app.autoplayPronunciationAudio).isFalse()
         }
     }
 
@@ -140,10 +140,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().restrictAudioToMp3).isFalse()
+            assertThat(awaitItem().app.restrictAudioToMp3).isFalse()
 
             viewModel.onRestrictAudioToMp3Change(true)
-            assertThat(awaitItem().restrictAudioToMp3).isTrue()
+            assertThat(awaitItem().app.restrictAudioToMp3).isTrue()
         }
     }
 
@@ -152,10 +152,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().showSubjectTypeLabel).isFalse()
+            assertThat(awaitItem().app.showSubjectTypeLabel).isFalse()
 
             viewModel.onShowSubjectTypeLabelChange(true)
-            assertThat(awaitItem().showSubjectTypeLabel).isTrue()
+            assertThat(awaitItem().app.showSubjectTypeLabel).isTrue()
         }
     }
 
@@ -164,10 +164,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().showAnswerReadingPitchAccent).isFalse()
+            assertThat(awaitItem().app.showAnswerReadingPitchAccent).isFalse()
 
             viewModel.onShowAnswerReadingPitchAccentChange(true)
-            assertThat(awaitItem().showAnswerReadingPitchAccent).isTrue()
+            assertThat(awaitItem().app.showAnswerReadingPitchAccent).isTrue()
         }
     }
 
@@ -176,10 +176,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().hideContextSentenceTranslations).isTrue()
+            assertThat(awaitItem().app.hideContextSentenceTranslations).isTrue()
 
             viewModel.onHideContextSentenceTranslationsChange(false)
-            assertThat(awaitItem().hideContextSentenceTranslations).isFalse()
+            assertThat(awaitItem().app.hideContextSentenceTranslations).isFalse()
         }
     }
 
@@ -188,10 +188,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().showTotalTimer).isFalse()
+            assertThat(awaitItem().app.showTotalTimer).isFalse()
 
             viewModel.onShowTotalTimerChange(true)
-            assertThat(awaitItem().showTotalTimer).isTrue()
+            assertThat(awaitItem().app.showTotalTimer).isTrue()
         }
     }
 
@@ -200,10 +200,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().showQuestionTimer).isFalse()
+            assertThat(awaitItem().app.showQuestionTimer).isFalse()
 
             viewModel.onShowQuestionTimerChange(true)
-            assertThat(awaitItem().showQuestionTimer).isTrue()
+            assertThat(awaitItem().app.showQuestionTimer).isTrue()
         }
     }
 
@@ -212,10 +212,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().closeEnoughAnswersEnabled).isTrue()
+            assertThat(awaitItem().app.closeEnoughAnswersEnabled).isTrue()
 
             viewModel.onCloseEnoughAnswersEnabledChange(false)
-            assertThat(awaitItem().closeEnoughAnswersEnabled).isFalse()
+            assertThat(awaitItem().app.closeEnoughAnswersEnabled).isFalse()
         }
     }
 
@@ -224,10 +224,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().requireTapToRevealMeaningAnswer).isFalse()
+            assertThat(awaitItem().app.requireTapToRevealMeaningAnswer).isFalse()
 
             viewModel.onRequireTapToRevealMeaningAnswerChange(true)
-            assertThat(awaitItem().requireTapToRevealMeaningAnswer).isTrue()
+            assertThat(awaitItem().app.requireTapToRevealMeaningAnswer).isTrue()
         }
     }
 
@@ -236,10 +236,10 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            assertThat(awaitItem().requireTapToRevealReadingAnswer).isFalse()
+            assertThat(awaitItem().app.requireTapToRevealReadingAnswer).isFalse()
 
             viewModel.onRequireTapToRevealReadingAnswerChange(true)
-            assertThat(awaitItem().requireTapToRevealReadingAnswer).isTrue()
+            assertThat(awaitItem().app.requireTapToRevealReadingAnswer).isTrue()
         }
     }
 
@@ -248,12 +248,12 @@ class SettingsViewModelTest {
         val viewModel = createViewModel()
         viewModel.uiState.test {
             val state = awaitItem()
-            assertThat(state.notificationsEnabled).isFalse()
-            assertThat(state.reviewsAvailableEnabled).isTrue()
-            assertThat(state.backlogThreshold).isEqualTo(100)
-            assertThat(state.dailyReminderHour).isEqualTo(20)
-            assertThat(state.quietHoursStartHour).isEqualTo(22)
-            assertThat(state.quietHoursEndHour).isEqualTo(7)
+            assertThat(state.notifications.notificationsEnabled).isFalse()
+            assertThat(state.notifications.reviewsAvailableEnabled).isTrue()
+            assertThat(state.notifications.backlogThreshold).isEqualTo(100)
+            assertThat(state.notifications.dailyReminderHour).isEqualTo(20)
+            assertThat(state.notifications.quietHoursStartHour).isEqualTo(22)
+            assertThat(state.notifications.quietHoursEndHour).isEqualTo(7)
         }
     }
 
@@ -316,7 +316,7 @@ class SettingsViewModelTest {
         viewModel.uiState.test {
             awaitItem()
             viewModel.onReviewsAvailableEnabledChange(false)
-            assertThat(awaitItem().reviewsAvailableEnabled).isFalse()
+            assertThat(awaitItem().notifications.reviewsAvailableEnabled).isFalse()
         }
         assertThat(notificationCoordinator.rescheduleDailyReminderCallCount).isEqualTo(0)
         assertThat(notificationScheduler.cancelAllCallCount).isEqualTo(0)
@@ -329,11 +329,11 @@ class SettingsViewModelTest {
         viewModel.uiState.test {
             awaitItem()
             viewModel.onBacklogThresholdChange(80)
-            assertThat(awaitItem().backlogThreshold).isEqualTo(80)
+            assertThat(awaitItem().notifications.backlogThreshold).isEqualTo(80)
             viewModel.onQuietHoursStartHourChange(23)
-            assertThat(awaitItem().quietHoursStartHour).isEqualTo(23)
+            assertThat(awaitItem().notifications.quietHoursStartHour).isEqualTo(23)
             viewModel.onQuietHoursEndHourChange(6)
-            assertThat(awaitItem().quietHoursEndHour).isEqualTo(6)
+            assertThat(awaitItem().notifications.quietHoursEndHour).isEqualTo(6)
         }
     }
 

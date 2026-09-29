@@ -14,6 +14,9 @@ import kotlinx.coroutines.Job
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsActions
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreen
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreenTestTags
+import com.crazyfluff.shellfstudy.shared.data.AppSettings
+import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
+import com.crazyfluff.shellfstudy.shared.feature.settings.FullRefreshStatus
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsUiState
 import org.junit.Rule
 import org.junit.Test
@@ -55,7 +58,7 @@ class SettingsScreenTest {
     }
     @Test
     fun showsCurrentDailyLessonGoalAndThemeSelection() {
-        setContent(uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.DARK))
+        setContent(uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.DARK)))
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.LESSON_GOAL_VALUE).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.THEME_DARK_OPTION).assertIsDisplayed()
@@ -65,7 +68,7 @@ class SettingsScreenTest {
     fun increaseAndDecreaseButtons_invokeCallbackWithAdjustedGoal() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM)),
             actions = actions
         )
 
@@ -78,7 +81,7 @@ class SettingsScreenTest {
 
     @Test
     fun decreaseButton_disabledAtMinimumGoal() {
-        setContent(uiState = SettingsUiState(dailyLessonGoal = 1, themeMode = ThemeMode.SYSTEM))
+        setContent(uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 1, themeMode = ThemeMode.SYSTEM)))
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.LESSON_GOAL_DECREASE).assertIsNotEnabled()
     }
@@ -86,11 +89,7 @@ class SettingsScreenTest {
     @Test
     fun backlogThresholdStepper_decreaseButton_disabledAtMinimum() {
         setContent(
-            uiState = SettingsUiState(
-                notificationsEnabled = true,
-                reviewsBacklogEnabled = true,
-                backlogThreshold = 5
-            )
+            uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 5))
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE)
@@ -100,11 +99,7 @@ class SettingsScreenTest {
     @Test
     fun backlogThresholdStepper_increaseButton_disabledAtMaximum() {
         setContent(
-            uiState = SettingsUiState(
-                notificationsEnabled = true,
-                reviewsBacklogEnabled = true,
-                backlogThreshold = 500
-            )
+            uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 500))
         )
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE)
@@ -115,7 +110,7 @@ class SettingsScreenTest {
     fun reviewPriorityOptions_showCurrentSelectionAndInvokeCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(reviewPriority = ReviewPriority.DEFAULT),
+            uiState = SettingsUiState(app = AppSettings(reviewPriority = ReviewPriority.DEFAULT)),
             actions = actions
         )
 
@@ -130,7 +125,7 @@ class SettingsScreenTest {
     fun selectingThemeOption_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM)),
             actions = actions
         )
 
@@ -142,7 +137,7 @@ class SettingsScreenTest {
     fun selectingEinkThemeOption_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM)),
             actions = actions
         )
 
@@ -154,7 +149,7 @@ class SettingsScreenTest {
     fun togglingPitchAccentSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showPitchAccent = true),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showPitchAccent = true)),
             actions = actions
         )
 
@@ -166,7 +161,7 @@ class SettingsScreenTest {
     fun togglingAutoplayAudioSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, autoplayPronunciationAudio = true),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, autoplayPronunciationAudio = true)),
             actions = actions
         )
 
@@ -178,7 +173,7 @@ class SettingsScreenTest {
     fun togglingMp3OnlyAudioSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, restrictAudioToMp3 = false),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, restrictAudioToMp3 = false)),
             actions = actions
         )
 
@@ -190,7 +185,7 @@ class SettingsScreenTest {
     fun togglingShowSubjectTypeLabelSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showSubjectTypeLabel = false),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showSubjectTypeLabel = false)),
             actions = actions
         )
 
@@ -202,7 +197,7 @@ class SettingsScreenTest {
     fun togglingShowTotalTimerSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showTotalTimer = false),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showTotalTimer = false)),
             actions = actions
         )
 
@@ -214,7 +209,7 @@ class SettingsScreenTest {
     fun togglingShowQuestionTimerSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showQuestionTimer = false),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showQuestionTimer = false)),
             actions = actions
         )
 
@@ -226,7 +221,7 @@ class SettingsScreenTest {
     fun togglingUseJapaneseKeyboardSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, useJapaneseKeyboard = false),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, useJapaneseKeyboard = false)),
             actions = actions
         )
 
@@ -238,7 +233,7 @@ class SettingsScreenTest {
     fun togglingCloseEnoughAnswersSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, closeEnoughAnswersEnabled = true),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, closeEnoughAnswersEnabled = true)),
             actions = actions
         )
 
@@ -250,7 +245,7 @@ class SettingsScreenTest {
     fun togglingRequireTapToRevealMeaningAnswerSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, requireTapToRevealMeaningAnswer = false),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, requireTapToRevealMeaningAnswer = false)),
             actions = actions
         )
 
@@ -262,7 +257,7 @@ class SettingsScreenTest {
     fun togglingRequireTapToRevealReadingAnswerSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, requireTapToRevealReadingAnswer = false),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, requireTapToRevealReadingAnswer = false)),
             actions = actions
         )
 
@@ -274,7 +269,7 @@ class SettingsScreenTest {
     fun togglingAnswerReadingPitchAccentSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showAnswerReadingPitchAccent = false),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showAnswerReadingPitchAccent = false)),
             actions = actions
         )
 
@@ -286,7 +281,7 @@ class SettingsScreenTest {
     fun togglingHideContextSentenceTranslationsSwitch_invokesCallback() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, hideContextSentenceTranslations = true),
+            uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, hideContextSentenceTranslations = true)),
             actions = actions
         )
 
@@ -308,7 +303,7 @@ class SettingsScreenTest {
     fun togglingNotificationsMasterSwitch_invokesCallback() {
         var enabled: Boolean? = null
         setContent(
-            uiState = SettingsUiState(notificationsEnabled = false),
+            uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = false)),
             onNotificationsEnabledChange = { enabled = it }
         )
 
@@ -318,14 +313,14 @@ class SettingsScreenTest {
 
     @Test
     fun categoryToggles_areHiddenWhenNotificationsAreDisabled() {
-        setContent(uiState = SettingsUiState(notificationsEnabled = false))
+        setContent(uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = false)))
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE).assertDoesNotExist()
     }
 
     @Test
     fun categoryToggles_areShownWhenNotificationsAreEnabled() {
-        setContent(uiState = SettingsUiState(notificationsEnabled = true))
+        setContent(uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true)))
 
         // The whole screen is one scrolling column (SettingsScreen.kt), so these notification
         // sub-toggles can sit below the fold depending on device screen height.
@@ -338,7 +333,7 @@ class SettingsScreenTest {
     fun backlogThresholdStepper_invokesCallbackWithStepOfFive() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 50),
+            uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 50)),
             actions = actions
         )
 
@@ -353,7 +348,7 @@ class SettingsScreenTest {
     fun dailyReminderHourStepper_wrapsAroundMidnight() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(notificationsEnabled = true, dailyReminderEnabled = true, dailyReminderHour = 23),
+            uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, dailyReminderEnabled = true, dailyReminderHour = 23)),
             actions = actions
         )
 
@@ -365,7 +360,7 @@ class SettingsScreenTest {
     fun quietHoursSteppers_invokeCallbacks() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(notificationsEnabled = true, quietHoursEnabled = true, quietHoursStartHour = 22, quietHoursEndHour = 7),
+            uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, quietHoursEnabled = true, quietHoursStartHour = 22, quietHoursEndHour = 7)),
             actions = actions
         )
 
@@ -392,7 +387,7 @@ class SettingsScreenTest {
     fun fullRefreshRow_showsProgressAndIsDisabledWhileRefreshing() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(isFullRefreshing = true),
+            uiState = SettingsUiState(fullRefresh = FullRefreshStatus.InFlight),
             actions = actions
         )
 
@@ -404,7 +399,7 @@ class SettingsScreenTest {
 
     @Test
     fun fullRefreshRow_showsErrorMessageOnFailure() {
-        setContent(uiState = SettingsUiState(fullRefreshError = "WaniKani API error (500)"))
+        setContent(uiState = SettingsUiState(fullRefresh = FullRefreshStatus.Failed("WaniKani API error (500)")))
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_ERROR_TEXT).performScrollTo().assertIsDisplayed()
     }

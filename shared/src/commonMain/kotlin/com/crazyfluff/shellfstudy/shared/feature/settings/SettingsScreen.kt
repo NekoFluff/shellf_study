@@ -439,20 +439,20 @@ private fun DailyGoalSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             IconButton(
-                onClick = { actions.onDailyLessonGoalChange(uiState.dailyLessonGoal - 1) },
-                enabled = uiState.dailyLessonGoal > DAILY_LESSON_GOAL_RANGE.first,
+                onClick = { actions.onDailyLessonGoalChange(uiState.app.dailyLessonGoal - 1) },
+                enabled = uiState.app.dailyLessonGoal > DAILY_LESSON_GOAL_RANGE.first,
                 modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_DECREASE)
             ) {
                 Icon(Icons.Default.Remove, contentDescription = "Decrease daily lesson goal")
             }
             Text(
-                text = uiState.dailyLessonGoal.toString(),
+                text = uiState.app.dailyLessonGoal.toString(),
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_VALUE)
             )
             IconButton(
-                onClick = { actions.onDailyLessonGoalChange(uiState.dailyLessonGoal + 1) },
-                enabled = uiState.dailyLessonGoal < DAILY_LESSON_GOAL_RANGE.last,
+                onClick = { actions.onDailyLessonGoalChange(uiState.app.dailyLessonGoal + 1) },
+                enabled = uiState.app.dailyLessonGoal < DAILY_LESSON_GOAL_RANGE.last,
                 modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_INCREASE)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Increase daily lesson goal")
@@ -480,20 +480,20 @@ private fun LessonBatchSizeSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             IconButton(
-                onClick = { actions.onLessonBatchSizeChange(uiState.lessonBatchSize - 1) },
-                enabled = uiState.lessonBatchSize > LESSON_BATCH_SIZE_RANGE.first,
+                onClick = { actions.onLessonBatchSizeChange(uiState.app.lessonBatchSize - 1) },
+                enabled = uiState.app.lessonBatchSize > LESSON_BATCH_SIZE_RANGE.first,
                 modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_DECREASE)
             ) {
                 Icon(Icons.Default.Remove, contentDescription = "Smaller batches")
             }
             Text(
-                text = uiState.lessonBatchSize.toString(),
+                text = uiState.app.lessonBatchSize.toString(),
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_VALUE)
             )
             IconButton(
-                onClick = { actions.onLessonBatchSizeChange(uiState.lessonBatchSize + 1) },
-                enabled = uiState.lessonBatchSize < LESSON_BATCH_SIZE_RANGE.last,
+                onClick = { actions.onLessonBatchSizeChange(uiState.app.lessonBatchSize + 1) },
+                enabled = uiState.app.lessonBatchSize < LESSON_BATCH_SIZE_RANGE.last,
                 modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_BATCH_SIZE_INCREASE)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Bigger batches")
@@ -512,28 +512,28 @@ private fun AppearanceSection(
         ThemeOptionRow(
             label = "System default",
             mode = ThemeMode.SYSTEM,
-            selected = uiState.themeMode,
+            selected = uiState.app.themeMode,
             onSelect = actions::onThemeModeChange,
             testTag = SettingsScreenTestTags.THEME_SYSTEM_OPTION
         )
         ThemeOptionRow(
             label = "Light",
             mode = ThemeMode.LIGHT,
-            selected = uiState.themeMode,
+            selected = uiState.app.themeMode,
             onSelect = actions::onThemeModeChange,
             testTag = SettingsScreenTestTags.THEME_LIGHT_OPTION
         )
         ThemeOptionRow(
             label = "Dark",
             mode = ThemeMode.DARK,
-            selected = uiState.themeMode,
+            selected = uiState.app.themeMode,
             onSelect = actions::onThemeModeChange,
             testTag = SettingsScreenTestTags.THEME_DARK_OPTION
         )
         ThemeOptionRow(
             label = "E-Ink (grayscale)",
             mode = ThemeMode.EINK,
-            selected = uiState.themeMode,
+            selected = uiState.app.themeMode,
             onSelect = actions::onThemeModeChange,
             testTag = SettingsScreenTestTags.THEME_EINK_OPTION
         )
@@ -550,35 +550,35 @@ private fun VocabularySection(
         ToggleRow(
             label = "Show pitch accent",
             description = "Overlays WaniKani's pitch-accent pattern markers on vocabulary readings.",
-            checked = uiState.showPitchAccent,
+            checked = uiState.app.showPitchAccent,
             onCheckedChange = actions::onShowPitchAccentChange,
             testTag = SettingsScreenTestTags.PITCH_ACCENT_TOGGLE
         )
         ToggleRow(
             label = "Show stroke order",
             description = "Displays the animated stroke order diagram and writing practice canvas for kanji in the subject detail panel.",
-            checked = uiState.showStrokeOrder,
+            checked = uiState.app.showStrokeOrder,
             onCheckedChange = actions::onShowStrokeOrderChange,
             testTag = SettingsScreenTestTags.STROKE_ORDER_TOGGLE
         )
         ToggleRow(
             label = "Auto-play pronunciation audio",
             description = "Plays a word's audio automatically when a reading question is revealed during reviews.",
-            checked = uiState.autoplayPronunciationAudio,
+            checked = uiState.app.autoplayPronunciationAudio,
             onCheckedChange = actions::onAutoplayPronunciationAudioChange,
             testTag = SettingsScreenTestTags.AUTOPLAY_AUDIO_TOGGLE
         )
         ToggleRow(
             label = "MP3 audio only",
             description = "Only play pronunciation clips available as MP3. Every word has an MP3 version, so nothing is lost — this just guarantees playback on devices that can't play Ogg audio (e.g. e-ink readers).",
-            checked = uiState.restrictAudioToMp3,
+            checked = uiState.app.restrictAudioToMp3,
             onCheckedChange = actions::onRestrictAudioToMp3Change,
             testTag = SettingsScreenTestTags.MP3_ONLY_AUDIO_TOGGLE
         )
         ToggleRow(
             label = "Hide sentence translations",
             description = "Redacts a context sentence's English translation until tapped, so you can try reading the Japanese first.",
-            checked = uiState.hideContextSentenceTranslations,
+            checked = uiState.app.hideContextSentenceTranslations,
             onCheckedChange = actions::onHideContextSentenceTranslationsChange,
             testTag = SettingsScreenTestTags.HIDE_CONTEXT_SENTENCE_TRANSLATIONS_TOGGLE
         )
@@ -595,61 +595,61 @@ private fun ReviewsSection(
         ToggleRow(
             label = "Show item type",
             description = "Displays Radical, Kanji, or Vocabulary below the word during reviews and lesson quizzes — handy on e-ink screens where color alone is hard to read.",
-            checked = uiState.showSubjectTypeLabel,
+            checked = uiState.app.showSubjectTypeLabel,
             onCheckedChange = actions::onShowSubjectTypeLabelChange,
             testTag = SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE
         )
         ToggleRow(
             label = "Total time",
             description = "Shows a running clock above the progress bar for how long the current review/lesson quiz has taken.",
-            checked = uiState.showTotalTimer,
+            checked = uiState.app.showTotalTimer,
             onCheckedChange = actions::onShowTotalTimerChange,
             testTag = SettingsScreenTestTags.SHOW_TOTAL_TIMER_TOGGLE
         )
         ToggleRow(
             label = "Question time",
             description = "Shows a running clock below the progress bar for how long you've spent on the current question.",
-            checked = uiState.showQuestionTimer,
+            checked = uiState.app.showQuestionTimer,
             onCheckedChange = actions::onShowQuestionTimerChange,
             testTag = SettingsScreenTestTags.SHOW_QUESTION_TIMER_TOGGLE
         )
         ToggleRow(
             label = "Use system keyboard for reading",
             description = "Disables the built-in romaji converter and sends a Japanese locale hint to your keyboard, so Gboard and similar apps switch language automatically between meaning and reading questions.",
-            checked = uiState.useJapaneseKeyboard,
+            checked = uiState.app.useJapaneseKeyboard,
             onCheckedChange = actions::onUseJapaneseKeyboardChange,
             testTag = SettingsScreenTestTags.JAPANESE_KEYBOARD_TOGGLE
         )
         ToggleRow(
             label = "Accept close-enough answers",
             description = "Allows small typos in meaning answers (a couple of letters off from a correct answer still counts). Turn off to require an exact match.",
-            checked = uiState.closeEnoughAnswersEnabled,
+            checked = uiState.app.closeEnoughAnswersEnabled,
             onCheckedChange = actions::onCloseEnoughAnswersEnabledChange,
             testTag = SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE
         )
         ToggleRow(
             label = "Require a tap to reveal meaning answers",
             description = "On a wrong meaning answer, shows whether you were right or wrong first, then requires a separate tap to reveal the correct meaning — so you can keep thinking about it before you see it.",
-            checked = uiState.requireTapToRevealMeaningAnswer,
+            checked = uiState.app.requireTapToRevealMeaningAnswer,
             onCheckedChange = actions::onRequireTapToRevealMeaningAnswerChange,
             testTag = SettingsScreenTestTags.REQUIRE_TAP_TO_REVEAL_MEANING_ANSWER_TOGGLE
         )
         ToggleRow(
             label = "Require a tap to reveal reading answers",
             description = "On a wrong reading answer, shows whether you were right or wrong first, then requires a separate tap to reveal the correct reading (and its audio/pitch-accent hint, if enabled below) — so you can keep thinking about it before you see it.",
-            checked = uiState.requireTapToRevealReadingAnswer,
+            checked = uiState.app.requireTapToRevealReadingAnswer,
             onCheckedChange = actions::onRequireTapToRevealReadingAnswerChange,
             testTag = SettingsScreenTestTags.REQUIRE_TAP_TO_REVEAL_READING_ANSWER_TOGGLE
         )
         ToggleRow(
             label = "Show reading & pitch accent on answer",
             description = "After answering a reading question during lessons and reviews, shows the word's reading and its pitch-accent pattern above the character.",
-            checked = uiState.showAnswerReadingPitchAccent,
+            checked = uiState.app.showAnswerReadingPitchAccent,
             onCheckedChange = actions::onShowAnswerReadingPitchAccentChange,
             testTag = SettingsScreenTestTags.ANSWER_READING_PITCH_ACCENT_TOGGLE
         )
         ReviewPriorityRow(
-            selected = uiState.reviewPriority,
+            selected = uiState.app.reviewPriority,
             onSelect = actions::onReviewPriorityChange
         )
     }
@@ -695,33 +695,33 @@ private fun NotificationsSection(
         ToggleRow(
             label = "Enable notifications",
             description = "Turn on to receive the alerts below.",
-            checked = uiState.notificationsEnabled,
+            checked = uiState.notifications.notificationsEnabled,
             onCheckedChange = onNotificationsEnabledChange,
             testTag = SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE
         )
 
-        if (uiState.notificationsEnabled) {
+        if (uiState.notifications.notificationsEnabled) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             NotificationGroupLabel("Reviews")
             ToggleRow(
                 label = "Reviews available",
                 description = "Notifies you as soon as new reviews are ready.",
-                checked = uiState.reviewsAvailableEnabled,
+                checked = uiState.notifications.reviewsAvailableEnabled,
                 onCheckedChange = actions::onReviewsAvailableEnabledChange,
                 testTag = SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE
             )
             ToggleRow(
                 label = "Review backlog warning",
                 description = "Warns you when unanswered reviews pile up past the threshold below. Won't repeat more than once every 6 hours.",
-                checked = uiState.reviewsBacklogEnabled,
+                checked = uiState.notifications.reviewsBacklogEnabled,
                 onCheckedChange = actions::onReviewsBacklogEnabledChange,
                 testTag = SettingsScreenTestTags.REVIEWS_BACKLOG_TOGGLE
             )
-            if (uiState.reviewsBacklogEnabled) {
+            if (uiState.notifications.reviewsBacklogEnabled) {
                 StepperRow(
                     label = "Backlog threshold",
-                    value = uiState.backlogThreshold,
+                    value = uiState.notifications.backlogThreshold,
                     onValueChange = actions::onBacklogThresholdChange,
                     testTags = SettingsScreenTestTags.BACKLOG_THRESHOLD_TAGS,
                     step = 5,
@@ -735,14 +735,14 @@ private fun NotificationsSection(
             ToggleRow(
                 label = "Daily study reminder",
                 description = "A one-time nudge at the hour below, sent only if you haven't studied yet that day.",
-                checked = uiState.dailyReminderEnabled,
+                checked = uiState.notifications.dailyReminderEnabled,
                 onCheckedChange = actions::onDailyReminderEnabledChange,
                 testTag = SettingsScreenTestTags.DAILY_REMINDER_TOGGLE
             )
-            if (uiState.dailyReminderEnabled) {
+            if (uiState.notifications.dailyReminderEnabled) {
                 StepperRow(
                     label = "Reminder hour",
-                    value = uiState.dailyReminderHour,
+                    value = uiState.notifications.dailyReminderHour,
                     onValueChange = { actions.onDailyReminderHourChange(it.mod(24)) },
                     testTags = SettingsScreenTestTags.DAILY_REMINDER_HOUR_TAGS,
                     valueLabel = { formatHour(it) }
@@ -755,21 +755,21 @@ private fun NotificationsSection(
             ToggleRow(
                 label = "Quiet hours",
                 description = "Holds back review/backlog alerts during the window below and delivers them right after it ends. The daily reminder is skipped instead of delayed.",
-                checked = uiState.quietHoursEnabled,
+                checked = uiState.notifications.quietHoursEnabled,
                 onCheckedChange = actions::onQuietHoursEnabledChange,
                 testTag = SettingsScreenTestTags.QUIET_HOURS_TOGGLE
             )
-            if (uiState.quietHoursEnabled) {
+            if (uiState.notifications.quietHoursEnabled) {
                 StepperRow(
                     label = "Quiet hours start",
-                    value = uiState.quietHoursStartHour,
+                    value = uiState.notifications.quietHoursStartHour,
                     onValueChange = { actions.onQuietHoursStartHourChange(it.mod(24)) },
                     testTags = SettingsScreenTestTags.QUIET_HOURS_START_TAGS,
                     valueLabel = { formatHour(it) }
                 )
                 StepperRow(
                     label = "Quiet hours end",
-                    value = uiState.quietHoursEndHour,
+                    value = uiState.notifications.quietHoursEndHour,
                     onValueChange = { actions.onQuietHoursEndHourChange(it.mod(24)) },
                     testTags = SettingsScreenTestTags.QUIET_HOURS_END_TAGS,
                     valueLabel = { formatHour(it) }

@@ -17,11 +17,28 @@ import kotlinx.coroutines.launch
 
 data class AuthUiState(
     val tokenInput: String = "",
-    val isSubmitting: Boolean = false,
-    val errorMessage: String? = null,
-    val pendingNotificationRequest: Boolean = false,
-    val isAuthenticated: Boolean = false
-)
+    val step: AuthStep = AuthStep.Editing()
+) {
+    val isSubmitting: Boolean get() = step == AuthStep.Submitting
+    val errorMessage: String? get() = (step as? AuthStep.Editing)?.error
+    val pendingNotificationRequest: Boolean get() = step == AuthStep.RequestingNotifications
+    val isAuthenticated: Boolean get() = step == AuthStep.Authenticated
+}
+
+/** Where sign-in is: one at a time, in this order. */
+sealed interface AuthStep {
+    /** Entering a token, showing why the last attempt failed if it did. */
+    data class Editing(val error: String? = null) : AuthStep
+
+    /** The token is being checked against WaniKani. */
+    data object Submitting : AuthStep
+
+    /** Signed in; the notification permission prompt is up. */
+    data object RequestingNotifications : AuthStep
+
+    /** Done — the screen navigates on. */
+    data object Authenticated : AuthStep
+}
 
 class AuthViewModel(
     private val tokenRepository: TokenRepository,
@@ -35,27 +52,27 @@ class AuthViewModel(
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     fun onTokenInputChange(value: String) {
-        _uiState.update { it.copy(tokenInput = value, errorMessage = null) }
+        _uiState.update { it.copy(tokenInput = value, step = AuthStep.Editing()) }
     }
 
     fun submitToken() {
         val token = _uiState.value.tokenInput.trim()
         if (token.isEmpty()) {
-            _uiState.update { it.copy(errorMessage = "Enter your WaniKani API token.") }
+            _uiState.update { it.copy(step = AuthStep.Editing(error = "Enter your WaniKani API token.")) }
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+            _uiState.update { it.copy(step = AuthStep.Submitting) }
             tokenRepository.saveToken(token)
             when (val result = waniKaniRepository.fetchUser()) {
                 is ApiResult.Success -> {
                     syncScheduler.schedulePeriodicSync()
                     notificationCoordinator.onLogin()
-                    _uiState.update { it.copy(isSubmitting = false, pendingNotificationRequest = true) }
+                    _uiState.update { it.copy(step = AuthStep.RequestingNotifications) }
                 }
                 is ApiResult.Error -> {
                     if (result.isAuthError) tokenRepository.clearToken()
-                    _uiState.update { it.copy(isSubmitting = false, errorMessage = result.message) }
+                    _uiState.update { it.copy(step = AuthStep.Editing(error = result.message)) }
                 }
             }
         }
@@ -64,7 +81,7 @@ class AuthViewModel(
     fun onNotificationPermissionResult(granted: Boolean) {
         viewModelScope.launch {
             settingsRepository.setNotificationsEnabled(granted)
-            _uiState.update { it.copy(pendingNotificationRequest = false, isAuthenticated = true) }
+            _uiState.update { it.copy(step = AuthStep.Authenticated) }
         }
     }
 }

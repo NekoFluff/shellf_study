@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
+import com.crazyfluff.shellfstudy.shared.data.AppSettings
+import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
@@ -18,35 +20,20 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class SettingsUiState(
-    val dailyLessonGoal: Int = 15,
-    val lessonBatchSize: Int = DEFAULT_LESSON_BATCH_SIZE,
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val showPitchAccent: Boolean = true,
-    val autoplayPronunciationAudio: Boolean = true,
-    val restrictAudioToMp3: Boolean = false,
-    val showSubjectTypeLabel: Boolean = false,
-    val showTotalTimer: Boolean = false,
-    val showQuestionTimer: Boolean = false,
-    val showStrokeOrder: Boolean = true,
-    val useJapaneseKeyboard: Boolean = false,
-    val closeEnoughAnswersEnabled: Boolean = true,
-    val showAnswerReadingPitchAccent: Boolean = false,
-    val hideContextSentenceTranslations: Boolean = true,
-    val requireTapToRevealMeaningAnswer: Boolean = false,
-    val requireTapToRevealReadingAnswer: Boolean = false,
-    val reviewPriority: ReviewPriority = ReviewPriority.DEFAULT,
-    val notificationsEnabled: Boolean = false,
-    val reviewsAvailableEnabled: Boolean = true,
-    val reviewsBacklogEnabled: Boolean = true,
-    val backlogThreshold: Int = 100,
-    val dailyReminderEnabled: Boolean = true,
-    val dailyReminderHour: Int = 20,
-    val quietHoursEnabled: Boolean = true,
-    val quietHoursStartHour: Int = 22,
-    val quietHoursEndHour: Int = 7,
-    val isFullRefreshing: Boolean = false,
-    val fullRefreshError: String? = null
-)
+    val app: AppSettings = AppSettings(),
+    val notifications: NotificationSettings = NotificationSettings(),
+    val fullRefresh: FullRefreshStatus = FullRefreshStatus.Idle
+) {
+    val isFullRefreshing: Boolean get() = fullRefresh == FullRefreshStatus.InFlight
+    val fullRefreshError: String? get() = (fullRefresh as? FullRefreshStatus.Failed)?.message
+}
+
+/** The settings screen's "re-download everything" action. */
+sealed interface FullRefreshStatus {
+    data object Idle : FullRefreshStatus
+    data object InFlight : FullRefreshStatus
+    data class Failed(val message: String) : FullRefreshStatus
+}
 
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
@@ -55,45 +42,14 @@ class SettingsViewModel(
     private val syncOrchestrator: SyncOrchestrator
 ) : ViewModel(), SettingsActions {
 
-    private data class FullRefreshState(val isRefreshing: Boolean = false, val error: String? = null)
-    private val fullRefreshState = MutableStateFlow(FullRefreshState())
+    private val fullRefresh = MutableStateFlow<FullRefreshStatus>(FullRefreshStatus.Idle)
 
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.settings,
         settingsRepository.notificationSettings,
-        fullRefreshState
-    ) { app, notif, refresh ->
-        SettingsUiState(
-            dailyLessonGoal = app.dailyLessonGoal,
-            lessonBatchSize = app.lessonBatchSize,
-            themeMode = app.themeMode,
-            showPitchAccent = app.showPitchAccent,
-            autoplayPronunciationAudio = app.autoplayPronunciationAudio,
-            restrictAudioToMp3 = app.restrictAudioToMp3,
-            showSubjectTypeLabel = app.showSubjectTypeLabel,
-            showTotalTimer = app.showTotalTimer,
-            showQuestionTimer = app.showQuestionTimer,
-            showStrokeOrder = app.showStrokeOrder,
-            useJapaneseKeyboard = app.useJapaneseKeyboard,
-            closeEnoughAnswersEnabled = app.closeEnoughAnswersEnabled,
-            showAnswerReadingPitchAccent = app.showAnswerReadingPitchAccent,
-            hideContextSentenceTranslations = app.hideContextSentenceTranslations,
-            requireTapToRevealMeaningAnswer = app.requireTapToRevealMeaningAnswer,
-            requireTapToRevealReadingAnswer = app.requireTapToRevealReadingAnswer,
-            reviewPriority = app.reviewPriority,
-            notificationsEnabled = notif.notificationsEnabled,
-            reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
-            reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
-            backlogThreshold = notif.backlogThreshold,
-            dailyReminderEnabled = notif.dailyReminderEnabled,
-            dailyReminderHour = notif.dailyReminderHour,
-            quietHoursEnabled = notif.quietHoursEnabled,
-            quietHoursStartHour = notif.quietHoursStartHour,
-            quietHoursEndHour = notif.quietHoursEndHour,
-            isFullRefreshing = refresh.isRefreshing,
-            fullRefreshError = refresh.error
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
+        fullRefresh,
+        ::SettingsUiState
+    ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     override fun onDailyLessonGoalChange(goal: Int) {
         viewModelScope.launch { settingsRepository.setDailyLessonGoal(goal) }
@@ -221,10 +177,10 @@ class SettingsViewModel(
      */
     override fun onFullRefreshRequested() {
         viewModelScope.launch {
-            fullRefreshState.value = FullRefreshState(isRefreshing = true)
-            fullRefreshState.value = when (val result = syncOrchestrator.fullRefresh()) {
-                is ApiResult.Success -> FullRefreshState()
-                is ApiResult.Error -> FullRefreshState(error = result.message)
+            fullRefresh.value = FullRefreshStatus.InFlight
+            fullRefresh.value = when (val result = syncOrchestrator.fullRefresh()) {
+                is ApiResult.Success -> FullRefreshStatus.Idle
+                is ApiResult.Error -> FullRefreshStatus.Failed(result.message)
             }
         }
     }
