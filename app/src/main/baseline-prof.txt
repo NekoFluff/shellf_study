@@ -1,0 +1,53 @@
+# Baseline profile for Shellf Study.
+#
+# Read by ART on install and used to AOT-compile the listed methods, so the first launch does not pay
+# to interpret-and-JIT the startup path. The `[HOT_STARTUP]` tag marks these as app-startup hot.
+#
+# IMPORTANT — this file does nothing for a debug build. Android disables profile installation for
+# debuggable apps, and the `firebase-release` path distributes `:app:assembleDebug`, so the friends
+# group currently receives a build in which this profile is inert. It starts paying off when the
+# distributed build becomes a release/optimized one. The release build type also has
+# `optimization { enable = false }`, which is a separate reason testers see unoptimized code.
+#
+# Scope is deliberate and narrow: app start (Application -> MainActivity -> ShellfStudyApp -> Splash)
+# and nothing else. A profile is a hint, not a manifest — listing methods that are not actually hot
+# on the startup path dilutes it, and a profile that is wrong is worse than none because it changes
+# dex layout for no reason.
+#
+# These signatures were extracted from the release dex rather than written by hand, because HPROF
+# descriptors have to match exactly (parameter types, return type, and the synthetic lambda bodies
+# the Compose compiler generates). To regenerate after a refactor:
+#
+#   ./gradlew :app:assembleRelease
+#   cd /tmp && rm -rf dexrel && mkdir dexrel && cd dexrel
+#   unzip -o -q <repo>/app/build/outputs/apk/release/app-release-unsigned.apk "classes*.dex"
+#   BT=$(dirname $(ls ~/Library/Android/sdk/build-tools/*/apksigner | tail -1))
+#   for d in classes*.dex; do "$BT/dexdump" -d "$d"; done > /tmp/all_dex.txt
+#   # then re-run the parser that produced this file (see the commit that added it)
+#
+# A class-level entry (no `->`) is legal and means "all of this class's methods".
+
+# --- Android entry points -------------------------------------------------------------------
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/ShellfStudyApplication;
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/MainActivity;
+
+# --- Compose root and navigation ------------------------------------------------------------
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/ShellfStudyAppKt;
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/navigation/ShellfStudyNavHostKt;
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/navigation/ShellfStudyDestination;
+
+# --- Splash: the first screen composed on every cold start -----------------------------------
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashScreenKt;->SplashRoute(Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashViewModel;Landroidx/compose/runtime/Composer;II)V
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashScreenKt;->SplashScreen(Landroidx/compose/runtime/Composer;I)V
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashScreenKt;->SplashScreen$lambda$1(ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashScreenKt;->SplashRoute$lambda$0(Landroidx/compose/runtime/State;)Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashUiState;
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashScreenKt;->SplashRoute$lambda$2(Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashViewModel;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashScreenKt;->access$SplashRoute$lambda$0(Landroidx/compose/runtime/State;)Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashUiState;
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashViewModel;-><init>(Lcom/crazyfluff/shellfstudy/shared/data/TokenRepository;Lcom/crazyfluff/shellfstudy/shared/sync/SyncScheduler;Lcom/crazyfluff/shellfstudy/shared/notifications/NotificationCoordinator;)V
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/shared/feature/splash/SplashViewModel;->getUiState()Lkotlinx/coroutines/flow/StateFlow;
+
+# --- Activity lifecycle methods, listed individually where a whole class is too broad ---------
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/MainActivity;->onCreate(Landroid/os/Bundle;)V
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/MainActivity;->onNewIntent(Landroid/content/Intent;)V
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/MainActivity;->onCreate$lambda$0(Lcom/crazyfluff/shellfstudy/MainActivity;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;
+[HOT_STARTUP] Lcom/crazyfluff/shellfstudy/MainActivity;->onCreate$lambda$0$0$0(Lcom/crazyfluff/shellfstudy/MainActivity;)Lkotlin/Unit;
