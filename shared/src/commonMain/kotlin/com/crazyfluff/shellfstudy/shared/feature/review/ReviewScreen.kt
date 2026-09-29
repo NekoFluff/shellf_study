@@ -1,39 +1,23 @@
 package com.crazyfluff.shellfstudy.shared.feature.review
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.LocalOpenSubjectDetail
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
-import com.crazyfluff.shellfstudy.shared.designsystem.components.AbandonSessionMenuItem
-import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
-import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizEmptyQueueContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizEmptyQueueTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizErrorContent
@@ -52,7 +36,8 @@ import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
-import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
+import com.crazyfluff.shellfstudy.shared.feature.quiz.QuizScreenChromeTestTags
+import com.crazyfluff.shellfstudy.shared.feature.quiz.QuizScreenScaffold
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportQuizSessionJankState
 
@@ -171,7 +156,6 @@ fun ReviewRoute(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReviewScreen(
     uiState: ReviewUiState,
@@ -181,102 +165,48 @@ fun ReviewScreen(
     searchUiState: SearchUiState = SearchUiState(),
     onSearchQueryChange: (String) -> Unit = {}
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-    var showAbandonConfirm by remember { mutableStateOf(false) }
-    var isSearchActive by remember { mutableStateOf(false) }
-    val canManageSession = uiState.phase is ReviewUiState.Phase.Active
+    val activePhase = uiState.phase as? ReviewUiState.Phase.Active
 
-    Box(modifier = Modifier.fillMaxSize()) {
-    Scaffold(
-        topBar = {
-            CompactTopBar(
-                navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.testTag(ReviewScreenTestTags.BACK_BUTTON)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { isSearchActive = true },
-                        modifier = Modifier.testTag(ReviewScreenTestTags.SEARCH_BUTTON)
-                    ) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
-                    }
-                    if (canManageSession) {
-                        Box {
-                            IconButton(
-                                onClick = { menuExpanded = true },
-                                modifier = Modifier.testTag(ReviewScreenTestTags.OVERFLOW_MENU)
-                            ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
-                            }
-                            DropdownMenu(
-                                expanded = menuExpanded,
-                                onDismissRequest = { menuExpanded = false },
-                                shape = RoundedCornerShape(16.dp)
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Wrap up") },
-                                    leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
-                                    enabled = (uiState.phase as? ReviewUiState.Phase.Active)?.isWrappingUp != true,
-                                    onClick = { menuExpanded = false; actions.wrapUp() },
-                                    modifier = Modifier.testTag(ReviewScreenTestTags.WRAP_UP_MENU_ITEM)
-                                )
-                                HorizontalDivider()
-                                AbandonSessionMenuItem(
-                                    label = "Abandon session",
-                                    testTag = ReviewScreenTestTags.ABANDON_MENU_ITEM,
-                                    onClick = { menuExpanded = false; showAbandonConfirm = true }
-                                )
-                            }
-                        }
-                    }
-                }
+    // The answer-details sheet stays mounted once the first question loads — `active` gates its
+    // visibility, not its composition — so its AnchoredDraggableState/Surface pays first-mount cost
+    // once per session instead of once per question. Between questions it sits on the last subject
+    // shown, remembered here; a plain reference, not state, since it is only read when no question
+    // is up and is updated after composition.
+    val lastDetail = remember { DetailSubjectRef() }
+    val detail = activePhase?.let { it.currentItem.subjectId to it.currentQuestionType } ?: lastDetail.value
+    SideEffect { if (activePhase != null) lastDetail.value = detail }
+
+    QuizScreenScaffold(
+        onBack = onBack,
+        canManageSession = activePhase != null,
+        abandonDialogText = "Progress on items you haven't finished yet will be lost. This won't affect items you've already submitted.",
+        onAbandon = actions::abandonSession,
+        searchUiState = searchUiState,
+        onSearchQueryChange = onSearchQueryChange,
+        testTags = QuizScreenChromeTestTags(
+            backButton = ReviewScreenTestTags.BACK_BUTTON,
+            searchButton = ReviewScreenTestTags.SEARCH_BUTTON,
+            overflowMenu = ReviewScreenTestTags.OVERFLOW_MENU,
+            abandonMenuItem = ReviewScreenTestTags.ABANDON_MENU_ITEM,
+            abandonConfirmButton = ReviewScreenTestTags.ABANDON_CONFIRM_BUTTON
+        ),
+        extraMenuItems = { closeMenu ->
+            DropdownMenuItem(
+                text = { Text("Wrap up") },
+                leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
+                enabled = activePhase?.isWrappingUp != true,
+                onClick = { closeMenu(); actions.wrapUp() },
+                modifier = Modifier.testTag(ReviewScreenTestTags.WRAP_UP_MENU_ITEM)
             )
-        }
-    ) { innerPadding ->
-        if (showAbandonConfirm) {
-            ConfirmationDialog(
-                title = "Abandon this session?",
-                text = "Progress on items you haven't finished yet will be lost. This won't affect items you've already submitted.",
-                confirmLabel = "Abandon",
-                onConfirm = { showAbandonConfirm = false; actions.abandonSession() },
-                onDismiss = { showAbandonConfirm = false },
-                confirmButtonTestTag = ReviewScreenTestTags.ABANDON_CONFIRM_BUTTON
-            )
-        }
-
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            ReviewPhaseContent(
-                uiState = uiState,
-                actions = actions,
-                onSessionComplete = onSessionComplete,
-            )
-        }
-    }
-
-        // Only shown once there's actually something to toggle — pre-answer it'd just be a dimmed,
-        // non-interactive bar taking up space and inviting a swipe that does nothing (and, since
-        // isAnswered is hardcoded true below, one that would leak the fully-revealed answer to a
-        // question not yet submitted). Kept mounted permanently once the first question of the
-        // session loads — `active` gates visibility/interactivity, not composition — so its
-        // AnchoredDraggableState/Surface (SubjectDetailSheet's shell) only ever pays first-mount cost
-        // once per session instead of once per question, the same off-screen-mount treatment
-        // SubjectDetailSheetHost uses. The subjectId/questionType are remembered past the point a
-        // new question clears uiState.currentItem/currentQuestionType, so the now-invisible sheet
-        // still has a valid (if stale) subject to sit on between questions.
-        var lastDetailSubjectId by remember { mutableStateOf<Long?>(null) }
-        var lastDetailQuestionType by remember { mutableStateOf<QuestionType?>(null) }
-        val activePhase = uiState.phase as? ReviewUiState.Phase.Active
-        activePhase?.let { lastDetailSubjectId = it.currentItem.subjectId }
-        activePhase?.let { lastDetailQuestionType = it.currentQuestionType }
-
-        lastDetailSubjectId?.let { subjectId ->
-            lastDetailQuestionType?.let { questionType ->
-                val active = !isSearchActive && activePhase?.feedback != null
+            HorizontalDivider()
+        },
+        detailSheet = { isSearchActive ->
+            // Only interactive once there's something to toggle — pre-answer it would invite a swipe
+            // that leaks the fully revealed answer, since isAnswered is always true here.
+            detail?.let { (subjectId, questionType) ->
                 SubjectDetailSheet(
                     subjectId = subjectId,
-                    active = active,
+                    active = !isSearchActive && activePhase?.feedback != null,
                     expanded = activePhase?.isDetailsExpanded == true,
                     onToggle = { actions.toggleDetails() },
                     onDismiss = { actions.closeDetails() },
@@ -288,17 +218,13 @@ fun ReviewScreen(
                 )
             }
         }
-
-        SubjectSearchOverlay(
-            active = isSearchActive,
-            onActiveChange = { isSearchActive = it },
-            uiState = searchUiState,
-            onQueryChange = onSearchQueryChange,
-            modifier = Modifier.fillMaxSize(),
-        )
-
+    ) {
+        ReviewPhaseContent(uiState = uiState, actions = actions, onSessionComplete = onSessionComplete)
     }
 }
+
+/** The subject the review's details sheet last showed — see [ReviewScreen]. */
+private class DetailSubjectRef(var value: Pair<Long, QuestionType>? = null)
 
 /**
  * The one place that decides which phase renders — everything above it in [ReviewScreen] is chrome

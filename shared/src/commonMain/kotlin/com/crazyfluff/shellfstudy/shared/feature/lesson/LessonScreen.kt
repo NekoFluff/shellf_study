@@ -32,15 +32,12 @@ import com.crazyfluff.shellfstudy.shared.designsystem.text.LocalShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -54,7 +51,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,10 +58,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -79,10 +75,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
-import com.crazyfluff.shellfstudy.shared.designsystem.components.AbandonSessionMenuItem
-import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SectionTitle
-import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizEmptyQueueContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizEmptyQueueTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizErrorContent
@@ -116,7 +109,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.toDetailQues
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
-import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
+import com.crazyfluff.shellfstudy.shared.feature.quiz.QuizScreenChromeTestTags
+import com.crazyfluff.shellfstudy.shared.feature.quiz.QuizScreenScaffold
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
 import kotlinx.coroutines.flow.collect
 import kotlin.math.roundToInt
@@ -257,7 +251,6 @@ fun LessonRoute(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LessonScreen(
     uiState: LessonUiState,
@@ -267,9 +260,6 @@ fun LessonScreen(
     searchUiState: SearchUiState = SearchUiState(),
     onSearchQueryChange: (String) -> Unit = {}
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-    var showAbandonConfirm by remember { mutableStateOf(false) }
-    var isSearchActive by remember { mutableStateOf(false) }
     // A session only exists to abandon once the user has committed to a lesson session — the SELECT
     // phase hasn't persisted anything yet (see LessonSessionRepository), so there's nothing there
     // for the dashboard's "Abandon lesson session" entry, or this screen's own copy of it, to act on.
@@ -280,94 +270,38 @@ fun LessonScreen(
         else -> false
     }
 
-    // Wrapping Scaffold and the session's own SubjectDetailSheet in a shared Box — rather than
-    // leaving them as top-level siblings — is what lets that sheet's handle overlay the true bottom
-    // of the screen and pick up real navigation-bar insets via its own navigationBarsPadding(),
-    // instead of ending up laid out underneath the system nav bar/gesture area. The app's *browse*
-    // sheet is no longer hosted here; ShellfStudyApp mounts that one, for every screen at once.
-    Box(modifier = Modifier.fillMaxSize()) {
-    Scaffold(
-        topBar = {
-            CompactTopBar(
-                navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.testTag(LessonScreenTestTags.BACK_BUTTON)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { isSearchActive = true },
-                        modifier = Modifier.testTag(LessonScreenTestTags.SEARCH_BUTTON)
-                    ) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
-                    }
-                    if (canManageSession) {
-                        Box {
-                            IconButton(
-                                onClick = { menuExpanded = true },
-                                modifier = Modifier.testTag(LessonScreenTestTags.OVERFLOW_MENU)
-                            ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
-                            }
-                            DropdownMenu(
-                                expanded = menuExpanded,
-                                onDismissRequest = { menuExpanded = false },
-                                shape = RoundedCornerShape(16.dp)
-                            ) {
-                                AbandonSessionMenuItem(
-                                    label = "Abandon session",
-                                    testTag = LessonScreenTestTags.ABANDON_MENU_ITEM,
-                                    onClick = { menuExpanded = false; showAbandonConfirm = true }
-                                )
-                            }
-                        }
-                    }
-                }
-            )
+    QuizScreenScaffold(
+        onBack = onBack,
+        canManageSession = canManageSession,
+        abandonDialogText = "Finished batches are kept. Lessons in the batch you're on that you haven't finished, and every batch after it, are dropped from this session — they stay available to study later.",
+        onAbandon = actions::abandonSession,
+        searchUiState = searchUiState,
+        onSearchQueryChange = onSearchQueryChange,
+        testTags = QuizScreenChromeTestTags(
+            backButton = LessonScreenTestTags.BACK_BUTTON,
+            searchButton = LessonScreenTestTags.SEARCH_BUTTON,
+            overflowMenu = LessonScreenTestTags.OVERFLOW_MENU,
+            abandonMenuItem = LessonScreenTestTags.ABANDON_MENU_ITEM,
+            abandonConfirmButton = LessonScreenTestTags.ABANDON_CONFIRM_BUTTON
+        ),
+        detailSheet = { isSearchActive ->
+            val quizPhase = uiState.phase as? LessonUiState.Phase.Quiz
+            if (quizPhase != null) {
+                SubjectDetailSheet(
+                    subjectId = quizPhase.currentItem.subjectId,
+                    active = !isSearchActive && quizPhase.feedback != null,
+                    expanded = quizPhase.isDetailsExpanded,
+                    onToggle = { actions.toggleDetails() },
+                    onDismiss = { actions.closeDetails() },
+                    revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
+                    isAnswered = true,
+                    questionType = quizPhase.currentQuestionType.toDetailQuestionType(),
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
-    ) { innerPadding ->
-        if (showAbandonConfirm) {
-            ConfirmationDialog(
-                title = "Abandon this session?",
-                text = "Finished batches are kept. Lessons in the batch you're on that you haven't finished, and every batch after it, are dropped from this session — they stay available to study later.",
-                confirmLabel = "Abandon",
-                onConfirm = { showAbandonConfirm = false; actions.abandonSession() },
-                onDismiss = { showAbandonConfirm = false },
-                confirmButtonTestTag = LessonScreenTestTags.ABANDON_CONFIRM_BUTTON
-            )
-        }
-
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            LessonPhaseContent(
-                uiState = uiState,
-                actions = actions,
-                onSessionComplete = onSessionComplete
-            )
-        }
-    }
-
-    SubjectSearchOverlay(
-        active = isSearchActive,
-        onActiveChange = { isSearchActive = it },
-        uiState = searchUiState,
-        onQueryChange = onSearchQueryChange,
-        modifier = Modifier.fillMaxSize(),
-    )
-
-    val quizPhase = uiState.phase as? LessonUiState.Phase.Quiz
-    if (quizPhase != null) {
-        SubjectDetailSheet(
-            subjectId = quizPhase.currentItem.subjectId,
-            active = !isSearchActive && quizPhase.feedback != null,
-            expanded = quizPhase.isDetailsExpanded,
-            onToggle = { actions.toggleDetails() },
-            onDismiss = { actions.closeDetails() },
-            revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
-            isAnswered = true,
-            questionType = quizPhase.currentQuestionType.toDetailQuestionType(),
-            modifier = Modifier.fillMaxSize()
-        )
-    }
+    ) {
+        LessonPhaseContent(uiState = uiState, actions = actions, onSessionComplete = onSessionComplete)
     }
 }
 
