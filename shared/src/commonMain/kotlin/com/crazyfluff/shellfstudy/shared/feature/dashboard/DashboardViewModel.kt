@@ -234,11 +234,21 @@ class DashboardViewModel(
         ProgressStatsState(lessonsToday, daysOnLevel, itemSpread, projection)
     }
 
+    /**
+     * The review forecast, deduped.
+     *
+     * [AssignmentRepository.observeReviewForecast] re-subscribes on every hour boundary (the DAO query
+     * bakes `nowIso` in at subscription time), and Room re-runs it on any assignments write. A
+     * re-subscription that produces the same buckets — which is the normal case, an hour passing with
+     * nothing becoming due that the selected window shows — otherwise emitted a new equal
+     * `ReviewForecast` that propagated through both `combine`s and invalidated the forecast Canvas.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val reviewForecastFlow: Flow<ReviewForecast> = _dashboardData
         .map { it.selectedForecastWindow }
         .distinctUntilChanged()
         .flatMapLatest { window -> assignmentRepository.observeReviewForecast(window) }
+        .distinctUntilChanged()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val levelDependentState: Flow<LevelDependentState> = currentLevel.flatMapLatest { level ->
@@ -255,11 +265,22 @@ class DashboardViewModel(
         }
     }
 
+    /**
+     * The leaderboard, deduped.
+     *
+     * [FriendStatsRepository] rebuilds this from a friend-stats refresh, a roster change and its own
+     * self-stats flow, and the dashboard refreshes friend stats on every resume and pull-to-refresh.
+     * A refresh that changes nothing any chart draws — the common case, since the TTL means most
+     * resumes fetch nothing — still produced a new equal `Leaderboard`, which re-ran the outer
+     * `combine`'s copy and, because [RaceChartCard] passes it as a `remember` key, re-derived both
+     * charts' entire series for no visible change.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val leaderboardFlow: Flow<Leaderboard?> = _dashboardData
         .map { it.selectedMetric to it.selectedWindow }
         .distinctUntilChanged()
         .flatMapLatest { (metric, window) -> friendStatsRepository.observeLeaderboard(metric, window) }
+        .distinctUntilChanged()
 
     val uiState: StateFlow<DashboardUiState> = combine(
         combine(_dashboardData, sessionSyncState, progressStatsState, levelDependentState, localDueCounts)
