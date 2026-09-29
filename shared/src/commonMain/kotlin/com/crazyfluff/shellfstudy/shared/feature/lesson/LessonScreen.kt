@@ -75,8 +75,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.shared.designsystem.performance.JANK_STATE_SCREEN
-import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankState
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
@@ -122,6 +120,10 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
 import kotlinx.coroutines.flow.collect
 import kotlin.math.roundToInt
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportQuizSessionJankState
+
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.QuizAnswerJankState
+
 
 object LessonScreenTestTags {
     const val LOADING_INDICATOR = "lesson_loading_indicator"
@@ -196,12 +198,21 @@ object LessonScreenTestTags {
  * modes with different costs — a study card renders stroke-order data and mnemonics, the quiz renders
  * a question and grading feedback — and a stall attributed to "lesson" alone would not say which.
  */
+/** The lesson screen's phases, mapped onto the shared jank tags. */
+private fun LessonUiState.Phase.Quiz?.answerJankState(): QuizAnswerJankState = when {
+    this == null -> QuizAnswerJankState.NotAnswering
+    feedback == null -> QuizAnswerJankState.Answering
+    answerRevealed -> QuizAnswerJankState.FeedbackRevealed
+    else -> QuizAnswerJankState.FeedbackHidden
+}
+
 @Composable
 private fun LessonJankState(uiState: LessonUiState) {
     val phase = uiState.phase
-    ReportJankState(
-        JANK_STATE_SCREEN to "lesson",
-        "phase" to when (phase) {
+    val quiz = phase as? LessonUiState.Phase.Quiz
+    ReportQuizSessionJankState(
+        screen = "lesson",
+        phaseName = when (phase) {
             LessonUiState.Phase.Loading -> "loading"
             is LessonUiState.Phase.Error -> "error"
             LessonUiState.Phase.NoLessonsAvailable -> "empty"
@@ -210,15 +221,8 @@ private fun LessonJankState(uiState: LessonUiState) {
             is LessonUiState.Phase.Quiz -> "quiz"
             else -> "other"
         },
-        "answer" to when (phase) {
-            is LessonUiState.Phase.Quiz -> when {
-                phase.feedback == null -> "answering"
-                phase.answerRevealed -> "feedback_revealed"
-                else -> "feedback_hidden"
-            }
-            else -> "n/a"
-        },
-        "rankChange" to if ((phase as? LessonUiState.Phase.Quiz)?.rankChange != null) "shown" else "none"
+        answerState = quiz.answerJankState(),
+        hasRankChange = quiz?.rankChange != null
     )
 }
 

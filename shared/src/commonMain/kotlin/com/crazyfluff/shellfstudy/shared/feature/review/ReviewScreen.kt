@@ -31,8 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.shared.designsystem.performance.JANK_STATE_SCREEN
-import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankState
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
@@ -57,6 +55,10 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportQuizSessionJankState
+
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.QuizAnswerJankState
+
 
 object ReviewScreenTestTags {
     const val LOADING_INDICATOR = "review_loading_indicator"
@@ -109,31 +111,29 @@ object ReviewScreenTestTags {
  * Kept as its own composable so the mapping from [ReviewUiState] to tags reads as one piece, and so
  * [ReviewRoute] stays about wiring rather than about instrumentation.
  */
+/** The review screen's phases, mapped onto the shared jank tags. */
+private fun ReviewUiState.Phase.Active?.answerJankState(): QuizAnswerJankState = when {
+    this == null -> QuizAnswerJankState.NotAnswering
+    feedback == null -> QuizAnswerJankState.Answering
+    answerRevealed -> QuizAnswerJankState.FeedbackRevealed
+    else -> QuizAnswerJankState.FeedbackHidden
+}
+
 @Composable
 private fun ReviewJankState(uiState: ReviewUiState) {
     val phase = uiState.phase
-    ReportJankState(
-        JANK_STATE_SCREEN to "review",
-        "phase" to when (phase) {
+    val active = phase as? ReviewUiState.Phase.Active
+    ReportQuizSessionJankState(
+        screen = "review",
+        phaseName = when (phase) {
             ReviewUiState.Phase.Loading -> "loading"
             is ReviewUiState.Phase.Error -> "error"
             ReviewUiState.Phase.NoReviewsAvailable -> "empty"
             is ReviewUiState.Phase.Active -> "active"
             is ReviewUiState.Phase.Complete -> "complete"
         },
-        // Only meaningful while Active. `answering` means no feedback yet, so the frame belongs to
-        // typing/revealing; `feedback` covers the window in which the grade was applied — the
-        // optimistic SRS write, the outbox enqueue and the session persist — which is the flow the
-        // per-answer work runs through.
-        "answer" to when (phase) {
-            is ReviewUiState.Phase.Active -> when {
-                phase.feedback == null -> "answering"
-                phase.answerRevealed -> "feedback_revealed"
-                else -> "feedback_hidden"
-            }
-            else -> "n/a"
-        },
-        "rankChange" to if ((phase as? ReviewUiState.Phase.Active)?.rankChange != null) "shown" else "none"
+        answerState = active.answerJankState(),
+        hasRankChange = active?.rankChange != null
     )
 }
 
