@@ -129,8 +129,11 @@ val repositoryModule = module {
         )
     }
     single { DashboardSyncCoordinator(waniKaniRepository = get(), syncOrchestrator = get(), dashboardCacheRepository = get()) }
-    single { LessonSessionRepository(dataStore = get(), json = get()) }
-    single { ReviewSessionRepository(dataStore = get(), json = get()) }
+    // Sessions persist to their own Room database rather than the shared preferences DataStore. The
+    // DataStore is still passed as `legacyDataStore` so a session written before that move is drained
+    // into Room on first read — see RoomSessionStore.
+    single { LessonSessionRepository(sessionDao = get(), legacyDataStore = get(), json = get()) }
+    single { ReviewSessionRepository(sessionDao = get(), legacyDataStore = get(), json = get()) }
     single { LastSessionSummaryRepository(dataStore = get(), json = get()) }
 
     // One controller per feature, shared by that feature's ViewModel and any out-of-band caller

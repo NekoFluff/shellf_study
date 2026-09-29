@@ -7,6 +7,8 @@ import com.crazyfluff.shellfstudy.shared.database.friends.FriendsDatabase
 import com.crazyfluff.shellfstudy.shared.database.friends.buildFriendsDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDatabase
 import com.crazyfluff.shellfstudy.shared.database.outbox.buildOutboxDatabase
+import com.crazyfluff.shellfstudy.shared.database.session.SessionDatabase
+import com.crazyfluff.shellfstudy.shared.database.session.buildSessionDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.buildStudyActivityDatabase
 import org.koin.core.module.Module
@@ -27,7 +29,8 @@ fun Module.registerDatabases(
     appDatabaseBuilder: Scope.() -> RoomDatabase.Builder<AppDatabase>,
     studyActivityDatabaseBuilder: Scope.() -> RoomDatabase.Builder<StudyActivityDatabase>,
     outboxDatabaseBuilder: Scope.() -> RoomDatabase.Builder<OutboxDatabase>,
-    friendsDatabaseBuilder: Scope.() -> RoomDatabase.Builder<FriendsDatabase>
+    friendsDatabaseBuilder: Scope.() -> RoomDatabase.Builder<FriendsDatabase>,
+    sessionDatabaseBuilder: Scope.() -> RoomDatabase.Builder<SessionDatabase>
 ) {
     single { buildAppDatabase(appDatabaseBuilder()) }
     single { get<AppDatabase>().subjectDao() }
@@ -52,4 +55,9 @@ fun Module.registerDatabases(
     // Pure cache — always re-fetchable from the WaniKani API.
     single { buildFriendsDatabase(friendsDatabaseBuilder()) }
     single { get<FriendsDatabase>().friendStatsDao() }
+
+    // Not destructive — an in-progress session must survive a schema bump, and it no longer shares
+    // a file with anything else (see SessionDatabase's doc comment for why it left DataStore).
+    single { buildSessionDatabase(sessionDatabaseBuilder()) }
+    single { get<SessionDatabase>().sessionDao() }
 }

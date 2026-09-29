@@ -2,6 +2,8 @@ package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import com.crazyfluff.shellfstudy.shared.database.session.REVIEW_SESSION_KEY
+import com.crazyfluff.shellfstudy.shared.database.session.SessionDao
 import com.crazyfluff.shellfstudy.shared.session.PersistedSessionStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
@@ -42,11 +44,17 @@ data class PersistedReviewSession(
  * means reconstructing this state rather than the ViewModel simply still being around.
  */
 class ReviewSessionRepository(
-    dataStore: DataStore<Preferences>,
+    sessionDao: SessionDao,
+    legacyDataStore: DataStore<Preferences>,
     json: Json
 ) : PersistedSessionStore<PersistedReviewSession> {
-    private val store = JsonPreferenceStore(
-        dataStore, json, "persisted_review_session", PersistedReviewSession.serializer()
+    private val store = RoomSessionStore(
+        sessionDao = sessionDao,
+        sessionKey = REVIEW_SESSION_KEY,
+        serializer = PersistedReviewSession.serializer(),
+        json = json,
+        legacyDataStore = legacyDataStore,
+        legacyKeyName = "persisted_review_session"
     )
 
     override val hasActiveSession: Flow<Boolean> = store.exists

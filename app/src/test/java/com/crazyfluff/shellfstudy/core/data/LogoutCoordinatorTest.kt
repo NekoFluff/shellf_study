@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
@@ -90,8 +91,8 @@ class LogoutCoordinatorTest {
         outboxDao = FakeOutboxDao()
         studyActivityDao = FakeStudyActivityDao()
         outboxRepository = OutboxRepository(outboxDao, FakeOutboxSyncScheduler(), dataStore)
-        reviewSessionRepository = ReviewSessionRepository(dataStore, json)
-        lessonSessionRepository = LessonSessionRepository(dataStore, json)
+        reviewSessionRepository = ReviewSessionRepository(FakeSessionDao(), dataStore, json)
+        lessonSessionRepository = LessonSessionRepository(FakeSessionDao(), dataStore, json)
         val reviewSessionController = ReviewSessionController(CoroutineScope(SupervisorJob()), reviewSessionRepository)
         val lessonSessionController = LessonSessionController(CoroutineScope(SupervisorJob()), lessonSessionRepository)
 

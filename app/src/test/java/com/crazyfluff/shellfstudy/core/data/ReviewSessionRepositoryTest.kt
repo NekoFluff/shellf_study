@@ -1,5 +1,8 @@
 package com.crazyfluff.shellfstudy.core.data
 
+import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
+
+
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -28,7 +31,7 @@ class ReviewSessionRepositoryTest {
         dataStore = PreferenceDataStoreFactory.create(
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
-        return ReviewSessionRepository(dataStore, Json)
+        return ReviewSessionRepository(FakeSessionDao(), dataStore, Json)
     }
 
     private val sampleSession = PersistedReviewSession(

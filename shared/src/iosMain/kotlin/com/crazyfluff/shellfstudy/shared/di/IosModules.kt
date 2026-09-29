@@ -15,6 +15,7 @@ import com.crazyfluff.shellfstudy.shared.database.getAppDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.database.friends.getFriendsDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.database.outbox.getOutboxDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.getStudyActivityDatabaseBuilder
+import com.crazyfluff.shellfstudy.shared.database.session.getSessionDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.di.registerDatabases
 import com.crazyfluff.shellfstudy.shared.notifications.DefaultNotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
@@ -34,7 +35,8 @@ private val iosDatabaseModule = module {
         appDatabaseBuilder = { getAppDatabaseBuilder() },
         studyActivityDatabaseBuilder = { getStudyActivityDatabaseBuilder() },
         outboxDatabaseBuilder = { getOutboxDatabaseBuilder() },
-        friendsDatabaseBuilder = { getFriendsDatabaseBuilder() }
+        friendsDatabaseBuilder = { getFriendsDatabaseBuilder() },
+        sessionDatabaseBuilder = { getSessionDatabaseBuilder() }
     )
 }
 

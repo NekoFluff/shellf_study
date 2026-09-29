@@ -31,6 +31,7 @@ import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
+import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeFriendStatsDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
@@ -72,6 +73,7 @@ class DashboardViewModelTest {
 
     private lateinit var server: MockWebServer
     private lateinit var dataStore: DataStore<Preferences>
+    private val sessionDao = FakeSessionDao()
     private lateinit var tokenRepository: TokenRepository
     private lateinit var repositories: TestRepositories
     private lateinit var reviewSessionRepository: ReviewSessionRepository
@@ -97,8 +99,8 @@ class DashboardViewModelTest {
         tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
         repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
-        reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
-        lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+        reviewSessionRepository = ReviewSessionRepository(sessionDao, dataStore, Json { ignoreUnknownKeys = true })
+        lessonSessionRepository = LessonSessionRepository(sessionDao, dataStore, Json { ignoreUnknownKeys = true })
         reviewSessionController = ReviewSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), reviewSessionRepository)
         lessonSessionController = LessonSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), lessonSessionRepository)
         settingsRepository = SettingsRepository(dataStore)

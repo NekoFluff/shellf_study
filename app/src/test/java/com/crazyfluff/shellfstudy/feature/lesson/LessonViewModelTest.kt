@@ -35,6 +35,7 @@ import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentBundledSource
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
@@ -85,6 +86,7 @@ class LessonViewModelTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
+        val sessionDao = FakeSessionDao()
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
             scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
@@ -96,7 +98,7 @@ class LessonViewModelTest {
         subjectRepository = repositories.subjectRepository
         strokeOrderRepository = FakeStrokeOrderRepository()
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
-        lessonSessionRepository = LessonSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+        lessonSessionRepository = LessonSessionRepository(sessionDao, dataStore, Json { ignoreUnknownKeys = true })
         lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, Json { ignoreUnknownKeys = true })
         pronunciationAudioPlayer = FakePronunciationAudioPlayer()
         appForegroundTracker = AppForegroundTracker()

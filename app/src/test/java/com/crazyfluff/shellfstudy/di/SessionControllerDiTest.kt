@@ -3,12 +3,14 @@ package com.crazyfluff.shellfstudy.di
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonPhase
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
+import com.crazyfluff.shellfstudy.shared.database.session.SessionDao
 import com.crazyfluff.shellfstudy.shared.di.coroutineScopeModule
 import com.crazyfluff.shellfstudy.shared.di.repositoryModule
 import com.crazyfluff.shellfstudy.shared.network.waniKaniJson
@@ -56,6 +58,10 @@ class SessionControllerDiTest {
                             produceFile = { tempFolder.newFile("koin-test.preferences_pb") }
                         )
                     }
+                    // Sessions live in their own Room database now (see SessionDatabase). One shared
+                    // fake here is what the real single-instance DAO would be; the two repositories
+                    // are still separated by session key, which is the distinction under test.
+                    single<SessionDao> { FakeSessionDao() }
                 },
                 coroutineScopeModule,
                 repositoryModule,

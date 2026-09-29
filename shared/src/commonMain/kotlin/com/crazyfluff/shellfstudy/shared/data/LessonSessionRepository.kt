@@ -2,6 +2,8 @@ package com.crazyfluff.shellfstudy.shared.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import com.crazyfluff.shellfstudy.shared.database.session.LESSON_SESSION_KEY
+import com.crazyfluff.shellfstudy.shared.database.session.SessionDao
 import com.crazyfluff.shellfstudy.shared.session.PersistedSessionStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
@@ -87,11 +89,17 @@ data class PersistedLessonSession(
  * committed to yet, so falling back to a fresh fetch there is harmless.
  */
 class LessonSessionRepository(
-    dataStore: DataStore<Preferences>,
+    sessionDao: SessionDao,
+    legacyDataStore: DataStore<Preferences>,
     json: Json
 ) : PersistedSessionStore<PersistedLessonSession> {
-    private val store = JsonPreferenceStore(
-        dataStore, json, "persisted_lesson_session", PersistedLessonSession.serializer()
+    private val store = RoomSessionStore(
+        sessionDao = sessionDao,
+        sessionKey = LESSON_SESSION_KEY,
+        serializer = PersistedLessonSession.serializer(),
+        json = json,
+        legacyDataStore = legacyDataStore,
+        legacyKeyName = "persisted_lesson_session"
     )
 
     override val hasActiveSession: Flow<Boolean> = store.exists

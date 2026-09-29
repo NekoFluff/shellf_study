@@ -28,6 +28,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentU
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
+import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
@@ -77,11 +78,12 @@ class ReviewViewModelTest {
         repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)
         assignmentRepository = repositories.assignmentRepository
         statsRepository = repositories.statsRepository
+        val sessionDao = FakeSessionDao()
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
             scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
-        reviewSessionRepository = ReviewSessionRepository(dataStore, Json { ignoreUnknownKeys = true })
+        reviewSessionRepository = ReviewSessionRepository(sessionDao, dataStore, Json { ignoreUnknownKeys = true })
         lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, Json { ignoreUnknownKeys = true })
         outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
         val settingsDataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
