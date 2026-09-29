@@ -225,6 +225,42 @@ class OutboxDrainerTest {
         assertThat(repositories.outboxDao.allReviewSubmissions().first().status).isEqualTo(OutboxStatus.PENDING.name)
     }
 
+    /**
+     * Rows are independent submissions, so a server-side failure on one must not hold up the rest.
+     * Before this, the drain returned RETRY at the first transient failure, which meant a row that
+     * consistently 5xx'd blocked every submission queued behind it — for as long as it kept failing,
+     * which for a malformed payload is forever.
+     */
+    @Test
+    fun `a review the server rejects with a 500 does not block the reviews queued behind it`() = runTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.path.orEmpty()
+                val body = request.body.readUtf8()
+                return when {
+                    request.method == "POST" && path.startsWith("/reviews") && body.contains("102") ->
+                        emptyResponse(500)
+                    request.method == "POST" && path.startsWith("/reviews") && body.contains("101") ->
+                        jsonResponse(reviewResultJson(101, 1, 1, 2))
+                    request.method == "POST" && path.startsWith("/reviews") && body.contains("103") ->
+                        jsonResponse(reviewResultJson(103, 3, 1, 2))
+                    else -> emptyResponse(404)
+                }
+            }
+        }
+        queueReview(assignmentId = 101, subjectId = 1)
+        queueReview(assignmentId = 102, subjectId = 2)
+        queueReview(assignmentId = 103, subjectId = 3)
+
+        val outcome = buildDrainer().drain()
+
+        // The pass still reports that something needs retrying…
+        assertThat(outcome).isEqualTo(DrainOutcome.RETRY)
+        // …but only the rejected row is left for it.
+        assertThat(repositories.outboxDao.allReviewSubmissions().map { it.assignmentId })
+            .containsExactly(102L)
+    }
+
     private fun startedAssignmentJson(id: Long, subjectId: Long) = """
         {
           "id": $id, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/$id",

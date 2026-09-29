@@ -49,9 +49,27 @@ class OutboxDrainer(
                 )
             )
         },
+        // Deleted before reconciling, deliberately, and the opposite of what this used to do. The
+        // two writes cannot be one transaction: the outbox is its own Room database, separate from
+        // the assignments table it reconciles into. So one of the two orders has to be chosen, and
+        // the choice decides what a crash between them costs:
+        //
+        //   reconcile -> delete: the row is still PENDING, so the next drain submits the review
+        //     again. WaniKani's POST /reviews is not idempotent — the assignment has already moved
+        //     on from the first submission, so the second one advances it again from the new stage,
+        //     which is silent SRS corruption and a duplicate review in the user's history.
+        //   delete -> reconcile: the submission is recorded once and the local assignment keeps the
+        //     optimistic stage the grading path already gave it until the next assignments sync
+        //     (which the dashboard's resume path and the periodic sync both perform) fetches the
+        //     authoritative row.
+        //
+        // A stale local row that heals on the next sync is the cheaper failure. The fuller fix is a
+        // two-phase row — mark it submitted, reconcile, then delete — which would need the server's
+        // answer persisted on the row or a refetch to recover; not worth the extra state for a
+        // window this narrow.
         onSuccess = { row, data ->
-            assignmentRepository.reconcileAfterReviewResult(data)
             outboxDao.deleteReviewSubmission(row)
+            assignmentRepository.reconcileAfterReviewResult(data)
         },
         markTerminal = { row, message -> outboxDao.markReviewSubmissionTerminal(row.id, message) }
     )
@@ -63,6 +81,7 @@ class OutboxDrainer(
         onSuccess: suspend (Row, T) -> Unit,
         markTerminal: suspend (Row, String?) -> Unit
     ): DrainOutcome {
+        var retryNeeded = false
         for (row in rows) {
             when (val result = submit(row)) {
                 is ApiResult.Success -> onSuccess(row, result.data)
@@ -82,10 +101,19 @@ class OutboxDrainer(
                         assignmentRepository.refetchAssignment(assignmentId(row))
                         continue
                     }
-                    return DrainOutcome.RETRY
+                    if (result.status == null) {
+                        // The request never got an answer — offline, DNS, a timeout. Every remaining
+                        // row would fail the same way, so stop the pass instead of retrying the whole
+                        // queue against a network that is down.
+                        return DrainOutcome.RETRY
+                    }
+                    // The server answered and refused *this* row: a 5xx on one payload, or a 429.
+                    // Rows are independent submissions, so the rest of the queue drains rather than
+                    // waiting behind it — the failing row stays PENDING and is retried next pass.
+                    retryNeeded = true
                 }
             }
         }
-        return DrainOutcome.SUCCESS
+        return if (retryNeeded) DrainOutcome.RETRY else DrainOutcome.SUCCESS
     }
 }
