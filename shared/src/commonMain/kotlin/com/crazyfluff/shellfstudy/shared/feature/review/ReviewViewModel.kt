@@ -7,7 +7,6 @@ import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
 import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
-import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.PersistedAnsweredQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
@@ -17,25 +16,24 @@ import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord
 import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
-import com.crazyfluff.shellfstudy.shared.quiz.AnswerOutcome
 import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
 import com.crazyfluff.shellfstudy.shared.quiz.toPendingQuestionOrNull
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
-import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.toLastSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
 import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
-import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
-import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.quiz.requiresTapToRevealAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.undoLastCorrectAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.undoLastIncorrectAnswer
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionPhase
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionState
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionViewModel
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
@@ -69,7 +67,12 @@ data class ReviewUiState(
     val phase: Phase = Phase.Loading,
     // Deliberately not folded into Phase — see LessonUiState.isAbandoned's doc comment for why.
     val isAbandoned: Boolean = false
-) {
+) : QuizSessionState<ReviewUiState, ReviewUiState.Phase.Active, ReviewItem> {
+
+    override val quizPhase: Phase.Active? get() = phase as? Phase.Active
+
+    override fun withQuizPhase(phase: Phase.Active): ReviewUiState = copy(phase = phase)
+
     sealed interface Phase {
         data object Loading : Phase
         data class Error(val message: String) : Phase
@@ -77,18 +80,18 @@ data class ReviewUiState(
 
         data class Active(
             // Non-nullable by construction — see LessonUiState.Phase.Quiz's doc comment for why.
-            val currentItem: ReviewItem,
-            val currentQuestionType: QuestionType,
-            val answerInput: String = "",
-            val feedback: AnswerFeedback? = null,
+            override val currentItem: ReviewItem,
+            override val currentQuestionType: QuestionType,
+            override val answerInput: String = "",
+            override val feedback: AnswerFeedback? = null,
             val rankChange: RankChange? = null,
             val undoCounter: Int = 0,
             // Bumped on every advance to a new current question, even a requeued one that repeats
             // the same item/type — see QuizQuestionContent's focusResetKey, which needs a signal
             // that's guaranteed to change on advance regardless of whether the question repeats.
             val questionSequence: Int = 0,
-            val isDetailsExpanded: Boolean = false,
-            val answerTypeMismatchCount: Int = 0,
+            override val isDetailsExpanded: Boolean = false,
+            override val answerTypeMismatchCount: Int = 0,
             val totalCount: Int = 0,
             val remainingCount: Int = 0,
             // A modifier within the active variant, not a separate mode — wrapUp() changes what
@@ -96,19 +99,25 @@ data class ReviewUiState(
             // way, so this doesn't warrant its own Phase (unlike Lesson's Select/Study/Quiz, which
             // really are different rendering modes).
             val isWrappingUp: Boolean = false,
-            val timing: QuizTimingUiState = QuizTimingUiState(),
+            override val timing: QuizTimingUiState = QuizTimingUiState(),
             // Whether the correct-answer text is visible for the current (wrong) feedback. Always
             // true except right after a wrong submit while the "require tap to reveal answer"
             // setting is on — see gradeAnswer/revealAnswer. Give-ups and correct/close-match answers
             // are never gated, so this stays true for them regardless of the setting.
-            val answerRevealed: Boolean = true,
+            override val answerRevealed: Boolean = true,
             // The reading + pitch-accent patterns + audio for the just-graded reading question. The
             // reading/audio are published with the feedback (see gradeAnswer); the pitch patterns are
             // *observed* live for as long as this question is the current one (see
             // pitchAccentHintKey/init), so an update from any writer to the bundled dictionary's
             // cache lands here without a refetch.
             val answerHint: AnswerReadingHint? = null
-        ) : Phase
+        ) : Phase, QuizSessionPhase<ReviewItem, Active> {
+            override fun withAnswerInput(value: String): Active = copy(answerInput = value)
+            override fun withAnswerRevealed(revealed: Boolean): Active = copy(answerRevealed = revealed)
+            override fun withDetailsExpanded(expanded: Boolean): Active = copy(isDetailsExpanded = expanded)
+            override fun withAnswerTypeMismatchCount(count: Int): Active = copy(answerTypeMismatchCount = count)
+            override fun withTiming(timing: QuizTimingUiState): Active = copy(timing = timing)
+        }
 
         data class Complete(
             val sessionItemsReviewed: Int = 0,
@@ -170,14 +179,14 @@ class ReviewViewModel(
     private val statsRepository: StatsRepository,
     private val sessionController: ReviewSessionController,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
-    private val pronunciationAudioPlayer: PronunciationAudioPlayer,
+    override val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val settingsRepository: SettingsRepository,
     private val pitchAccentRepository: PitchAccentRepository,
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope
-) : ViewModel(), ReviewActions {
+) : QuizSessionViewModel<ReviewItem, ReviewUiState.Phase.Active, ReviewUiState>(), ReviewActions {
 
-    private val _uiState = MutableStateFlow(ReviewUiState())
+    override val _uiState = MutableStateFlow(ReviewUiState())
     val uiState: StateFlow<ReviewUiState> = _uiState.asStateFlow()
 
     /** The word the current question's reading hint is watching — see [PitchAccentHintKey]. A plain
@@ -196,7 +205,6 @@ class ReviewViewModel(
     // the previous pending submission is always resolved before a new one can be created.
     private var pendingSubmissionAssignmentId: Long? = null
 
-    private val gradingGuard = QuizGradingGuard(viewModelScope)
 
     // Individual per-answer records, used for the "slowest answers" summary — persisted and
     // restored across a resume just like progressByAssignmentId (see resumeFromPersisted), so the
@@ -209,10 +217,10 @@ class ReviewViewModel(
     // QuizSessionController. Runs on applicationScope rather than viewModelScope so this flush
     // actually executes when triggered from onCleared() (viewModelScope is cancelled just before
     // onCleared() runs, so a viewModelScope.launch here would silently never execute).
-    private val sessionTiming = QuizSessionTiming(
-        onResume = { now -> updateActiveTiming { it.copy(sessionActiveSegmentStartMs = now) } },
+    override val sessionTiming = QuizSessionTiming(
+        onResume = { now -> updateQuizTiming { it.copy(sessionActiveSegmentStartMs = now) } },
         onPause = { newElapsed ->
-            updateActiveTiming { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
+            updateQuizTiming { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
             applicationScope.launch { persistCurrentState() }
         }
     )
@@ -222,8 +230,8 @@ class ReviewViewModel(
     // freeze(), used when a new question is shown / the current one is graded, versus resume()/
     // pause(), used only by wireForegroundTracking below for background/foreground transitions).
     private val questionTiming = QuizSessionTiming(
-        onResume = { now -> updateActiveTiming { it.copy(questionActiveSegmentStartMs = now) } },
-        onPause = { newElapsed -> updateActiveTiming { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }
+        onResume = { now -> updateQuizTiming { it.copy(questionActiveSegmentStartMs = now) } },
+        onPause = { newElapsed -> updateQuizTiming { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }
     )
 
     // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
@@ -234,7 +242,7 @@ class ReviewViewModel(
     // animation actually running — dropping enough frames that the animation appeared to "snap"
     // rather than animate. AppSettings()'s defaults match SettingsRepository's DataStore defaults,
     // so the narrow window before this field's first real emission lands is harmless.
-    private var latestSettings = AppSettings()
+    override var latestSettings = AppSettings()
 
     init {
         loadOrResume()
@@ -256,7 +264,7 @@ class ReviewViewModel(
                         ?: flowOf(null)
                 }
                 .collect { hint ->
-                    updateActive {
+                    updateQuiz {
                         val current = it.answerHint
                         // Drop anything that doesn't belong to the hint on screen right now — an
                         // emission can land after an undo or an advance, and must neither resurrect a
@@ -275,19 +283,6 @@ class ReviewViewModel(
         // QuizSessionTiming.wireForegroundTracking's doc comment.
         sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
         questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
-    }
-
-    /** Guard-clause helper for updates that only apply while in the Active phase — a safe cast plus
-     *  a no-op fallback, not `!!`/unchecked cast. */
-    private inline fun updateActive(transform: (ReviewUiState.Phase.Active) -> ReviewUiState.Phase.Active) {
-        _uiState.update { state ->
-            val active = state.phase as? ReviewUiState.Phase.Active ?: return@update state
-            state.copy(phase = transform(active))
-        }
-    }
-
-    private inline fun updateActiveTiming(transform: (QuizTimingUiState) -> QuizTimingUiState) {
-        updateActive { it.copy(timing = transform(it.timing)) }
     }
 
     /** Resumes a persisted in-progress session if one exists, otherwise fetches a fresh queue. */
@@ -441,80 +436,13 @@ class ReviewViewModel(
         }
     }
 
-    override fun onAnswerInputChange(value: String) {
-        updateActive { it.copy(answerInput = value) }
-    }
 
-    override fun toggleDetails() {
-        updateActive { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
-    }
-
-    /** Unlike [toggleDetails] (a real flip, driven by the swipe handle/gesture-settle sync), this is
-     *  the definitively-directional close used by the scrim tap, the close button, and the back
-     *  handler — those always mean "close", never "toggle", so they must not risk re-opening the
-     *  sheet if called while it's already collapsed. */
-    override fun closeDetails() {
-        updateActive { it.copy(isDetailsExpanded = false) }
-    }
-
-    override fun submitAnswer() {
-        val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
-        if (active.feedback != null) return
-        val item = active.currentItem
-        val type = active.currentQuestionType
-        if (active.answerInput.isBlank()) return
-
-        gradingGuard.launchIfIdle {
-            val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-            val outcome = evaluateAnswer(
-                active.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
-                closeEnoughEnabled = latestSettings.closeEnoughAnswersEnabled
-            )
-            when (outcome) {
-                AnswerOutcome.TypeMismatch ->
-                    updateActive { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
-                is AnswerOutcome.Graded ->
-                    gradeAnswer(
-                        item, type, outcome.isCorrect, candidates, expandDetails = false,
-                        wasCloseMatch = outcome.wasCloseMatch
-                    )
-            }
-        }
-    }
-
-    /** Gives up on the current question — grades it as a miss without requiring a typed guess. */
-    override fun dontKnowAnswer() {
-        val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
-        if (active.feedback != null) return
-        val item = active.currentItem
-        val type = active.currentQuestionType
-
-        gradingGuard.launchIfIdle {
-            val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-            gradeAnswer(item, type, isCorrect = false, candidates, expandDetails = false, isGiveUp = true)
-        }
-    }
-
-    /** Reveals a gated wrong answer's correct-answer text — see [ReviewUiState.Phase.Active.answerRevealed].
-     *  No-op if there's nothing gated right now (already revealed, or no feedback showing). Doesn't
-     *  need [gradingGuard]: it mutates only display state, not grading/SRS state — but a reading
-     *  question's audio/pitch-accent hint were themselves withheld at grading time (see
-     *  [publishReadingRevealEffects]), so revealing now is what actually triggers them. */
-    override fun revealAnswer() {
-        val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
-        if (active.feedback == null || active.answerRevealed) return
-        updateActive { it.copy(answerRevealed = true) }
-        val item = active.currentItem
-        val type = active.currentQuestionType
-        val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-        publishReadingRevealEffects(item, type, candidates, latestSettings)
-    }
 
     /** The autoplay audio and reading/pitch-accent hint for a just-graded (and, if gated, now
      *  revealed) reading question — held back while a wrong answer's text is still gated behind
      *  "require tap to reveal answer" (see [gradeAnswer]/[revealAnswer]), so a learner can't hear or
      *  see the correct reading before choosing to look at the answer. */
-    private fun publishReadingRevealEffects(item: ReviewItem, type: QuestionType, candidates: List<String>, settings: AppSettings) {
+    override fun publishReadingRevealEffects(item: ReviewItem, type: QuestionType, candidates: List<String>, settings: AppSettings) {
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {
             candidates.firstOrNull()?.let { reading ->
                 pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
@@ -532,7 +460,7 @@ class ReviewViewModel(
             val answerReadingAudio = answerReading?.let { reading ->
                 selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
             }
-            updateActive {
+            updateQuiz {
                 it.copy(
                     answerHint = answerReading?.let { reading -> AnswerReadingHint(reading = reading, audio = answerReadingAudio) }
                 )
@@ -541,14 +469,13 @@ class ReviewViewModel(
         }
     }
 
-    private suspend fun gradeAnswer(
+    override suspend fun gradeAnswer(
         item: ReviewItem,
         type: QuestionType,
         isCorrect: Boolean,
         candidates: List<String>,
-        expandDetails: Boolean,
-        wasCloseMatch: Boolean = false,
-        isGiveUp: Boolean = false
+        wasCloseMatch: Boolean,
+        isGiveUp: Boolean
     ) {
         // Whether this grade is visible right away, or gated behind an explicit revealAnswer() tap —
         // see ReviewUiState.Phase.Active.answerRevealed. Computed once up front since both the
@@ -611,13 +538,12 @@ class ReviewViewModel(
             // commitPendingSubmission.
             val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
 
-            updateActive {
+            updateQuiz {
                 it.copy(
                     feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
                     answerRevealed = revealedNow,
                     remainingCount = queue.size,
-                    isDetailsExpanded = it.isDetailsExpanded || expandDetails,
-                    rankChange = newRankChange ?: it.rankChange,
+                                        rankChange = newRankChange ?: it.rankChange,
                     // Freezes the "time on this question" display the instant feedback appears,
                     // rather than letting it keep ticking while the feedback/Continue screen is up
                     // — matches the elapsedMs recorded for the slowest-answers summary above, which
@@ -681,7 +607,7 @@ class ReviewViewModel(
             // undoCounter changes even though currentItem/currentQuestionType don't — this is what
             // the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't change
             // either of those but still needs to refocus the field the user just tapped away from.
-            updateActive {
+            updateQuiz {
                 it.copy(
                     feedback = null,
                     // Undoing a correct answer retracts the rank change it predicted; an incorrect
@@ -726,7 +652,7 @@ class ReviewViewModel(
             totalQuestions = queue.size + completedQuestionCount()
 
             persistCurrentState()
-            updateActive { it.copy(isWrappingUp = true, totalCount = totalQuestions, remainingCount = queue.size) }
+            updateQuiz { it.copy(isWrappingUp = true, totalCount = totalQuestions, remainingCount = queue.size) }
         }
     }
 
@@ -745,12 +671,6 @@ class ReviewViewModel(
 
     private fun completedQuestionCount(): Int =
         progressByAssignmentId.values.sumOf { (if (it.meaningDone) 1 else 0) + (if (it.readingDone) 1 else 0) }
-
-    override fun onCleared() {
-        super.onCleared()
-        sessionTiming.pause()
-        pronunciationAudioPlayer.stop()
-    }
 
     /** Only counts items with [QuizItemProgress.hasAnyProgress] — progressByAssignmentId is seeded
      *  with an entry for every item in the original queue up front (see buildQueue), so after a

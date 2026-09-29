@@ -39,6 +39,15 @@ interface QuizDisplayItem {
     val characters: String?
     val characterImageUrl: String?
     val meanings: List<String>
+
+    /** WaniKani's own alternate meanings — acceptable answers, distinct from [meanings]. Here rather
+     *  than on the concrete items because grading needs them: the shared submit/reveal flow builds a
+     *  question's acceptable answers from [meanings] + this + [readings]. */
+    val auxiliaryMeanings: List<String>
+
+    /** The subject's readings; empty for radicals, which are only ever asked for meaning. */
+    val readings: List<String>
+
     val subjectId: Long
     val subjectType: SubjectType
 }
@@ -52,10 +61,10 @@ data class ReviewItem(
     val level: Int,
     val srsStage: Int,
     override val meanings: List<String>,
-    val readings: List<String>,
+    override val readings: List<String>,
     /** WaniKani's own official alternate meanings (e.g. "1" alongside "one") — distinct from the
      *  primary [meanings], but just as acceptable a grading answer. */
-    val auxiliaryMeanings: List<String> = emptyList(),
+    override val auxiliaryMeanings: List<String> = emptyList(),
     val pronunciationAudios: List<PronunciationAudio> = emptyList(),
     /** Carried along so a review's rank change can be computed synchronously against
      *  AssignmentRepository's in-memory SRS-system cache, with no DB access needed on the
@@ -100,10 +109,10 @@ data class LessonItem(
      *  reorders a level's items. */
     val lessonPosition: Int = 0,
     override val meanings: List<String>,
-    val readings: List<String>,
+    override val readings: List<String>,
     val meaningMnemonic: String?,
     val readingMnemonic: String?,
-    val auxiliaryMeanings: List<String> = emptyList(),
+    override val auxiliaryMeanings: List<String> = emptyList(),
     val meaningHint: String? = null,
     val readingHint: String? = null,
     val onyomiReadings: List<String> = emptyList(),

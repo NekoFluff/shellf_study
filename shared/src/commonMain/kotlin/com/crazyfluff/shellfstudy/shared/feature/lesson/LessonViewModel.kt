@@ -11,7 +11,6 @@ import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
-import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PersistedAnsweredQuestion
@@ -36,24 +35,23 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord
 import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
-import com.crazyfluff.shellfstudy.shared.quiz.AnswerOutcome
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
 import com.crazyfluff.shellfstudy.shared.quiz.toPendingQuestionOrNull
-import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.toLastSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
 import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
-import com.crazyfluff.shellfstudy.shared.quiz.candidatesFor
-import com.crazyfluff.shellfstudy.shared.quiz.evaluateAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.quiz.requiresTapToRevealAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.undoLastIncorrectAnswer
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionPhase
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionState
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionViewModel
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
@@ -93,7 +91,12 @@ data class LessonUiState(
      *  the map has no cached summary (yet); [RelatedSubjectsSection]/[toRelatedSubjectsUiState] is
      *  what turns "absent" into a "not cached yet" caption rather than silence. */
     val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap()
-) {
+) : QuizSessionState<LessonUiState, LessonUiState.Phase.Quiz, LessonItem> {
+
+    override val quizPhase: Phase.Quiz? get() = phase as? Phase.Quiz
+
+    override fun withQuizPhase(phase: Phase.Quiz): LessonUiState = copy(phase = phase)
+
     /** Why the learner is leaving the lesson screen, if they are. */
     sealed interface ExitRequest {
         data object None : ExitRequest
@@ -150,32 +153,38 @@ data class LessonUiState(
             // Non-nullable by construction — a next-question decision always branches into either a
             // Quiz with a real item, or on to a checkpoint/Complete; there's no way to construct a
             // Quiz value with nothing to show.
-            val currentItem: LessonItem,
-            val currentQuestionType: QuestionType,
+            override val currentItem: LessonItem,
+            override val currentQuestionType: QuestionType,
             val batchIndex: Int = 0,
             val batchCount: Int = 1,
-            val answerInput: String = "",
-            val feedback: AnswerFeedback? = null,
+            override val answerInput: String = "",
+            override val feedback: AnswerFeedback? = null,
             val rankChange: RankChange? = null,
             val undoCounter: Int = 0,
             // Bumped on every advance to a new current question, even a requeued one that repeats
             // the same item/type — see QuizQuestionContent's focusResetKey, which needs a signal
             // that's guaranteed to change on advance regardless of whether the question repeats.
             val questionSequence: Int = 0,
-            val isDetailsExpanded: Boolean = false,
-            val answerTypeMismatchCount: Int = 0,
+            override val isDetailsExpanded: Boolean = false,
+            override val answerTypeMismatchCount: Int = 0,
             val totalQuizCount: Int = 0,
             val remainingQuizCount: Int = 0,
-            val timing: QuizTimingUiState = QuizTimingUiState(),
+            override val timing: QuizTimingUiState = QuizTimingUiState(),
             // Whether the correct-answer text is visible for the current (wrong) feedback — see
             // ReviewUiState.Phase.Active.answerRevealed for the full explanation. Mirrors the same
             // gating here.
-            val answerRevealed: Boolean = true,
+            override val answerRevealed: Boolean = true,
             // Reading + audio for the just-graded reading question, published together at grading
             // time. Pitch accents aren't carried here — the screen reads those live off
             // [LessonUiState.pitchAccentsBySubjectId] and folds them into this hint at render time.
             val answerHint: AnswerReadingHint? = null
-        ) : Phase
+        ) : Phase, QuizSessionPhase<LessonItem, Quiz> {
+            override fun withAnswerInput(value: String): Quiz = copy(answerInput = value)
+            override fun withAnswerRevealed(revealed: Boolean): Quiz = copy(answerRevealed = revealed)
+            override fun withDetailsExpanded(expanded: Boolean): Quiz = copy(isDetailsExpanded = expanded)
+            override fun withAnswerTypeMismatchCount(count: Int): Quiz = copy(answerTypeMismatchCount = count)
+            override fun withTiming(timing: QuizTimingUiState): Quiz = copy(timing = timing)
+        }
 
         /** The end of a batch — where a session pauses instead of running every selected item's
          *  flashcards before anything is quizzed. [next] is modelled as one sealed value rather than
@@ -228,12 +237,12 @@ class LessonViewModel(
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
     private val strokeOrderRepository: StrokeOrderRepository,
-    private val pronunciationAudioPlayer: PronunciationAudioPlayer,
+    override val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope
-) : ViewModel(), LessonActions {
+) : QuizSessionViewModel<LessonItem, LessonUiState.Phase.Quiz, LessonUiState>(), LessonActions {
 
-    private val _uiState = MutableStateFlow(LessonUiState())
+    override val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
 
     // The frozen plan for the session in progress: the ordered assignment ids the learner committed to
@@ -271,7 +280,6 @@ class LessonViewModel(
     private val startedAssignmentIds = mutableSetOf<Long>()
     private var totalQuizCount = 0
 
-    private val gradingGuard = QuizGradingGuard(viewModelScope)
 
     private val progressByAssignmentId = mutableMapOf<Long, LessonItemProgress>()
     /** The items whose pitch accents the screen can currently show — either this batch's study cards
@@ -300,7 +308,7 @@ class LessonViewModel(
     // check here — see QuizSessionController. Runs on applicationScope rather than viewModelScope so
     // this flush actually executes when triggered from onCleared() (viewModelScope is cancelled just
     // before onCleared() runs, so a viewModelScope.launch here would silently never execute).
-    private val sessionTiming = QuizSessionTiming(
+    override val sessionTiming = QuizSessionTiming(
         onResume = { now -> updateQuizTiming { it.copy(sessionActiveSegmentStartMs = now) } },
         onPause = pause@{ newElapsed ->
             updateQuizTiming { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
@@ -324,7 +332,7 @@ class LessonViewModel(
     // janks the post-submit animation. AppSettings()'s defaults match SettingsRepository's
     // DataStore defaults, so the narrow window before this field's first real emission lands is
     // harmless.
-    private var latestSettings = AppSettings()
+    override var latestSettings = AppSettings()
 
     init {
         loadOrResume()
@@ -390,21 +398,6 @@ class LessonViewModel(
     private fun isSessionBeingWorked(): Boolean = when (_uiState.value.phase) {
         is LessonUiState.Phase.Study, is LessonUiState.Phase.Quiz -> true
         else -> false
-    }
-
-    /** Guard-clause helper for updates that only apply while in the Quiz phase — a safe cast plus a
-     *  no-op fallback, not `!!`/unchecked cast. Also what makes writing session-timing fields onto a
-     *  Study value structurally impossible (see [sessionTiming]'s doc comment): there's no such
-     *  property on [LessonUiState.Phase.Study] to write into, so this simply no-ops instead. */
-    private inline fun updateQuiz(transform: (LessonUiState.Phase.Quiz) -> LessonUiState.Phase.Quiz) {
-        _uiState.update { state ->
-            val quiz = state.phase as? LessonUiState.Phase.Quiz ?: return@update state
-            state.copy(phase = transform(quiz))
-        }
-    }
-
-    private inline fun updateQuizTiming(transform: (QuizTimingUiState) -> QuizTimingUiState) {
-        updateQuiz { it.copy(timing = transform(it.timing)) }
     }
 
     /** Explicit fresh fetch — bound to the error screen's retry action, so it always discards any
@@ -918,58 +911,7 @@ class LessonViewModel(
         persistCurrentState()
     }
 
-    override fun onAnswerInputChange(value: String) {
-        updateQuiz { it.copy(answerInput = value) }
-    }
 
-    override fun submitAnswer() {
-        val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
-        if (quiz.feedback != null) return
-        val item = quiz.currentItem
-        val type = quiz.currentQuestionType
-        if (quiz.answerInput.isBlank()) return
-
-        gradingGuard.launchIfIdle {
-            val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-            val outcome = evaluateAnswer(
-                quiz.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
-                closeEnoughEnabled = latestSettings.closeEnoughAnswersEnabled
-            )
-            when (outcome) {
-                AnswerOutcome.TypeMismatch ->
-                    updateQuiz { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
-                is AnswerOutcome.Graded ->
-                    gradeAnswer(item, type, outcome.isCorrect, candidates, wasCloseMatch = outcome.wasCloseMatch)
-            }
-        }
-    }
-
-    /** Gives up on the current question — treated the same as a wrong answer, requeued for another pass. */
-    override fun dontKnowAnswer() {
-        val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
-        if (quiz.feedback != null) return
-        val item = quiz.currentItem
-        val type = quiz.currentQuestionType
-        val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-        gradingGuard.launchIfIdle {
-            gradeAnswer(item, type, isCorrect = false, candidates, isGiveUp = true)
-        }
-    }
-
-    /** Reveals a gated wrong answer's correct-answer text — see
-     *  [LessonUiState.Phase.Quiz.answerRevealed]. No-op if there's nothing gated right now. Doesn't
-     *  need [gradingGuard]: it mutates only display state, not grading/SRS state — but a reading
-     *  question's audio/hint were themselves withheld at grading time (see
-     *  [publishReadingRevealEffects]), so revealing now is what actually triggers them. */
-    override fun revealAnswer() {
-        val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
-        if (quiz.feedback == null || quiz.answerRevealed) return
-        updateQuiz { it.copy(answerRevealed = true) }
-        val item = quiz.currentItem
-        val type = quiz.currentQuestionType
-        val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
-        publishReadingRevealEffects(item, type, candidates, latestSettings)
-    }
 
     /** The autoplay audio and reading hint for a just-graded (and, if gated, now revealed) reading
      *  question — held back while a wrong answer's text is still gated behind "require tap to
@@ -977,7 +919,7 @@ class LessonViewModel(
      *  reading before choosing to look at the answer. The pitch patterns themselves are gated
      *  separately at render time (QuizQuestionContent reads them live off
      *  [LessonUiState.pitchAccentsBySubjectId], which isn't scoped to grading/reveal at all). */
-    private fun publishReadingRevealEffects(item: LessonItem, type: QuestionType, candidates: List<String>, settings: AppSettings) {
+    override fun publishReadingRevealEffects(item: LessonItem, type: QuestionType, candidates: List<String>, settings: AppSettings) {
         // isPitchAccentEligible (matching the live collection's own filter) is enforced explicitly
         // here too — a kanji/radical item's map entry would simply be absent, but answerReading itself
         // has no such natural gate, so without this check it would still surface the reading (with no
@@ -1057,13 +999,13 @@ class LessonViewModel(
         }
     }
 
-    private suspend fun gradeAnswer(
+    override suspend fun gradeAnswer(
         item: LessonItem,
         type: QuestionType,
         isCorrect: Boolean,
         candidates: List<String>,
-        wasCloseMatch: Boolean = false,
-        isGiveUp: Boolean = false
+        wasCloseMatch: Boolean,
+        isGiveUp: Boolean
     ) {
         val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { LessonItemProgress(item) }
         val questionElapsedMs = questionTiming.freeze()
@@ -1222,14 +1164,6 @@ class LessonViewModel(
         viewModelScope.launch { advanceQuiz() }
     }
 
-    override fun toggleDetails() {
-        updateQuiz { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
-    }
-
-    override fun closeDetails() {
-        updateQuiz { it.copy(isDetailsExpanded = false) }
-    }
-
     /** Walks from a just-finished batch into the next one — the checkpoint's primary action. */
     override fun continueSession() {
         val checkpoint = _uiState.value.phase as? LessonUiState.Phase.BatchComplete ?: return
@@ -1250,12 +1184,6 @@ class LessonViewModel(
             clearSessionState()
             _uiState.update { it.copy(exit = LessonUiState.ExitRequest.Abandoned) }
         }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        sessionTiming.pause()
-        pronunciationAudioPlayer.stop()
     }
 
     /** Items learned, how many were correct without ever missing, which were missed at least once,
