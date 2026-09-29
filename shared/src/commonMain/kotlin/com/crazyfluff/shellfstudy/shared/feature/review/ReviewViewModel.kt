@@ -24,6 +24,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.QuizGradingGuard
 import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
+import com.crazyfluff.shellfstudy.shared.quiz.toLastSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
 import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
@@ -33,8 +34,6 @@ import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
 import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.quiz.requiresTapToRevealAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
-import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
-import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.quiz.undoLastCorrectAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.undoLastIncorrectAnswer
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
@@ -772,14 +771,8 @@ class ReviewViewModel(
     private fun persistLastSessionSummary(summary: QuizSessionSummary<ReviewItem>) {
         applicationScope.launch {
             lastSessionSummaryRepository.save(
-                LastSessionSummary(
+                summary.toLastSessionSummary(
                     kind = LastSessionKind.REVIEW,
-                    itemsCount = summary.itemsCount,
-                    correctFirstTry = summary.correctFirstTry,
-                    totalElapsedMs = summary.totalElapsedMs,
-                    averageTimePerItemMs = summary.averageTimePerItemMs,
-                    slowestAnswers = summary.slowestAnswers.map { it.toSessionAnswerRow() },
-                    missedItems = summary.missedItems.map { it.toSessionMissedItemRow() },
                     completedAtMillis = Clock.System.now().toEpochMilliseconds()
                 )
             )

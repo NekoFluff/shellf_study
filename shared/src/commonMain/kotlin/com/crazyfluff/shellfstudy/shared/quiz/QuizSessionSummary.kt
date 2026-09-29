@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.quiz
 
+import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummary
 import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
 import com.crazyfluff.shellfstudy.shared.data.model.SessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.data.model.SessionMissedItemRow
@@ -60,4 +62,25 @@ fun <T : QuizDisplayItem> T.toSessionMissedItemRow(): SessionMissedItemRow = Ses
     label = characters ?: meanings.firstOrNull() ?: "?",
     subjectId = subjectId,
     subjectType = subjectType
+)
+
+/**
+ * The persisted row the dashboard's "last session" card reads — the same eight-field mapping for both
+ * features, which each carried a copy of.
+ *
+ * [completedAtMillis] is a parameter rather than a `Clock.System.now()` read inside, so the caller
+ * stays responsible for the one piece of this that is not a transcription of [QuizSessionSummary].
+ */
+fun <T : QuizDisplayItem> QuizSessionSummary<T>.toLastSessionSummary(
+    kind: LastSessionKind,
+    completedAtMillis: Long
+): LastSessionSummary = LastSessionSummary(
+    kind = kind,
+    itemsCount = itemsCount,
+    correctFirstTry = correctFirstTry,
+    totalElapsedMs = totalElapsedMs,
+    averageTimePerItemMs = averageTimePerItemMs,
+    slowestAnswers = slowestAnswers.map { it.toSessionAnswerRow() },
+    missedItems = missedItems.map { it.toSessionMissedItemRow() },
+    completedAtMillis = completedAtMillis
 )
