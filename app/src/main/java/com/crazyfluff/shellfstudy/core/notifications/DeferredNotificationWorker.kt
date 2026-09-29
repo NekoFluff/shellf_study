@@ -17,13 +17,12 @@ class DeferredNotificationWorker(
     private val notificationCoordinator: NotificationCoordinator
 ) : CoroutineWorker(appContext, params) {
 
-    override suspend fun doWork(): Result = runCatching {
+    override suspend fun doWork(): Result = retryOnFailure {
         when (inputData.getString(KEY_CATEGORY)) {
             DeferredNotificationCategory.BACKLOG -> notificationCoordinator.evaluateReviewsAndBacklog()
             DeferredNotificationCategory.STUDY_REMINDER -> notificationCoordinator.evaluateStudyReminder()
         }
-        Result.success()
-    }.getOrElse { Result.retry() }
+    }
 
     companion object {
         const val KEY_CATEGORY = "category"

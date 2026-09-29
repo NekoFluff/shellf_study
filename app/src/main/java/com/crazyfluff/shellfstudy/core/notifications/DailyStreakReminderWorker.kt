@@ -16,9 +16,8 @@ class DailyStreakReminderWorker(
     private val notificationCoordinator: NotificationCoordinator
 ) : CoroutineWorker(appContext, params) {
 
-    override suspend fun doWork(): Result = runCatching {
+    override suspend fun doWork(): Result = retryOnFailure {
         notificationCoordinator.evaluateStudyReminder()
         notificationCoordinator.rescheduleDailyReminder()
-        Result.success()
-    }.getOrElse { Result.retry() }
+    }
 }
