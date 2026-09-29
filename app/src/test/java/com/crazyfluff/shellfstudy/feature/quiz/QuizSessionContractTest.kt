@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.feature.quiz
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
@@ -22,6 +23,7 @@ import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingHint
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
+import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.TestScope
@@ -51,6 +53,7 @@ interface QuizSessionSubject<STATE : Any> {
     fun undoLastAnswer()
     fun toggleDetails()
     fun closeDetails()
+    fun abandonSession()
 }
 
 /** What a scenario asserts on: the question on screen, read out of a feature's own phase. */
@@ -66,7 +69,11 @@ data class QuizQuestionView(
      *  folds in at render time; a review folds them into the hint itself. */
     val pitchAccents: PitchAccentUiState?,
     val remainingCount: Int,
-    val answerTypeMismatchCount: Int
+    val answerTypeMismatchCount: Int,
+    /** What the learner has typed for this question so far — an undo clears it. */
+    val answerInput: String,
+    /** The pause-aware timers, shared by both features as [QuizTimingUiState]. */
+    val timing: QuizTimingUiState
 )
 
 /**
@@ -143,6 +150,14 @@ abstract class QuizSessionContractTest<STATE : Any> {
      *  card, a review admitting its next item, a summary. */
     protected abstract fun question(state: STATE): QuizQuestionView?
 
+    /** Whether this state is the report a finished session ends on. */
+    protected abstract fun sessionFinished(state: STATE): Boolean
+
+    /** Whether this state is an abandoned session. Both features keep this flag beside the phase
+     *  rather than in it — the screen has to navigate away whatever else the phase says — but spell it
+     *  differently: a lesson an exit request, a review a boolean. */
+    protected abstract fun isAbandoned(state: STATE): Boolean
+
     /**
      * Brings a session to its first live question. A review is there as soon as its queue loads; a
      * lesson must start a session and step past its first study card.
@@ -156,10 +171,14 @@ abstract class QuizSessionContractTest<STATE : Any> {
      * Runs [scenario] with a session over [fixtures] started and its first question on screen.
      * [beforeSession] runs first, for a scenario that needs a display setting in place before the
      * ViewModel loads — its settings collector reads the stored value as the session starts.
+     * [afterSession] runs once the state collection has ended, for what the session left behind in a
+     * repository: a lesson's summary is saved from a scope of its own, so it is only reliably there
+     * after the scenario stopped collecting.
      */
     protected fun quizSession(
         fixtures: QuizQueueFixtures,
         beforeSession: suspend () -> Unit = {},
+        afterSession: suspend () -> Unit = {},
         scenario: suspend QuizScenario<STATE>.() -> Unit
     ) = runTest(mainDispatcherRule.dispatcher) {
         beforeSession()
@@ -168,7 +187,7 @@ abstract class QuizSessionContractTest<STATE : Any> {
 
         subject.uiState.test {
             startSession(subject, this)
-            val scenarioBody = QuizScenario(subject, this, ::question)
+            val scenarioBody = QuizScenario(subject, this, ::question, ::sessionFinished, ::isAbandoned)
             // A scenario starts with a live question on screen: a lesson's start leaves it on a study
             // card and a review emits a few queue states, and typing into either would be dropped —
             // the shared flow no-ops when no question is showing.
@@ -176,6 +195,7 @@ abstract class QuizSessionContractTest<STATE : Any> {
             scenarioBody.scenario()
             cancelAndIgnoreRemainingEvents()
         }
+        afterSession()
     }
 
     /**
@@ -205,10 +225,15 @@ abstract class QuizSessionContractTest<STATE : Any> {
     class QuizScenario<STATE : Any>(
         private val subject: QuizSessionSubject<STATE>,
         private val states: ReceiveTurbine<STATE>,
-        private val question: (STATE) -> QuizQuestionView?
+        private val question: (STATE) -> QuizQuestionView?,
+        private val sessionFinished: (STATE) -> Boolean,
+        private val isAbandoned: (STATE) -> Boolean
     ) {
         /** The question the scenario is looking at — the one the harness waited for before starting. */
         private lateinit var current: QuizQuestionView
+
+        /** The question on screen right now, without waiting for a new state. */
+        val questionOnScreen: QuizQuestionView get() = current
 
         internal fun startFrom(view: QuizQuestionView) {
             current = view
@@ -227,6 +252,8 @@ abstract class QuizSessionContractTest<STATE : Any> {
         suspend fun reveal() = subject.revealAnswer()
 
         suspend fun undo() = subject.undoLastAnswer()
+
+        suspend fun abandonSession() = subject.abandonSession()
 
         suspend fun continueToNextQuestion() {
             subject.onContinue()
@@ -261,6 +288,19 @@ abstract class QuizSessionContractTest<STATE : Any> {
 
         /** The next state that is a question with feedback showing — a grade has landed. */
         suspend fun awaitGraded(): QuizQuestionView = awaitQuestion { it.feedbackPresent }
+
+        /** Waits out whatever else the session emits until its report is on screen. */
+        suspend fun awaitSessionFinished(): STATE = awaitState(sessionFinished)
+
+        /** Waits out whatever else the session emits until it is marked abandoned. */
+        suspend fun awaitAbandoned(): STATE = awaitState(isAbandoned)
+
+        private suspend fun awaitState(matching: (STATE) -> Boolean): STATE {
+            while (true) {
+                val state = states.awaitItem()
+                if (matching(state)) return state
+            }
+        }
     }
 
     // ------------------------------------------------------------------ scenarios
@@ -483,6 +523,119 @@ abstract class QuizSessionContractTest<STATE : Any> {
         reveal()
         assertThat(awaitPlayedAudio().url).isEqualTo(KANJI_AUDIO_URL)
         assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
+    }
+
+    /**
+     * Backgrounding pauses the session's total timer and returning resumes it: the time spent away is
+     * not folded in as active study time, and the accumulated total is carried across rather than
+     * restarted.
+     */
+    protected fun backgroundingPausesTheTotalTimer() = quizSession(radicalQueue) {
+        assertThat(questionOnScreen.timing.sessionActiveSegmentStartMs).isNotNull()
+
+        appForegroundTracker.onStop(FakeLifecycleOwner)
+        val paused = awaitQuestion()
+        assertThat(paused.timing.sessionActiveSegmentStartMs).isNull()
+        val elapsedWhilePaused = paused.timing.sessionActiveElapsedMs
+
+        appForegroundTracker.onStart(FakeLifecycleOwner)
+        val resumed = awaitQuestion()
+        assertThat(resumed.timing.sessionActiveSegmentStartMs).isNotNull()
+        assertThat(resumed.timing.sessionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+    }
+
+    /**
+     * The per-question timer pauses and resumes exactly like the session one — a regression guard: it
+     * used to be plain wall-clock (now minus a stored "question shown at") with no connection to the
+     * foreground tracker, so backgrounding mid-question inflated both the live display and the
+     * elapsedMs recorded for "slowest answers".
+     */
+    protected fun backgroundingPausesThePerQuestionTimer() = quizSession(radicalQueue) {
+        assertThat(questionOnScreen.timing.questionActiveSegmentStartMs).isNotNull()
+
+        appForegroundTracker.onStop(FakeLifecycleOwner)
+        val paused = awaitQuestion()
+        assertThat(paused.timing.questionActiveSegmentStartMs).isNull()
+        val elapsedWhilePaused = paused.timing.questionActiveElapsedMs
+
+        appForegroundTracker.onStart(FakeLifecycleOwner)
+        val resumed = awaitQuestion()
+        assertThat(resumed.timing.questionActiveSegmentStartMs).isNotNull()
+        assertThat(resumed.timing.questionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+
+        // Grading now must record an elapsedMs built on that same paused-and-resumed total, not a
+        // fresh wall-clock read from when the question first appeared.
+        type(resumed.answers.first())
+        submit()
+        assertThat(awaitGraded().timing.questionElapsedMs).isAtLeast(elapsedWhilePaused)
+    }
+
+    /**
+     * Undoing a wrong reading answer takes the surfaced reading and its pitch accents down with the
+     * feedback: a typo's hint must not linger behind the retry.
+     */
+    protected fun undoingAReadingAnswerClearsItsHint() = quizSession(
+        fixtures = vocabQueue,
+        beforeSession = { settingsRepository.setShowAnswerReadingPitchAccent(true) }
+    ) {
+        awaitQuestionOfType(QuestionType.READING)
+
+        // A typo, not a genuine miss — undoable.
+        type("けんい")
+        submit()
+        assertThat(awaitGraded().feedbackIsCorrect).isFalse()
+
+        undo()
+        val undone = awaitQuestion()
+        assertThat(undone.feedbackPresent).isFalse()
+        assertThat(undone.answerHint).isNull()
+    }
+
+    /**
+     * Undoing a wrong answer takes it out of the session's record: the correct retry is the answer
+     * that counts. What "counts" means is the one thing the two features keep differently — a lesson
+     * writes a summary when the session ends, a review keeps a remaining-questions count on the state
+     * — so each supplies its own bookkeeping check: [afterSession] once the session's states have
+     * stopped being collected, or [verifyUndo] on the undone state.
+     */
+    protected fun undoingAMissKeepsItOutOfTheRecord(
+        afterSession: suspend () -> Unit = {},
+        verifyUndo: (QuizQuestionView) -> Unit = {}
+    ) = quizSession(radicalQueue, afterSession = afterSession) {
+        type("wrong")
+        submit()
+        assertThat(awaitGraded().feedbackIsCorrect).isFalse()
+
+        undo()
+        val undone = awaitQuestion()
+        assertThat(undone.feedbackPresent).isFalse()
+        assertThat(undone.answerInput).isEmpty()
+        verifyUndo(undone)
+
+        type(undone.answers.first())
+        submit()
+        assertThat(awaitGraded().feedbackIsCorrect).isTrue()
+
+        continueToNextQuestion()
+        awaitSessionFinished()
+    }
+
+    /**
+     * Abandoning a session leaves nothing behind: the state says it was abandoned, and the queue it
+     * was holding is gone from wherever that feature persists it — [loadPersistedSession] returns the
+     * feature's own session type or null.
+     */
+    protected fun abandoningASessionClearsItsPersistedState(
+        loadPersistedSession: suspend () -> Any?
+    ) = quizSession(radicalQueue) {
+        // There has to be something to clear: the harness only gets here with a live question on
+        // screen, which is past the session's first persist.
+        assertThat(loadPersistedSession()).isNotNull()
+
+        abandonSession()
+        awaitAbandoned()
+
+        assertThat(loadPersistedSession()).isNull()
     }
 
     private companion object {

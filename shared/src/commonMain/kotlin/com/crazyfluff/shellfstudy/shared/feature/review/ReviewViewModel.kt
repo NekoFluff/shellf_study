@@ -65,7 +65,8 @@ import kotlinx.coroutines.launch
 
 data class ReviewUiState(
     val phase: Phase = Phase.Loading,
-    // Deliberately not folded into Phase — see LessonUiState.isAbandoned's doc comment for why.
+    // Deliberately not folded into Phase — see LessonUiState.exit's doc comment for why. A review has
+    // only the one way out, so a boolean rather than that feature's sealed exit request.
     val isAbandoned: Boolean = false
 ) : QuizSessionState<ReviewUiState, ReviewUiState.Phase.Active, ReviewItem> {
 

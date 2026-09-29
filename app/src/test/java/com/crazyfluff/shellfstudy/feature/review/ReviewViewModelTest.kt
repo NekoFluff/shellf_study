@@ -98,6 +98,11 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     override fun createSubject(scope: TestScope): QuizSessionSubject<ReviewUiState> =
         scope.createViewModel().asSubject()
 
+    override fun sessionFinished(state: ReviewUiState): Boolean =
+        state.phase is ReviewUiState.Phase.Complete
+
+    override fun isAbandoned(state: ReviewUiState): Boolean = state.isAbandoned
+
     override fun dispatchSessionFetches(assignments: MockResponse, subjects: MockResponse) =
         dispatch(assignments, subjects)
 
@@ -117,7 +122,9 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
             // A review folds the live pitch accents into the hint itself.
             pitchAccents = active.answerHint?.pitchAccents,
             remainingCount = active.remainingCount,
-            answerTypeMismatchCount = active.answerTypeMismatchCount
+            answerTypeMismatchCount = active.answerTypeMismatchCount,
+            answerInput = active.answerInput,
+            timing = active.timing
         )
     }
 
@@ -138,6 +145,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
         override fun undoLastAnswer() = viewModel.undoLastAnswer()
         override fun toggleDetails() = viewModel.toggleDetails()
         override fun closeDetails() = viewModel.closeDetails()
+        override fun abandonSession() = viewModel.abandonSession()
     }
 
     private fun ReviewViewModel.asSubject() = ReviewSubject(this)
@@ -649,38 +657,9 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
-    fun `undo reverts an incorrect answer so it doesn't count as a miss`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-
-            viewModel.onAnswerInputChange("typo")
-            awaitItem()
-            viewModel.submitAnswer()
-            val incorrectState = awaitItem()
-            assertThat((incorrectState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
-
-            viewModel.undoLastAnswer()
-            val undoneState = awaitItem()
-            assertThat((undoneState.phase as ReviewUiState.Phase.Active).feedback).isNull()
-            assertThat((undoneState.phase as ReviewUiState.Phase.Active).answerInput).isEmpty()
-            // Undo doesn't requeue a duplicate — remaining count is back to exactly one question.
-            assertThat((undoneState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
-
-            viewModel.onAnswerInputChange("Mouth")
-            awaitItem()
-            viewModel.submitAnswer()
-            val correctState = awaitItem()
-            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
-
-            viewModel.onContinue()
-            val finalState = awaitItem()
-            assertThat((finalState.phase is ReviewUiState.Phase.Complete)).isTrue()
-        }
+    fun `undo reverts an incorrect answer so it doesn't count as a miss`() = undoingAMissKeepsItOutOfTheRecord { undone ->
+        // Undo doesn't requeue a duplicate — remaining count is back to exactly one question.
+        assertThat(undone.remainingCount).isEqualTo(1)
     }
 
     @Test
@@ -867,24 +846,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
-    fun `abandonSession clears persisted state and marks the session abandoned`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            assertThat(reviewSessionRepository.load()).isNotNull()
-
-            viewModel.abandonSession()
-            var abandonedState = awaitItem()
-            while (!abandonedState.isAbandoned) abandonedState = awaitItem()
-            assertThat(abandonedState.isAbandoned).isTrue()
-        }
-
-        assertThat(reviewSessionRepository.load()).isNull()
-    }
+    fun `abandonSession clears persisted state and marks the session abandoned`() = abandoningASessionClearsItsPersistedState { reviewSessionRepository.load() }
 
     @Test
     fun `abandonSession still commits a correct answer that hasn't been continued past yet`() = runTest(mainDispatcherRule.dispatcher) {
@@ -1100,39 +1062,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     fun `a kanji reading question never surfaces the hint even with the setting on`() = kanjiReadingQuestionNeverShowsAHint()
 
     @Test
-    fun `undoing a reading answer clears the surfaced reading and pitch accents`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange("Testword")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            // A typo, not a genuine miss — undoable.
-            viewModel.onAnswerInputChange("けんい")
-            awaitItem()
-            viewModel.submitAnswer()
-            var settled = awaitItem()
-            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
-            assertThat((settled.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
-
-            viewModel.undoLastAnswer()
-            val undoneState = awaitItem()
-            val active = undoneState.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback).isNull()
-            assertThat(active.answerHint).isNull()
-        }
-    }
+    fun `undoing a reading answer clears the surfaced reading and pitch accents`() = undoingAReadingAnswerClearsItsHint()
 
     @Test
     fun `disabling close-enough answers requires an exact meaning match`() = runTest(mainDispatcherRule.dispatcher) {
@@ -1457,68 +1387,10 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
-    fun `backgrounding the app pauses the total timer, and returning to it resumes without resetting the accumulated time`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            assertThat((state.phase as ReviewUiState.Phase.Active).timing.sessionActiveSegmentStartMs).isNotNull()
-
-            appForegroundTracker.onStop(FakeLifecycleOwner)
-            val pausedState = awaitItem()
-            assertThat((pausedState.phase as ReviewUiState.Phase.Active).timing.sessionActiveSegmentStartMs).isNull()
-            val elapsedWhilePaused = (pausedState.phase as ReviewUiState.Phase.Active).timing.sessionActiveElapsedMs
-
-            appForegroundTracker.onStart(FakeLifecycleOwner)
-            val resumedState = awaitItem()
-            assertThat((resumedState.phase as ReviewUiState.Phase.Active).timing.sessionActiveSegmentStartMs).isNotNull()
-            // Resumes right where it left off — the time spent "away" (backgrounded) must not have
-            // been folded in as if it were active review time.
-            assertThat((resumedState.phase as ReviewUiState.Phase.Active).timing.sessionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
-        }
-    }
+    fun `backgrounding the app pauses the total timer, and returning to it resumes without resetting the accumulated time`() = backgroundingPausesTheTotalTimer()
 
     @Test
-    fun `backgrounding the app pauses the per-question timer, and returning to it resumes without resetting the accumulated time`() = runTest(mainDispatcherRule.dispatcher) {
-        // Regression test: the per-question timer used to be plain wall-clock (Clock.System.now()
-        // minus a stored "question shown at" timestamp) with no connection to AppForegroundTracker,
-        // so backgrounding mid-question inflated both the live display and the elapsedMs recorded
-        // for "slowest answers". It's now driven by the same QuizSessionTiming primitive as the
-        // total-session timer above, so it must behave identically across a background/foreground
-        // cycle.
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            assertThat((state.phase as ReviewUiState.Phase.Active).timing.questionActiveSegmentStartMs).isNotNull()
-
-            appForegroundTracker.onStop(FakeLifecycleOwner)
-            val pausedState = awaitItem()
-            assertThat((pausedState.phase as ReviewUiState.Phase.Active).timing.questionActiveSegmentStartMs).isNull()
-            val elapsedWhilePaused = (pausedState.phase as ReviewUiState.Phase.Active).timing.questionActiveElapsedMs
-
-            appForegroundTracker.onStart(FakeLifecycleOwner)
-            val resumedState = awaitItem()
-            assertThat((resumedState.phase as ReviewUiState.Phase.Active).timing.questionActiveSegmentStartMs).isNotNull()
-            // Resumes right where it left off — the time spent "away" (backgrounded) must not have
-            // been folded in as if it were active question time.
-            assertThat((resumedState.phase as ReviewUiState.Phase.Active).timing.questionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
-
-            // Grading now must record an elapsedMs built on that same paused-and-resumed total, not
-            // a fresh wall-clock read from when the question first appeared.
-            viewModel.onAnswerInputChange("Mouth")
-            awaitItem()
-            viewModel.submitAnswer()
-            val gradedState = awaitItem()
-            assertThat((gradedState.phase as ReviewUiState.Phase.Active).timing.questionElapsedMs).isAtLeast(elapsedWhilePaused)
-        }
-    }
+    fun `backgrounding the app pauses the per-question timer, and returning to it resumes without resetting the accumulated time`() = backgroundingPausesThePerQuestionTimer()
 
     @Test
     fun `backgrounding the app after completing a session does not resurrect a resumable session`() = runTest(mainDispatcherRule.dispatcher) {
