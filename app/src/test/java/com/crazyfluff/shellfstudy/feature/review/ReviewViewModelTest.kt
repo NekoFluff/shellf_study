@@ -61,48 +61,97 @@ import com.crazyfluff.shellfstudy.fakes.waniKaniAssignmentsJson
 import com.crazyfluff.shellfstudy.fakes.waniKaniSubjectsJson
 import com.crazyfluff.shellfstudy.fakes.MIZU_AUDIO
 import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
+import app.cash.turbine.ReceiveTurbine
+import com.crazyfluff.shellfstudy.feature.quiz.QuizQuestionView
+import com.crazyfluff.shellfstudy.feature.quiz.QuizQueueFixtures
+import com.crazyfluff.shellfstudy.feature.quiz.QuizSessionContractTest
+import com.crazyfluff.shellfstudy.feature.quiz.QuizSessionSubject
 
-class ReviewViewModelTest {
+class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
 
-    @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
+    // The rules, the mock server, the repository graph and the base wiring come from the harness;
+    // what follows is what a review has that a lesson does not.
 
-    @get:Rule
-    val tempFolder = TemporaryFolder()
-
-    private lateinit var server: MockWebServer
-    private lateinit var assignmentRepository: AssignmentRepository
-    private lateinit var outboxRepository: OutboxRepository
     private lateinit var statsRepository: StatsRepository
     private lateinit var reviewSessionRepository: ReviewSessionRepository
-    private lateinit var lastSessionSummaryRepository: LastSessionSummaryRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var pronunciationAudioPlayer: FakePronunciationAudioPlayer
-    private lateinit var appForegroundTracker: AppForegroundTracker
-    private lateinit var repositories: TestRepositories
+
+
+    // ------------------------------------------------------------------ harness hooks
+
+    override val radicalQueue = QuizQueueFixtures(
+        assignments = radicalAssignmentsJson(),
+        subjects = radicalSubjectsJson()
+    )
+
+    override val vocabQueue = QuizQueueFixtures(
+        assignments = vocabAssignmentsJson(),
+        subjects = vocabSubjectsJson()
+    )
+
+    override val kanjiQueue = QuizQueueFixtures(
+        assignments = kanjiAssignmentsJson(),
+        subjects = kanjiSubjectsJson()
+    )
+
+    override fun createSubject(scope: TestScope): QuizSessionSubject<ReviewUiState> =
+        scope.createViewModel().asSubject()
+
+    override fun dispatchSessionFetches(assignments: MockResponse, subjects: MockResponse) =
+        dispatch(assignments, subjects)
+
+    /** The question a review is asking, or null while it is loading or showing its summary. */
+    override fun question(state: ReviewUiState): QuizQuestionView? {
+        val active = state.phase as? ReviewUiState.Phase.Active ?: return null
+        return QuizQuestionView(
+            questionType = active.currentQuestionType,
+            answers = when (active.currentQuestionType) {
+                QuestionType.MEANING -> active.currentItem.meanings
+                QuestionType.READING -> active.currentItem.readings
+            },
+            feedbackPresent = active.feedback != null,
+            feedbackIsCorrect = active.feedback?.isCorrect,
+            answerRevealed = active.answerRevealed,
+            answerHint = active.answerHint,
+            remainingCount = active.remainingCount,
+            answerTypeMismatchCount = active.answerTypeMismatchCount
+        )
+    }
+
+    /** A review is asking its first question as soon as the queue loads. */
+    override suspend fun startSession(
+        subject: QuizSessionSubject<ReviewUiState>,
+        states: ReceiveTurbine<ReviewUiState>
+    ) = Unit
+
+    /** Adapts the ViewModel to the harness's action set — production code carries no test interface. */
+    private class ReviewSubject(val viewModel: ReviewViewModel) : QuizSessionSubject<ReviewUiState> {
+        override val uiState get() = viewModel.uiState
+        override fun onAnswerInputChange(value: String) = viewModel.onAnswerInputChange(value)
+        override fun submitAnswer() = viewModel.submitAnswer()
+        override fun dontKnowAnswer() = viewModel.dontKnowAnswer()
+        override fun onContinue() = viewModel.onContinue()
+        override fun revealAnswer() = viewModel.revealAnswer()
+        override fun undoLastAnswer() = viewModel.undoLastAnswer()
+        override fun toggleDetails() = viewModel.toggleDetails()
+        override fun closeDetails() = viewModel.closeDetails()
+    }
+
+    private fun ReviewViewModel.asSubject() = ReviewSubject(this)
 
     @Before
     fun setUp() {
-        server = MockWebServer()
-        server.start()
-        repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)
-        assignmentRepository = repositories.assignmentRepository
+        startHarness()
         statsRepository = repositories.statsRepository
-        val sessionDao = FakeSessionDao()
-        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
-            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
-            produceFile = { tempFolder.newFile("test.preferences_pb") }
+        reviewSessionRepository = ReviewSessionRepository(FakeSessionDao(), dataStore, Json { ignoreUnknownKeys = true })
+
+        // A separate DataStore from the session one: a review's settings are read through their own
+        // store so a session write cannot re-emit every settings collector.
+        settingsRepository = SettingsRepository(
+            PreferenceDataStoreFactory.create(
+                scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
+                produceFile = { tempFolder.newFile("settings.preferences_pb") }
+            )
         )
-        reviewSessionRepository = ReviewSessionRepository(sessionDao, dataStore, Json { ignoreUnknownKeys = true })
-        lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, Json { ignoreUnknownKeys = true })
-        outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
-        val settingsDataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
-            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
-            produceFile = { tempFolder.newFile("settings.preferences_pb") }
-        )
-        settingsRepository = SettingsRepository(settingsDataStore)
-        pronunciationAudioPlayer = FakePronunciationAudioPlayer()
-        appForegroundTracker = AppForegroundTracker()
     }
 
     @After
@@ -1336,74 +1385,13 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `require tap to reveal answer gates a wrong answer's text until revealAnswer is called`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-
-            viewModel.onAnswerInputChange("wrong")
-            awaitItem()
-            viewModel.submitAnswer()
-            var settled = awaitItem()
-            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
-            var active = settled.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback?.isCorrect).isFalse()
-            assertThat(active.answerRevealed).isFalse()
-
-            viewModel.revealAnswer()
-            active = awaitItem().phase as ReviewUiState.Phase.Active
-            assertThat(active.answerRevealed).isTrue()
-        }
-    }
+    fun `require tap to reveal answer gates a wrong answer's text until revealAnswer is called`() = wrongAnswerWaitsForReveal()
 
     @Test
-    fun `giving up always reveals the answer regardless of the require-tap setting`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-
-            viewModel.dontKnowAnswer()
-            var settled = awaitItem()
-            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
-            val active = settled.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback?.isCorrect).isFalse()
-            assertThat(active.answerRevealed).isTrue()
-        }
-    }
+    fun `giving up always reveals the answer regardless of the require-tap setting`() = giveUpAlwaysReveals()
 
     @Test
-    fun `a correct close-match answer is never gated by the require-tap setting`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-
-            // "Mouth" (the correct answer) with the last two letters transposed — a close match,
-            // still graded correct with closeEnoughAnswersEnabled at its default (true).
-            viewModel.onAnswerInputChange("Mouht")
-            awaitItem()
-            viewModel.submitAnswer()
-            var settled = awaitItem()
-            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
-            val active = settled.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback?.isCorrect).isTrue()
-            assertThat(active.answerRevealed).isTrue()
-        }
-    }
+    fun `a correct close-match answer is never gated by the require-tap setting`() = closeMatchIsNeverGated()
 
     @Test
     fun `require tap to reveal answer withholds a wrong reading question's pronunciation audio until revealed`() = runTest(mainDispatcherRule.dispatcher) {
@@ -1441,43 +1429,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `require tap to reveal answer withholds a wrong reading question's answer hint until revealed`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        settingsRepository.setRequireTapToRevealReadingAnswer(true)
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange("Testword")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            // A genuine miss, not a typo — graded incorrect (see the undo test above using the
-            // same fixture/wrong reading).
-            viewModel.onAnswerInputChange("けんい")
-            awaitItem()
-            viewModel.submitAnswer()
-            var settled = awaitItem()
-            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
-            var active = settled.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback?.isCorrect).isFalse()
-            assertThat(active.answerRevealed).isFalse()
-            assertThat(active.answerHint).isNull()
-
-            viewModel.revealAnswer()
-            active = awaitItem().phase as ReviewUiState.Phase.Active
-            assertThat(active.answerRevealed).isTrue()
-            assertThat(active.answerHint?.reading).isEqualTo("けんあ")
-        }
-    }
+    fun `require tap to reveal answer withholds a wrong reading question's answer hint until revealed`() = wrongReadingWaitsForRevealBeforeShowingItsHint()
 
     @Test
     fun `require tap to reveal meaning answer does not gate a wrong reading answer`() = runTest(mainDispatcherRule.dispatcher) {

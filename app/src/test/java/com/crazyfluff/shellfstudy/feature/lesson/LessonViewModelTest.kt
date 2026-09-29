@@ -70,48 +70,100 @@ import com.crazyfluff.shellfstudy.fakes.waniKaniAssignmentsJson
 import com.crazyfluff.shellfstudy.fakes.waniKaniSubjectsJson
 import com.crazyfluff.shellfstudy.fakes.MIZU_AUDIO
 import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
+import com.crazyfluff.shellfstudy.feature.quiz.QuizQuestionView
+import com.crazyfluff.shellfstudy.feature.quiz.QuizQueueFixtures
+import com.crazyfluff.shellfstudy.feature.quiz.QuizSessionContractTest
+import com.crazyfluff.shellfstudy.feature.quiz.QuizSessionSubject
 
-class LessonViewModelTest {
+class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
 
-    @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
+    // The rules, the mock server, the repository graph and the settings repository come from the
+    // harness; what follows is what a lesson has that a review does not.
 
-    @get:Rule
-    val tempFolder = TemporaryFolder()
-
-    private lateinit var server: MockWebServer
-    private lateinit var repositories: TestRepositories
-    private lateinit var assignmentRepository: AssignmentRepository
-    private lateinit var outboxRepository: OutboxRepository
     private lateinit var lessonSessionRepository: LessonSessionRepository
-    private lateinit var lastSessionSummaryRepository: LastSessionSummaryRepository
     private lateinit var pitchAccentRepository: PitchAccentRepository
-    private lateinit var settingsRepository: SettingsRepository
     private lateinit var subjectRepository: SubjectRepository
     private var strokeOrderRepository: StrokeOrderRepository = FakeStrokeOrderRepository()
-    private lateinit var pronunciationAudioPlayer: FakePronunciationAudioPlayer
-    private lateinit var appForegroundTracker: AppForegroundTracker
+
+
+    // ------------------------------------------------------------------ harness hooks
+
+    override val radicalQueue = QuizQueueFixtures(
+        assignments = radicalAssignmentsJson(),
+        subjects = radicalSubjectsJson()
+    )
+
+    override val vocabQueue = QuizQueueFixtures(
+        assignments = vocabAssignmentsJson(),
+        subjects = vocabSubjectsJson()
+    )
+
+    override val kanjiQueue = QuizQueueFixtures(
+        assignments = kanjiAssignmentsJson(),
+        subjects = kanjiSubjectsJson()
+    )
+
+    override fun createSubject(scope: TestScope): QuizSessionSubject<LessonUiState> =
+        scope.createViewModel().asSubject()
+
+    /** The question a lesson is asking, or null while it is loading, selecting or studying. */
+    override fun question(state: LessonUiState): QuizQuestionView? {
+        val quiz = state.phase as? LessonUiState.Phase.Quiz ?: return null
+        return QuizQuestionView(
+            questionType = quiz.currentQuestionType,
+            answers = when (quiz.currentQuestionType) {
+                QuestionType.MEANING -> quiz.currentItem.meanings
+                QuestionType.READING -> quiz.currentItem.readings
+            },
+            feedbackPresent = quiz.feedback != null,
+            feedbackIsCorrect = quiz.feedback?.isCorrect,
+            answerRevealed = quiz.answerRevealed,
+            answerHint = quiz.answerHint,
+            remainingCount = quiz.remainingQuizCount,
+            answerTypeMismatchCount = quiz.answerTypeMismatchCount
+        )
+    }
+
+    override fun dispatchSessionFetches(assignments: MockResponse, subjects: MockResponse) =
+        dispatch(assignments, subjects)
+
+    /** A lesson starts at the selection screen and studies its first card before it asks anything. */
+    override suspend fun startSession(
+        subject: QuizSessionSubject<LessonUiState>,
+        states: ReceiveTurbine<LessonUiState>
+    ) {
+        val viewModel = (subject as LessonSubject).viewModel
+        var state = states.awaitItem()
+        while (state.phase is LessonUiState.Phase.Loading) state = states.awaitItem()
+
+        viewModel.startSelectedLessons()
+        states.awaitItem()
+        viewModel.nextStudyCard()
+    }
+
+    /** Adapts the ViewModel to the harness's action set — production code carries no test interface. */
+    private class LessonSubject(val viewModel: LessonViewModel) : QuizSessionSubject<LessonUiState> {
+        override val uiState get() = viewModel.uiState
+        override fun onAnswerInputChange(value: String) = viewModel.onAnswerInputChange(value)
+        override fun submitAnswer() = viewModel.submitAnswer()
+        override fun dontKnowAnswer() = viewModel.dontKnowAnswer()
+        override fun onContinue() = viewModel.onContinue()
+        override fun revealAnswer() = viewModel.revealAnswer()
+        override fun undoLastAnswer() = viewModel.undoLastAnswer()
+        override fun toggleDetails() = viewModel.toggleDetails()
+        override fun closeDetails() = viewModel.closeDetails()
+    }
+
+    private fun LessonViewModel.asSubject() = LessonSubject(this)
 
     @Before
     fun setUp() {
-        server = MockWebServer()
-        server.start()
-        val sessionDao = FakeSessionDao()
-        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
-            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
-            produceFile = { tempFolder.newFile("test.preferences_pb") }
-        )
+        startHarness()
         settingsRepository = SettingsRepository(dataStore)
-        repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)
-        assignmentRepository = repositories.assignmentRepository
+        lessonSessionRepository = LessonSessionRepository(FakeSessionDao(), dataStore, Json { ignoreUnknownKeys = true })
         pitchAccentRepository = repositories.pitchAccentRepository
         subjectRepository = repositories.subjectRepository
         strokeOrderRepository = FakeStrokeOrderRepository()
-        outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore)
-        lessonSessionRepository = LessonSessionRepository(sessionDao, dataStore, Json { ignoreUnknownKeys = true })
-        lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, Json { ignoreUnknownKeys = true })
-        pronunciationAudioPlayer = FakePronunciationAudioPlayer()
-        appForegroundTracker = AppForegroundTracker()
     }
 
     @After
@@ -375,47 +427,7 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `require tap to reveal answer withholds a wrong reading question's answer hint until revealed`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        settingsRepository.setRequireTapToRevealReadingAnswer(true)
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            state = awaitItem() // quiz begins
-
-            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange("Testword")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            // A genuine miss, not a typo — graded incorrect (see the undo test above using the
-            // same fixture/wrong reading).
-            viewModel.onAnswerInputChange("けんい")
-            awaitItem()
-            viewModel.submitAnswer()
-            var quiz = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.feedback?.isCorrect).isFalse()
-            assertThat(quiz.answerRevealed).isFalse()
-            assertThat(quiz.answerHint).isNull()
-
-            viewModel.revealAnswer()
-            quiz = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.answerRevealed).isTrue()
-            assertThat(quiz.answerHint?.reading).isEqualTo("けんあ")
-        }
-    }
+    fun `require tap to reveal answer withholds a wrong reading question's answer hint until revealed`() = wrongReadingWaitsForRevealBeforeShowingItsHint()
 
     @Test
     fun `require tap to reveal answer withholds a wrong reading question's pronunciation audio until revealed`() = runTest(mainDispatcherRule.dispatcher) {
@@ -1067,83 +1079,13 @@ class LessonViewModelTest {
     }
 
     @Test
-    fun `require tap to reveal answer gates a wrong answer's text until revealAnswer is called`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            awaitItem() // quiz begins
-
-            viewModel.onAnswerInputChange("wrong")
-            awaitItem()
-            viewModel.submitAnswer()
-            var quiz = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.feedback?.isCorrect).isFalse()
-            assertThat(quiz.answerRevealed).isFalse()
-
-            viewModel.revealAnswer()
-            quiz = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.answerRevealed).isTrue()
-        }
-    }
+    fun `require tap to reveal answer gates a wrong answer's text until revealAnswer is called`() = wrongAnswerWaitsForReveal()
 
     @Test
-    fun `giving up always reveals the answer regardless of the require-tap setting`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            awaitItem() // quiz begins
-
-            viewModel.dontKnowAnswer()
-            val quiz = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.feedback?.isCorrect).isFalse()
-            assertThat(quiz.answerRevealed).isTrue()
-        }
-    }
+    fun `giving up always reveals the answer regardless of the require-tap setting`() = giveUpAlwaysReveals()
 
     @Test
-    fun `a correct close-match answer is never gated by the require-tap setting`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            awaitItem() // quiz begins
-
-            // "Mouth" (the correct answer) with the last two letters transposed — a close match,
-            // still graded correct with closeEnoughAnswersEnabled at its default (true).
-            viewModel.onAnswerInputChange("Mouht")
-            awaitItem()
-            viewModel.submitAnswer()
-            val quiz = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.feedback?.isCorrect).isTrue()
-            assertThat(quiz.answerRevealed).isTrue()
-        }
-    }
+    fun `a correct close-match answer is never gated by the require-tap setting`() = closeMatchIsNeverGated()
 
     @Test
     fun `a new ViewModel resumes a persisted study session on the same card instead of restarting selection`() = runTest(mainDispatcherRule.dispatcher) {
