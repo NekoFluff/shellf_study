@@ -2,19 +2,13 @@ package com.crazyfluff.shellfstudy.di
 
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.work.WorkerParameters
+import com.crazyfluff.shellfstudy.core.audio.audioModule
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.shared.di.sharedAppModules
 import com.crazyfluff.shellfstudy.shared.session.PersistedSessionStore
+import com.google.common.truth.Truth.assertThat
 import io.ktor.client.engine.HttpClientEngine
-import com.crazyfluff.shellfstudy.shared.di.appForegroundTrackerModule
-import com.crazyfluff.shellfstudy.shared.di.coroutineScopeModule
-import com.crazyfluff.shellfstudy.shared.di.networkModule
-import com.crazyfluff.shellfstudy.shared.di.repositoryModule
-import com.crazyfluff.shellfstudy.shared.di.strokeOrderModule
-import com.crazyfluff.shellfstudy.shared.di.viewModelModule
-import com.crazyfluff.shellfstudy.core.data.dataStoreModule
-import com.crazyfluff.shellfstudy.core.database.databaseModule
-import com.crazyfluff.shellfstudy.core.notifications.notificationModule
-import com.crazyfluff.shellfstudy.core.sync.syncModule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.dsl.module
@@ -22,47 +16,42 @@ import org.koin.test.verify.verify
 import org.robolectric.annotation.Config
 
 /**
- * Static graph verification: confirms every constructor dependency across the core modules has a
- * registered provider, catching "forgot to wire X" bugs without starting a real Koin context.
+ * Static graph verification: confirms every constructor dependency in the modules the app actually
+ * installs has a registered provider, catching "forgot to wire X" without starting a real Koin
+ * context.
  *
- * Two modules are intentionally excluded:
- * - [audioModule]: ExoPlayer uses a builder pattern — the `SimpleCache` and `ExoPlayer` constructors
- *   have parameters (File, CacheEvictor, Builder internals) that aren't Koin bindings, so static
- *   analysis would produce false negatives. Audio wiring is exercised in integration instead.
- * - [workerModule]: Worker factories construct [OutboxDrainer] inline (rather than via Koin) to
- *   avoid a context-chain issue with Koin 4.x's KoinWorkerFactory. Worker correctness is covered
- *   by the dedicated SyncWorkerTest / OutboxSyncWorkerTest suites.
+ * The modules under test are [appModules] itself rather than a hand-written list, and that distinction
+ * is the point: a list copied into the test drifts from the one the app installs, and the test keeps
+ * passing while the real graph breaks. It also means the shared half — [sharedAppModules], which iOS
+ * installs too — is covered here, where the previous version checked only a hand-picked subset.
+ *
+ * One module is still excluded: [audioModule]. ExoPlayer uses a builder pattern — `SimpleCache(File,
+ * CacheEvictor)` and `ExoPlayer.Builder` take parameters that are not Koin bindings, so static analysis
+ * reports them as missing. Audio wiring is exercised in integration instead.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class AppModulesVerificationTest {
 
     @Test
-    fun `all non-worker non-audio module bindings are fully connected`() {
+    fun `every module the app installs is fully connected`() {
         // verifyAll() runs each module in isolation, so cross-module deps aren't visible. A single
         // wrapper module that includes all the modules under test gives the verifier the full graph.
         val allModules = module {
-            includes(
-                networkModule,
-                databaseModule,
-                dataStoreModule,
-                repositoryModule,
-                strokeOrderModule,
-                coroutineScopeModule,
-                appForegroundTrackerModule,
-                syncModule,
-                notificationModule,
-                viewModelModule,
-            )
+            appModules.filterNot { it === audioModule }.forEach { includes(it) }
         }
         allModules.verify(
             extraTypes = listOf(
                 // Provided at runtime via androidContext() — declared as external so the verifier
                 // treats it as always-available rather than a missing binding.
                 Context::class,
-                // PronunciationAudioPlayer comes from audioModule, which is excluded above.
-                // Declaring it as extra lets the verifier confirm the ViewModels that inject it
-                // still have a complete graph (the binding itself is wired, just not verified here).
+                // Supplied by KoinWorkerFactory from its own arguments rather than by a definition —
+                // see workerModule's comment. This is the last unresolved parameter workerModule has,
+                // now that OutboxDrainer is a registered bean instead of being built inline: the
+                // module used to be excluded from this test for exactly that reason.
+                WorkerParameters::class,
+                // Declared by the excluded audioModule above; naming it here still lets the verifier
+                // confirm the ViewModels that inject it have a complete graph.
                 PronunciationAudioPlayer::class,
                 // Ktor's HttpClient constructor takes HttpClientEngine internally; the actual engine
                 // (OkHttp) is supplied at construction time by createWaniKaniHttpClient(), not via Koin.
@@ -79,5 +68,14 @@ class AppModulesVerificationTest {
                 PersistedSessionStore::class,
             )
         )
+    }
+
+    /**
+     * The shared half has to be a prefix, not merely a subset: that is what makes it structurally
+     * impossible for a module to be installed on one platform and missing from the other.
+     */
+    @Test
+    fun `the shared modules lead the app's list`() {
+        assertThat(appModules.take(sharedAppModules.size)).isEqualTo(sharedAppModules)
     }
 }

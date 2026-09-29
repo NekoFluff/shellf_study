@@ -5,24 +5,18 @@ import com.crazyfluff.shellfstudy.core.data.dataStoreModule
 import com.crazyfluff.shellfstudy.core.database.databaseModule
 import com.crazyfluff.shellfstudy.core.notifications.notificationModule
 import com.crazyfluff.shellfstudy.core.sync.syncModule
-import com.crazyfluff.shellfstudy.shared.di.appForegroundTrackerModule
-import com.crazyfluff.shellfstudy.shared.di.coroutineScopeModule
-import com.crazyfluff.shellfstudy.shared.di.networkModule
-import com.crazyfluff.shellfstudy.shared.di.repositoryModule
-import com.crazyfluff.shellfstudy.shared.di.strokeOrderModule
-import com.crazyfluff.shellfstudy.shared.di.viewModelModule
+import com.crazyfluff.shellfstudy.shared.di.sharedAppModules
 
-val appModules = listOf(
-    networkModule,
+/**
+ * The shared graph plus Android's beans. Anything both platforms need lives in [sharedAppModules],
+ * so this list and iOS's cannot drift apart in the shared half — the only difference between the two
+ * is what is genuinely platform-specific, which is what a reader should see when comparing them.
+ */
+val appModules = sharedAppModules + listOf(
     databaseModule,
     dataStoreModule,
-    repositoryModule,
-    strokeOrderModule,
     audioModule,
-    coroutineScopeModule,
-    appForegroundTrackerModule,
     notificationModule,
     syncModule,
-    viewModelModule,
-    workerModule
+    workerModule,
 )

@@ -5,7 +5,6 @@ import com.crazyfluff.shellfstudy.core.notifications.DeferredNotificationWorker
 import com.crazyfluff.shellfstudy.core.notifications.ReviewNotificationWorker
 import com.crazyfluff.shellfstudy.core.sync.OutboxSyncWorker
 import com.crazyfluff.shellfstudy.core.sync.SyncWorker
-import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.dsl.worker
 import org.koin.dsl.module
@@ -18,12 +17,7 @@ val workerModule = module {
         OutboxSyncWorker(
             appContext = androidContext(),
             params = it.get(),
-            outboxDrainer = OutboxDrainer(
-                outboxDao = get(),
-                waniKaniRepository = get(),
-                assignmentRepository = get(),
-                outboxRepository = get()
-            )
+            outboxDrainer = get()
         )
     }
 

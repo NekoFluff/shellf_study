@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.di
 
 import com.crazyfluff.shellfstudy.shared.ThemeViewModel
 import com.crazyfluff.shellfstudy.shared.data.AccountDataCleaner
+import com.crazyfluff.shellfstudy.shared.data.CmpPitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
@@ -10,7 +11,9 @@ import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
+import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
@@ -35,8 +38,12 @@ import com.crazyfluff.shellfstudy.shared.network.AuthTokenProvider
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient
 import com.crazyfluff.shellfstudy.shared.network.waniKaniJson
+import com.crazyfluff.shellfstudy.shared.notifications.DefaultNotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
+import com.crazyfluff.shellfstudy.shared.notifications.NotificationStateRepository
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
+import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -176,6 +183,56 @@ val repositoryModule = module {
     }
 
     single { PitchAccentRepository(bundledSource = get()) }
+
+    // Shared rather than redeclared per platform module: this reads bundled compose resources, which
+    // exist on both platforms.
+    single { CmpPitchAccentBundledSource() } bind PitchAccentBundledSource::class
+}
+
+/**
+ * The outbox drainer and the sync orchestrator — shared classes with shared dependencies.
+ *
+ * Both used to be declared once per platform with identical arguments, and the drainer was not
+ * registered at all: it was constructed inline inside two different platform definitions, so its four
+ * collaborators were re-listed wherever it was needed. None of that could be verified on iOS.
+ */
+val syncOrchestrationModule = module {
+    single {
+        OutboxDrainer(
+            outboxDao = get(),
+            waniKaniRepository = get(),
+            assignmentRepository = get(),
+            outboxRepository = get()
+        )
+    }
+    single {
+        SyncOrchestrator(
+            transactionRunner = get(),
+            subjectRepository = get(),
+            assignmentRepository = get(),
+            statsRepository = get(),
+            syncStateDao = get()
+        )
+    }
+}
+
+/**
+ * The platform-agnostic half of notifications: the state repository and the default coordinator.
+ * Each platform supplies only a [com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler]
+ * and a [com.crazyfluff.shellfstudy.shared.notifications.NotificationPoster].
+ */
+val notificationCoordinatorModule = module {
+    single { NotificationStateRepository(get()) }
+    single {
+        DefaultNotificationCoordinator(
+            assignmentRepository = get(),
+            statsRepository = get(),
+            settingsRepository = get(),
+            notificationStateRepository = get(),
+            notificationScheduler = get(),
+            notificationPoster = get()
+        )
+    } bind NotificationCoordinator::class
 }
 
 val viewModelModule = module {
@@ -248,3 +305,23 @@ val viewModelModule = module {
         )
     }
 }
+
+/**
+ * Every module both platforms use, in one list.
+ *
+ * Each platform's own list is `sharedAppModules + <its platform beans>`, so a module can no longer
+ * exist on one platform and be missing from the other: the shared half has a single definition, and
+ * what each platform adds is exactly what is platform-specific. Before this, four shared graph blocks
+ * were hand-copied into both lists — SyncOrchestrator, the notification coordinator, the pitch-accent
+ * source and the outbox drainer — and the iOS copy was verified by nothing at all.
+ */
+val sharedAppModules = listOf(
+    networkModule,
+    repositoryModule,
+    strokeOrderModule,
+    coroutineScopeModule,
+    appForegroundTrackerModule,
+    syncOrchestrationModule,
+    notificationCoordinatorModule,
+    viewModelModule
+)
