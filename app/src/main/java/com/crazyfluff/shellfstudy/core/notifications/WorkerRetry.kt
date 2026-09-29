@@ -9,6 +9,9 @@ import kotlin.coroutines.cancellation.CancellationException
  * `runCatching` would catch the [CancellationException] WorkManager uses to stop a worker, and
  * answering it with a retry keeps a cancelled chain alive.
  */
+// Any failure is worth a retry here, and the exception has nowhere better to go: WorkManager only
+// hears success or retry.
+@Suppress("TooGenericExceptionCaught", "SwallowedException")
 internal inline fun retryOnFailure(block: () -> Unit): Result = try {
     block()
     Result.success()

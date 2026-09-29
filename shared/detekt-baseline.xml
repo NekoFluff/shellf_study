@@ -1,0 +1,380 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:CloseEnoughMatcher.kt:CloseEnoughMatcher$i &gt; 1 &amp;&amp; j &gt; 1 &amp;&amp; a[i - 1] == b[j - 2] &amp;&amp; a[i - 2] == b[j - 1]</ID>
+    <ID>ComplexCondition:ReviewViewModel.kt:ReviewViewModel$hint == null || it.currentItem.assignmentId != hint.first.assignmentId || current == null || current.reading != hint.first.reading || it.feedback == null</ID>
+    <ID>ComplexCondition:ReviewViewModel.kt:ReviewViewModel$type == QuestionType.READING &amp;&amp; settings.showAnswerReadingPitchAccent &amp;&amp; isPitchAccentEligible(item.subjectType) &amp;&amp; characters != null</ID>
+    <ID>ComplexCondition:SubjectRepository.kt:SubjectRepository$entity != null &amp;&amp; (type == SubjectType.VOCABULARY || type == SubjectType.KANA_VOCABULARY) &amp;&amp; entity.primaryReadingKey.isNotEmpty()</ID>
+    <ID>CyclomaticComplexMethod:DashboardScreen.kt:@Composable fun DashboardRoute</ID>
+    <ID>CyclomaticComplexMethod:DashboardViewModel.kt:DashboardViewModel$fun onDashboardResumed</ID>
+    <ID>CyclomaticComplexMethod:LessonScreen.kt:@Composable private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent</ID>
+    <ID>CyclomaticComplexMethod:LessonScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionContent</ID>
+    <ID>CyclomaticComplexMethod:RaceChartCard.kt:@Composable private fun ActivityWindowChart</ID>
+    <ID>CyclomaticComplexMethod:RaceChartCard.kt:@Composable private fun LevelRaceChart</ID>
+    <ID>CyclomaticComplexMethod:ReviewForecastCard.kt:@Composable private fun ReviewForecastBarChart</ID>
+    <ID>CyclomaticComplexMethod:RomajiConverter.kt:RomajiConverter$fun convert: Conversion</ID>
+    <ID>CyclomaticComplexMethod:SubjectDetailSheet.kt:@Composable fun SubjectDetailSheet</ID>
+    <ID>EmptyFunctionBlock:PlatformBackHandler.ios.kt:{ }</ID>
+    <ID>FunctionNaming:IosEntry.kt:fun MainViewController: UIViewController</ID>
+    <ID>LargeClass:LessonViewModel.kt:LessonViewModel : QuizSessionViewModelLessonActions</ID>
+    <ID>LongMethod:AuthScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun AuthScreen</ID>
+    <ID>LongMethod:DashboardScreen.kt:@Composable private fun DashboardTopBar</ID>
+    <ID>LongMethod:DashboardScreen.kt:private fun LazyListScope.dashboardItems</ID>
+    <ID>LongMethod:LastSessionSummaryScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun LastSessionSummaryScreen</ID>
+    <ID>LongMethod:LeaderboardCard.kt:@Composable fun LeaderboardCard</ID>
+    <ID>LongMethod:LeaderboardCard.kt:@Composable private fun LeaderboardRow</ID>
+    <ID>LongMethod:LeaderboardScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun LeaderboardScreen</ID>
+    <ID>LongMethod:LessonScreen.kt:@Composable private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteContent</ID>
+    <ID>LongMethod:LessonScreen.kt:@Composable private fun androidx.compose.foundation.layout.ColumnScope.LessonPhaseContent</ID>
+    <ID>LongMethod:LessonScreen.kt:@Composable private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent</ID>
+    <ID>LongMethod:LessonScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionContent</ID>
+    <ID>LongMethod:LevelProgressCard.kt:@Composable private fun SubjectTypeProgressRow</ID>
+    <ID>LongMethod:QuizAnswerField.kt:@Composable fun QuizAnswerField</ID>
+    <ID>LongMethod:QuizQuestionContent.kt:@Composable private fun &lt;T : QuizDisplayItem&gt; ColumnScope.QuizAnswerArea</ID>
+    <ID>LongMethod:QuizQuestionContent.kt:@Composable private fun &lt;T : QuizDisplayItem&gt; ColumnScope.QuizPrompt</ID>
+    <ID>LongMethod:QuizQuestionContent.kt:@Composable private fun &lt;T : QuizDisplayItem&gt; QuizProgressHeader</ID>
+    <ID>LongMethod:QuizScreenScaffold.kt:@Composable fun QuizScreenScaffold</ID>
+    <ID>LongMethod:RaceChartCard.kt:@Composable private fun ActivityWindowChart</ID>
+    <ID>LongMethod:RaceChartCard.kt:@Composable private fun LevelRaceChart</ID>
+    <ID>LongMethod:ReviewForecastCard.kt:@Composable fun ReviewForecastCard</ID>
+    <ID>LongMethod:ReviewForecastCard.kt:@Composable private fun ReviewForecastBarChart</ID>
+    <ID>LongMethod:SessionSummaryCards.kt:@Composable fun SessionCompleteContent</ID>
+    <ID>LongMethod:SettingsScreen.kt:@Composable private fun NotificationsSection</ID>
+    <ID>LongMethod:SettingsScreen.kt:@Composable private fun ReviewsSection</ID>
+    <ID>LongMethod:SettingsScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen</ID>
+    <ID>LongMethod:ShellfStudyNavHost.kt:@Composable fun ShellfStudyNavHost</ID>
+    <ID>LongMethod:SubjectDetailSheet.kt:@Composable fun SubjectDetailSheet</ID>
+    <ID>LongMethod:SubjectDetailSheet.kt:@Composable private fun ColumnScope.SubjectDetailBody</ID>
+    <ID>LongMethod:SubjectSearchOverlay.kt:@Composable fun SubjectSearchOverlay</ID>
+    <ID>LongMethod:SubjectSearchOverlay.kt:@Composable private fun SubjectResultRow</ID>
+    <ID>LongMethod:WritingPracticeSection.kt:@Composable fun WritingPracticeSection</ID>
+    <ID>LoopWithTooManyJumpStatements:CloseEnoughMatcher.kt:CloseEnoughMatcher$for</ID>
+    <ID>LoopWithTooManyJumpStatements:WkMnemonicText.kt:for</ID>
+    <ID>MagicNumber:ActivityBarBuilder.kt:11</ID>
+    <ID>MagicNumber:ActivityBarBuilder.kt:12</ID>
+    <ID>MagicNumber:ActivityBarBuilder.kt:6</ID>
+    <ID>MagicNumber:AssignmentStatsRepository.kt:3600</ID>
+    <ID>MagicNumber:CloseEnoughMatcher.kt:CloseEnoughMatcher$3</ID>
+    <ID>MagicNumber:CloseEnoughMatcher.kt:CloseEnoughMatcher$5</ID>
+    <ID>MagicNumber:CloseEnoughMatcher.kt:CloseEnoughMatcher$7</ID>
+    <ID>MagicNumber:DateRollover.kt:3600</ID>
+    <ID>MagicNumber:ElapsedTimeText.kt:1000</ID>
+    <ID>MagicNumber:ElapsedTimeText.kt:60</ID>
+    <ID>MagicNumber:FriendStats.kt:ActivityBuckets$12</ID>
+    <ID>MagicNumber:FriendStats.kt:ActivityBuckets$30</ID>
+    <ID>MagicNumber:FriendStats.kt:ActivityBuckets$7</ID>
+    <ID>MagicNumber:FriendStatsCalculations.kt:11</ID>
+    <ID>MagicNumber:FriendStatsCalculations.kt:29</ID>
+    <ID>MagicNumber:FriendStatsCalculations.kt:6</ID>
+    <ID>MagicNumber:JankStatsTracker.kt:JankStatsTracker$1_000_000.0</ID>
+    <ID>MagicNumber:JankStatsTracker.kt:JankStatsTracker.FrameCounters$100</ID>
+    <ID>MagicNumber:JankStatsTracker.kt:JankStatsTracker.FrameCounters$1_000_000.0</ID>
+    <ID>MagicNumber:LeaderboardPalette.kt:0xFF00695C</ID>
+    <ID>MagicNumber:LeaderboardPalette.kt:0xFF1565C0</ID>
+    <ID>MagicNumber:LeaderboardPalette.kt:0xFFE65100</ID>
+    <ID>MagicNumber:LevelProgressCard.kt:3</ID>
+    <ID>MagicNumber:LevelProgressCard.kt:4</ID>
+    <ID>MagicNumber:QuizAnswerField.kt:12f</ID>
+    <ID>MagicNumber:QuizAnswerField.kt:4f</ID>
+    <ID>MagicNumber:QuizAnswerField.kt:8f</ID>
+    <ID>MagicNumber:RaceChartCard.kt:0.25f</ID>
+    <ID>MagicNumber:RaceChartCard.kt:0.5f</ID>
+    <ID>MagicNumber:RaceChartCard.kt:0.75f</ID>
+    <ID>MagicNumber:RaceChartCard.kt:3</ID>
+    <ID>MagicNumber:RaceChartCard.kt:4f</ID>
+    <ID>MagicNumber:RaceChartCard.kt:6f</ID>
+    <ID>MagicNumber:RelativeTimeFormatting.kt:24</ID>
+    <ID>MagicNumber:RelativeTimeFormatting.kt:60</ID>
+    <ID>MagicNumber:RomajiConverter.kt:RomajiConverter$3</ID>
+    <ID>MagicNumber:SettingsRepository.kt:SettingsRepository$23</ID>
+    <ID>MagicNumber:SettingsScreen.kt:24</ID>
+    <ID>MagicNumber:SrsStage.kt:SrsStage.APPRENTICE_3$3</ID>
+    <ID>MagicNumber:SrsStage.kt:SrsStage.APPRENTICE_4$4</ID>
+    <ID>MagicNumber:SrsStage.kt:SrsStage.BURNED$9</ID>
+    <ID>MagicNumber:SrsStage.kt:SrsStage.ENLIGHTENED$8</ID>
+    <ID>MagicNumber:SrsStage.kt:SrsStage.GURU_1$5</ID>
+    <ID>MagicNumber:SrsStage.kt:SrsStage.GURU_2$6</ID>
+    <ID>MagicNumber:SrsStage.kt:SrsStage.MASTER$7</ID>
+    <ID>MagicNumber:StatRow.kt:10</ID>
+    <ID>MagicNumber:SubjectReviewStats.kt:100</ID>
+    <ID>MatchingDeclarationName:CompletionProjectionCard.kt:CompletionProjectionTestTags</ID>
+    <ID>MatchingDeclarationName:ContextSentenceRow.kt:ContextSentenceRowTestTags</ID>
+    <ID>MatchingDeclarationName:ItemSpreadCard.kt:ItemSpreadTestTags</ID>
+    <ID>MatchingDeclarationName:LastSessionSummaryScreen.kt:LastSessionSummaryScreenTestTags</ID>
+    <ID>MatchingDeclarationName:LessonScreen.kt:LessonScreenTestTags</ID>
+    <ID>MatchingDeclarationName:LevelProgressCard.kt:LevelProgressTestTags</ID>
+    <ID>MatchingDeclarationName:NavigationExtensions.kt:PopBackStackDebouncer</ID>
+    <ID>MatchingDeclarationName:PageCollector.kt:PaginationException : Exception</ID>
+    <ID>MatchingDeclarationName:PitchAccentDiagram.kt:PitchAccentTestTags</ID>
+    <ID>MatchingDeclarationName:QuizAnswerField.kt:QuizAnswerFieldTestTags</ID>
+    <ID>MatchingDeclarationName:QuizScreenScaffold.kt:QuizScreenChromeTestTags</ID>
+    <ID>MatchingDeclarationName:QuizSessionJankState.kt:QuizAnswerJankState</ID>
+    <ID>MatchingDeclarationName:ReviewForecastCard.kt:ReviewForecastTestTags</ID>
+    <ID>MatchingDeclarationName:ReviewScreen.kt:ReviewScreenTestTags</ID>
+    <ID>MatchingDeclarationName:ShellfStudyNavHost.kt:ShellfStudyDestination</ID>
+    <ID>MatchingDeclarationName:SplashScreen.kt:SplashScreenTestTags</ID>
+    <ID>MatchingDeclarationName:SubjectDetailSheetHost.kt:SubjectDetailSheetState</ID>
+    <ID>MatchingDeclarationName:SubjectSearchOverlay.kt:SearchOverlayTestTags</ID>
+    <ID>MatchingDeclarationName:SubjectStatsSection.kt:SubjectStatsTestTags</ID>
+    <ID>MatchingDeclarationName:WritingCanvas.kt:WritingPracticeTestTags</ID>
+    <ID>MaxLineLength:ActivityBarBuilder.kt:ActivityBar(MonthNames.ENGLISH_ABBREVIATED.names[targetMonth], entries.map { buckets(it).yearMonths.getOrElse(i) { 0 } })</ID>
+    <ID>MaxLineLength:ActivityBarBuilder.kt:val label = "${MonthNames.ENGLISH_ABBREVIATED.names[totalMonths % 12]} '${(totalMonths / 12 % 100).toString().padStart(2, '0')}"</ID>
+    <ID>MaxLineLength:ActivityBarBuilderTest.kt:ActivityBarBuilderTest$assertNotEquals(activityChartSubtitle(LeaderboardWindow.YEAR), activityChartSubtitle(LeaderboardWindow.ALL_TIME))</ID>
+    <ID>MaxLineLength:ActivityBarBuilderTest.kt:ActivityBarBuilderTest$val bars = buildActivityBars(listOf(e1, e2), LeaderboardMetric.LEARNED, LeaderboardWindow.ALL_TIME, nowMillis, tz)</ID>
+    <ID>MaxLineLength:ActivityBucketsSerializationTest.kt:ActivityBucketsSerializationTest$val decoded = json.decodeFromString(ActivityBuckets.serializer(), json.encodeToString(ActivityBuckets.serializer(), original))</ID>
+    <ID>MaxLineLength:AssignmentEntity.kt:AssignmentDao$@Query("SELECT * FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt &lt;= :nowIso ORDER BY availableAt ASC")</ID>
+    <ID>MaxLineLength:AssignmentEntity.kt:AssignmentDao$@Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt &lt;= :nowIso AND EXISTS (SELECT 1 FROM subjects WHERE subjects.id = assignments.subjectId)")</ID>
+    <ID>MaxLineLength:AssignmentEntity.kt:AssignmentDao$@Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND unlockedAt IS NOT NULL AND startedAt IS NULL AND EXISTS (SELECT 1 FROM subjects WHERE subjects.id = assignments.subjectId)")</ID>
+    <ID>MaxLineLength:AssignmentEntity.kt:AssignmentDao$@Query("SELECT availableAt, subjectType, srsStage FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt &gt; :nowIso ORDER BY availableAt ASC")</ID>
+    <ID>MaxLineLength:AssignmentEntity.kt:AssignmentDao$@Query("SELECT srsStage, subjectType, COUNT(*) as count FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL GROUP BY srsStage, subjectType")</ID>
+    <ID>MaxLineLength:AssignmentRepository.kt:AssignmentRepository$assignmentDao.upsertAll(listOf(assignment.withStageTransition(result.endingSrsStage, srsSystem, Clock.System.now())))</ID>
+    <ID>MaxLineLength:AssignmentRepository.kt:AssignmentRepository$assignmentDao.upsertAll(listOf(assignment.withStageTransition(srsSystem.startingStagePosition, srsSystem, Clock.System.now())))</ID>
+    <ID>MaxLineLength:AssignmentRepository.kt:private</ID>
+    <ID>MaxLineLength:AssignmentStatsRepository.kt:AssignmentStatsRepository$availableNowCountsByNextStage = availableNow.groupingBy { nextStageBucketFor(it.srsStage) }.eachCount()</ID>
+    <ID>MaxLineLength:AssignmentStatsRepository.kt:AssignmentStatsRepository$availableNowCountsByType = availableNow.groupingBy { SubjectType.fromWkString(it.subjectType) }.eachCount()</ID>
+    <ID>MaxLineLength:AssignmentStatsRepository.kt:AssignmentStatsRepository$combine</ID>
+    <ID>MaxLineLength:AssignmentStatsRepository.kt:SrsStage.APPRENTICE_1, SrsStage.APPRENTICE_2, SrsStage.APPRENTICE_3, SrsStage.APPRENTICE_4 -&gt; ItemSpreadBucket.APPRENTICE</ID>
+    <ID>MaxLineLength:ChunkedIdsTest.kt:ChunkedIdsTest$assertTrue(queried.all { it.size &lt;= 900 }, "a chunk exceeded the bound-variable limit: ${queried.map { it.size }}")</ID>
+    <ID>MaxLineLength:DashboardScreen.kt:text = "Finished batches are kept. Lessons in the batch you're on that you haven't finished, and every batch after it, are dropped from this session — they stay available to study later."</ID>
+    <ID>MaxLineLength:DashboardScreen.kt:text = "Progress on reviews you haven't finished yet will be lost. This won't affect items you've already submitted."</ID>
+    <ID>MaxLineLength:DetailRevealModeTest.kt:DetailRevealModeTest$assertFalse(canOfferForceReveal(DetailRevealMode.HIDE_UNTIL_ANSWERED, hasBackStack = false, forceRevealAll = true))</ID>
+    <ID>MaxLineLength:DetailRevealModeTest.kt:DetailRevealModeTest$assertFalse(canOfferForceReveal(DetailRevealMode.HIDE_UNTIL_ANSWERED, hasBackStack = true, forceRevealAll = false))</ID>
+    <ID>MaxLineLength:DetailRevealModeTest.kt:DetailRevealModeTest$assertTrue(canOfferForceReveal(DetailRevealMode.HIDE_UNTIL_ANSWERED, hasBackStack = false, forceRevealAll = false))</ID>
+    <ID>MaxLineLength:DetailRevealModeTest.kt:DetailRevealModeTest$resolveEffectiveRevealMode(DetailRevealMode.HIDE_UNTIL_ANSWERED, hasBackStack = false, forceRevealAll = false)</ID>
+    <ID>MaxLineLength:DetailRevealModeTest.kt:DetailRevealModeTest$resolveEffectiveRevealMode(DetailRevealMode.HIDE_UNTIL_ANSWERED, hasBackStack = false, forceRevealAll = true)</ID>
+    <ID>MaxLineLength:DetailRevealModeTest.kt:DetailRevealModeTest$resolveEffectiveRevealMode(DetailRevealMode.HIDE_UNTIL_ANSWERED, hasBackStack = true, forceRevealAll = false)</ID>
+    <ID>MaxLineLength:FriendStatsRepository.kt:FriendStatsRepository$private suspend</ID>
+    <ID>MaxLineLength:ItemSpreadCard.kt:SpreadSegment(ItemSpreadBucket.APPRENTICE, "Apprentice", spread?.apprenticeCount ?: 0, srsStageColor(SrsStage.APPRENTICE_1))</ID>
+    <ID>MaxLineLength:ItemSpreadCard.kt:SpreadSegment(ItemSpreadBucket.BURNED, "Burned", spread?.burnedCount ?: 0, srsStageColor(SrsStage.BURNED))</ID>
+    <ID>MaxLineLength:ItemSpreadCard.kt:SpreadSegment(ItemSpreadBucket.ENLIGHTENED, "Enlightened", spread?.enlightenedCount ?: 0, srsStageColor(SrsStage.ENLIGHTENED))</ID>
+    <ID>MaxLineLength:ItemSpreadCard.kt:SpreadSegment(ItemSpreadBucket.LOCKED, "Locked", spread?.lockedCount ?: 0, srsStageColor(SrsStage.LOCKED))</ID>
+    <ID>MaxLineLength:ItemSpreadCard.kt:SpreadSegment(ItemSpreadBucket.MASTER, "Master", spread?.masterCount ?: 0, srsStageColor(SrsStage.MASTER))</ID>
+    <ID>MaxLineLength:LastSessionSummaryScreen.kt:CircularProgressIndicator(modifier = Modifier.testTag(LastSessionSummaryScreenTestTags.LOADING_INDICATOR))</ID>
+    <ID>MaxLineLength:LeaderboardViewModel.kt:LeaderboardViewModel$_uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(nickname = value, status = AddFriendStatus.Editing())) }</ID>
+    <ID>MaxLineLength:LeaderboardViewModel.kt:LeaderboardViewModel$_uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(status = AddFriendStatus.Editing(error = "Please enter a nickname."))) }</ID>
+    <ID>MaxLineLength:LeaderboardViewModel.kt:LeaderboardViewModel$_uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(status = AddFriendStatus.Editing(error = "Please enter an API token."))) }</ID>
+    <ID>MaxLineLength:LeaderboardViewModel.kt:LeaderboardViewModel$_uiState.update { it.copy(addFriendForm = it.addFriendForm.copy(token = value, status = AddFriendStatus.Editing())) }</ID>
+    <ID>MaxLineLength:LeaderboardViewModel.kt:LeaderboardViewModel$it.copy(addFriendForm = it.addFriendForm.copy(status = AddFriendStatus.Editing(error = result.message)))</ID>
+    <ID>MaxLineLength:LessonPrioritizerTest.kt:LessonPrioritizerTest$val notReadyResult = LessonPrioritizer.prioritize(listOf(kanji, earlyVocab, laterVocab), notReady, isStrained = false)</ID>
+    <ID>MaxLineLength:LessonScreen.kt:.</ID>
+    <ID>MaxLineLength:LessonScreen.kt:abandonDialogText = "Finished batches are kept. Lessons in the batch you're on that you haven't finished, and every batch after it, are dropped from this session — they stay available to study later."</ID>
+    <ID>MaxLineLength:LessonScreen.kt:border = if (allSelected) null else FilterChipDefaults.filterChipBorder(enabled = true, selected = false)</ID>
+    <ID>MaxLineLength:LessonScreen.kt:modifier = Modifier.testTag(LessonScreenTestTags.lessonCheckboxTag(lessonItem.assignmentId))</ID>
+    <ID>MaxLineLength:LessonScreen.kt:val isVocabulary = item.subjectType == SubjectType.VOCABULARY || item.subjectType == SubjectType.KANA_VOCABULARY</ID>
+    <ID>MaxLineLength:LessonSessionPlanner.kt:LessonSessionPlanner$val target = if (remainingDailyGoal &gt;= 1) minOf(normalizeBatchSize(batchSize), remainingDailyGoal) else normalizeBatchSize(batchSize)</ID>
+    <ID>MaxLineLength:LessonSessionPlannerTest.kt:LessonSessionPlannerTest$assertEquals(0, LessonSessionPlanner.defaultSelectionSize(availableCount = 0, batchSize = 5, remainingDailyGoal = 15))</ID>
+    <ID>MaxLineLength:LessonSessionPlannerTest.kt:LessonSessionPlannerTest$assertEquals(2, LessonSessionPlanner.defaultSelectionSize(availableCount = 20, batchSize = 5, remainingDailyGoal = 2))</ID>
+    <ID>MaxLineLength:LessonSessionPlannerTest.kt:LessonSessionPlannerTest$assertEquals(3, LessonSessionPlanner.defaultSelectionSize(availableCount = 3, batchSize = 5, remainingDailyGoal = 15))</ID>
+    <ID>MaxLineLength:LessonSessionPlannerTest.kt:LessonSessionPlannerTest$assertEquals(4, LessonSessionPlanner.defaultSelectionSize(availableCount = 4, batchSize = 5, remainingDailyGoal = 0))</ID>
+    <ID>MaxLineLength:LessonSessionPlannerTest.kt:LessonSessionPlannerTest$assertEquals(5, LessonSessionPlanner.defaultSelectionSize(availableCount = 20, batchSize = 5, remainingDailyGoal = -3))</ID>
+    <ID>MaxLineLength:LessonSessionPlannerTest.kt:LessonSessionPlannerTest$assertEquals(5, LessonSessionPlanner.defaultSelectionSize(availableCount = 20, batchSize = 5, remainingDailyGoal = 0))</ID>
+    <ID>MaxLineLength:LessonSessionPlannerTest.kt:LessonSessionPlannerTest$assertEquals(5, LessonSessionPlanner.defaultSelectionSize(availableCount = 20, batchSize = 5, remainingDailyGoal = 15))</ID>
+    <ID>MaxLineLength:LessonSessionRepository.kt:PersistedLessonSession$PersistedLessonPhase.QUIZ -&gt; (quizQueue.map { it.assignmentId } + progress.map { it.assignmentId }).distinct()</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$it.copy(answerHint = answerReading?.let { reading -&gt; AnswerReadingHint(reading = reading, audio = answerReadingAudio) })</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$itemsCorrectFirstTry = completedProgress.count { p -&gt; !p.hadIncorrectMeaning &amp;&amp; !p.hadIncorrectReading }</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$onPause = { newElapsed -&gt; updateQuizTiming { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$override</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$pitchAccentItems.value</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$private suspend</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$startedAssignmentIds = if (isNewlyStarted) session.startedAssignmentIds + item.assignmentId else session.startedAssignmentIds</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$subjectRepository.observeSubjectSummaries(relatedIds).map { it.associateBy { s -&gt; s.subjectId } }</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$updateSelect { select -&gt; select.copy(selectedAssignmentIds = select.availableLessons.map { it.assignmentId }.toSet()) }</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$updateSelect { select -&gt; select.copy(selectedAssignmentIds = select.availableLessons.take(count).map { it.assignmentId }.toSet()) }</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$val</ID>
+    <ID>MaxLineLength:LessonViewModel.kt:LessonViewModel$val newRankChange = if (isNewlyStarted) assignmentRepository.computeLessonStartRankChange(item.srsSystemId) else null</ID>
+    <ID>MaxLineLength:LevelProgressCard.kt:modifier = Modifier.fillMaxWidth().testTag(LevelProgressTestTags.DETAIL_PREFIX + entry.subjectType.name)</ID>
+    <ID>MaxLineLength:LevelProgressCard.kt:val</ID>
+    <ID>MaxLineLength:LocalClock.kt:*</ID>
+    <ID>MaxLineLength:Migrations.kt:&lt;no name provided&gt;$connection.execSQL("CREATE INDEX IF NOT EXISTS `index_assignments_hidden_availableAt` ON `assignments` (`hidden`, `availableAt`)")</ID>
+    <ID>MaxLineLength:Migrations.kt:&lt;no name provided&gt;$connection.execSQL("CREATE INDEX IF NOT EXISTS `index_assignments_hidden_burnedAt` ON `assignments` (`hidden`, `burnedAt`)")</ID>
+    <ID>MaxLineLength:Migrations.kt:&lt;no name provided&gt;$connection.execSQL("CREATE INDEX IF NOT EXISTS `index_assignments_hidden_srsStage_subjectType` ON `assignments` (`hidden`, `srsStage`, `subjectType`)")</ID>
+    <ID>MaxLineLength:Migrations.kt:&lt;no name provided&gt;$connection.execSQL("CREATE INDEX IF NOT EXISTS `index_assignments_hidden_startedAt` ON `assignments` (`hidden`, `startedAt`)")</ID>
+    <ID>MaxLineLength:NotificationCoordinator.kt:DefaultNotificationCoordinator$is WatermarkDecision.ResetWatermark -&gt; notificationStateRepository.updateReviewWatermark(decision.newWatermark)</ID>
+    <ID>MaxLineLength:NotificationCoordinator.kt:DefaultNotificationCoordinator$notificationScheduler.scheduleDeferredNotification(DeferredNotificationCategory.BACKLOG, quietHoursEnd(settings, now))</ID>
+    <ID>MaxLineLength:NotificationStateRepository.kt:NotificationStateRepository$lastBacklogNotifiedAt = prefs[lastBacklogNotifiedAtKey]?.let { runCatching { Instant.parse(it) }.getOrNull() }</ID>
+    <ID>MaxLineLength:OutboxDao.kt:OutboxDao$@Query("UPDATE pending_review_submissions SET status = 'FAILED_TERMINAL', lastErrorMessage = :message WHERE id = :id")</ID>
+    <ID>MaxLineLength:OutboxDatabase.kt:OutboxDatabase$@Database(entities = [PendingReviewSubmissionEntity::class, PendingLessonStartEntity::class], version = 1, exportSchema = true)</ID>
+    <ID>MaxLineLength:OutboxRepository.kt:OutboxRepository$PendingLessonStartEntity(assignmentId = assignmentId, subjectId = subjectId, startedAt = Clock.System.now().toString())</ID>
+    <ID>MaxLineLength:OutboxRepository.kt:OutboxRepository$combine</ID>
+    <ID>MaxLineLength:PageCollectorTest.kt:PageCollectorTest$data = items.map { WkResourceItem(id = it.toLong(), objectType = "test", url = "https://api.wanikani.com/v2/test/$it", data = it) }</ID>
+    <ID>MaxLineLength:PitchAccentDiagram.kt:Row</ID>
+    <ID>MaxLineLength:QuestionTypeTest.kt:QuestionTypeTest$assertNull(PersistedQuestion(assignmentId = 7, questionType = "READING").toPendingQuestionOrNull(emptyMap&lt;Long, ReviewItem&gt;()))</ID>
+    <ID>MaxLineLength:QuizAnswering.kt:fun</ID>
+    <ID>MaxLineLength:QuizAnswering.kt:if (type == QuestionType.MEANING) settings.requireTapToRevealMeaningAnswer else settings.requireTapToRevealReadingAnswer</ID>
+    <ID>MaxLineLength:QuizFeedbackControls.kt:private</ID>
+    <ID>MaxLineLength:QuizFeedbackControls.kt:val outlinePath = Path().apply { addOutline(buttonShape.createOutline(size, layoutDirection, this@drawWithContent)) }</ID>
+    <ID>MaxLineLength:QuizQuestionContent.kt:focusResetKey = AnswerFieldFocusKey(item.assignmentId, questionType, uiState.undoCounter, uiState.questionSequence)</ID>
+    <ID>MaxLineLength:QuizQueueTest.kt:QuizQueueTest$queue.build(listOf("A", "B"), typesFor = { listOf(QuestionType.MEANING, QuestionType.READING) }, shuffle = false)</ID>
+    <ID>MaxLineLength:QuizQueueTest.kt:QuizQueueTest$queue.build(listOf("A", "B"), typesFor = { listOf(QuestionType.MEANING, QuestionType.READING) }, shuffle = false, cap = 1)</ID>
+    <ID>MaxLineLength:QuizQueueTest.kt:QuizQueueTest$queue.build(listOf("A", "B", "C"), typesFor = { listOf(QuestionType.MEANING, QuestionType.READING) }, shuffle = false, cap = 2)</ID>
+    <ID>MaxLineLength:QuizSession.kt:QuizSession$build(items, typesFor = { questionTypesFor(it.subjectType) }, shuffle = shuffle, cap = cap, priorityOf = priorityOf)</ID>
+    <ID>MaxLineLength:QuizSession.kt:QuizSession$copy(progress = progress + items.filter { it.assignmentId !in progress }.map { it.assignmentId to QuizItemProgress(it) })</ID>
+    <ID>MaxLineLength:QuizSessionTest.kt:QuizSessionTest$val firstPass = sessionOf(radical(1)).grade(isCorrect = false, elapsedMs = 5).grade(isCorrect = true, elapsedMs = 5)</ID>
+    <ID>MaxLineLength:RaceChartCard.kt:Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:RaceChartCard.kt:drawPath(path, color, style = Stroke(strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round))</ID>
+    <ID>MaxLineLength:RaceChartCard.kt:drawPath(path, user.color, style = Stroke(strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round))</ID>
+    <ID>MaxLineLength:RaceChartCard.kt:drawText(lr, labelColor, Offset((size.width - lr.size.width - 4.dp.toPx()).coerceAtLeast(0f), y - lr.size.height / 2f))</ID>
+    <ID>MaxLineLength:RaceChartCard.kt:val headerResult = textMeasurer.measure(bars[snapIdx].label, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))</ID>
+    <ID>MaxLineLength:RaceChartCard.kt:val headerResult = textMeasurer.measure(dateLabel, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold))</ID>
+    <ID>MaxLineLength:RaceChartCard.kt:val tooltipX = if (anchorX + tooltipW + 10.dp.toPx() &gt; canvasWidth) anchorX - tooltipW - 10.dp.toPx() else anchorX + 10.dp.toPx()</ID>
+    <ID>MaxLineLength:RaceChartCard.kt:val visEndMs = (globalMinMs + ((w - offsetX) / contentW * timeRange).toLong()).coerceIn(globalMinMs, nowMillis)</ID>
+    <ID>MaxLineLength:RaceChartCard.kt:val visStart = (((0f - offsetX) / contentW) * (numPoints - 1)).roundToInt().coerceIn(0, numPoints - 1)</ID>
+    <ID>MaxLineLength:RaceChartCard.kt:val visStartMs = (globalMinMs + ((0f - offsetX) / contentW * timeRange).toLong()).coerceIn(globalMinMs, nowMillis)</ID>
+    <ID>MaxLineLength:RelatedSubjectsSection.kt:fun</ID>
+    <ID>MaxLineLength:ReviewForecastCard.kt:.</ID>
+    <ID>MaxLineLength:ReviewForecastCard.kt:BarTapGeometry(isSelectable = forecast != null, barCount = barCount, yLabelColumnWidth = yLabelColumnWidth, onSelect = onSelect)</ID>
+    <ID>MaxLineLength:ReviewForecastCard.kt:SubjectType.VOCABULARY to (countsByType[SubjectType.VOCABULARY] ?: 0) + (countsByType[SubjectType.KANA_VOCABULARY] ?: 0)</ID>
+    <ID>MaxLineLength:ReviewForecastCard.kt:null -&gt; sumAcrossWindow(forecast.availableNowCountsByNextStage, forecast.buckets.map { it.countsByNextStage })</ID>
+    <ID>MaxLineLength:ReviewForecastCard.kt:private</ID>
+    <ID>MaxLineLength:ReviewForecastCard.kt:segments = segmentsByBar[index].map { (color, segmentCount) -&gt; color.copy(alpha = alpha) to segmentCount }</ID>
+    <ID>MaxLineLength:ReviewForecastCard.kt:val</ID>
+    <ID>MaxLineLength:ReviewForecastCard.kt:val barHeight = if (forecast == null) 4.dp.toPx() else (size.height * (count.toFloat() / maxCount)).coerceAtLeast(2f)</ID>
+    <ID>MaxLineLength:ReviewForecastCard.kt:val totalByThen = forecast.reviewsAvailableNow + forecast.buckets.take(selectedIndex).sumOf { it.newlyAvailableCount }</ID>
+    <ID>MaxLineLength:ReviewForecastText.kt:if (bucketHours &lt;= 1) "at ${formatHourOfDay(instant)}" else "by ${formatBucketDate(instant)}, ${formatHourOfDay(instant)}"</ID>
+    <ID>MaxLineLength:ReviewForecastWindowTest.kt:ReviewForecastWindowTest$"${window.name}: bucketHours (${window.bucketHours}) must divide totalHours (${window.totalHours}) evenly"</ID>
+    <ID>MaxLineLength:ReviewScreen.kt:abandonDialogText = "Progress on items you haven't finished yet will be lost. This won't affect items you've already submitted."</ID>
+    <ID>MaxLineLength:ReviewViewModel.kt:ReviewViewModel$answerHint = answerReading?.let { reading -&gt; AnswerReadingHint(reading = reading, audio = answerReadingAudio) }</ID>
+    <ID>MaxLineLength:ReviewViewModel.kt:ReviewViewModel$if</ID>
+    <ID>MaxLineLength:ReviewViewModel.kt:ReviewViewModel$onPause = { newElapsed -&gt; updateQuizTiming { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }</ID>
+    <ID>MaxLineLength:ReviewViewModel.kt:ReviewViewModel$override</ID>
+    <ID>MaxLineLength:ReviewViewModel.kt:ReviewViewModel$pronunciationAudioPlayer.playMatchingReading(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)</ID>
+    <ID>MaxLineLength:ReviewViewModel.kt:ReviewViewModel$updateQuiz { it.copy(isWrappingUp = true, totalCount = quiz.totalQuestions, remainingCount = quiz.remainingQuestions) }</ID>
+    <ID>MaxLineLength:ReviewViewModel.kt:ReviewViewModel$val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -&gt; rc.from != rc.to } }</ID>
+    <ID>MaxLineLength:RomajiConverter.kt:RomajiConverter$private val DOUBLING_CONSONANTS = setOf('k', 's', 't', 'p', 'g', 'z', 'd', 'b', 'c', 'j', 'f', 'h', 'm', 'r', 'y', 'w')</ID>
+    <ID>MaxLineLength:SearchViewModel.kt:SearchViewModel$SearchResults(results = matches.take(RESULT_CAP), totalMatchCount = matches.size, isSyncing = isSyncing)</ID>
+    <ID>MaxLineLength:SectionHeadings.kt:Text(text = title, modifier = modifier, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)</ID>
+    <ID>MaxLineLength:SessionSummaryCards.kt:FlowRow</ID>
+    <ID>MaxLineLength:SettingsRepository.kt:SettingsRepository$reviewPriority</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:/** Card shell used for every settings section — a small tinted icon next to the section title, matching the dashboard's card language. */</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:SettingsScreenTestTags$fun reviewPriorityOptionTag</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:SettingsScreenTestTags$val</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:SettingsScreenTestTags$val DAILY_REMINDER_HOUR_TAGS = StepperRowTestTags(DAILY_REMINDER_HOUR_DECREASE, DAILY_REMINDER_HOUR_INCREASE, DAILY_REMINDER_HOUR_VALUE)</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:SettingsScreenTestTags$val QUIET_HOURS_END_TAGS = StepperRowTestTags(QUIET_HOURS_END_DECREASE, QUIET_HOURS_END_INCREASE, QUIET_HOURS_END_VALUE)</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:SettingsScreenTestTags$val QUIET_HOURS_START_TAGS = StepperRowTestTags(QUIET_HOURS_START_DECREASE, QUIET_HOURS_START_INCREASE, QUIET_HOURS_START_VALUE)</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "After answering a reading question during lessons and reviews, shows the word's reading and its pitch-accent pattern above the character."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "Allows small typos in meaning answers (a couple of letters off from a correct answer still counts). Turn off to require an exact match."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "Disables the built-in romaji converter and sends a Japanese locale hint to your keyboard, so Gboard and similar apps switch language automatically between meaning and reading questions."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "Displays Radical, Kanji, or Vocabulary below the word during reviews and lesson quizzes — handy on e-ink screens where color alone is hard to read."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "Displays the animated stroke order diagram and writing practice canvas for kanji in the subject detail panel."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "Holds back review/backlog alerts during the window below and delivers them right after it ends. The daily reminder is skipped instead of delayed."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "On a wrong meaning answer, shows whether you were right or wrong first, then requires a separate tap to reveal the correct meaning — so you can keep thinking about it before you see it."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "On a wrong reading answer, shows whether you were right or wrong first, then requires a separate tap to reveal the correct reading (and its audio/pitch-accent hint, if enabled below) — so you can keep thinking about it before you see it."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "Only play pronunciation clips available as MP3. Every word has an MP3 version, so nothing is lost — this just guarantees playback on devices that can't play Ogg audio (e.g. e-ink readers)."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "Redacts a context sentence's English translation until tapped, so you can try reading the Japanese first."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "Shows a running clock above the progress bar for how long the current review/lesson quiz has taken."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "Shows a running clock below the progress bar for how long you've spent on the current question."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:description = "Warns you when unanswered reviews pile up past the threshold below. Won't repeat more than once every 6 hours."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:text = "Only ten items are worked on at a time during a review. This picks which of your due items fill those slots as they free up — it never changes when an item comes back for review."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:text = "Re-downloads your entire WaniKani library from scratch. Useful if some content looks wrong or missing after an app update."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt:text = "This re-downloads your entire WaniKani library from scratch instead of just what's changed. It may take longer than a normal sync and use more data."</ID>
+    <ID>MaxLineLength:ShareText.android.kt:val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$AKEBI_PACKAGE"))</ID>
+    <ID>MaxLineLength:SharedModules.kt:single { DashboardSyncCoordinator(waniKaniRepository = get(), syncOrchestrator = get(), dashboardCacheRepository = get()) }</ID>
+    <ID>MaxLineLength:ShellfStudyNavHost.kt:onOpenLastSessionSummary = { navController.navigate(ShellfStudyDestination.LastSessionSummary) { launchSingleTop = true } }</ID>
+    <ID>MaxLineLength:ShellfStudyNavHost.kt:onOpenLeaderboard = { navController.navigate(ShellfStudyDestination.Leaderboard) { launchSingleTop = true } }</ID>
+    <ID>MaxLineLength:ShellfStudyNavHost.kt:onOpenSettings = { navController.navigate(ShellfStudyDestination.Settings) { launchSingleTop = true } }</ID>
+    <ID>MaxLineLength:ShellfStudyNavHost.kt:onStartLesson = { navController.navigate(ShellfStudyDestination.Lesson) { launchSingleTop = true } }</ID>
+    <ID>MaxLineLength:ShellfStudyNavHost.kt:onStartReview = { navController.navigate(ShellfStudyDestination.Review) { launchSingleTop = true } }</ID>
+    <ID>MaxLineLength:SrsStageCalculatorTest.kt:SrsStageCalculatorTest$assertEquals(to, SrsStageCalculator.nextStageOnIncorrect(from, incorrect = 1, srsSystem = srsSystem), "from $from")</ID>
+    <ID>MaxLineLength:SrsStageUi.kt:SrsStage.ENLIGHTENED -&gt; themeAwareColor(SrsStageColors.Enlightened, EinkStageColors.Enlightened, SrsStageColorsDark.Enlightened)</ID>
+    <ID>MaxLineLength:SrsStageUi.kt:SrsStage.GURU_1, SrsStage.GURU_2 -&gt; themeAwareColor(SrsStageColors.Guru, EinkStageColors.Guru, SrsStageColorsDark.Guru)</ID>
+    <ID>MaxLineLength:StrokeOrderDiagram.kt:Icon(Icons.Filled.Replay, contentDescription = "Replay stroke order", tint = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:StrokeOrderDiagram.kt:drawCircle(color = strokeColor, radius = PEN_TIP_RADIUS_UNITS, center = measure.getPosition(distance))</ID>
+    <ID>MaxLineLength:StudyActivityDatabase.kt:&lt;no name provided&gt;$connection.execSQL("CREATE TABLE IF NOT EXISTS `study_activity_days` (`date` TEXT NOT NULL, PRIMARY KEY(`date`))")</ID>
+    <ID>MaxLineLength:SubjectAnswerSections.kt:ReadingDisplayStyle.PLAIN -&gt; JapaneseText(readings.joinToString(", "), style = MaterialTheme.typography.bodyLarge)</ID>
+    <ID>MaxLineLength:SubjectAnswerSections.kt:subjectType == SubjectType.VOCABULARY || subjectType == SubjectType.KANA_VOCABULARY -&gt; ReadingDisplayStyle.VOCABULARY</ID>
+    <ID>MaxLineLength:SubjectDetailContent.kt:SubjectHeadline</ID>
+    <ID>MaxLineLength:SubjectDetailContent.kt:fun</ID>
+    <ID>MaxLineLength:SubjectDetailContent.kt:val group = phoneticallySimilarGroup(detail.subjectType, detail.phoneticallySimilarSubjectIds, relatedSubjects) ?: return</ID>
+    <ID>MaxLineLength:SubjectDetailContent.kt:val revealMeaning = revealMode == DetailRevealMode.FULL || (isAnswered &amp;&amp; questionType == DetailQuestionType.MEANING)</ID>
+    <ID>MaxLineLength:SubjectDetailContent.kt:val revealReading = revealMode == DetailRevealMode.FULL || (isAnswered &amp;&amp; questionType == DetailQuestionType.READING)</ID>
+    <ID>MaxLineLength:SubjectDetailSheet.kt:val effectiveRevealMode = resolveEffectiveRevealMode(revealMode, uiState.backStack.isNotEmpty(), uiState.forceRevealAll)</ID>
+    <ID>MaxLineLength:SubjectDetailViewModel.kt:SubjectDetailViewModel$it.copy(backStack = it.backStack.dropLast(1), currentSubjectId = previous, pendingScrollOffset = scrollOffsets[previous] ?: 0)</ID>
+    <ID>MaxLineLength:SubjectDetailViewModel.kt:SubjectDetailViewModel$navState.update { it.copy(backStack = it.backStack + current, currentSubjectId = subjectId, pendingScrollOffset = 0) }</ID>
+    <ID>MaxLineLength:SubjectDetailViewModel.kt:SubjectDetailViewModel$val assignmentStatsFlow = detail?.let { assignmentRepository.observeAssignmentStats(it.subjectId) } ?: flowOf(null)</ID>
+    <ID>MaxLineLength:SubjectDetailViewModel.kt:SubjectDetailViewModel$val reviewStatsFlow = detail?.let { statsRepository.observeReviewStatistic(it.subjectId) } ?: flowOf(null)</ID>
+    <ID>MaxLineLength:SubjectEntity.kt:SubjectDao$/** Vocab characters for subjects the user has actually unlocked — keeps the background pitch-accent scrape from fetching data for locked/future-level vocab. */</ID>
+    <ID>MaxLineLength:SubjectGlyph.kt:characterImageUrl != null</ID>
+    <ID>MaxLineLength:SubjectRepository.kt:SubjectRepository$subjectDao.observeSearch(escapeLikeWildcards(query.lowercase())).map { entities -&gt; entities.map { it.toSubjectSummary() } }</ID>
+    <ID>MaxLineLength:SubjectRepository.kt:private</ID>
+    <ID>MaxLineLength:SubjectReviewStatsTest.kt:SubjectReviewStatsTest$val stats = reviewStats(meaningCorrect = 9, meaningIncorrect = 1, meaningCurrentStreak = 3, meaningMaxStreak = 5)</ID>
+    <ID>MaxLineLength:SubjectSearchOverlay.kt:CircularProgressIndicator(modifier = Modifier.testTag(SearchOverlayTestTags.SYNCING_STATE))</ID>
+    <ID>MaxLineLength:SubjectSearchOverlay.kt:HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))</ID>
+    <ID>MaxLineLength:SubjectSearchOverlay.kt:Placeholder(width = 20.sp, height = 20.sp, placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter)</ID>
+    <ID>MaxLineLength:SubjectSearchOverlay.kt:text = "Showing ${uiState.results.size} of ${uiState.totalMatchCount} — refine your search."</ID>
+    <ID>MaxLineLength:SubjectSearchOverlay.kt:withStyle</ID>
+    <ID>MaxLineLength:SubjectStatsSection.kt:Column</ID>
+    <ID>MaxLineLength:SubjectStatsSection.kt:LabelValueRow(label = "Next review", value = nextReviewText(assignmentStats.nextReviewAt, LocalClock.current.now()))</ID>
+    <ID>MaxLineLength:SubjectStatsSection.kt:Text(text = "${stats.accuracyPercent}%", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)</ID>
+    <ID>MaxLineLength:SubjectStatsSection.kt:Text(text = "No reviews yet", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:SubjectStatsSection.kt:Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:SubjectStatsSection.kt:Text(text = title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:SubjectTile.kt:/** A tappable related-subject card: glyph + one meaning + one reading, used in related-subject grids and search results. */</ID>
+    <ID>MaxLineLength:SvgStyleInliner.kt:attributes.forEach { (key, value) -&gt; append(' ').append(key).append("=\"").append(value.replace("\"", "&amp;quot;")).append('"') }</ID>
+    <ID>MaxLineLength:SvgStyleInlinerTest.kt:SvgStyleInlinerTest$"""&lt;path d="M240 940V420" class="b" fill="none" stroke="#000" stroke-linecap="square" stroke-width="68px"/&gt;""" in out</ID>
+    <ID>MaxLineLength:SvgStyleInlinerTest.kt:SvgStyleInlinerTest$assertTrue("""class="b" fill="none" stroke="#000" stroke-linecap="square" stroke-width="68px" clip-path="url(#a)"/&gt;""" in out, out)</ID>
+    <ID>MaxLineLength:Theme.kt:/** Whether the e-ink theme is active — lets categorical colors (subject type, SRS stage, pitch accent) fall back to grayscale. */</ID>
+    <ID>MaxLineLength:WaniKaniApiTest.kt:WaniKaniApiTest$"""{"object":"user","url":"https://api.wanikani.com/v2/user","data":{"id":"u1","username":"alex","level":5,"profile_url":"https://x","started_at":"2020-01-01"}}"""</ID>
+    <ID>MaxLineLength:WaniKaniApiTest.kt:WaniKaniApiTest$response = """{"id":1,"object":"assignment","url":"https://api.wanikani.com/v2/assignments/1","data":{"created_at":"2020-01-01","subject_id":1,"subject_type":"kanji","srs_stage":1}}"""</ID>
+    <ID>MaxLineLength:WaniKaniApiTest.kt:WaniKaniApiTest$response = """{"id":1,"object":"review","url":"https://api.wanikani.com/v2/reviews/1","data":{"assignment_id":10,"subject_id":20,"starting_srs_stage":3,"ending_srs_stage":4,"incorrect_meaning_answers":0,"incorrect_reading_answers":1,"created_at":"2020-01-01"}}"""</ID>
+    <ID>MaxLineLength:WritingPracticeSection.kt:.</ID>
+    <ID>MaxLineLength:WritingPracticeSection.kt:enabled = practiceState.completedStrokes.isNotEmpty() || practiceState.currentStrokePoints.isNotEmpty()</ID>
+    <ID>MaxLineLength:WritingPracticeSection.kt:val chevronRotation by animateFloatAsState(targetValue = if (expanded) 180f else 0f, label = "writing_practice_chevron")</ID>
+    <ID>NewLineAtEndOfFile:PitchAccentDiagram.kt:com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentDiagram.kt</ID>
+    <ID>ReturnCount:AssignmentRepository.kt:AssignmentRepository$suspend fun applyOptimisticLessonStart: RankChange?</ID>
+    <ID>ReturnCount:AssignmentRepository.kt:AssignmentRepository$suspend fun applyOptimisticReviewResult: RankChange?</ID>
+    <ID>ReturnCount:AssignmentRepository.kt:AssignmentRepository$suspend fun getLessonItems: List&lt;LessonItem&gt;</ID>
+    <ID>ReturnCount:AssignmentRepository.kt:AssignmentRepository$suspend fun getReviewItems: List&lt;ReviewItem&gt;</ID>
+    <ID>ReturnCount:AudioSelection.kt:fun selectAudioFor: PronunciationAudio?</ID>
+    <ID>ReturnCount:ChunkedIds.kt:internal inline fun &lt;ID, reified ROW&gt; chunkedIds: Flow&lt;List&lt;ROW&gt;&gt;</ID>
+    <ID>ReturnCount:CloseEnoughMatcher.kt:CloseEnoughMatcher$fun match: MatchResult</ID>
+    <ID>ReturnCount:FriendStatsCalculations.kt:internal fun buildTimeline: List&lt;TimelinePointJson&gt;</ID>
+    <ID>ReturnCount:FriendStatsCalculations.kt:internal fun computeAvgDaysPerLevel: Float?</ID>
+    <ID>ReturnCount:LessonPrioritizer.kt:LessonPrioritizer$private fun interleave: List&lt;LessonItem&gt;</ID>
+    <ID>ReturnCount:LessonSessionRepository.kt:LessonSessionRepository$override suspend fun load: PersistedLessonSession?</ID>
+    <ID>ReturnCount:LessonSessionRepository.kt:PersistedLessonSession$fun migratedFromLegacyShape: PersistedLessonSession</ID>
+    <ID>ReturnCount:LessonViewModel.kt:LessonViewModel$override fun undoLastAnswer</ID>
+    <ID>ReturnCount:NotificationCoordinator.kt:DefaultNotificationCoordinator$override suspend fun evaluateStudyReminder</ID>
+    <ID>ReturnCount:NotificationPolicies.kt:BacklogPolicy$fun shouldNotify: Boolean</ID>
+    <ID>ReturnCount:OutboxDrainer.kt:OutboxDrainer$private suspend fun &lt;Row, T&gt; drain: DrainOutcome</ID>
+    <ID>ReturnCount:QuizSession.kt:QuizSession$fun undoLastGrade: QuizSession&lt;T&gt;?</ID>
+    <ID>ReturnCount:QuizSessionViewModel.kt:QuizSessionViewModel$open fun submitAnswer</ID>
+    <ID>ReturnCount:QuizTypes.kt:fun &lt;T&gt; PersistedQuestion.toPendingQuestionOrNull: PendingQuestion&lt;T&gt;?</ID>
+    <ID>ReturnCount:ReviewForecastCard.kt:private fun summaryText: String</ID>
+    <ID>ReturnCount:ReviewSessionRepository.kt:ReviewSessionRepository$override suspend fun load: PersistedReviewSession?</ID>
+    <ID>ReturnCount:SrsStageCalculator.kt:SrsStageCalculator$fun availableAtFor: Instant?</ID>
+    <ID>ReturnCount:SyncFreshness.kt:suspend fun shouldSync: Boolean</ID>
+    <ID>ReturnCount:TokenRepository.kt:TokenRepository$private fun decrypt: String?</ID>
+    <ID>SwallowedException:FriendRepository.kt:FriendRepository$e: Exception</ID>
+    <ID>SwallowedException:QuizAnswering.kt:e: Exception</ID>
+    <ID>TooGenericExceptionCaught:AccountDataCleaner.kt:AccountDataCleaner$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:FriendRepository.kt:FriendRepository$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:FriendStatsRepository.kt:FriendStatsRepository$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:QuizAnswering.kt:e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SafeApiCall.kt:e: Exception</ID>
+    <ID>TooManyFunctions:AssignmentEntity.kt:AssignmentDao</ID>
+    <ID>TooManyFunctions:AssignmentRepository.kt:AssignmentRepository</ID>
+    <ID>TooManyFunctions:Converters.kt:Converters</ID>
+    <ID>TooManyFunctions:DashboardScreen.kt:com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreen.kt</ID>
+    <ID>TooManyFunctions:DashboardViewModel.kt:DashboardViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:JankStatsTracker.kt:JankStatsTracker</ID>
+    <ID>TooManyFunctions:LessonActions.kt:LessonActions</ID>
+    <ID>TooManyFunctions:LessonScreen.kt:com.crazyfluff.shellfstudy.shared.feature.lesson.LessonScreen.kt</ID>
+    <ID>TooManyFunctions:LessonViewModel.kt:LessonViewModel : QuizSessionViewModelLessonActions</ID>
+    <ID>TooManyFunctions:OutboxDao.kt:OutboxDao</ID>
+    <ID>TooManyFunctions:QuizQueue.kt:QuizQueue&lt;T&gt;</ID>
+    <ID>TooManyFunctions:QuizSession.kt:QuizSession&lt;T : QuizDisplayItem&gt;</ID>
+    <ID>TooManyFunctions:ReviewActions.kt:ReviewActions</ID>
+    <ID>TooManyFunctions:ReviewForecastCard.kt:com.crazyfluff.shellfstudy.shared.feature.dashboard.ReviewForecastCard.kt</ID>
+    <ID>TooManyFunctions:ReviewViewModel.kt:ReviewViewModel : QuizSessionViewModelReviewActions</ID>
+    <ID>TooManyFunctions:SettingsActions.kt:SettingsActions</ID>
+    <ID>TooManyFunctions:SettingsRepository.kt:SettingsRepository</ID>
+    <ID>TooManyFunctions:SettingsScreen.kt:com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreen.kt</ID>
+    <ID>TooManyFunctions:SettingsViewModel.kt:SettingsViewModel : ViewModelSettingsActions</ID>
+    <ID>TooManyFunctions:SubjectDetailContent.kt:com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectDetailContent.kt</ID>
+    <ID>TooManyFunctions:WaniKaniApi.kt:WaniKaniApi</ID>
+    <ID>UnusedParameter:PitchAccentDiagram.kt:moraCount: Int</ID>
+    <ID>VariableNaming:QuizSessionViewModel.kt:QuizSessionViewModel$/** * The screen's state, owned by the subclass so that how a screen observes its ViewModel is * unchanged by this base class. Named as the subclasses already named it. */ protected abstract val _uiState: MutableStateFlow&lt;S&gt;</ID>
+  </CurrentIssues>
+</SmellBaseline>

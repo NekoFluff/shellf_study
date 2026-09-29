@@ -1,0 +1,15 @@
+# Overrides on top of detekt's default rules (buildUponDefaultConfig) — only where the defaults
+# contradict this codebase's conventions rather than flag real problems.
+
+naming:
+  FunctionNaming:
+    # Composables are PascalCase by Compose convention.
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    # Test tags and design tokens are top-level vals named like constants.
+    constantPattern: '[A-Z][A-Za-z0-9_]*'
+
+complexity:
+  LongParameterList:
+    # Composables take their state and callbacks as parameters by design.
+    ignoreAnnotated: ['Composable']

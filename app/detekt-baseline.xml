@@ -1,0 +1,212 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>FunctionOnlyReturningConstant:WaniKaniFixtures.kt:fun emptyCollectionJson: String</ID>
+    <ID>InvalidPackageDeclaration:DomainModelsTest.kt:package com.crazyfluff.shellfstudy.shared.data.model</ID>
+    <ID>InvalidPackageDeclaration:SrsStageTest.kt:package com.crazyfluff.shellfstudy.shared.data.model</ID>
+    <ID>LargeClass:AssignmentRepositoryTest.kt:AssignmentRepositoryTest</ID>
+    <ID>LargeClass:DashboardViewModelTest.kt:DashboardViewModelTest</ID>
+    <ID>LargeClass:LessonScreenTest.kt:LessonScreenTest</ID>
+    <ID>LargeClass:LessonViewModelTest.kt:LessonViewModelTest : QuizSessionContractTest</ID>
+    <ID>LargeClass:ReviewScreenTest.kt:ReviewScreenTest</ID>
+    <ID>LargeClass:ReviewViewModelTest.kt:ReviewViewModelTest : QuizSessionContractTest</ID>
+    <ID>LargeClass:SubjectDetailContentTest.kt:SubjectDetailContentTest</ID>
+    <ID>LongMethod:LessonViewModelTest.kt:LessonViewModelTest$@Test fun `resuming after fully completing one lesson item preserves it in the eventual session summary`</ID>
+    <ID>LongMethod:SubjectDetailViewModelTest.kt:SubjectDetailViewModelTest$@Before fun setUp</ID>
+    <ID>MatchingDeclarationName:NotificationChannels.kt:AndroidNotificationChannels</ID>
+    <ID>MatchingDeclarationName:NotificationPoster.kt:SystemNotificationPoster : NotificationPoster</ID>
+    <ID>MatchingDeclarationName:PronunciationAudioPlayer.kt:RealPronunciationAudioPlayer : PronunciationAudioPlayer</ID>
+    <ID>MaxLineLength:AccountDataCleanerTest.kt:AccountDataCleanerTest$PendingReviewSubmissionEntity(assignmentId = 1, subjectId = 1, incorrectMeaningAnswers = 0, incorrectReadingAnswers = 0, gradedAt = "2026-08-01T00:00:00Z")</ID>
+    <ID>MaxLineLength:AccountDataCleanerTest.kt:AccountDataCleanerTest$PersistedReviewSession(queue = listOf(PersistedQuestion(assignmentId = 1, questionType = "MEANING")), progress = emptyList(), totalQuestions = 1)</ID>
+    <ID>MaxLineLength:AccountDataCleanerTest.kt:AccountDataCleanerTest$averageTimePerItemMs = 1000L</ID>
+    <ID>MaxLineLength:AccountDataCleanerTest.kt:AccountDataCleanerTest$dashboardCacheRepository.save(username = "durtle_fan", level = 5, lessonCount = 3, reviewCount = 7, syncedAtMillis = 1L)</ID>
+    <ID>MaxLineLength:AccountDataCleanerTest.kt:AccountDataCleanerTest$listOf(AssignmentEntity(id = 1, subjectId = 1, subjectType = "kanji", srsStage = 1, createdAt = "2026-08-01T00:00:00Z", hidden = false))</ID>
+    <ID>MaxLineLength:AndroidSvgRenderingTest.kt:AndroidSvgRenderingTest$private val deathStar = """&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"&gt;&lt;defs&gt;&lt;clipPath id="a"&gt;&lt;path d="M0 39h1000v421H0z" class="a"/&gt;&lt;/clipPath&gt;&lt;clipPath id="b"&gt;&lt;path d="M240 420h220v520H240z" class="a"/&gt;&lt;/clipPath&gt;&lt;style&gt;.a,.b{fill:none}.b{stroke:var(--color-text, #000);stroke-linecap:square;stroke-miterlimit:2;stroke-width:68px}&lt;/style&gt;&lt;/defs&gt;&lt;path d="M240 940V420h220v440c0 40-40 80-80 80M340 300h320" class="b"/&gt;&lt;path d="M780 300C676 244.9 580 169 500 60c-80 109-176 184.9-280 240" class="b" style="clip-path:url(#a)"/&gt;&lt;path d="M600 780V460M760 420v440c0 40-40 80-80 80h-60" class="b"/&gt;&lt;g style="clip-path:url(#b)"&gt;&lt;path d="M460 740H240M460 580H240" class="b"/&gt;&lt;/g&gt;&lt;/svg&gt;"""</ID>
+    <ID>MaxLineLength:AppDatabaseMigrationTest.kt:AppDatabaseMigrationTest$connection.execSQL("CREATE INDEX IF NOT EXISTS `index_assignments_availableAt` ON `assignments` (`availableAt`)")</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$)</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$assignmentData(id = 1, subjectId = 1, subjectType = "radical", srsStage = 5, startedAt = "2020-01-01T00:00:00.000000Z")</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$assignmentData(id = 2, subjectId = 2, subjectType = "kanji", srsStage = 5, startedAt = "2020-01-01T00:00:00.000000Z")</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$assignmentData(id = 201, subjectId = 1, srsStage = 5, unlockedAt = "2020-01-01T00:00:00.000000Z")</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$assignmentData(id = 202, subjectId = 2, srsStage = 2, unlockedAt = "2020-01-01T00:00:00.000000Z")</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$assignmentData(id = 202, subjectId = 2, srsStage = 3, unlockedAt = "2020-01-01T00:00:00.000000Z")</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$assignmentData(id = 3, subjectId = 3, subjectType = "vocabulary", srsStage = 5, startedAt = "2020-01-01T00:00:00.000000Z")</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$assignmentData(id = 4, subjectId = 4, subjectType = "kana_vocabulary", srsStage = 5, startedAt = "2020-01-01T00:00:00.000000Z")</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$createdAt = "2026-01-01T00:00:00.000000Z"</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$fun</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$seedSubject(id = 5, characters = "5", meaning = "e", reading = "e", subjectType = "kanji")</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$val rankChange = repository.applyOptimisticReviewResult(101, 0, ReviewGrade(meaningCorrect = false, readingCorrect = true))</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$val rankChange = repository.applyOptimisticReviewResult(101, 0, ReviewGrade(meaningCorrect = true, readingCorrect = true))</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$val rankChange = repository.applyOptimisticReviewResult(999, 0, ReviewGrade(meaningCorrect = true, readingCorrect = true))</ID>
+    <ID>MaxLineLength:AssignmentRepositoryTest.kt:AssignmentRepositoryTest$val rankChange = repository.computeReviewRankChange(item, ReviewGrade(meaningCorrect = true, readingCorrect = true))</ID>
+    <ID>MaxLineLength:AudioModule.kt:.</ID>
+    <ID>MaxLineLength:AuthViewModelTest.kt:AuthViewModelTest$fun</ID>
+    <ID>MaxLineLength:AuthViewModelTest.kt:AuthViewModelTest$waniKaniRepository = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher).waniKaniRepository</ID>
+    <ID>MaxLineLength:CompletionProjectionCardTest.kt:CompletionProjectionCardTest$projectedCompletionDate = Clock.System.todayIn(TimeZone.currentSystemDefault()).plus(520, DateTimeUnit.DAY)</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonLessonSession = { abandoned = true })</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true })</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onOpenSettings = { openedSettings = true })</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$fetchState = DashboardFetch.Idle</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$fetchState = DashboardFetch.InFlight</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveLessonSession = true)</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveReviewSession = true)</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasLastSessionSummary = false)</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasLastSessionSummary = true)</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, lessonCount = 0)</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, lessonCount = 5)</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, reviewCount = 0)</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, reviewCount = 5)</ID>
+    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 12, daysOnCurrentLevel = 6)</ID>
+    <ID>MaxLineLength:DashboardViewModelTest.kt:DashboardViewModelTest$fun</ID>
+    <ID>MaxLineLength:DashboardViewModelTest.kt:DashboardViewModelTest$lessonSessionController = LessonSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), lessonSessionRepository)</ID>
+    <ID>MaxLineLength:DashboardViewModelTest.kt:DashboardViewModelTest$repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)</ID>
+    <ID>MaxLineLength:DashboardViewModelTest.kt:DashboardViewModelTest$reviewSessionController = ReviewSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), reviewSessionRepository)</ID>
+    <ID>MaxLineLength:FakeDaos.kt:FakeSubjectDao$.</ID>
+    <ID>MaxLineLength:FakeDaos.kt:FakeSubjectDao$return subjects.map { map -&gt; map.values.filter { it.searchTarget.contains(unescaped, ignoreCase = true) }.take(200) }</ID>
+    <ID>MaxLineLength:FakeNotificationCoordinator.kt:FakeNotificationCoordinator$/** Call-count spy stand-in for [NotificationCoordinator], used by ViewModel tests that only care whether the right lifecycle hook fired. */</ID>
+    <ID>MaxLineLength:FakeSyncDaos.kt:FakeOutboxDao$lessonStarts.value = lessonStarts.value + (id to entity.copy(status = OutboxStatus.FAILED_TERMINAL.name, lastErrorMessage = message))</ID>
+    <ID>MaxLineLength:FakeSyncDaos.kt:FakeOutboxDao$reviewSubmissions.value = reviewSubmissions.value + (id to entity.copy(status = OutboxStatus.FAILED_TERMINAL.name, lastErrorMessage = message))</ID>
+    <ID>MaxLineLength:LastSessionSummaryViewModelTest.kt:LastSessionSummaryViewModelTest$fun</ID>
+    <ID>MaxLineLength:LessonScreenTest.kt:LessonScreenTest$answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))</ID>
+    <ID>MaxLineLength:LessonScreenTest.kt:LessonScreenTest$composeTestRule.onAllNodesWithTag(LessonScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertCountEquals(0)</ID>
+    <ID>MaxLineLength:LessonScreenTest.kt:LessonScreenTest$composeTestRule.onAllNodesWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.RADICAL)).assertCountEquals(0)</ID>
+    <ID>MaxLineLength:LessonScreenTest.kt:LessonScreenTest$composeTestRule.onNodeWithTag(LessonScreenTestTags.BATCH_COMPLETE_HEADLINE).assertTextEquals("Batch 1 of 3 done!")</ID>
+    <ID>MaxLineLength:LessonScreenTest.kt:LessonScreenTest$composeTestRule.onNodeWithTag(LessonScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals(formatElapsedClock(5_000L))</ID>
+    <ID>MaxLineLength:LessonScreenTest.kt:LessonScreenTest$composeTestRule.onNodeWithTag(LessonScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertIsDisplayed()</ID>
+    <ID>MaxLineLength:LessonScreenTest.kt:LessonScreenTest$composeTestRule.onNodeWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.RADICAL)).assertIsNotSelected()</ID>
+    <ID>MaxLineLength:LessonScreenTest.kt:LessonScreenTest$composeTestRule.onNodeWithTag(LessonScreenTestTags.typeSelectorChipTag(SubjectType.VOCABULARY)).assertDoesNotExist()</ID>
+    <ID>MaxLineLength:LessonViewModelTest.kt:LessonViewModelTest$AssignmentFixture(id = 606, subjectId = 8001, subjectType = "vocabulary", srsStage = 0, unlockedAt = FIXTURE_INSTANT)</ID>
+    <ID>MaxLineLength:LessonViewModelTest.kt:LessonViewModelTest$AssignmentFixture(id = 607, subjectId = 8002, subjectType = "vocabulary", srsStage = 0, unlockedAt = FIXTURE_INSTANT)</ID>
+    <ID>MaxLineLength:LessonViewModelTest.kt:LessonViewModelTest$FakePitchAccentBundledSource(mapOf("水" to listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))))</ID>
+    <ID>MaxLineLength:LessonViewModelTest.kt:LessonViewModelTest$assertThat((awaitItem().phase as LessonUiState.Phase.Select).selectedAssignmentIds).containsExactly(101L, 102L)</ID>
+    <ID>MaxLineLength:LessonViewModelTest.kt:LessonViewModelTest$dispatch(jsonResponse(vocabWithRealPitchAccentAssignmentsJson()), jsonResponse(vocabWithRealPitchAccentSubjectsJson()))</ID>
+    <ID>MaxLineLength:LessonViewModelTest.kt:LessonViewModelTest$fun</ID>
+    <ID>MaxLineLength:LessonViewModelTest.kt:LessonViewModelTest$lastSessionSummaryRepository</ID>
+    <ID>MaxLineLength:LessonViewModelTest.kt:LessonViewModelTest$lessonSessionRepository = LessonSessionRepository(FakeSessionDao(), dataStore, Json { ignoreUnknownKeys = true })</ID>
+    <ID>MaxLineLength:LessonViewModelTest.kt:LessonViewModelTest$while (state.phase is LessonUiState.Phase.Loading || state.phase is LessonUiState.Phase.Error) state = awaitItem()</ID>
+    <ID>MaxLineLength:LevelProgressCardTest.kt:LevelProgressCardTest$SubjectTypeProgress(SubjectType.VOCABULARY, items = levelItems(SubjectType.VOCABULARY, total = 90, passed = 40))</ID>
+    <ID>MaxLineLength:LogoutCoordinatorTest.kt:LogoutCoordinatorTest$assignmentDao.upsertAll(listOf(AssignmentEntity(id = 1, subjectId = 1, subjectType = "kanji", srsStage = 1, createdAt = "2026-08-01T00:00:00Z", hidden = false)))</ID>
+    <ID>MaxLineLength:LogoutCoordinatorTest.kt:LogoutCoordinatorTest$fun</ID>
+    <ID>MaxLineLength:LogoutCoordinatorTest.kt:LogoutCoordinatorTest$reviewSessionRepository.save(PersistedReviewSession(queue = listOf(PersistedQuestion(1, "MEANING")), progress = emptyList(), totalQuestions = 1))</ID>
+    <ID>MaxLineLength:NotificationBuilderTest.kt:NotificationBuilderTest$buckets = listOf(ReviewForecastBucket(hoursFromNow = 1, availableAt = Clock.System.now(), newlyAvailableCount = 0))</ID>
+    <ID>MaxLineLength:NotificationChannels.kt:AndroidNotificationChannels$NotificationChannelCompat.Builder(NotificationChannels.REVIEWS_AVAILABLE, NotificationManagerCompat.IMPORTANCE_DEFAULT)</ID>
+    <ID>MaxLineLength:NotificationChannels.kt:AndroidNotificationChannels$NotificationChannelCompat.Builder(NotificationChannels.REVIEWS_BACKLOG, NotificationManagerCompat.IMPORTANCE_HIGH)</ID>
+    <ID>MaxLineLength:NotificationChannels.kt:AndroidNotificationChannels$NotificationChannelCompat.Builder(NotificationChannels.STUDY_REMINDER, NotificationManagerCompat.IMPORTANCE_DEFAULT)</ID>
+    <ID>MaxLineLength:OutboxDrainerTest.kt:OutboxDrainerTest$PendingLessonStartEntity(assignmentId = assignmentId, subjectId = subjectId, startedAt = "2026-01-01T00:00:00.000000Z")</ID>
+    <ID>MaxLineLength:OutboxDrainerTest.kt:OutboxDrainerTest.&lt;no name provided&gt;$request.method == "GET" &amp;&amp; path.startsWith("/assignments") -&gt; jsonResponse(singleAssignmentJson(101, 1, 1))</ID>
+    <ID>MaxLineLength:OutboxDrainerTest.kt:OutboxDrainerTest.&lt;no name provided&gt;$request.method == "POST" &amp;&amp; path.startsWith("/reviews") -&gt; jsonResponse(reviewResultJson(101, 1, 1, 2))</ID>
+    <ID>MaxLineLength:OutboxDrainerTest.kt:OutboxDrainerTest.&lt;no name provided&gt;$request.method == "POST" &amp;&amp; path.startsWith("/reviews") -&gt; jsonResponse(reviewResultJson(101, 1, 5, 3))</ID>
+    <ID>MaxLineLength:OutboxDrainerTest.kt:OutboxDrainerTest.&lt;no name provided&gt;$request.method == "POST" &amp;&amp; path.startsWith("/reviews") -&gt; jsonResponse(reviewResultJson(102, 2, 1, 2))</ID>
+    <ID>MaxLineLength:OutboxRepositoryTest.kt:OutboxRepositoryTest$repository.enqueueReviewSubmission(assignmentId = 1, subjectId = 2, grade = ReviewGrade(meaningCorrect = true, readingCorrect = false))</ID>
+    <ID>MaxLineLength:OutboxSyncWorkerTest.kt:OutboxSyncWorkerTest$createdAt = "2026-01-01T00:00:00.000000Z"</ID>
+    <ID>MaxLineLength:OutboxSyncWorkerTest.kt:OutboxSyncWorkerTest$fun</ID>
+    <ID>MaxLineLength:OutboxSyncWorkerTest.kt:OutboxSyncWorkerTest$server.enqueue(jsonResponse(reviewResultJson(assignmentId = 101, subjectId = 1, startingStage = 1, endingStage = 2)))</ID>
+    <ID>MaxLineLength:OutboxSyncWorkerTest.kt:OutboxSyncWorkerTest$server.enqueue(jsonResponse(reviewResultJson(assignmentId = 102, subjectId = 2, startingStage = 1, endingStage = 2)))</ID>
+    <ID>MaxLineLength:OutboxSyncWorkerTest.kt:OutboxSyncWorkerTest$server.enqueue(jsonResponse(singleAssignmentJson(id = 101, subjectId = 1, srsStage = 1)))</ID>
+    <ID>MaxLineLength:PitchAccentDiagramTest.kt:PitchAccentDiagramTest$assertThat((0..3).map { isHighMora(it, pitchNumber = 0, moraCount = 4) }).containsExactly(false, true, true, true).inOrder()</ID>
+    <ID>MaxLineLength:PitchAccentDiagramTest.kt:PitchAccentDiagramTest$assertThat((0..3).map { isHighMora(it, pitchNumber = 1, moraCount = 4) }).containsExactly(true, false, false, false).inOrder()</ID>
+    <ID>MaxLineLength:PitchAccentDiagramTest.kt:PitchAccentDiagramTest$assertThat((0..3).map { isHighMora(it, pitchNumber = 2, moraCount = 4) }).containsExactly(false, true, false, false).inOrder()</ID>
+    <ID>MaxLineLength:PitchAccentDiagramTest.kt:PitchAccentDiagramTest$assertThat((0..3).map { isHighMora(it, pitchNumber = 4, moraCount = 4) }).containsExactly(false, true, true, true).inOrder()</ID>
+    <ID>MaxLineLength:QuizSessionContractTest.kt:QuizSessionContractTest$repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)</ID>
+    <ID>MaxLineLength:QuizSessionFixtures.kt:val readings = if (reading == null) "[]" else """[{"reading": "$reading", "primary": true, "accepted_reading": true}]"""</ID>
+    <ID>MaxLineLength:ReadingRowTest.kt:ReadingRowTest$val buttonBounds = composeTestRule.onNodeWithContentDescription("Play pronunciation for みず").getUnclippedBoundsInRoot()</ID>
+    <ID>MaxLineLength:ReviewForecastCardTest.kt:ReviewForecastCardTest$ReviewForecastCard(forecast = forecastFor(ReviewForecastWindow.DAY, newlyAvailableCount = 0).copy(reviewsAvailableNow = 0))</ID>
+    <ID>MaxLineLength:ReviewForecastCardTest.kt:ReviewForecastCardTest$ReviewForecastCard(forecast = forecastFor(ReviewForecastWindow.FOUR_MONTHS), selectedWindow = ReviewForecastWindow.FOUR_MONTHS)</ID>
+    <ID>MaxLineLength:ReviewForecastCardTest.kt:ReviewForecastCardTest$ReviewForecastCard(forecast = forecastFor(ReviewForecastWindow.WEEK), selectedWindow = ReviewForecastWindow.WEEK)</ID>
+    <ID>MaxLineLength:ReviewForecastCardTest.kt:ReviewForecastCardTest$ReviewForecastCard(forecast = typeBreakdownForecast(), selectedColorMode = ReviewForecastColorMode.SUBJECT_TYPE)</ID>
+    <ID>MaxLineLength:ReviewScreenTest.kt:ReviewScreenTest$answerPitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))</ID>
+    <ID>MaxLineLength:ReviewScreenTest.kt:ReviewScreenTest$composeTestRule.onAllNodesWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertCountEquals(0)</ID>
+    <ID>MaxLineLength:ReviewScreenTest.kt:ReviewScreenTest$composeTestRule.onNodeWithTag(ReviewScreenTestTags.QUESTION_TIMER_TEXT).assertTextEquals(formatElapsedClock(5_000L))</ID>
+    <ID>MaxLineLength:ReviewScreenTest.kt:ReviewScreenTest$composeTestRule.onNodeWithTag(ReviewScreenTestTags.TYPE_MISMATCH_TEXT, useUnmergedTree = true).assertIsDisplayed()</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$AssignmentFixture(id = 101, subjectId = 1, subjectType = "radical", srsStage = 1, availableAt = FIXTURE_INSTANT)</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$AssignmentFixture(id = 102, subjectId = 2, subjectType = "radical", srsStage = 1, availableAt = FIXTURE_INSTANT)</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$AssignmentFixture(id = 103, subjectId = 3, subjectType = "radical", srsStage = 1, availableAt = FIXTURE_INSTANT)</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$AssignmentFixture(id = 606, subjectId = 8001, subjectType = "vocabulary", srsStage = 3, availableAt = FIXTURE_INSTANT)</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$AssignmentFixture(id = 607, subjectId = 8002, subjectType = "vocabulary", srsStage = 3, availableAt = FIXTURE_INSTANT)</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((requeuedState.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((settled.phase as ReviewUiState.Phase.Active).rankChange).isEqualTo(RankChange(SrsStage.APPRENTICE_1, SrsStage.APPRENTICE_2))</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((state.phase as ReviewUiState.Phase.Active).timing.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((state.phase as ReviewUiState.Phase.Complete).sessionMissedItems.first().characters).isEqualTo("水")</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((state.phase as ReviewUiState.Phase.Complete).sessionMissedItems.map { it.subjectId }).containsExactly(440L)</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((state.phase as ReviewUiState.Phase.Complete).sessionSlowestAnswers.map { it.item.assignmentId }).contains(101L)</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat(inFlight - setOf(1012L, 1013L)).containsExactly(1000L, 1001L, 1002L, 1003L, 1004L, 1005L, 1006L, 1007L)</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$fun</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$private</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$request.method == "POST" &amp;&amp; path.startsWith("/reviews") -&gt; reviewResponse ?: jsonResponse(reviewResultJson())</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$reviewSessionRepository = ReviewSessionRepository(FakeSessionDao(), dataStore, Json { ignoreUnknownKeys = true })</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$val</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$val answer = if ((current.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu"</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$val answer = if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu"</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$viewModel.onAnswerInputChange((wrappedState.phase as ReviewUiState.Phase.Active).currentItem.meanings.first())</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$while ((correctState.phase as ReviewUiState.Phase.Active).feedback == null || (correctState.phase as ReviewUiState.Phase.Active).rankChange == null) correctState = awaitItem()</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$while ((settled.phase as ReviewUiState.Phase.Active).feedback == null || (settled.phase as ReviewUiState.Phase.Active).rankChange == null) settled = awaitItem()</ID>
+    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$while ((state.phase is ReviewUiState.Phase.Loading) || (state.phase as? ReviewUiState.Phase.Error)?.message != null) state = awaitItem()</ID>
+    <ID>MaxLineLength:SearchViewModelTest.kt:SearchViewModelTest$fun</ID>
+    <ID>MaxLineLength:SearchViewModelTest.kt:SearchViewModelTest$private val repositories = buildTestRepositories("https://api.wanikani.com/v2/", defaultDispatcher = mainDispatcherRule.dispatcher)</ID>
+    <ID>MaxLineLength:SearchViewModelTest.kt:SearchViewModelTest$repeat(60) { index -&gt; seedSubject(id = index.toLong(), characters = "水$index", meaning = "Water", reading = "みず") }</ID>
+    <ID>MaxLineLength:SessionControllerDiTest.kt:SessionControllerDiTest$fun</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:RecordingSettingsActions$override fun onAutoplayPronunciationAudioChange</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:RecordingSettingsActions$override fun onCloseEnoughAnswersEnabledChange</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:RecordingSettingsActions$override fun onHideContextSentenceTranslationsChange</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:RecordingSettingsActions$override fun onRequireTapToRevealMeaningAnswerChange</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:RecordingSettingsActions$override fun onRequireTapToRevealReadingAnswerChange</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:RecordingSettingsActions$override fun onShowAnswerReadingPitchAccentChange</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.ANSWER_READING_PITCH_ACCENT_TOGGLE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_HOUR_INCREASE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_TOGGLE).performScrollTo().assertIsDisplayed()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_ERROR_TEXT).performScrollTo().assertIsDisplayed()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_PROGRESS).performScrollTo().assertIsDisplayed()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_START_INCREASE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.REQUIRE_TAP_TO_REVEAL_MEANING_ANSWER_TOGGLE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.REQUIRE_TAP_TO_REVEAL_READING_ANSWER_TOGGLE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE).performScrollTo().assertIsDisplayed()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_QUESTION_TIMER_TOGGLE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE).performScrollTo().performClick()</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, autoplayPronunciationAudio = true))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, closeEnoughAnswersEnabled = true))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, hideContextSentenceTranslations = true))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, requireTapToRevealMeaningAnswer = false))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, requireTapToRevealReadingAnswer = false))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, restrictAudioToMp3 = false))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showAnswerReadingPitchAccent = false))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showPitchAccent = true))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showQuestionTimer = false))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showSubjectTypeLabel = false))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showTotalTimer = false))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, useJapaneseKeyboard = false))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, dailyReminderEnabled = true, dailyReminderHour = 23))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, quietHoursEnabled = true, quietHoursStartHour = 22, quietHoursEndHour = 7))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 5))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 50))</ID>
+    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 500))</ID>
+    <ID>MaxLineLength:SettingsViewModelTest.kt:SettingsViewModelTest$fun</ID>
+    <ID>MaxLineLength:SettingsViewModelTest.kt:SettingsViewModelTest$syncOrchestrator: SyncOrchestrator = buildTestRepositories("http://localhost/", defaultDispatcher = mainDispatcherRule.dispatcher).syncOrchestrator</ID>
+    <ID>MaxLineLength:SettingsViewModelTest.kt:SettingsViewModelTest$val viewModel = createViewModel(buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher).syncOrchestrator)</ID>
+    <ID>MaxLineLength:SplashViewModelTest.kt:SplashViewModelTest$fun</ID>
+    <ID>MaxLineLength:StatsRepositoryTest.kt:StatsRepositoryTest$fun</ID>
+    <ID>MaxLineLength:StatsRepositoryTest.kt:StatsRepositoryTest$server.enqueue(jsonResponse(reviewStatisticsJson(subjectId = 440, dataUpdatedAt = "2026-01-15T03:00:00.000000Z")))</ID>
+    <ID>MaxLineLength:SubjectDetailContentTest.kt:SubjectDetailContentTest$CompositionLocalProvider</ID>
+    <ID>MaxLineLength:SubjectDetailContentTest.kt:SubjectDetailContentTest$pitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))</ID>
+    <ID>MaxLineLength:SubjectDetailContentTest.kt:SubjectDetailContentTest$val answerBottom = composeTestRule.onNodeWithTag(SubjectDetailTestTags.READING_ANSWER).getUnclippedBoundsInRoot().bottom</ID>
+    <ID>MaxLineLength:SubjectDetailContentTest.kt:SubjectDetailContentTest$val readingBounds = composeTestRule.onNodeWithTag(SubjectDetailTestTags.READING_ANSWER).getUnclippedBoundsInRoot()</ID>
+    <ID>MaxLineLength:SubjectDetailContentTest.kt:SubjectDetailContentTest$val vocabDetail = detail.copy(subjectType = SubjectType.VOCABULARY, readings = listOf("みず"), pronunciationAudios = emptyList())</ID>
+    <ID>MaxLineLength:SubjectDetailViewModelTest.kt:SubjectDetailViewModelTest$StrokeOrderUiState.Available(listOf(StrokeOrderStroke(pathData = "M10,10L90,90", labelX = 5f, labelY = 5f)))</ID>
+    <ID>MaxLineLength:SubjectDetailViewModelTest.kt:SubjectDetailViewModelTest$fun</ID>
+    <ID>MaxLineLength:SubjectDetailViewModelTest.kt:SubjectDetailViewModelTest$repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)</ID>
+    <ID>MaxLineLength:SubjectRepositoryTest.kt:SubjectRepositoryTest$.</ID>
+    <ID>MaxLineLength:SubjectRepositoryTest.kt:SubjectRepositoryTest$fun</ID>
+    <ID>MaxLineLength:SyncOrchestratorTest.kt:SyncOrchestratorTest$SyncStateEntity(resource = "subjects", lastSyncedAt = "2020-01-01T00:00:00Z", lastSyncSuccessAt = "2020-01-01T00:00:00Z")</ID>
+    <ID>MaxLineLength:SyncOrchestratorTest.kt:SyncOrchestratorTest$SyncStateEntity(resource = resource, lastSyncedAt = "2020-01-01T00:00:00Z", lastSyncSuccessAt = "2020-01-01T00:00:00Z")</ID>
+    <ID>MaxLineLength:TestApiFactory.kt:*</ID>
+    <ID>MaxLineLength:TestApiFactory.kt:val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, srsSystemDao, defaultDispatcher)</ID>
+    <ID>MaxLineLength:TestApiFactory.kt:val statsRepository = StatsRepository(api, reviewStatisticDao, levelProgressionDao, studyActivityDao, syncStateDao, defaultDispatcher)</ID>
+    <ID>MaxLineLength:TestApiFactory.kt:val syncOrchestrator = SyncOrchestrator(syncTransactionRunner, subjectRepository, assignmentRepository, statsRepository, syncStateDao)</ID>
+    <ID>MaxLineLength:WaniKaniRepositoryTest.kt:WaniKaniRepositoryTest$val result = repository.submitReview(assignmentId = 555, grade = ReviewGrade(meaningCorrect = true, readingCorrect = false))</ID>
+  </CurrentIssues>
+</SmellBaseline>

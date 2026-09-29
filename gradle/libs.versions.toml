@@ -43,6 +43,9 @@ kotlinxDatetime = "0.8.0"
 okio = "3.16.0"
 composeMultiplatform = "1.11.1"
 
+# Static analysis. The 2.x line is the one built for K2 and Gradle 9; 1.23.x predates both.
+detekt = "2.0.0-alpha.6"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-metrics-performance = { group = "androidx.metrics", name = "metrics-performance", version.ref = "jankStats" }
@@ -123,3 +126,4 @@ firebase-appdistribution = { id = "com.google.firebase.appdistribution", version
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPlugin" }
 android-lint = { id = "com.android.lint", version.ref = "agp" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }

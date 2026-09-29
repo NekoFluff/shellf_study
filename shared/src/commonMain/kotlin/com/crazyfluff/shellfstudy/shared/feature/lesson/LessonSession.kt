@@ -93,6 +93,10 @@ internal data class LessonPicker(
     val levelUpProgress: LevelUpProgress,
     val isStrained: Boolean
 ) {
-    fun sorted(sort: LessonSort): List<LessonItem> =
-        LessonPrioritizer.prioritize(items = queue, levelUpProgress = levelUpProgress, isStrained = isStrained, sort = sort)
+    fun sorted(sort: LessonSort): List<LessonItem> = LessonPrioritizer.prioritize(
+        items = queue,
+        levelUpProgress = levelUpProgress,
+        isStrained = isStrained,
+        sort = sort
+    )
 }

@@ -64,6 +64,13 @@ jobs:
       - name: Run app (Robolectric) unit tests
         run: ./gradlew :app:testDebugUnitTest
 
+      # Fails only on findings newer than each module's detekt-baseline.xml.
+      - name: Static analysis (detekt)
+        run: ./gradlew detekt
+
+      - name: Android lint
+        run: ./gradlew :app:lintDebug
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v5
@@ -72,3 +79,34 @@ jobs:
           path: |
             shared/build/reports/tests
             app/build/reports/tests
+            app/build/reports/lint-results-debug.html
+
+  # The Linux job only compiles commonMain's metadata. This is the one that compiles the iOS target
+  # itself and runs commonTest (plus iosTest) on Kotlin/Native, where JVM-only APIs and behaviour
+  # differences actually surface.
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Compile the iOS simulator target
+        run: ./gradlew :shared:compileKotlinIosSimulatorArm64
+
+      - name: Run shared tests on the iOS simulator
+        run: ./gradlew :shared:iosSimulatorArm64Test
+
+      - name: Upload iOS test reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ios-test-reports
+          path: shared/build/reports/tests
