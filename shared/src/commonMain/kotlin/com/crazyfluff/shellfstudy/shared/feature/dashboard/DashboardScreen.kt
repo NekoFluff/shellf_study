@@ -61,6 +61,8 @@ import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardContentState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardUiState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.JANK_STATE_SCREEN
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankState
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
@@ -161,6 +163,35 @@ fun DashboardRoute(
             onPendingDestinationConsumed()
         }
     }
+
+    // Which of the dashboard's expensive pieces are on screen, reported to the jank harness so a
+    // stalled frame says what it was made of. The dashboard is the screen every "it feels slow"
+    // report is about, and "dashboard" alone is too coarse to act on: the two Canvas charts and the
+    // paged level grid are the parts that cost anything, and which of them was mounted when a frame
+    // blew its budget is the whole question.
+    //
+    // Reported as presence flags rather than sizes, so the tag values are low-cardinality and two
+    // log lines are directly comparable. Cheap to compute and stable between emissions, so an idle
+    // dashboard does not re-enter the tracker frame after frame — see ReportJankState's keying.
+    ReportJankState(
+        JANK_STATE_SCREEN to "dashboard",
+        "data" to if (uiState.username == null) "none" else "cached",
+        "content" to when (uiState.contentState) {
+            is DashboardContentState.Loading -> "loading"
+            is DashboardContentState.FullScreenError -> "error"
+            DashboardContentState.Content -> "content"
+        },
+        "fetch" to when (uiState.fetchState) {
+            DashboardFetch.InFlight -> "inflight"
+            DashboardFetch.Idle -> "idle"
+            DashboardFetch.Stale -> "stale"
+            is DashboardFetch.Failed -> "failed"
+        },
+        "forecast" to if (uiState.reviewForecast == null) "none" else "loaded",
+        "levelProgress" to if (uiState.levelProgress == null) "none" else "loaded",
+        "leaderboard" to if (uiState.leaderboard == null) "none" else "loaded",
+        "session" to if (uiState.hasActiveReviewSession || uiState.hasActiveLessonSession) "active" else "none"
+    )
 
     DashboardWithSearch(
         callbacks = rememberDashboardCallbacks(

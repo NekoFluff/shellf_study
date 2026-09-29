@@ -84,6 +84,10 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.androidx.activity.compose)
+            // The Android-only jank harness — see JankStatsTracker. Declared here rather than in :app
+            // because the tracker is shared/androidMain code: :app cannot be referenced from :shared,
+            // and the reporter seam has to reach commonMain so shared screens can report state.
+            implementation(libs.androidx.metrics.performance)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

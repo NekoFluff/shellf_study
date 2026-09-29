@@ -14,6 +14,8 @@ import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.LocalNotificationPermissionRequest
 import com.crazyfluff.shellfstudy.shared.designsystem.rememberNotificationPermissionRequest
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.LocalJankStateReporter
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.rememberJankStateReporter
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.toDisplaySettings
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
@@ -65,6 +67,10 @@ fun ShellfStudyApp(
         remember(subjectDetailSheetState) { { id: Long -> subjectDetailSheetState.show(id) } }
     ShellfStudyTheme(themeMode = themeMode) {
         CompositionLocalProvider(
+            // The jank harness's reporting seam. Android supplies a real implementation; on iOS and
+            // anywhere else this stays the no-op default, so shared code carries no platform
+            // dependency and reporting costs nothing when nothing is listening.
+            LocalJankStateReporter provides rememberJankStateReporter(),
             LocalPronunciationAudioPlayer provides audioPlayer,
             LocalDisplaySettings provides displaySettings,
             LocalShareText provides shareText,

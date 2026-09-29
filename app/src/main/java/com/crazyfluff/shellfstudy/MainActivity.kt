@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.JankStatsTracker
 import com.crazyfluff.shellfstudy.shared.ShellfStudyApp
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
 
@@ -21,6 +22,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // The jank harness is off unless this build is debuggable, so no release behaviour changes.
+        // The system-property override exists so a release build can be profiled without a code
+        // change — setprops cannot be written by an app, only read, which is what makes it a safe gate.
+        if (BuildConfig.DEBUG || System.getProperty(JANK_STATS_PROPERTY) == "1") {
+            JankStatsTracker.enable()
+        }
         pendingDestination = intent?.getStringExtra(NotificationDeepLink.EXTRA_DESTINATION)
         setContent {
             // The content is entirely ShellfStudyApp — the same composable iOS's MainViewController
@@ -37,5 +44,24 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingDestination = intent.getStringExtra(NotificationDeepLink.EXTRA_DESTINATION)
+    }
+
+    // Started in onResume rather than onCreate: JankStats reads window.peekDecorView() when it is
+    // constructed, and before the first resume the decor view may not be attached yet.
+    override fun onResume() {
+        super.onResume()
+        JankStatsTracker.start(this)
+    }
+
+    override fun onDestroy() {
+        // One tracker per live window; without this a recreated Activity would find the tracker still
+        // installed and refuse to re-register, silently recording nothing.
+        if (isFinishing) JankStatsTracker.stop()
+        super.onDestroy()
+    }
+
+    private companion object {
+        /** Read-only inside the app, so it cannot be turned on from the app itself. */
+        const val JANK_STATS_PROPERTY = "debug.shellfstudy.jankstats"
     }
 }

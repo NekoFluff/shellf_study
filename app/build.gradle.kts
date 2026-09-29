@@ -43,6 +43,9 @@ android {
     }
     buildFeatures {
         compose = true
+        // BuildConfig.DEBUG gates the jank harness — see JankStatsTracker. AGP 9 does not generate
+        // BuildConfig unless asked.
+        buildConfig = true
     }
     testOptions {
         unitTests {
@@ -66,6 +69,9 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.core.ktx)
+    // Per-frame UI-thread timing with state tags — the jank harness. Debug-only in practice; see
+    // JankStatsTracker for the gate and the rationale.
+    implementation(libs.androidx.metrics.performance)
     implementation(libs.androidx.lifecycle.process)
 
     implementation(platform(libs.koin.bom))
