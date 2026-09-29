@@ -22,7 +22,8 @@ class QuizQueue<T> {
     // Mirrors the `shuffle` a session was built with, so a later admitNext() randomizes a
     // newly-admitted item's position the same way build() would have — and, symmetrically, stays
     // off for shuffle=false test fixtures that rely on deterministic ordering.
-    private var shuffleOnAdmit = true
+    var shuffleOnAdmit = true
+        private set
 
     val size: Int get() = inFlight.size + reserve.size
     val isEmpty: Boolean get() = inFlight.isEmpty() && reserve.isEmpty()
@@ -90,8 +91,14 @@ class QuizQueue<T> {
     }
 
     /** Restores a previously-persisted split — [inFlight] defaults every existing caller that never
-     *  used a cap to an empty [reserve]. */
-    fun restore(inFlight: List<PendingQuestion<T>>, reserve: List<PendingQuestion<T>> = emptyList()) {
+     *  used a cap to an empty [reserve]. [shuffleOnAdmit] carries over the `shuffle` the queue was
+     *  first built with, for a copy that will go on admitting from [reserve]. */
+    fun restore(
+        inFlight: List<PendingQuestion<T>>,
+        reserve: List<PendingQuestion<T>> = emptyList(),
+        shuffleOnAdmit: Boolean = true
+    ) {
+        this.shuffleOnAdmit = shuffleOnAdmit
         this.inFlight.clear()
         this.inFlight.addAll(inFlight)
         this.reserve.clear()

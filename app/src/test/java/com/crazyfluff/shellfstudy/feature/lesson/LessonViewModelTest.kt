@@ -1785,6 +1785,49 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     }
 
     @Test
+    fun `a session resumed from a checkpoint still summarizes every batch`() = runTest(mainDispatcherRule.dispatcher) {
+        // Resuming at a checkpoint with a batch still to go used to restore neither the earlier
+        // batches' progress nor the session clock, so the summary counted only the batches studied
+        // after the resume.
+        dispatch(jsonResponse(threeRadicalAssignmentsJson()), jsonResponse(threeRadicalSubjectsJson()))
+        settingsRepository.setLessonBatchSize(2)
+
+        val firstViewModel = createViewModel()
+        firstViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            firstViewModel.selectAll()
+            awaitItem()
+            firstViewModel.startSelectedLessons()
+            awaitItem() // batch 1 study
+            firstViewModel.nextStudyCard()
+            awaitItem()
+            firstViewModel.nextStudyCard()
+            state = awaitItem() // batch 1 quiz
+            state = answerEveryQuestionInBatch(state, firstViewModel)
+            assertThat(state.phase).isInstanceOf(LessonUiState.Phase.BatchComplete::class.java)
+            firstViewModel.finishForNow()
+            var parked = awaitItem()
+            while (parked.exit != LessonUiState.ExitRequest.Parked) parked = awaitItem()
+        }
+        val parkedElapsedMs = lessonSessionRepository.load()!!.sessionActiveElapsedMs
+
+        val secondViewModel = createViewModel()
+        secondViewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            assertThat(state.phase).isInstanceOf(LessonUiState.Phase.Study::class.java)
+            secondViewModel.nextStudyCard()
+            state = awaitItem() // batch 2 quiz
+
+            val summary = answerEveryQuestionInBatch(state, secondViewModel).phase as LessonUiState.Phase.Complete
+
+            assertThat(summary.sessionItemsLearned).isEqualTo(3)
+            assertThat(summary.sessionTotalElapsedMs).isAtLeast(parkedElapsedMs)
+        }
+    }
+
+    @Test
     fun `the picker defaults to what is left of the daily lesson goal`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(threeRadicalAssignmentsJson()), jsonResponse(threeRadicalSubjectsJson()))
         settingsRepository.setDailyLessonGoal(2)

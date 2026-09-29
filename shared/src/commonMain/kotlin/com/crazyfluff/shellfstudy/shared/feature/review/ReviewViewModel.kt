@@ -8,29 +8,18 @@ import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
-import com.crazyfluff.shellfstudy.shared.data.PersistedAnsweredQuestion
-import com.crazyfluff.shellfstudy.shared.data.PersistedItemProgress
-import com.crazyfluff.shellfstudy.shared.data.PersistedQuestion
 import com.crazyfluff.shellfstudy.shared.data.PersistedReviewSession
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
-import com.crazyfluff.shellfstudy.shared.quiz.AnsweredQuestionRecord
-import com.crazyfluff.shellfstudy.shared.quiz.QuizItemProgress
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
-import com.crazyfluff.shellfstudy.shared.quiz.PendingQuestion
-import com.crazyfluff.shellfstudy.shared.quiz.toPendingQuestionOrNull
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
-import com.crazyfluff.shellfstudy.shared.quiz.QuizQueue
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.toLastSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
 import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
-import com.crazyfluff.shellfstudy.shared.quiz.questionTypesFor
 import com.crazyfluff.shellfstudy.shared.quiz.requiresTapToRevealAnswer
-import com.crazyfluff.shellfstudy.shared.quiz.summarizeQuizSession
-import com.crazyfluff.shellfstudy.shared.quiz.undoLastCorrectAnswer
-import com.crazyfluff.shellfstudy.shared.quiz.undoLastIncorrectAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionPhase
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionState
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionViewModel
@@ -43,12 +32,10 @@ import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
-import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingHint
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
-import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlin.time.Clock
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
@@ -141,27 +128,11 @@ private fun QuizSessionSummary<ReviewItem>.toCompletePhase() = ReviewUiState.Pha
     sessionSlowestAnswers = slowestAnswers
 )
 
-private typealias ItemProgress = QuizItemProgress<ReviewItem>
-
 /** How many distinct items can be in flight (admitted into the queue's working set) at once —
  *  matches WaniKani's own review session, which stops introducing new items once 10 are already
- *  being worked on. Fixed rather than a setting, same as upstream. Enforced by QuizQueue itself: see
- *  [buildQueue]'s `cap` argument (initial admission) and [gradeAnswer]'s `queue.admitNext` call
- *  (admits one more whenever an item finishes and frees a slot). */
+ *  being worked on. Fixed rather than a setting, same as upstream. Applied when the queue is built
+ *  ([buildQueue]) and on every grade, which admits one more item whenever one finishes. */
 private const val MAX_IN_FLIGHT_REVIEW_ITEMS = 10
-
-/** Shared by [ReviewViewModel.gradeAnswer]'s synchronous rank-change prediction and
- *  [ReviewViewModel.commitPendingSubmission]'s later, authoritative recomputation — keeps the two
- *  from drifting if the grading formula ever changes. Carries the real wrong-answer counts rather
- *  than deriving them from the booleans: WaniKani's demotion rule is `ceil(incorrect / 2) * penalty`,
- *  so the count decides how far a missed item falls. */
-private fun ItemProgress.toReviewGrade(): ReviewGrade =
-    ReviewGrade(
-        meaningCorrect = !hadIncorrectMeaning,
-        readingCorrect = !hadIncorrectReading,
-        incorrectMeaning = incorrectMeaningAttempts,
-        incorrectReading = incorrectReadingAttempts
-    )
 
 /**
  * Identifies the word whose pitch accent the current question's hint should be watching — null
@@ -197,22 +168,9 @@ class ReviewViewModel(
      *  only ever sees the [PitchAccentUiState] the collector below derives from it. */
     private val pitchAccentHintKey = MutableStateFlow<PitchAccentHintKey?>(null)
 
-    private val queue = QuizQueue<ReviewItem>()
-    private val progressByAssignmentId = mutableMapOf<Long, ItemProgress>()
-    private var totalQuestions = 0
-
-    // The assignment whose grade is graded-correct-but-not-yet-submitted — set by gradeAnswer when
-    // an item becomes fully done, cleared by commitPendingSubmission (on Continue, or on resuming a
-    // session that carried one across) or by undoLastAnswer (retracting it instead). At most one can
-    // exist at a time: submitAnswer/dontKnowAnswer both refuse to grade while feedback is showing, so
-    // the previous pending submission is always resolved before a new one can be created.
-    private var pendingSubmissionAssignmentId: Long? = null
-
-
-    // Individual per-answer records, used for the "slowest answers" summary — persisted and
-    // restored across a resume just like progressByAssignmentId (see resumeFromPersisted), so the
-    // summary reflects the whole session, not just the segment since the most recent resume.
-    private val answeredQuestions = mutableListOf<AnsweredQuestionRecord<ReviewItem>>()
+    /** The session's questions and its pending submission — every change replaces it whole, so a
+     *  snapshot taken for persisting can never be changed underneath the write. */
+    private var session = ReviewSession()
 
     // Tracks only the time the session was actively being viewed — see QuizSessionTiming. A
     // completed/abandoned/empty-queue session is handled structurally by sessionController.persist()
@@ -344,45 +302,23 @@ class ReviewViewModel(
             ).toSet()
         val itemsById = assignmentRepository.getReviewItems(neededIds).associateBy { it.assignmentId }
 
-        // A *queue*/*reserve* entry referencing an item we can no longer look up (e.g. app storage was
-        // cleared), or carrying a question type this build no longer knows, is genuinely unrecoverable
-        // — rebuilding its PendingQuestion needs both. Fall back to a fresh fetch rather than crash on
-        // that. Rebuilt in one pass and compared by size so the two conditions cannot drift apart.
-        val restoredInFlight = persisted.queue.mapNotNull { it.toPendingQuestionOrNull(itemsById) }
-        val restoredReserve = persisted.reserve.mapNotNull { it.toPendingQuestionOrNull(itemsById) }
-        if (restoredInFlight.size != persisted.queue.size || restoredReserve.size != persisted.reserve.size) {
+        // A queued entry referencing an item we can no longer look up (e.g. app storage was cleared),
+        // or carrying a question type this build no longer knows, is genuinely unrecoverable — fall
+        // back to a fresh fetch rather than crash on that.
+        val quiz = QuizSession.restore(
+            itemsById = itemsById,
+            inFlight = persisted.queue,
+            reserve = persisted.reserve,
+            progress = persisted.progress,
+            answered = persisted.answeredQuestions,
+            totalQuestions = persisted.totalQuestions
+        )
+        if (quiz == null) {
             sessionController.complete()
             fetchFreshQueue()
             return
         }
-
-        queue.restore(inFlight = restoredInFlight, reserve = restoredReserve)
-        progressByAssignmentId.clear()
-        persisted.progress.forEach { p ->
-            // itemsById was resolved by id above, so this only misses for the same
-            // genuinely-unrecoverable case handled above — not merely "no longer due".
-            val item = itemsById[p.assignmentId] ?: return@forEach
-            progressByAssignmentId[p.assignmentId] = ItemProgress(item).apply {
-                meaningDone = p.meaningDone
-                readingDone = p.readingDone
-                hadIncorrectMeaning = p.hadIncorrectMeaning
-                hadIncorrectReading = p.hadIncorrectReading
-                // Snapshots written before the counts were persisted carry 0 with the flag still
-                // true; the boolean setters above already floored the count at 1 for exactly that
-                // case, so this only ever raises it to a genuinely-recorded count.
-                restoreIncorrectCounts(p.incorrectMeaningCount, p.incorrectReadingCount)
-            }
-        }
-        totalQuestions = persisted.totalQuestions
-        pendingSubmissionAssignmentId = persisted.pendingSubmissionAssignmentId
-        answeredQuestions.clear()
-        answeredQuestions.addAll(
-            persisted.answeredQuestions.mapNotNull { p ->
-                val item = itemsById[p.assignmentId] ?: return@mapNotNull null
-                val type = QuestionType.fromPersisted(p.questionType) ?: return@mapNotNull null
-                AnsweredQuestionRecord(item, type, p.isCorrect, p.elapsedMs)
-            }
-        )
+        session = ReviewSession(quiz, persisted.pendingSubmissionAssignmentId)
         // Restores the session's accumulated active time rather than restarting the clock — this is
         // deliberately *not* wall-clock time since the session began; time spent away (backgrounded,
         // or navigated off and back) must not count. sessionTiming.resume() then starts a fresh
@@ -394,19 +330,13 @@ class ReviewViewModel(
     }
 
     private suspend fun buildQueue(items: List<ReviewItem>) {
-        queue.clear()
-        progressByAssignmentId.clear()
-        answeredQuestions.clear()
         sessionTiming.elapsedMs = 0L
         sessionTiming.resume()
 
-        // Progress is created on demand (gradeAnswer's getOrPut) rather than seeded for every item.
-        // Seeding meant a queue of a few hundred due reviews retained a few hundred ItemProgress
-        // objects for the life of the session and — worse — serialized every one of them into the
-        // persisted snapshot on *every* persist, which happens after each answer. Only attempted
-        // items are worth carrying, and the readers already tolerate a missing entry: sessionSummary
-        // filters on hasAnyProgress, completedQuestionCount sums zero for an absent one, and wrapUp
-        // treats "no entry" as "never attempted".
+        // Progress is created as items are graded rather than seeded for every item: seeding a queue
+        // of a few hundred due reviews would serialize every entry into the persisted snapshot after
+        // each answer. The readers tolerate a missing entry — the summary counts only items with
+        // progress, and wrap-up treats "no entry" as "never attempted".
         //
         // Read straight from the DataStore rather than the `latestSettings` field the per-answer
         // paths use: this runs once, during the loading spinner, so the extra read costs nothing,
@@ -421,15 +351,15 @@ class ReviewViewModel(
         // The tier key, not a pre-sorted list: QuizQueue sorts the *whole* queue by tier, so the
         // reserve stays in priority order too and admitNext keeps feeding level-up kanji in as slots
         // free. DEFAULT passes no key at all, leaving build on its original shuffled-selection path.
-        queue.build(
-            items,
-            typesFor = { item -> questionTypesFor(item.subjectType) },
-            cap = MAX_IN_FLIGHT_REVIEW_ITEMS,
-            priorityOf = if (priority == ReviewPriority.DEFAULT) null else tierOf
+        session = ReviewSession(
+            QuizSession<ReviewItem>().withQuestionsFor(
+                items,
+                cap = MAX_IN_FLIGHT_REVIEW_ITEMS,
+                priorityOf = if (priority == ReviewPriority.DEFAULT) null else tierOf
+            )
         )
-        totalQuestions = queue.size
 
-        if (queue.isEmpty) {
+        if (session.quiz.isEmpty) {
             // Distinct from Phase.Complete — nothing was ever reviewed this visit, so there's no
             // summary to show. Mirrors LessonViewModel's NoLessonsAvailable, set in the same
             // fresh-fetch-came-back-empty spot (as opposed to advanceToNextQuestion, where the queue
@@ -489,76 +419,42 @@ class ReviewViewModel(
         // reading each have their own setting (requiresTapToRevealAnswer), so this can gate one
         // question type and not the other.
         val revealedNow = isCorrect || isGiveUp || !requiresTapToRevealAnswer(latestSettings, type)
-        val (snapshot, queueIsEmpty) = run {
-            val itemProgress = progressByAssignmentId.getOrPut(item.assignmentId) { ItemProgress(item) }
-            val questionElapsedMs = questionTiming.freeze()
-            answeredQuestions.add(AnsweredQuestionRecord(item, type, isCorrect, questionElapsedMs))
+        val questionElapsedMs = questionTiming.freeze()
+        val quiz = session.quiz.grade(
+            isCorrect = isCorrect,
+            elapsedMs = questionElapsedMs,
+            // An item with a still-pending sibling question type has that one pushed to the back, so
+            // it isn't the entry most likely to be drawn again right away.
+            deferSiblingOnCorrect = true,
+            cap = MAX_IN_FLIGHT_REVIEW_ITEMS
+        )
+        val graded = quiz.lastGraded ?: return
+        val grade = if (graded.completedItem) quiz.progress.getValue(item.assignmentId).toReviewGrade() else null
+        // Only recorded as pending here — actually submitting to WaniKani (and bumping the local SRS
+        // stage) waits for commitPendingSubmission, so the user can still undo a correct answer
+        // before pressing Continue.
+        session = ReviewSession(quiz, pendingSubmissionAssignmentId = grade?.let { item.assignmentId })
 
-            queue.removeCurrent()
-            if (isCorrect) {
-                when (type) {
-                    QuestionType.MEANING -> itemProgress.meaningDone = true
-                    QuestionType.READING -> itemProgress.readingDone = true
-                }
-                // Not done yet — this item has a still-pending sibling question type. Push it to the
-                // back rather than leaving it wherever it landed when admitted, so it isn't the entry
-                // most likely to be drawn again right away.
-                if (!isFullyDone(item, itemProgress)) {
-                    queue.moveMatchingToBack { it.item.assignmentId == item.assignmentId }
-                }
-            } else {
-                when (type) {
-                    QuestionType.MEANING -> itemProgress.recordIncorrectMeaning()
-                    QuestionType.READING -> itemProgress.recordIncorrectReading()
-                }
-                queue.requeue(PendingQuestion(item, type))
-            }
-            // No-ops unless this answer just finished an item and freed its slot, and reserve still
-            // has more waiting — see MAX_IN_FLIGHT_REVIEW_ITEMS's doc comment. Safe to call
-            // unconditionally rather than only when a slot might have freed.
-            queue.admitNext(MAX_IN_FLIGHT_REVIEW_ITEMS)
+        // Whether this answer was the very last one due — if so, commitGradeDurably completes the
+        // session outright instead of saving a snapshot of the now-empty queue.
+        val queueIsEmpty = quiz.current == null
+        val snapshot = session.toPersisted(sessionTiming.currentElapsedMs())
 
-            // Whether this answer was the very last one due — if so, commitGradeDurably completes
-            // the session outright instead of saving a snapshot of the now-empty queue. That snapshot
-            // would only ever get overwritten by advanceToNextQuestion's own completion once the user
-            // taps Continue anyway; not writing it in the first place, right when the queue empties,
-            // is simpler and safer than writing it and relying on a later completion to overwrite it.
-            val queueIsEmpty = queue.current == null
+        // Computed synchronously against AssignmentRepository's in-memory SRS-system cache — no DB
+        // access on this critical path. Purely a UI prediction; the actual DB write of the new stage
+        // happens in commitPendingSubmission.
+        val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
 
-            val grade = if (isCorrect && isFullyDone(item, itemProgress)) itemProgress.toReviewGrade() else null
-            // Only recorded as pending here — actually submitting to WaniKani (and bumping the local
-            // SRS stage) is deferred to commitPendingSubmission, so the user can still undo a correct
-            // answer before pressing Continue. See pendingSubmissionAssignmentId's doc comment.
-            pendingSubmissionAssignmentId = grade?.let { item.assignmentId }
-
-            // Snapshotted synchronously, right after mutating the queue/progress/pending-submission
-            // state above, so the detached durability write below can safely run concurrently with
-            // the next question's own grading/advance — queue/progressByAssignmentId are plain,
-            // non-thread-safe collections, and once feedback is visible the user is free to act
-            // immediately.
-            val snapshot = currentPersistSnapshot()
-
-            // Computed synchronously against AssignmentRepository's in-memory SRS-system cache
-            // (warmed once when the queue loaded) — zero DB access on this critical path at all now.
-            // This is purely a UI prediction; the actual DB write of the new stage happens later, in
-            // commitPendingSubmission.
-            val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
-
-            updateQuiz {
-                it.copy(
-                    feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
-                    answerRevealed = revealedNow,
-                    remainingCount = queue.size,
-                                        rankChange = newRankChange ?: it.rankChange,
-                    // Freezes the "time on this question" display the instant feedback appears,
-                    // rather than letting it keep ticking while the feedback/Continue screen is up
-                    // — matches the elapsedMs recorded for the slowest-answers summary above, which
-                    // is stamped at this same moment.
-                    timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null)
-                )
-            }
-
-            snapshot to queueIsEmpty
+        updateQuiz {
+            it.copy(
+                feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
+                answerRevealed = revealedNow,
+                remainingCount = quiz.remainingQuestions,
+                rankChange = newRankChange ?: it.rankChange,
+                // Freezes the "time on this question" display the instant feedback appears — the same
+                // elapsedMs the slowest-answers summary records for this answer.
+                timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null)
+            )
         }
         // Withheld entirely while gated (revealedNow == false) — a wrong reading answer's audio/hint
         // wait for revealAnswer() to trigger them instead, same as its answer text.
@@ -573,39 +469,19 @@ class ReviewViewModel(
     }
 
     /** Reverts the most recent answer — a typo (incorrect) or a change of mind (correct, and not yet
-     *  submitted to WaniKani — see [pendingSubmissionAssignmentId]). The queue/progress mutation
-     *  itself is shared via [undoLastIncorrectAnswer]/[undoLastCorrectAnswer]. */
+     *  submitted to WaniKani — see [ReviewSession.pendingSubmissionAssignmentId]). */
     override fun undoLastAnswer() {
         val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
-        val item = active.currentItem
-        val type = active.currentQuestionType
         val feedback = active.feedback ?: return
 
         viewModelScope.launch {
-            // Cleared before persist() (called at the end of the undo functions below) so the
-            // snapshot it saves doesn't resurrect a submission this undo just retracted.
-            if (feedback.isCorrect) pendingSubmissionAssignmentId = null
-
-            val didUndo = if (feedback.isCorrect) {
-                undoLastCorrectAnswer(
-                    queue = queue,
-                    progressByAssignmentId = progressByAssignmentId,
-                    answeredQuestions = answeredQuestions,
-                    item = item,
-                    questionType = type,
-                    persist = { persistCurrentState() }
-                )
-            } else {
-                undoLastIncorrectAnswer(
-                    queue = queue,
-                    progressByAssignmentId = progressByAssignmentId,
-                    answeredQuestions = answeredQuestions,
-                    item = item,
-                    questionType = type,
-                    persist = { persistCurrentState() }
-                )
-            }
-            if (!didUndo) return@launch
+            val undone = session.quiz.undoLastGrade() ?: return@launch
+            // Retracting a correct answer retracts the submission it made pending.
+            session = ReviewSession(
+                quiz = undone,
+                pendingSubmissionAssignmentId = if (feedback.isCorrect) null else session.pendingSubmissionAssignmentId
+            )
+            persistCurrentState()
             // Restarts this question's clock so the retry's timing doesn't inherit time spent
             // before the undo.
             val questionStartedAt = questionTiming.restart()
@@ -622,7 +498,7 @@ class ReviewViewModel(
                     answerHint = null,
                     answerRevealed = true,
                     answerInput = "",
-                    remainingCount = queue.size,
+                    remainingCount = undone.remainingQuestions,
                     undoCounter = it.undoCounter + 1,
                     timing = it.timing.copy(
                         questionActiveElapsedMs = 0L,
@@ -636,11 +512,6 @@ class ReviewViewModel(
         }
     }
 
-    private fun isFullyDone(item: ReviewItem, progress: ItemProgress): Boolean {
-        val requiresReading = item.subjectType != SubjectType.RADICAL && item.subjectType != SubjectType.KANA_VOCABULARY
-        return progress.meaningDone && (!requiresReading || progress.readingDone)
-    }
-
     override fun onContinue() {
         viewModelScope.launch { advanceToNextQuestion() }
     }
@@ -650,15 +521,10 @@ class ReviewViewModel(
      *  question being graded and this menu action running — see QuizSessionController.persist(). */
     override fun wrapUp() {
         viewModelScope.launch {
-            val currentAssignmentId = queue.current?.item?.assignmentId
-            queue.retainCurrentAndMatching {
-                progressByAssignmentId[it.item.assignmentId]?.hasAnyProgress == true ||
-                    it.item.assignmentId == currentAssignmentId
-            }
-            totalQuestions = queue.size + completedQuestionCount()
-
+            val quiz = session.quiz.wrappedUp()
+            session = session.copy(quiz = quiz)
             persistCurrentState()
-            updateQuiz { it.copy(isWrappingUp = true, totalCount = totalQuestions, remainingCount = queue.size) }
+            updateQuiz { it.copy(isWrappingUp = true, totalCount = quiz.totalQuestions, remainingCount = quiz.remainingQuestions) }
         }
     }
 
@@ -675,21 +541,11 @@ class ReviewViewModel(
         }
     }
 
-    private fun completedQuestionCount(): Int =
-        progressByAssignmentId.values.sumOf { (if (it.meaningDone) 1 else 0) + (if (it.readingDone) 1 else 0) }
-
-    /** Only counts items with [QuizItemProgress.hasAnyProgress] — progressByAssignmentId is seeded
-     *  with an entry for every item in the original queue up front (see buildQueue), so after a
-     *  wrapUp() drops never-attempted items from the queue, their still-present-but-untouched
-     *  entries here must not be counted as "reviewed", or this would overcount items reviewed and,
-     *  in turn, understate the average time spent per item actually reviewed. The average divides
-     *  total wall-clock session time (start to finish, including feedback screens and rank-change
-     *  animations between questions) by the count of distinct items reviewed — that's what a user
-     *  actually means by "average time per item." Mirrors LessonViewModel.sessionSummary(). */
-    private fun sessionSummary(): QuizSessionSummary<ReviewItem> {
-        val reviewedProgress = progressByAssignmentId.values.filter { it.hasAnyProgress }
-        return summarizeQuizSession(reviewedProgress, answeredQuestions, sessionTiming.currentElapsedMs())
-    }
+    /** Only items with progress count as reviewed: after [wrapUp] drops never-attempted items, counting
+     *  them would overstate items reviewed and understate the average time per item. The average
+     *  divides total active session time by distinct items reviewed. */
+    private fun sessionSummary(): QuizSessionSummary<ReviewItem> =
+        session.quiz.summary(sessionTiming.currentElapsedMs()) { it.hasAnyProgress }
 
     /** Snapshots a just-completed session's summary so it can be revisited later from the
      *  dashboard, after this ViewModel (and its otherwise-ephemeral session-complete state) is
@@ -712,7 +568,7 @@ class ReviewViewModel(
         // (process death, or navigating away and back), treating that the same as an implicit
         // Continue, since undo only works on the live in-memory session.
         commitPendingSubmission()
-        val next = queue.current
+        val next = session.quiz.current
         if (next == null) {
             sessionController.complete()
             outboxRepository.requestSyncNow()
@@ -733,8 +589,8 @@ class ReviewViewModel(
                 phase = ReviewUiState.Phase.Active(
                     currentItem = next.item,
                     currentQuestionType = next.type,
-                    totalCount = totalQuestions,
-                    remainingCount = queue.size,
+                    totalCount = session.quiz.totalQuestions,
+                    remainingCount = session.quiz.remainingQuestions,
                     questionSequence = (previousPhase?.questionSequence ?: 0) + 1,
                     timing = QuizTimingUiState(
                         sessionActiveElapsedMs = sessionTiming.elapsedMs,
@@ -746,31 +602,8 @@ class ReviewViewModel(
         }
     }
 
-    /** Captures the current queue/progress as an immutable, ready-to-persist value — safe to hold
-     *  across a suspension point even if the live queue/progressByAssignmentId are mutated by
-     *  something else afterward (see [gradeAnswer]'s deferred [commitGradeDurably] call). Folds
-     *  in the currently-running viewing segment (if any) rather than the possibly-stale
-     *  [activeElapsedMs] alone, so an abrupt process death loses at most the time since this
-     *  snapshot, not the whole segment since the last pause. */
-    private fun currentPersistSnapshot(): PersistedReviewSession = PersistedReviewSession(
-        queue = queue.toList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
-        reserve = queue.reserveList().map { PersistedQuestion(it.item.assignmentId, it.type.name) },
-        progress = progressByAssignmentId.map { (id, p) ->
-            PersistedItemProgress(
-                id, p.meaningDone, p.readingDone, p.hadIncorrectMeaning, p.hadIncorrectReading,
-                p.incorrectMeaningAttempts, p.incorrectReadingAttempts
-            )
-        },
-        totalQuestions = totalQuestions,
-        sessionActiveElapsedMs = sessionTiming.currentElapsedMs(),
-        answeredQuestions = answeredQuestions.map {
-            PersistedAnsweredQuestion(it.item.assignmentId, it.type.name, it.isCorrect, it.elapsedMs)
-        },
-        pendingSubmissionAssignmentId = pendingSubmissionAssignmentId
-    )
-
     private suspend fun persistCurrentState() {
-        sessionController.persist(currentPersistSnapshot())
+        sessionController.persist(session.toPersisted(sessionTiming.currentElapsedMs()))
     }
 
     /** Runs the post-grading durability write (session persistence only — see
@@ -798,9 +631,9 @@ class ReviewViewModel(
      *  No-ops if nothing is pending — e.g. the last-graded answer was incorrect, or this was already
      *  committed. */
     private suspend fun commitPendingSubmission() {
-        val assignmentId = pendingSubmissionAssignmentId ?: return
-        val progress = progressByAssignmentId[assignmentId] ?: return
-        pendingSubmissionAssignmentId = null
+        val assignmentId = session.pendingSubmissionAssignmentId ?: return
+        val progress = session.quiz.progress[assignmentId] ?: return
+        session = session.copy(pendingSubmissionAssignmentId = null)
         val item = progress.item
         val grade = progress.toReviewGrade()
         // Durable against this ViewModel being cleared mid-write, via applicationScope rather than
