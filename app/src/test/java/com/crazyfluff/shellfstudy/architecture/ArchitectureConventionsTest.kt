@@ -165,7 +165,7 @@ class ArchitectureConventionsTest {
         val BACKTICKED_NAME = Regex("""fun\s+`([^`]*)`""")
 
         /** Refused by the Kotlin/Native backend, whose declaration names double as Objective-C selectors. */
-        const val NATIVE_ILLEGAL_NAME_CHARS = ".;[]/<>:\\,"
+        const val NATIVE_ILLEGAL_NAME_CHARS = ".;[]/<>:\\,()"
 
         val NAV_HOST_CALL = Regex("""(?<!fun )ShellfStudyNavHost\(""")
 

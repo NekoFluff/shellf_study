@@ -1,11 +1,11 @@
-package com.crazyfluff.shellfstudy.core.notifications
+package com.crazyfluff.shellfstudy.shared.notifications
 
 import com.crazyfluff.shellfstudy.shared.notifications.DailyReminderTiming
-import com.google.common.truth.Truth.assertThat
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class DailyReminderTimingTest {
 
@@ -18,7 +18,7 @@ class DailyReminderTimingTest {
         val next = DailyReminderTiming.nextOccurrence(now, zone, hour = 20)
 
         val expected = LocalDateTime(2026, 8, 10, 20, 0).toInstant(zone)
-        assertThat(next).isEqualTo(expected)
+        assertEquals(expected, next)
     }
 
     @Test
@@ -28,7 +28,7 @@ class DailyReminderTimingTest {
         val next = DailyReminderTiming.nextOccurrence(now, zone, hour = 20)
 
         val expected = LocalDateTime(2026, 8, 11, 20, 0).toInstant(zone)
-        assertThat(next).isEqualTo(expected)
+        assertEquals(expected, next)
     }
 
     @Test
@@ -38,6 +38,6 @@ class DailyReminderTimingTest {
         val next = DailyReminderTiming.nextOccurrence(now, zone, hour = 20)
 
         val expected = LocalDateTime(2026, 8, 11, 20, 0).toInstant(zone)
-        assertThat(next).isEqualTo(expected)
+        assertEquals(expected, next)
     }
 }

@@ -1,4 +1,4 @@
-package com.crazyfluff.shellfstudy.core.designsystem.subjectdetail
+package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.text.LinkAnnotation
@@ -6,8 +6,10 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.parseWkMarkup
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.SubjectTypeColors
-import com.google.common.truth.Truth.assertThat
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertTrue
+import kotlin.test.assertFalse
+import kotlin.test.assertEquals
 
 class WkMnemonicTextTest {
 
@@ -15,66 +17,66 @@ class WkMnemonicTextTest {
     fun `plain text has no spans`() {
         val result = parseWkMarkup("no markup here")
 
-        assertThat(result.text).isEqualTo("no markup here")
-        assertThat(result.spanStyles).isEmpty()
+        assertEquals("no markup here", result.text)
+        assertTrue(result.spanStyles.isEmpty())
     }
 
     @Test
     fun `radical tag colors its enclosed text and strips the tag itself`() {
         val result = parseWkMarkup("<radical>drop</radical> means water")
 
-        assertThat(result.text).isEqualTo("drop means water")
+        assertEquals("drop means water", result.text)
         val span = result.spanStyles.single()
-        assertThat(result.text.substring(span.start, span.end)).isEqualTo("drop")
-        assertThat(span.item.color).isEqualTo(SubjectTypeColors.Radical)
+        assertEquals("drop", result.text.substring(span.start, span.end))
+        assertEquals(SubjectTypeColors.Radical, span.item.color)
     }
 
     @Test
     fun `kanji and vocabulary tags use their own type colors`() {
         val kanji = parseWkMarkup("<kanji>水</kanji>")
-        assertThat(kanji.spanStyles.single().item.color).isEqualTo(SubjectTypeColors.Kanji)
+        assertEquals(SubjectTypeColors.Kanji, kanji.spanStyles.single().item.color)
 
         val vocab = parseWkMarkup("<vocabulary>水道</vocabulary>")
-        assertThat(vocab.spanStyles.single().item.color).isEqualTo(SubjectTypeColors.Vocabulary)
+        assertEquals(SubjectTypeColors.Vocabulary, vocab.spanStyles.single().item.color)
 
         val kanaVocab = parseWkMarkup("<kana_vocabulary>みず</kana_vocabulary>")
-        assertThat(kanaVocab.spanStyles.single().item.color).isEqualTo(SubjectTypeColors.Vocabulary)
+        assertEquals(SubjectTypeColors.Vocabulary, kanaVocab.spanStyles.single().item.color)
     }
 
     @Test
-    fun `reading tag is italic, not colored`() {
+    fun `reading tag is italic rather than colored`() {
         val result = parseWkMarkup("<reading>mizu</reading>")
 
         val span = result.spanStyles.single()
-        assertThat(span.item.fontStyle).isEqualTo(FontStyle.Italic)
-        assertThat(span.item.color.isSpecified).isFalse()
+        assertEquals(FontStyle.Italic, span.item.fontStyle)
+        assertFalse(span.item.color.isSpecified)
     }
 
     @Test
-    fun `ja tag is medium weight, not colored`() {
+    fun `ja tag is medium weight rather than colored`() {
         val result = parseWkMarkup("<ja>水</ja>")
 
         val span = result.spanStyles.single()
-        assertThat(span.item.fontWeight).isEqualTo(FontWeight.Medium)
+        assertEquals(FontWeight.Medium, span.item.fontWeight)
     }
 
     @Test
     fun `unknown tags are stripped silently without leaking raw markup or crashing`() {
         val result = parseWkMarkup("before <mystery>middle</mystery> after")
 
-        assertThat(result.text).isEqualTo("before middle after")
-        assertThat(result.spanStyles).isEmpty()
+        assertEquals("before middle after", result.text)
+        assertTrue(result.spanStyles.isEmpty())
     }
 
     @Test
     fun `adjacent tags do not bleed styling into each other`() {
         val result = parseWkMarkup("<radical>drop</radical> and <kanji>water</kanji>")
 
-        assertThat(result.spanStyles).hasSize(2)
+        assertEquals(2, result.spanStyles.size)
         val radicalSpan = result.spanStyles.first { result.text.substring(it.start, it.end) == "drop" }
         val kanjiSpan = result.spanStyles.first { result.text.substring(it.start, it.end) == "water" }
-        assertThat(radicalSpan.item.color).isEqualTo(SubjectTypeColors.Radical)
-        assertThat(kanjiSpan.item.color).isEqualTo(SubjectTypeColors.Kanji)
+        assertEquals(SubjectTypeColors.Radical, radicalSpan.item.color)
+        assertEquals(SubjectTypeColors.Kanji, kanjiSpan.item.color)
     }
 
     @Test
@@ -82,10 +84,10 @@ class WkMnemonicTextTest {
         val url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         val result = parseWkMarkup("check this out: $url")
 
-        assertThat(result.text).isEqualTo("check this out: $url")
+        assertEquals("check this out: $url", result.text)
         val annotation = result.getLinkAnnotations(0, result.text.length).single()
-        assertThat(result.text.substring(annotation.start, annotation.end)).isEqualTo(url)
-        assertThat((annotation.item as LinkAnnotation.Url).url).isEqualTo(url)
+        assertEquals(url, result.text.substring(annotation.start, annotation.end))
+        assertEquals(url, (annotation.item as LinkAnnotation.Url).url)
     }
 
     @Test
@@ -93,23 +95,23 @@ class WkMnemonicTextTest {
         val url = "https://youtu.be/abc123"
         val result = parseWkMarkup("<radical>drop</radical> like this video $url")
 
-        assertThat(result.text).isEqualTo("drop like this video $url")
+        assertEquals("drop like this video $url", result.text)
         val linkAnnotation = result.getLinkAnnotations(0, result.text.length).single()
-        assertThat((linkAnnotation.item as LinkAnnotation.Url).url).isEqualTo(url)
+        assertEquals(url, (linkAnnotation.item as LinkAnnotation.Url).url)
         val radicalSpan = result.spanStyles.single()
-        assertThat(result.text.substring(radicalSpan.start, radicalSpan.end)).isEqualTo("drop")
+        assertEquals("drop", result.text.substring(radicalSpan.start, radicalSpan.end))
     }
 
     @Test
-    fun `html anchor tag becomes a clickable link using its anchor text, with no raw markup leaking`() {
+    fun `html anchor tag becomes a clickable link using its anchor text with no raw markup leaking`() {
         val href = "https://www.youtube.com/watch?v=XaCrQL_8eMY"
         val result = parseWkMarkup(
             "you're the <a href=\"$href\" target=\"_blank\">Whole. Damn. Meal.</a> apparently"
         )
 
-        assertThat(result.text).isEqualTo("you're the Whole. Damn. Meal. apparently")
+        assertEquals("you're the Whole. Damn. Meal. apparently", result.text)
         val annotation = result.getLinkAnnotations(0, result.text.length).single()
-        assertThat(result.text.substring(annotation.start, annotation.end)).isEqualTo("Whole. Damn. Meal.")
-        assertThat((annotation.item as LinkAnnotation.Url).url).isEqualTo(href)
+        assertEquals("Whole. Damn. Meal.", result.text.substring(annotation.start, annotation.end))
+        assertEquals(href, (annotation.item as LinkAnnotation.Url).url)
     }
 }

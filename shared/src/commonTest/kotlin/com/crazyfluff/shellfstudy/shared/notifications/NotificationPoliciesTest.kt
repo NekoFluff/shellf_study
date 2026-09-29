@@ -1,10 +1,12 @@
-package com.crazyfluff.shellfstudy.core.notifications
+package com.crazyfluff.shellfstudy.shared.notifications
 
 import com.crazyfluff.shellfstudy.shared.notifications.BacklogPolicy
 import com.crazyfluff.shellfstudy.shared.notifications.WatermarkDecision
 import com.crazyfluff.shellfstudy.shared.notifications.WatermarkPolicy
-import com.google.common.truth.Truth.assertThat
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertTrue
+import kotlin.test.assertFalse
+import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
@@ -13,19 +15,19 @@ class NotificationPoliciesTest {
     @Test
     fun `WatermarkPolicy notifies when count rises past last-notified watermark`() {
         val decision = WatermarkPolicy.decide(currentCount = 8, lastNotifiedCount = 5)
-        assertThat(decision).isEqualTo(WatermarkDecision.Notify(delta = 3, newWatermark = 8))
+        assertEquals(WatermarkDecision.Notify(delta = 3, newWatermark = 8), decision)
     }
 
     @Test
     fun `WatermarkPolicy resets watermark when count drops`() {
         val decision = WatermarkPolicy.decide(currentCount = 2, lastNotifiedCount = 8)
-        assertThat(decision).isEqualTo(WatermarkDecision.ResetWatermark(newWatermark = 2))
+        assertEquals(WatermarkDecision.ResetWatermark(newWatermark = 2), decision)
     }
 
     @Test
     fun `WatermarkPolicy is a no-op when count is unchanged`() {
         val decision = WatermarkPolicy.decide(currentCount = 5, lastNotifiedCount = 5)
-        assertThat(decision).isEqualTo(WatermarkDecision.NoChange)
+        assertEquals(WatermarkDecision.NoChange, decision)
     }
 
     @Test
@@ -37,7 +39,7 @@ class NotificationPoliciesTest {
             now = Instant.parse("2026-08-10T12:00:00Z"),
             cooldown = 6.hours
         )
-        assertThat(result).isFalse()
+        assertFalse(result)
     }
 
     @Test
@@ -49,7 +51,7 @@ class NotificationPoliciesTest {
             now = Instant.parse("2026-08-10T12:00:00Z"),
             cooldown = 6.hours
         )
-        assertThat(result).isTrue()
+        assertTrue(result)
     }
 
     @Test
@@ -62,7 +64,7 @@ class NotificationPoliciesTest {
             now = now,
             cooldown = 6.hours
         )
-        assertThat(result).isFalse()
+        assertFalse(result)
     }
 
     @Test
@@ -75,6 +77,6 @@ class NotificationPoliciesTest {
             now = now,
             cooldown = 6.hours
         )
-        assertThat(result).isTrue()
+        assertTrue(result)
     }
 }

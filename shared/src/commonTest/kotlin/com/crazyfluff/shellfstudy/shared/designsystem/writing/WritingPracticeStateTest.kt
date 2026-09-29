@@ -1,9 +1,10 @@
-package com.crazyfluff.shellfstudy.core.designsystem.writing
+package com.crazyfluff.shellfstudy.shared.designsystem.writing
 
 import androidx.compose.ui.geometry.Offset
 import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeState
-import com.google.common.truth.Truth.assertThat
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 
 class WritingPracticeStateTest {
 
@@ -16,22 +17,20 @@ class WritingPracticeStateTest {
         state.onDrag(Offset(20f, 0f))
         state.onDragEnd()
 
-        assertThat(state.completedStrokes).hasSize(1)
-        assertThat(state.completedStrokes.single().points)
-            .containsExactly(Offset(0f, 0f), Offset(10f, 0f), Offset(20f, 0f))
-            .inOrder()
-        assertThat(state.currentStrokePoints).isEmpty()
+        assertEquals(1, state.completedStrokes.size)
+        assertEquals(listOf(Offset(0f, 0f), Offset(10f, 0f), Offset(20f, 0f)), state.completedStrokes.single().points)
+        assertTrue(state.currentStrokePoints.isEmpty())
     }
 
     @Test
-    fun `a tap with no drag is discarded, not recorded as a stroke`() {
+    fun `a tap with no drag is discarded rather than recorded as a stroke`() {
         val state = WritingPracticeState()
 
         state.onDragStart(Offset(5f, 5f))
         state.onDragEnd()
 
-        assertThat(state.completedStrokes).isEmpty()
-        assertThat(state.currentStrokePoints).isEmpty()
+        assertTrue(state.completedStrokes.isEmpty())
+        assertTrue(state.currentStrokePoints.isEmpty())
     }
 
     @Test
@@ -40,7 +39,7 @@ class WritingPracticeStateTest {
 
         state.undoLast()
 
-        assertThat(state.completedStrokes).isEmpty()
+        assertTrue(state.completedStrokes.isEmpty())
     }
 
     @Test
@@ -55,8 +54,8 @@ class WritingPracticeStateTest {
 
         state.undoLast()
 
-        assertThat(state.completedStrokes).hasSize(1)
-        assertThat(state.completedStrokes.single().points.last()).isEqualTo(Offset(1f, 1f))
+        assertEquals(1, state.completedStrokes.size)
+        assertEquals(Offset(1f, 1f), state.completedStrokes.single().points.last())
     }
 
     @Test
@@ -70,7 +69,7 @@ class WritingPracticeStateTest {
 
         state.clear()
 
-        assertThat(state.completedStrokes).isEmpty()
-        assertThat(state.currentStrokePoints).isEmpty()
+        assertTrue(state.completedStrokes.isEmpty())
+        assertTrue(state.currentStrokePoints.isEmpty())
     }
 }

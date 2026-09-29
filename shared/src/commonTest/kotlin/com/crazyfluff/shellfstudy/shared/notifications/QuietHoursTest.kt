@@ -1,11 +1,13 @@
-package com.crazyfluff.shellfstudy.core.notifications
+package com.crazyfluff.shellfstudy.shared.notifications
 
 import com.crazyfluff.shellfstudy.shared.notifications.QuietHours
-import com.google.common.truth.Truth.assertThat
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertTrue
+import kotlin.test.assertFalse
+import kotlin.test.assertEquals
 
 class QuietHoursTest {
 
@@ -16,10 +18,10 @@ class QuietHoursTest {
         val start = 9
         val end = 17
 
-        assertThat(QuietHours.isQuietNow(10, start, end)).isTrue()
-        assertThat(QuietHours.isQuietNow(9, start, end)).isTrue()
-        assertThat(QuietHours.isQuietNow(17, start, end)).isFalse()
-        assertThat(QuietHours.isQuietNow(8, start, end)).isFalse()
+        assertTrue(QuietHours.isQuietNow(10, start, end))
+        assertTrue(QuietHours.isQuietNow(9, start, end))
+        assertFalse(QuietHours.isQuietNow(17, start, end))
+        assertFalse(QuietHours.isQuietNow(8, start, end))
     }
 
     @Test
@@ -27,17 +29,17 @@ class QuietHoursTest {
         val start = 22
         val end = 7
 
-        assertThat(QuietHours.isQuietNow(23, start, end)).isTrue()
-        assertThat(QuietHours.isQuietNow(3, start, end)).isTrue()
-        assertThat(QuietHours.isQuietNow(22, start, end)).isTrue()
-        assertThat(QuietHours.isQuietNow(6, start, end)).isTrue()
-        assertThat(QuietHours.isQuietNow(7, start, end)).isFalse()
-        assertThat(QuietHours.isQuietNow(12, start, end)).isFalse()
+        assertTrue(QuietHours.isQuietNow(23, start, end))
+        assertTrue(QuietHours.isQuietNow(3, start, end))
+        assertTrue(QuietHours.isQuietNow(22, start, end))
+        assertTrue(QuietHours.isQuietNow(6, start, end))
+        assertFalse(QuietHours.isQuietNow(7, start, end))
+        assertFalse(QuietHours.isQuietNow(12, start, end))
     }
 
     @Test
     fun `equal start and end means never quiet`() {
-        assertThat(QuietHours.isQuietNow(10, 9, 9)).isFalse()
+        assertFalse(QuietHours.isQuietNow(10, 9, 9))
     }
 
     @Test
@@ -49,7 +51,7 @@ class QuietHoursTest {
         val result = QuietHours.nextEndInstant(now, zone, start, end)
 
         val expected = LocalDateTime(2026, 8, 11, end, 0).toInstant(zone)
-        assertThat(result).isEqualTo(expected)
+        assertEquals(expected, result)
     }
 
     @Test
@@ -61,7 +63,7 @@ class QuietHoursTest {
         val result = QuietHours.nextEndInstant(now, zone, start, end)
 
         val expected = LocalDateTime(2026, 8, 11, end, 0).toInstant(zone)
-        assertThat(result).isEqualTo(expected)
+        assertEquals(expected, result)
     }
 
     @Test
@@ -73,6 +75,6 @@ class QuietHoursTest {
         val result = QuietHours.nextEndInstant(now, zone, start, end)
 
         val expected = LocalDateTime(2026, 8, 10, end, 0).toInstant(zone)
-        assertThat(result).isEqualTo(expected)
+        assertEquals(expected, result)
     }
 }

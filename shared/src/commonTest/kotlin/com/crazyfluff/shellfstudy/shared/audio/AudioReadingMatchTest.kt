@@ -1,12 +1,14 @@
-package com.crazyfluff.shellfstudy.core.audio
+package com.crazyfluff.shellfstudy.shared.audio
 
 import com.crazyfluff.shellfstudy.shared.audio.VoicePreference
 import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
-import com.google.common.truth.Truth.assertThat
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertNull
+import kotlin.test.assertNotNull
+import kotlin.test.assertEquals
 
-class AudioSelectionTest {
+class AudioReadingMatchTest {
 
     private fun audio(
         pronunciation: String?,
@@ -28,7 +30,7 @@ class AudioSelectionTest {
 
         val selected = selectAudioFor(audios, reading = "スイ")
 
-        assertThat(selected?.pronunciation).isEqualTo("スイ")
+        assertEquals("スイ", selected?.pronunciation)
     }
 
     @Test
@@ -37,7 +39,7 @@ class AudioSelectionTest {
 
         val selected = selectAudioFor(audios, reading = "みず")
 
-        assertThat(selected).isNotNull()
+        assertNotNull(selected)
     }
 
     @Test
@@ -46,7 +48,7 @@ class AudioSelectionTest {
 
         val selected = selectAudioFor(audios, reading = "みず")
 
-        assertThat(selected).isEqualTo(audios.first())
+        assertEquals(audios.first(), selected)
     }
 
     @Test
@@ -58,7 +60,7 @@ class AudioSelectionTest {
 
         val selected = selectAudioFor(audios, reading = "みず", preference = VoicePreference.MALE)
 
-        assertThat(selected?.gender).isEqualTo("male")
+        assertEquals("male", selected?.gender)
     }
 
     @Test
@@ -67,12 +69,12 @@ class AudioSelectionTest {
 
         val selected = selectAudioFor(audios, reading = "みず", preference = VoicePreference.MALE)
 
-        assertThat(selected).isEqualTo(audios.first())
+        assertEquals(audios.first(), selected)
     }
 
     @Test
     fun `an empty audio list returns null`() {
-        assertThat(selectAudioFor(emptyList(), reading = "みず")).isNull()
+        assertNull(selectAudioFor(emptyList(), reading = "みず"))
     }
 
     @Test
@@ -84,7 +86,7 @@ class AudioSelectionTest {
 
         val selected = selectAudioFor(audios, reading = "みず", mp3Only = true)
 
-        assertThat(selected?.contentType).isEqualTo("audio/mpeg")
+        assertEquals("audio/mpeg", selected?.contentType)
     }
 
     @Test
@@ -93,7 +95,7 @@ class AudioSelectionTest {
 
         val selected = selectAudioFor(audios, reading = "みず", mp3Only = true)
 
-        assertThat(selected).isNull()
+        assertNull(selected)
     }
 
     @Test
@@ -106,7 +108,7 @@ class AudioSelectionTest {
 
         val selected = selectAudioFor(audios, reading = "みず", preference = VoicePreference.MALE, mp3Only = true)
 
-        assertThat(selected?.gender).isEqualTo("male")
-        assertThat(selected?.contentType).isEqualTo("audio/mpeg")
+        assertEquals("male", selected?.gender)
+        assertEquals("audio/mpeg", selected?.contentType)
     }
 }
