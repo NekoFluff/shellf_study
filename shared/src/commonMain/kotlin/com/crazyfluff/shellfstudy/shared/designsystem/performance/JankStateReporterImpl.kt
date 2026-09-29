@@ -11,3 +11,14 @@ import androidx.compose.runtime.Composable
  */
 @Composable
 expect fun rememberJankStateReporter(): (Map<String, String>) -> Unit
+
+/**
+ * Platform composition-timing recorder, or a no-op where there is no harness. See
+ * [Modifier.timedComposition].
+ */
+@Composable
+expect fun rememberCompositionRecorder(): (name: String, nanos: Long) -> Unit
+
+/** Whether the platform has composition timing enabled. */
+@Composable
+expect fun rememberCompositionTimingEnabled(): Boolean

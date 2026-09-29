@@ -62,6 +62,7 @@ import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardContentState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardUiState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.JANK_STATE_SCREEN
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.timedComposition
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankState
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
@@ -440,7 +441,8 @@ fun DashboardScreen(
                             Spacer(modifier = Modifier.height(24.dp))
 
                             Row(
-                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)
+                                    .timedComposition("summaryCards"),
                                 horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 SummaryCard(
@@ -490,7 +492,7 @@ fun DashboardScreen(
                                 onWindowChange = callbacks.onReviewForecastWindowChange,
                                 selectedColorMode = uiState.selectedForecastColorMode,
                                 onColorModeChange = callbacks.onReviewForecastColorModeChange,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth().timedComposition("reviewForecastCard")
                             )
 
                             if (uiState.levelProgress != null) {
@@ -500,7 +502,7 @@ fun DashboardScreen(
                                     maxLevel = uiState.level,
                                     levelUpProgress = uiState.levelUpProgress,
                                     onLevelChange = callbacks.onLevelProgressLevelChange,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth().timedComposition("levelProgressCard")
                                 )
                             }
 
@@ -508,12 +510,12 @@ fun DashboardScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
                                 CompletionProjectionCard(
                                     projection = uiState.completionProjection,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth().timedComposition("completionProjectionCard")
                                 )
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
-                            ItemSpreadCard(spread = uiState.itemSpread, modifier = Modifier.fillMaxWidth())
+                            ItemSpreadCard(spread = uiState.itemSpread, modifier = Modifier.fillMaxWidth().timedComposition("itemSpreadCard"))
 
                             if (uiState.leaderboard != null) {
                                 Spacer(modifier = Modifier.height(16.dp))
@@ -525,12 +527,12 @@ fun DashboardScreen(
                                     onSeeAll = callbacks.onOpenLeaderboard,
                                     selectedMetric = uiState.selectedMetric,
                                     selectedWindow = uiState.selectedWindow,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth().timedComposition("leaderboardCard")
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 RaceChartCard(
                                     leaderboard = uiState.leaderboard,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth().timedComposition("raceChartCard")
                                 )
                             }
                         }

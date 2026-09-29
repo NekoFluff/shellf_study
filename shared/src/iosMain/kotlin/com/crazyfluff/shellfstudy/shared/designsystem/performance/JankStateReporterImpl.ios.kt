@@ -8,3 +8,11 @@ actual fun rememberJankStateReporter(): (Map<String, String>) -> Unit = {
     // Reporting is a no-op rather than absent so shared screens carry no platform branching; see the
     // expect declaration.
 }
+
+@Composable
+actual fun rememberCompositionRecorder(): (String, Long) -> Unit = { _, _ ->
+    // No harness on iOS; see the expect declaration.
+}
+
+@Composable
+actual fun rememberCompositionTimingEnabled(): Boolean = false

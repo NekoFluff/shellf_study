@@ -14,6 +14,10 @@ import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.LocalNotificationPermissionRequest
 import com.crazyfluff.shellfstudy.shared.designsystem.rememberNotificationPermissionRequest
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.LocalCompositionRecorder
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.LocalCompositionTimingEnabled
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.rememberCompositionRecorder
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.rememberCompositionTimingEnabled
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.LocalJankStateReporter
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.rememberJankStateReporter
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
@@ -71,6 +75,10 @@ fun ShellfStudyApp(
             // anywhere else this stays the no-op default, so shared code carries no platform
             // dependency and reporting costs nothing when nothing is listening.
             LocalJankStateReporter provides rememberJankStateReporter(),
+            // Composition timing rides the same harness and the same enablement: off unless the
+            // platform turned the jank tracker on, so this costs nothing in a normal build.
+            LocalCompositionRecorder provides rememberCompositionRecorder(),
+            LocalCompositionTimingEnabled provides rememberCompositionTimingEnabled(),
             LocalPronunciationAudioPlayer provides audioPlayer,
             LocalDisplaySettings provides displaySettings,
             LocalShareText provides shareText,

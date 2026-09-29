@@ -54,8 +54,16 @@ object JankStatsTracker {
 
     const val TAG = "ShellfStudyJank"
 
-    /** Frames between summary lines — roughly five seconds of interaction at 120 Hz. */
-    const val SUMMARY_INTERVAL_FRAMES = 600
+    /**
+     * Frames between summary lines — roughly two seconds of interaction at 120 Hz, four at 60 Hz.
+     *
+     * Shortened from 600 after discovering the cost of a long window: a summary every five seconds
+     * means a scripted twenty-second exercise of the app can finish before the first one is emitted,
+     * and a real session produces only a handful. The window is small enough that the composition
+     * totals it reports still describe a coherent burst of work rather than smearing an entire session
+     * together, which is what the breakdown is for.
+     */
+    const val SUMMARY_INTERVAL_FRAMES = 240
 
     /**
      * A frame slower than this gets its own log line. Above both the 120 Hz budget (8.3 ms) and the
@@ -86,6 +94,30 @@ object JankStatsTracker {
     private var jankStats: JankStats? = null
 
     private val counters = FrameCounters()
+
+    /**
+     * Per-card composition totals for the current summary window — see
+     * [com.crazyfluff.shellfstudy.shared.designsystem.performance.timedComposition].
+     *
+     * Cleared with the frame counters so a summary describes one window. Keyed by card name; the
+     * values are total nanoseconds and composition count, because the two together distinguish an
+     * intrinsically expensive card from one that merely recomposes far too often.
+     */
+    private val compositionTotals = linkedMapOf<String, CompositionTotal>()
+
+    private data class CompositionTotal(var totalNanos: Long = 0, var count: Int = 0)
+
+    /**
+     * Records one composable's composition time. Called from a `SideEffect`, so it runs on the main
+     * thread right after a composition commits — the same thread the frame is being measured on, and
+     * cheap enough not to perturb what it measures.
+     */
+    fun recordComposition(name: String, nanos: Long) {
+        if (!isEnabled) return
+        val total = compositionTotals.getOrPut(name) { CompositionTotal() }
+        total.totalNanos += nanos
+        total.count++
+    }
 
     /** Turns recording on. Idempotent. */
     fun enable() {
@@ -231,6 +263,16 @@ object JankStatsTracker {
 
     private fun logSummary() {
         Log.i(TAG, counters.summaryAndReset())
+        // Reported separately and cleared on the same cadence, so a summary line and the composition
+        // breakdown that follows it describe the same window.
+        if (compositionTotals.isNotEmpty()) {
+            Log.i(TAG, "COMPOSITION " + compositionTotals.entries
+                .sortedByDescending { it.value.totalNanos }
+                .joinToString(" | ") { (name, total) ->
+                    "${name}:${ms(total.totalNanos)}x${total.count}"
+                })
+            compositionTotals.clear()
+        }
     }
 
     private fun describeStates(frame: FrameData): String =
