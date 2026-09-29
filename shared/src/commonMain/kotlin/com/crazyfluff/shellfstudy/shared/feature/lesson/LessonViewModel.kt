@@ -21,7 +21,6 @@ import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
-import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingHint
@@ -39,7 +38,8 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
 import com.crazyfluff.shellfstudy.shared.quiz.requiresTapToRevealAnswer
-import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionPhase
+import com.crazyfluff.shellfstudy.shared.quiz.QuizGrade
+import com.crazyfluff.shellfstudy.shared.quiz.QuizQuestionState
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionState
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionViewModel
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
@@ -82,11 +82,12 @@ data class LessonUiState(
      *  the map has no cached summary (yet); [RelatedSubjectsSection]/[toRelatedSubjectsUiState] is
      *  what turns "absent" into a "not cached yet" caption rather than silence. */
     val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap()
-) : QuizSessionState<LessonUiState, LessonUiState.Phase.Quiz, LessonItem> {
+) : QuizSessionState<LessonUiState, LessonItem> {
 
-    override val quizPhase: Phase.Quiz? get() = phase as? Phase.Quiz
+    override val question: QuizQuestionState<LessonItem>? get() = (phase as? Phase.Quiz)?.question
 
-    override fun withQuizPhase(phase: Phase.Quiz): LessonUiState = copy(phase = phase)
+    override fun withQuestion(question: QuizQuestionState<LessonItem>): LessonUiState =
+        (phase as? Phase.Quiz)?.let { copy(phase = it.copy(question = question)) } ?: this
 
     /** Why the learner is leaving the lesson screen, if they are. */
     sealed interface ExitRequest {
@@ -141,41 +142,12 @@ data class LessonUiState(
         ) : Phase
 
         data class Quiz(
-            // Non-nullable by construction — a next-question decision always branches into either a
-            // Quiz with a real item, or on to a checkpoint/Complete; there's no way to construct a
-            // Quiz value with nothing to show.
-            override val currentItem: LessonItem,
-            override val currentQuestionType: QuestionType,
+            val question: QuizQuestionState<LessonItem>,
             val batchIndex: Int = 0,
             val batchCount: Int = 1,
-            override val answerInput: String = "",
-            override val feedback: AnswerFeedback? = null,
-            override val rankChange: RankChange? = null,
-            override val undoCounter: Int = 0,
-            // Bumped on every advance to a new current question, even a requeued one that repeats
-            // the same item/type — see QuizQuestionContent's focusResetKey, which needs a signal
-            // that's guaranteed to change on advance regardless of whether the question repeats.
-            override val questionSequence: Int = 0,
-            override val isDetailsExpanded: Boolean = false,
-            override val answerTypeMismatchCount: Int = 0,
             val totalQuizCount: Int = 0,
-            val remainingQuizCount: Int = 0,
-            override val timing: QuizTimingUiState = QuizTimingUiState(),
-            // Whether the correct-answer text is visible for the current (wrong) feedback — see
-            // ReviewUiState.Phase.Active.answerRevealed for the full explanation. Mirrors the same
-            // gating here.
-            override val answerRevealed: Boolean = true,
-            // Reading + audio for the just-graded reading question, published together at grading
-            // time. Pitch accents aren't carried here — the screen reads those live off
-            // [LessonUiState.pitchAccentsBySubjectId] and folds them into this hint at render time.
-            val answerHint: AnswerReadingHint? = null
-        ) : Phase, QuizSessionPhase<LessonItem, Quiz> {
-            override fun withAnswerInput(value: String): Quiz = copy(answerInput = value)
-            override fun withAnswerRevealed(revealed: Boolean): Quiz = copy(answerRevealed = revealed)
-            override fun withDetailsExpanded(expanded: Boolean): Quiz = copy(isDetailsExpanded = expanded)
-            override fun withAnswerTypeMismatchCount(count: Int): Quiz = copy(answerTypeMismatchCount = count)
-            override fun withTiming(timing: QuizTimingUiState): Quiz = copy(timing = timing)
-        }
+            val remainingQuizCount: Int = 0
+        ) : Phase
 
         /** The end of a batch — where a session pauses instead of running every selected item's
          *  flashcards before anything is quizzed. [next] is modelled as one sealed value rather than
@@ -232,7 +204,7 @@ class LessonViewModel(
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope,
     private val syncOrchestrator: SyncOrchestrator
-) : QuizSessionViewModel<LessonItem, LessonUiState.Phase.Quiz, LessonUiState>(), LessonActions {
+) : QuizSessionViewModel<LessonItem, LessonUiState>(), LessonActions {
 
     override val _uiState = MutableStateFlow(LessonUiState())
     val uiState: StateFlow<LessonUiState> = _uiState.asStateFlow()
@@ -501,17 +473,19 @@ class LessonViewModel(
         _uiState.update {
             it.copy(
                 phase = LessonUiState.Phase.Quiz(
-                    currentItem = next.item,
-                    currentQuestionType = next.type,
+                    question = QuizQuestionState(
+                        item = next.item,
+                        type = next.type,
+                        timing = QuizTimingUiState(
+                            sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                            sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
+                            questionActiveSegmentStartMs = questionStartedAt
+                        )
+                    ),
                     batchIndex = session.batchIndex,
                     batchCount = session.batchCount,
                     totalQuizCount = quiz.totalQuestions,
-                    remainingQuizCount = quiz.remainingQuestions,
-                    timing = QuizTimingUiState(
-                        sessionActiveElapsedMs = sessionTiming.elapsedMs,
-                        sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                        questionActiveSegmentStartMs = questionStartedAt
-                    )
+                    remainingQuizCount = quiz.remainingQuestions
                 )
             )
         }
@@ -818,17 +792,19 @@ class LessonViewModel(
         _uiState.update {
             it.copy(
                 phase = LessonUiState.Phase.Quiz(
-                    currentItem = next.item,
-                    currentQuestionType = next.type,
+                    question = QuizQuestionState(
+                        item = next.item,
+                        type = next.type,
+                        timing = QuizTimingUiState(
+                            sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                            sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
+                            questionActiveSegmentStartMs = questionStartedAt
+                        )
+                    ),
                     batchIndex = session.batchIndex,
                     batchCount = session.batchCount,
                     totalQuizCount = quiz.totalQuestions,
-                    remainingQuizCount = quiz.totalQuestions,
-                    timing = QuizTimingUiState(
-                        sessionActiveElapsedMs = sessionTiming.elapsedMs,
-                        sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                        questionActiveSegmentStartMs = questionStartedAt
-                    )
+                    remainingQuizCount = quiz.totalQuestions
                 )
             )
         }
@@ -861,7 +837,7 @@ class LessonViewModel(
         val answerReadingAudio = answerReading?.let { reading ->
             selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
         }
-        updateQuiz {
+        updateGrade {
             it.copy(answerHint = answerReading?.let { reading -> AnswerReadingHint(reading = reading, audio = answerReadingAudio) })
         }
 
@@ -878,8 +854,7 @@ class LessonViewModel(
      *  showing it's already committed. The queue/progress mutation for the incorrect-answer case
      *  is shared via [undoLastIncorrectAnswer]. */
     override fun undoLastAnswer() {
-        val quiz = _uiState.value.phase as? LessonUiState.Phase.Quiz ?: return
-        val feedback = quiz.feedback ?: return
+        val feedback = question?.feedback ?: return
         if (feedback.isCorrect) return
 
         viewModelScope.launch {
@@ -890,26 +865,13 @@ class LessonViewModel(
             // before the undo.
             val questionStartedAt = questionTiming.restart()
 
-            // undoCounter changes even though currentItem/currentQuestionType don't — this is
-            // what the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't
-            // change either of those but still needs to refocus the field the user just tapped away
-            // from.
-            updateQuiz {
-                it.copy(
-                    feedback = null,
-                    // The hint goes away with the answer. The check flags deliberately don't: a failed
-                    // check was a fact about the *word*, which hasn't changed — same treatment
-                    // SubjectDetailViewModel gives it across an unrelated uiState change.
-                    answerHint = null,
-                    answerRevealed = true,
-                    answerInput = "",
+            // Back to asking the same question: the grade and its hint go as a whole. undoCounter
+            // changes even though the item and type don't; it is what the answer field's
+            // focus-restoring effect keys on.
+            updateQuizPhase { quiz ->
+                quiz.copy(
                     remainingQuizCount = undone.remainingQuestions,
-                    undoCounter = it.undoCounter + 1,
-                    timing = it.timing.copy(
-                        questionActiveElapsedMs = 0L,
-                        questionActiveSegmentStartMs = questionStartedAt,
-                        questionElapsedMs = null
-                    )
+                    question = quiz.question.retried(questionStartedAt)
                 )
             }
         }
@@ -952,20 +914,16 @@ class LessonViewModel(
         // `settingsRepository.settings.first()` — see `latestSettings`'s doc comment.
         val settings = latestSettings
         // Whether this grade is visible right away, or gated behind an explicit revealAnswer() tap —
-        // see LessonUiState.Phase.Quiz.answerRevealed.
+        // see QuizGrade.answerRevealed.
         val revealedNow = isCorrect || isGiveUp || !requiresTapToRevealAnswer(settings, type)
 
-        updateQuiz {
-            it.copy(
-                feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
-                answerRevealed = revealedNow,
+        val answerGrade = QuizGrade.of(
+            isCorrect, candidates, wasCloseMatch, answerRevealed = revealedNow, rankChange = newRankChange
+        )
+        updateQuizPhase { phase ->
+            phase.copy(
                 remainingQuizCount = quiz.remainingQuestions,
-                rankChange = newRankChange ?: it.rankChange,
-                // Freezes the "time on this question" display the instant feedback appears, rather
-                // than letting it keep ticking while the feedback/Continue screen is up — matches
-                // the elapsedMs recorded for the slowest-answers summary above, stamped at this
-                // same moment.
-                timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null)
+                question = phase.question.graded(answerGrade, elapsedMs = questionElapsedMs)
             )
         }
 
@@ -1009,6 +967,13 @@ class LessonViewModel(
             // re-asking questions that were already answered.
             queueIsEmpty -> sessionController.persist(snapshot, alongside = outboxWork)
             else -> sessionController.persist(snapshot, alongside = outboxWork)
+        }
+    }
+
+    private inline fun updateQuizPhase(transform: (LessonUiState.Phase.Quiz) -> LessonUiState.Phase.Quiz) {
+        _uiState.update { state ->
+            val quiz = state.phase as? LessonUiState.Phase.Quiz ?: return@update state
+            state.copy(phase = transform(quiz))
         }
     }
 
@@ -1122,23 +1087,20 @@ class LessonViewModel(
         val next = session.quiz.current
         if (next != null) {
             val questionStartedAt = questionTiming.restart()
-            // The new question owns neither the previous one's hint — a stale word's patterns must
-            // not leak into this question's caption.
-            updateQuiz {
-                it.copy(
-                    currentItem = next.item,
-                    currentQuestionType = next.type,
-                    answerInput = "",
-                    feedback = null,
-                    rankChange = null,
-                    answerHint = null,
-                    isDetailsExpanded = false,
+            // A new question, whole: nothing about the last one — its grade, hint, typed answer or
+            // refused-script count — carries over. Only the session clock does.
+            updateQuizPhase { quiz ->
+                quiz.copy(
                     remainingQuizCount = session.quiz.remainingQuestions,
-                    questionSequence = it.questionSequence + 1,
-                    timing = it.timing.copy(
-                        questionActiveElapsedMs = 0L,
-                        questionActiveSegmentStartMs = questionStartedAt,
-                        questionElapsedMs = null
+                    question = QuizQuestionState(
+                        item = next.item,
+                        type = next.type,
+                        sequence = quiz.question.sequence + 1,
+                        timing = quiz.question.timing.copy(
+                            questionActiveElapsedMs = 0L,
+                            questionActiveSegmentStartMs = questionStartedAt,
+                            questionElapsedMs = null
+                        )
                     )
                 )
             }

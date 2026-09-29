@@ -60,6 +60,8 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.QuizGrade
+import com.crazyfluff.shellfstudy.shared.quiz.QuizQuestionState
 import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.google.common.truth.Truth.assertThat
@@ -213,19 +215,25 @@ class LessonScreenTest {
         answerReadingAudio: PronunciationAudio? = null
     ) = LessonUiState(
         phase = LessonUiState.Phase.Quiz(
-            currentItem = currentItem,
-            currentQuestionType = currentQuestionType,
-            answerInput = answerInput,
-            feedback = feedback,
-            answerTypeMismatchCount = answerTypeMismatchCount,
+            question = QuizQuestionState(
+                item = currentItem,
+                type = currentQuestionType,
+                answerInput = answerInput,
+                answerTypeMismatchCount = answerTypeMismatchCount,
+                sequence = questionSequence,
+                timing = timing,
+                grade = feedback?.let {
+                    QuizGrade(
+                        feedback = it,
+                        answerRevealed = answerRevealed,
+                        answerHint = answerReading?.let { reading ->
+                            AnswerReadingHint(reading = reading, audio = answerReadingAudio)
+                        }
+                    )
+                }
+            ),
             totalQuizCount = totalQuizCount,
-            remainingQuizCount = remainingQuizCount,
-            questionSequence = questionSequence,
-            timing = timing,
-            answerRevealed = answerRevealed,
-            answerHint = answerReading?.let {
-                AnswerReadingHint(reading = it, audio = answerReadingAudio)
-            }
+            remainingQuizCount = remainingQuizCount
         ),
         // The quiz hint reads the live map for the current item — spelled out here so a fixture can
         // still express "this word's pitch accent is Available/Unavailable" in one line.

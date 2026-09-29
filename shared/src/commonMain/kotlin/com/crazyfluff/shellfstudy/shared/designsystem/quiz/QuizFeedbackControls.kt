@@ -43,7 +43,7 @@ fun GatedContinueButton(
     onContinue: () -> Unit,
     continueButtonTestTag: String,
     modifier: Modifier = Modifier,
-    // Whether the answer text has been revealed — see QuizQuestionUiState.answerRevealed. Continue
+    // Whether the answer text has been revealed — see QuizGrade.answerRevealed. Continue
     // stays locked until this is true, on top of the timed ring below, so "require tap to reveal
     // answer" can't be skipped past without ever seeing the answer. Always true when there's
     // nothing gated (correct/close-match/give-up, or the setting off).

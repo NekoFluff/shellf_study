@@ -64,7 +64,8 @@ data class QuizQuestionView(
     val answers: List<String>,
     val feedbackPresent: Boolean,
     val feedbackIsCorrect: Boolean?,
-    val answerRevealed: Boolean,
+    /** Null before the question is graded, when there is no answer to reveal. */
+    val answerRevealed: Boolean?,
     val answerHint: AnswerReadingHint?,
     /** The pitch accents rendered alongside the hint. A lesson keeps them in a top-level map its hint
      *  folds in at render time; a review folds them into the hint itself. */
@@ -266,6 +267,9 @@ abstract class QuizSessionContractTest<STATE : Any> {
         /** The question the scenario is looking at — the one the harness waited for before starting. */
         private lateinit var current: QuizQuestionView
 
+        /** The question on screen as of the last one awaited. */
+        val currentQuestion: QuizQuestionView get() = current
+
         /** The question on screen right now, without waiting for a new state. */
         val questionOnScreen: QuizQuestionView get() = current
 
@@ -454,6 +458,27 @@ abstract class QuizSessionContractTest<STATE : Any> {
         type(correctAnswer)
         submit()
         assertThat(awaitGraded().feedbackIsCorrect).isTrue()
+    }
+
+    /**
+     * The refused-answer count belongs to the question it was refused on. The lesson used to reset the
+     * next question's fields one by one and missed this one, so a single refusal carried into every
+     * later question of the pass.
+     */
+    protected fun aRefusedAnswerDoesNotCarryIntoTheNextQuestion() = quizSession(kanjiQueue) {
+        // The kanji's two questions come in either order; refuse an answer on whichever is showing.
+        val first = currentQuestion
+        type(if (first.questionType == QuestionType.MEANING) "mizu" else "Water")
+        submit()
+        assertThat(awaitQuestion().answerTypeMismatchCount).isEqualTo(1)
+        type(first.answers.first())
+        submit()
+        awaitGraded()
+
+        continueToNextQuestion()
+        val next = awaitQuestion { it.questionType != first.questionType }
+
+        assertThat(next.answerTypeMismatchCount).isEqualTo(0)
     }
 
     /**

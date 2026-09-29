@@ -36,6 +36,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentU
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.QuizGrade
+import com.crazyfluff.shellfstudy.shared.quiz.QuizQuestionState
 import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -92,23 +94,33 @@ class ReviewScreenTest {
         answerReadingAudio: PronunciationAudio? = null
     ) = ReviewUiState(
         phase = ReviewUiState.Phase.Active(
-            currentItem = item,
-            currentQuestionType = questionType,
-            answerInput = answerInput,
-            feedback = feedback,
-            rankChange = rankChange,
-            undoCounter = undoCounter,
-            questionSequence = questionSequence,
-            isDetailsExpanded = isDetailsExpanded,
-            answerTypeMismatchCount = answerTypeMismatchCount,
+            question = QuizQuestionState(
+                item = item,
+                type = questionType,
+                answerInput = answerInput,
+                answerTypeMismatchCount = answerTypeMismatchCount,
+                isDetailsExpanded = isDetailsExpanded,
+                undoCounter = undoCounter,
+                sequence = questionSequence,
+                timing = timing,
+                grade = feedback?.let {
+                    QuizGrade(
+                        feedback = it,
+                        answerRevealed = answerRevealed,
+                        rankChange = rankChange,
+                        answerHint = answerReading?.let { reading ->
+                            AnswerReadingHint(
+                                reading = reading,
+                                pitchAccents = answerPitchAccents,
+                                audio = answerReadingAudio
+                            )
+                        }
+                    )
+                }
+            ),
             totalCount = totalCount,
             remainingCount = remainingCount,
-            isWrappingUp = isWrappingUp,
-            timing = timing,
-            answerRevealed = answerRevealed,
-            answerHint = answerReading?.let {
-                AnswerReadingHint(reading = it, pitchAccents = answerPitchAccents, audio = answerReadingAudio)
-            }
+            isWrappingUp = isWrappingUp
         ),
     )
 

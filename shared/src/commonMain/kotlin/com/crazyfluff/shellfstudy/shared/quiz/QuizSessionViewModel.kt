@@ -13,19 +13,20 @@ import kotlinx.coroutines.flow.update
  * state up to date, answering it, revealing a gated answer, and stopping the clock when the screen
  * goes away.
  *
- * It is shaped around [QuizSessionPhase]/[QuizSessionState] rather than around a session-wide state
- * machine, because that is where the duplication actually was: the two features' *policies* differ
- * (a lesson submission is sent when the item is done, a review's waits for Continue; a review caps
- * items in flight, a lesson works through batches), and those stay in the subclasses. What does not
- * differ is how a question is read out of the state and written back.
+ * It works on the [QuizQuestionState] both features embed in their quiz phase. The two features'
+ * *policies* differ (a lesson submission is sent when the item is done, a review's waits for Continue;
+ * a review caps items in flight, a lesson works through batches), and those stay in the subclasses.
+ * What does not differ is asking, grading and revealing one question.
  *
  * Subclasses keep their own state flow and hand it to the base, so nothing about how a screen
  * observes its ViewModel changes.
  */
+// The whole action surface both quiz screens share lives here on purpose; splitting it would scatter
+// one screen's contract across classes.
+@Suppress("TooManyFunctions")
 abstract class QuizSessionViewModel<
     T : QuizDisplayItem,
-    P : QuizSessionPhase<T, P>,
-    S : QuizSessionState<S, P, T>,
+    S : QuizSessionState<S, T>,
     > : ViewModel() {
 
     /** The session's clock — paused by [onCleared]. */
@@ -52,27 +53,32 @@ abstract class QuizSessionViewModel<
     protected val gradingGuard = QuizGradingGuard(viewModelScope)
 
     /** The question currently on screen, or null when the screen is not asking one. */
-    protected val quizPhase: P? get() = _uiState.value.quizPhase
+    protected val question: QuizQuestionState<T>? get() = _uiState.value.question
 
     /** Applies [transform] to the current question, or does nothing when there is none. */
-    protected fun updateQuiz(transform: (P) -> P) {
+    protected fun updateQuestion(transform: (QuizQuestionState<T>) -> QuizQuestionState<T>) {
         _uiState.update { state ->
-            val phase = state.quizPhase ?: return@update state
-            state.withQuizPhase(transform(phase))
+            val question = state.question ?: return@update state
+            state.withQuestion(transform(question))
         }
     }
 
+    /** Applies [transform] to the current question's grade, or does nothing before it is graded. */
+    protected fun updateGrade(transform: (QuizGrade) -> QuizGrade) {
+        updateQuestion { question -> question.grade?.let { question.copy(grade = transform(it)) } ?: question }
+    }
+
     protected fun updateQuizTiming(transform: (QuizTimingUiState) -> QuizTimingUiState) {
-        updateQuiz { it.withTiming(transform(it.timing)) }
+        updateQuestion { it.copy(timing = transform(it.timing)) }
     }
 
     open fun onAnswerInputChange(value: String) {
-        updateQuiz { it.withAnswerInput(value) }
+        updateQuestion { it.copy(answerInput = value) }
     }
 
     /** A real flip, driven by the swipe handle and the gesture settle. */
     open fun toggleDetails() {
-        updateQuiz { it.withDetailsExpanded(!it.isDetailsExpanded) }
+        updateQuestion { it.copy(isDetailsExpanded = !it.isDetailsExpanded) }
     }
 
     /**
@@ -81,7 +87,7 @@ abstract class QuizSessionViewModel<
      * collapsed.
      */
     open fun closeDetails() {
-        updateQuiz { it.withDetailsExpanded(false) }
+        updateQuestion { it.copy(isDetailsExpanded = false) }
     }
 
     /**
@@ -113,21 +119,21 @@ abstract class QuizSessionViewModel<
      * double-tap, or an IME action landing twice, must not grade the same question twice.
      */
     open fun submitAnswer() {
-        val phase = quizPhase ?: return
-        if (phase.feedback != null) return
-        if (phase.answerInput.isBlank()) return
-        val item = phase.currentItem
-        val type = phase.currentQuestionType
+        val question = question ?: return
+        if (question.grade != null) return
+        if (question.answerInput.isBlank()) return
+        val item = question.item
+        val type = question.type
 
         gradingGuard.launchIfIdle {
             val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
             val outcome = evaluateAnswer(
-                phase.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
+                question.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
                 closeEnoughEnabled = latestSettings.closeEnoughAnswersEnabled
             )
             when (outcome) {
                 AnswerOutcome.TypeMismatch ->
-                    updateQuiz { it.withAnswerTypeMismatchCount(it.answerTypeMismatchCount + 1) }
+                    updateQuestion { it.copy(answerTypeMismatchCount = it.answerTypeMismatchCount + 1) }
                 is AnswerOutcome.Graded ->
                     gradeAnswer(
                         item, type, outcome.isCorrect, candidates,
@@ -139,10 +145,10 @@ abstract class QuizSessionViewModel<
 
     /** Gives up on the current question — graded as a miss without requiring a typed guess. */
     open fun dontKnowAnswer() {
-        val phase = quizPhase ?: return
-        if (phase.feedback != null) return
-        val item = phase.currentItem
-        val type = phase.currentQuestionType
+        val question = question ?: return
+        if (question.grade != null) return
+        val item = question.item
+        val type = question.type
         val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
 
         gradingGuard.launchIfIdle {
@@ -156,11 +162,11 @@ abstract class QuizSessionViewModel<
      * time, so revealing now is what triggers them.
      */
     open fun revealAnswer() {
-        val phase = quizPhase ?: return
-        if (phase.feedback == null || phase.answerRevealed) return
-        updateQuiz { it.withAnswerRevealed(true) }
-        val item = phase.currentItem
-        val type = phase.currentQuestionType
+        val question = question ?: return
+        if (question.grade?.answerRevealed != false) return
+        updateGrade { it.copy(answerRevealed = true) }
+        val item = question.item
+        val type = question.type
         val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
         publishReadingRevealEffects(item, type, candidates, latestSettings)
     }

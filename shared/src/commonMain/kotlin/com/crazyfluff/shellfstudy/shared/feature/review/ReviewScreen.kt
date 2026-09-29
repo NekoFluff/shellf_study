@@ -28,7 +28,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSummaryDisplay
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.toQuizQuestionUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizProgress
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.answerJankState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.toDetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
@@ -41,7 +42,6 @@ import com.crazyfluff.shellfstudy.shared.feature.quiz.QuizScreenScaffold
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportQuizSessionJankState
 
-import com.crazyfluff.shellfstudy.shared.designsystem.performance.QuizAnswerJankState
 
 
 object ReviewScreenTestTags {
@@ -96,12 +96,6 @@ object ReviewScreenTestTags {
  * [ReviewRoute] stays about wiring rather than about instrumentation.
  */
 /** The review screen's phases, mapped onto the shared jank tags. */
-private fun ReviewUiState.Phase.Active?.answerJankState(): QuizAnswerJankState = when {
-    this == null -> QuizAnswerJankState.NotAnswering
-    feedback == null -> QuizAnswerJankState.Answering
-    answerRevealed -> QuizAnswerJankState.FeedbackRevealed
-    else -> QuizAnswerJankState.FeedbackHidden
-}
 
 @Composable
 private fun ReviewJankState(uiState: ReviewUiState) {
@@ -116,8 +110,8 @@ private fun ReviewJankState(uiState: ReviewUiState) {
             is ReviewUiState.Phase.Active -> "active"
             is ReviewUiState.Phase.Complete -> "complete"
         },
-        answerState = active.answerJankState(),
-        hasRankChange = active?.rankChange != null
+        answerState = active?.question.answerJankState(),
+        hasRankChange = active?.question?.grade?.rankChange != null
     )
 }
 
@@ -173,7 +167,7 @@ fun ReviewScreen(
     // shown, remembered here; a plain reference, not state, since it is only read when no question
     // is up and is updated after composition.
     val lastDetail = remember { DetailSubjectRef() }
-    val detail = activePhase?.let { it.currentItem.subjectId to it.currentQuestionType } ?: lastDetail.value
+    val detail = activePhase?.let { it.question.item.subjectId to it.question.type } ?: lastDetail.value
     SideEffect { if (activePhase != null) lastDetail.value = detail }
 
     QuizScreenScaffold(
@@ -206,8 +200,8 @@ fun ReviewScreen(
             detail?.let { (subjectId, questionType) ->
                 SubjectDetailSheet(
                     subjectId = subjectId,
-                    active = !isSearchActive && activePhase?.feedback != null,
-                    expanded = activePhase?.isDetailsExpanded == true,
+                    active = !isSearchActive && activePhase?.question?.grade != null,
+                    expanded = activePhase?.question?.isDetailsExpanded == true,
                     onToggle = { actions.toggleDetails() },
                     onDismiss = { actions.closeDetails() },
                     revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
@@ -313,12 +307,9 @@ private fun ColumnScope.ReviewActivePhase(
     actions: ReviewActions
 ) {
     QuizQuestionContent(
-        uiState = phase.toQuizQuestionUiState(
-            totalCount = phase.totalCount,
-            remainingCount = phase.remainingCount,
-            allowUndoAfterCorrect = true,
-            answerHint = phase.answerHint
-        ),
+        question = phase.question,
+        progress = QuizProgress(total = phase.totalCount, remaining = phase.remainingCount),
+        allowUndoAfterCorrect = true,
         onAnswerInputChange = actions::onAnswerInputChange,
         onSubmit = actions::submitAnswer,
         onDontKnow = actions::dontKnowAnswer,

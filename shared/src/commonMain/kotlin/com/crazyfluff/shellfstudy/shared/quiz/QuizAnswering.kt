@@ -26,7 +26,7 @@ fun candidatesFor(meanings: List<String>, auxiliaryMeanings: List<String>, readi
 
 /** Whether a wrong answer of [type] is gated behind an explicit reveal tap — see
  *  ReviewViewModel/LessonViewModel's gradeAnswer/revealAnswer and
- *  QuizQuestionUiState.answerRevealed. Split by question type (rather than one setting for both)
+ *  QuizGrade.answerRevealed. Split by question type (rather than one setting for both)
  *  since a learner may want the pause for one kind of question but not the other — meaning recall
  *  and reading recall are different skills. */
 fun requiresTapToRevealAnswer(settings: AppSettings, type: QuestionType): Boolean =

@@ -86,7 +86,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSummaryDisplay
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.toQuizQuestionUiState
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizProgress
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.answerJankState
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
@@ -116,7 +117,6 @@ import kotlinx.coroutines.flow.collect
 import kotlin.math.roundToInt
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportQuizSessionJankState
 
-import com.crazyfluff.shellfstudy.shared.designsystem.performance.QuizAnswerJankState
 
 
 object LessonScreenTestTags {
@@ -193,12 +193,6 @@ object LessonScreenTestTags {
  * a question and grading feedback — and a stall attributed to "lesson" alone would not say which.
  */
 /** The lesson screen's phases, mapped onto the shared jank tags. */
-private fun LessonUiState.Phase.Quiz?.answerJankState(): QuizAnswerJankState = when {
-    this == null -> QuizAnswerJankState.NotAnswering
-    feedback == null -> QuizAnswerJankState.Answering
-    answerRevealed -> QuizAnswerJankState.FeedbackRevealed
-    else -> QuizAnswerJankState.FeedbackHidden
-}
 
 @Composable
 private fun LessonJankState(uiState: LessonUiState) {
@@ -215,8 +209,8 @@ private fun LessonJankState(uiState: LessonUiState) {
             is LessonUiState.Phase.Quiz -> "quiz"
             else -> "other"
         },
-        answerState = quiz.answerJankState(),
-        hasRankChange = quiz?.rankChange != null
+        answerState = quiz?.question.answerJankState(),
+        hasRankChange = quiz?.question?.grade?.rankChange != null
     )
 }
 
@@ -288,14 +282,14 @@ fun LessonScreen(
             val quizPhase = uiState.phase as? LessonUiState.Phase.Quiz
             if (quizPhase != null) {
                 SubjectDetailSheet(
-                    subjectId = quizPhase.currentItem.subjectId,
-                    active = !isSearchActive && quizPhase.feedback != null,
-                    expanded = quizPhase.isDetailsExpanded,
+                    subjectId = quizPhase.question.item.subjectId,
+                    active = !isSearchActive && quizPhase.question.grade != null,
+                    expanded = quizPhase.question.isDetailsExpanded,
                     onToggle = { actions.toggleDetails() },
                     onDismiss = { actions.closeDetails() },
                     revealMode = DetailRevealMode.HIDE_UNTIL_ANSWERED,
                     isAnswered = true,
-                    questionType = quizPhase.currentQuestionType.toDetailQuestionType(),
+                    questionType = quizPhase.question.type.toDetailQuestionType(),
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -408,22 +402,23 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
     actions: LessonActions
 ) {
     QuizQuestionContent(
-        uiState = phase.toQuizQuestionUiState(
-            totalCount = phase.totalQuizCount,
-            remainingCount = phase.remainingQuizCount,
+        question = phase.question,
+        progress = QuizProgress(
+            total = phase.totalQuizCount,
+            remaining = phase.remainingQuizCount,
             // Which pass of the session this question belongs to: a plan of several batches needs
             // saying out loud, or "3 / 10" reads as the whole session.
             sessionContextLabel = when {
                 phase.batchCount > 1 -> "Batch ${phase.batchIndex + 1} of ${phase.batchCount}"
                 else -> null
-            },
-            // Pitch accents are folded in from the live map rather than a copy taken at grading time
-            // — a batch's own quiz needs the same up-to-the-moment knowledge its study cards showed.
-            // An absent entry has not been looked up yet.
-            answerHint = phase.answerHint?.copy(
-                pitchAccents = pitchAccentsBySubjectId[phase.currentItem.subjectId]
-                    ?: PitchAccentUiState.Unavailable
-            )
+            }
+        ),
+        // Pitch accents are folded in from the live map rather than a copy taken at grading time — a
+        // batch's own quiz needs the same up-to-the-moment knowledge its study cards showed. An absent
+        // entry has not been looked up yet.
+        answerHint = phase.question.grade?.answerHint?.copy(
+            pitchAccents = pitchAccentsBySubjectId[phase.question.item.subjectId]
+                ?: PitchAccentUiState.Unavailable
         ),
         onAnswerInputChange = actions::onAnswerInputChange,
         onSubmit = actions::submitAnswer,

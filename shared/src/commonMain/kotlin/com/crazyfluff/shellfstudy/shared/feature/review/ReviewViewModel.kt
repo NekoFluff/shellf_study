@@ -20,7 +20,8 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
 import com.crazyfluff.shellfstudy.shared.quiz.requiresTapToRevealAnswer
-import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionPhase
+import com.crazyfluff.shellfstudy.shared.quiz.QuizGrade
+import com.crazyfluff.shellfstudy.shared.quiz.QuizQuestionState
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionState
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionViewModel
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
@@ -31,7 +32,6 @@ import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
-import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingHint
@@ -56,11 +56,12 @@ data class ReviewUiState(
     // Deliberately not folded into Phase — see LessonUiState.exit's doc comment for why. A review has
     // only the one way out, so a boolean rather than that feature's sealed exit request.
     val isAbandoned: Boolean = false
-) : QuizSessionState<ReviewUiState, ReviewUiState.Phase.Active, ReviewItem> {
+) : QuizSessionState<ReviewUiState, ReviewItem> {
 
-    override val quizPhase: Phase.Active? get() = phase as? Phase.Active
+    override val question: QuizQuestionState<ReviewItem>? get() = (phase as? Phase.Active)?.question
 
-    override fun withQuizPhase(phase: Phase.Active): ReviewUiState = copy(phase = phase)
+    override fun withQuestion(question: QuizQuestionState<ReviewItem>): ReviewUiState =
+        (phase as? Phase.Active)?.let { copy(phase = it.copy(question = question)) } ?: this
 
     sealed interface Phase {
         data object Loading : Phase
@@ -68,45 +69,15 @@ data class ReviewUiState(
         data object NoReviewsAvailable : Phase
 
         data class Active(
-            // Non-nullable by construction — see LessonUiState.Phase.Quiz's doc comment for why.
-            override val currentItem: ReviewItem,
-            override val currentQuestionType: QuestionType,
-            override val answerInput: String = "",
-            override val feedback: AnswerFeedback? = null,
-            override val rankChange: RankChange? = null,
-            override val undoCounter: Int = 0,
-            // Bumped on every advance to a new current question, even a requeued one that repeats
-            // the same item/type — see QuizQuestionContent's focusResetKey, which needs a signal
-            // that's guaranteed to change on advance regardless of whether the question repeats.
-            override val questionSequence: Int = 0,
-            override val isDetailsExpanded: Boolean = false,
-            override val answerTypeMismatchCount: Int = 0,
+            val question: QuizQuestionState<ReviewItem>,
             val totalCount: Int = 0,
             val remainingCount: Int = 0,
             // A modifier within the active variant, not a separate mode — wrapUp() changes what
             // happens to the queue, but the screen still renders exactly the same question UI either
             // way, so this doesn't warrant its own Phase (unlike Lesson's Select/Study/Quiz, which
             // really are different rendering modes).
-            val isWrappingUp: Boolean = false,
-            override val timing: QuizTimingUiState = QuizTimingUiState(),
-            // Whether the correct-answer text is visible for the current (wrong) feedback. Always
-            // true except right after a wrong submit while the "require tap to reveal answer"
-            // setting is on — see gradeAnswer/revealAnswer. Give-ups and correct/close-match answers
-            // are never gated, so this stays true for them regardless of the setting.
-            override val answerRevealed: Boolean = true,
-            // The reading + pitch-accent patterns + audio for the just-graded reading question. The
-            // reading/audio are published with the feedback (see gradeAnswer); the pitch patterns are
-            // *observed* live for as long as this question is the current one (see
-            // pitchAccentHintKey/init), so an update from any writer to the bundled dictionary's
-            // cache lands here without a refetch.
-            val answerHint: AnswerReadingHint? = null
-        ) : Phase, QuizSessionPhase<ReviewItem, Active> {
-            override fun withAnswerInput(value: String): Active = copy(answerInput = value)
-            override fun withAnswerRevealed(revealed: Boolean): Active = copy(answerRevealed = revealed)
-            override fun withDetailsExpanded(expanded: Boolean): Active = copy(isDetailsExpanded = expanded)
-            override fun withAnswerTypeMismatchCount(count: Int): Active = copy(answerTypeMismatchCount = count)
-            override fun withTiming(timing: QuizTimingUiState): Active = copy(timing = timing)
-        }
+            val isWrappingUp: Boolean = false
+        ) : Phase
 
         data class Complete(
             val sessionItemsReviewed: Int = 0,
@@ -143,7 +114,12 @@ private const val MAX_IN_FLIGHT_REVIEW_ITEMS = 10
  * reading is chosen and published at the same moment the key is set, so an emission can be matched
  * back to the exact hint it belongs to and can't land on the next question's.
  */
-private data class PitchAccentHintKey(val assignmentId: Long, val characters: String, val reading: String)
+private data class PitchAccentHintKey(val assignmentId: Long, val characters: String, val reading: String) {
+    /** Whether this key was set for [hint] on [question] — not for an earlier question, or a reading
+     *  an undo has since taken back. */
+    fun isFor(question: QuizQuestionState<ReviewItem>, hint: AnswerReadingHint): Boolean =
+        question.item.assignmentId == assignmentId && hint.reading == reading
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReviewViewModel(
@@ -158,7 +134,7 @@ class ReviewViewModel(
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope,
     private val syncOrchestrator: SyncOrchestrator
-) : QuizSessionViewModel<ReviewItem, ReviewUiState.Phase.Active, ReviewUiState>(), ReviewActions {
+) : QuizSessionViewModel<ReviewItem, ReviewUiState>(), ReviewActions {
 
     override val _uiState = MutableStateFlow(ReviewUiState())
     val uiState: StateFlow<ReviewUiState> = _uiState.asStateFlow()
@@ -225,18 +201,20 @@ class ReviewViewModel(
                         ?: flowOf(null)
                 }
                 .collect { hint ->
-                    updateQuiz {
-                        val current = it.answerHint
-                        // Drop anything that doesn't belong to the hint on screen right now — an
-                        // emission can land after an undo or an advance, and must neither resurrect a
-                        // stale word's patterns nor overwrite the next question's.
-                        if (hint == null || it.currentItem.assignmentId != hint.first.assignmentId ||
-                            current == null || current.reading != hint.first.reading || it.feedback == null
-                        ) {
-                            it.copy(answerHint = current?.copy(pitchAccents = PitchAccentUiState.Unavailable))
+                    // The hint's pitch patterns are followed live for as long as the reading answer is
+                    // on screen. Drop anything that doesn't belong to the hint showing right now — an
+                    // emission can land after an undo or an advance, and must neither resurrect a
+                    // stale word's patterns nor overwrite the next question's. Before a grade there is
+                    // no hint to update.
+                    updateQuestion { question ->
+                        val grade = question.grade ?: return@updateQuestion question
+                        val current = grade.answerHint ?: return@updateQuestion question
+                        val pitchAccents = if (hint != null && hint.first.isFor(question, current)) {
+                            hint.second
                         } else {
-                            it.copy(answerHint = current.copy(pitchAccents = hint.second))
+                            PitchAccentUiState.Unavailable
                         }
+                        question.copy(grade = grade.copy(answerHint = current.copy(pitchAccents = pitchAccents)))
                     }
                 }
         }
@@ -396,10 +374,9 @@ class ReviewViewModel(
             val answerReadingAudio = answerReading?.let { reading ->
                 selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
             }
-            updateQuiz {
-                it.copy(
-                    answerHint = answerReading?.let { reading -> AnswerReadingHint(reading = reading, audio = answerReadingAudio) }
-                )
+            updateGrade {
+                val hint = answerReading?.let { reading -> AnswerReadingHint(reading, audio = answerReadingAudio) }
+                it.copy(answerHint = hint)
             }
             pitchAccentHintKey.value = answerReading?.let { PitchAccentHintKey(item.assignmentId, characters, it) }
         }
@@ -414,7 +391,7 @@ class ReviewViewModel(
         isGiveUp: Boolean
     ) {
         // Whether this grade is visible right away, or gated behind an explicit revealAnswer() tap —
-        // see ReviewUiState.Phase.Active.answerRevealed. Computed once up front since both the
+        // see QuizGrade.answerRevealed. Computed once up front since both the
         // published feedback state and the reveal-effects gate below must agree on it. Meaning and
         // reading each have their own setting (requiresTapToRevealAnswer), so this can gate one
         // question type and not the other.
@@ -445,15 +422,13 @@ class ReviewViewModel(
         // happens in commitPendingSubmission.
         val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
 
-        updateQuiz {
-            it.copy(
-                feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
-                answerRevealed = revealedNow,
+        val answerGrade = QuizGrade.of(
+            isCorrect, candidates, wasCloseMatch, answerRevealed = revealedNow, rankChange = newRankChange
+        )
+        updateActive { active ->
+            active.copy(
                 remainingCount = quiz.remainingQuestions,
-                rankChange = newRankChange ?: it.rankChange,
-                // Freezes the "time on this question" display the instant feedback appears — the same
-                // elapsedMs the slowest-answers summary records for this answer.
-                timing = it.timing.copy(questionElapsedMs = questionElapsedMs, questionActiveSegmentStartMs = null)
+                question = active.question.graded(answerGrade, elapsedMs = questionElapsedMs)
             )
         }
         // Withheld entirely while gated (revealedNow == false) — a wrong reading answer's audio/hint
@@ -471,8 +446,7 @@ class ReviewViewModel(
     /** Reverts the most recent answer — a typo (incorrect) or a change of mind (correct, and not yet
      *  submitted to WaniKani — see [ReviewSession.pendingSubmissionAssignmentId]). */
     override fun undoLastAnswer() {
-        val active = _uiState.value.phase as? ReviewUiState.Phase.Active ?: return
-        val feedback = active.feedback ?: return
+        val feedback = question?.feedback ?: return
 
         viewModelScope.launch {
             val undone = session.quiz.undoLastGrade() ?: return@launch
@@ -486,29 +460,24 @@ class ReviewViewModel(
             // before the undo.
             val questionStartedAt = questionTiming.restart()
 
-            // undoCounter changes even though currentItem/currentQuestionType don't — this is what
-            // the answer field's focus-restoring LaunchedEffect keys on, since undo doesn't change
-            // either of those but still needs to refocus the field the user just tapped away from.
-            updateQuiz {
-                it.copy(
-                    feedback = null,
-                    // Undoing a correct answer retracts the rank change it predicted; an incorrect
-                    // answer never had one, so this is a no-op in that branch.
-                    rankChange = if (feedback.isCorrect) null else it.rankChange,
-                    answerHint = null,
-                    answerRevealed = true,
-                    answerInput = "",
+            // Back to asking the same question: the grade — its feedback, rank change and hint — goes
+            // as a whole. undoCounter changes even though the item and type don't; it is what the
+            // answer field's focus-restoring effect keys on.
+            updateActive { active ->
+                active.copy(
                     remainingCount = undone.remainingQuestions,
-                    undoCounter = it.undoCounter + 1,
-                    timing = it.timing.copy(
-                        questionActiveElapsedMs = 0L,
-                        questionActiveSegmentStartMs = questionStartedAt,
-                        questionElapsedMs = null
-                    )
+                    question = active.question.retried(questionStartedAt)
                 )
             }
             // The hint the answer revealed goes away with it.
             pitchAccentHintKey.value = null
+        }
+    }
+
+    private inline fun updateActive(transform: (ReviewUiState.Phase.Active) -> ReviewUiState.Phase.Active) {
+        _uiState.update { state ->
+            val active = state.phase as? ReviewUiState.Phase.Active ?: return@update state
+            state.copy(phase = transform(active))
         }
     }
 
@@ -524,7 +493,9 @@ class ReviewViewModel(
             val quiz = session.quiz.wrappedUp()
             session = session.copy(quiz = quiz)
             persistCurrentState()
-            updateQuiz { it.copy(isWrappingUp = true, totalCount = quiz.totalQuestions, remainingCount = quiz.remainingQuestions) }
+            updateActive {
+                it.copy(isWrappingUp = true, totalCount = quiz.totalQuestions, remainingCount = quiz.remainingQuestions)
+            }
         }
     }
 
@@ -584,19 +555,21 @@ class ReviewViewModel(
         // leak into this question's caption.
         pitchAccentHintKey.value = null
         _uiState.update {
-            val previousPhase = it.phase as? ReviewUiState.Phase.Active
+            val previousSequence = (it.phase as? ReviewUiState.Phase.Active)?.question?.sequence ?: 0
             it.copy(
                 phase = ReviewUiState.Phase.Active(
-                    currentItem = next.item,
-                    currentQuestionType = next.type,
+                    question = QuizQuestionState(
+                        item = next.item,
+                        type = next.type,
+                        sequence = previousSequence + 1,
+                        timing = QuizTimingUiState(
+                            sessionActiveElapsedMs = sessionTiming.elapsedMs,
+                            sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
+                            questionActiveSegmentStartMs = questionStartedAt
+                        )
+                    ),
                     totalCount = session.quiz.totalQuestions,
-                    remainingCount = session.quiz.remainingQuestions,
-                    questionSequence = (previousPhase?.questionSequence ?: 0) + 1,
-                    timing = QuizTimingUiState(
-                        sessionActiveElapsedMs = sessionTiming.elapsedMs,
-                        sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                        questionActiveSegmentStartMs = questionStartedAt
-                    )
+                    remainingCount = session.quiz.remainingQuestions
                 )
             )
         }

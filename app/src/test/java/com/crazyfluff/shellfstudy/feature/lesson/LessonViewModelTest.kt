@@ -114,22 +114,22 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     override fun question(state: LessonUiState): QuizQuestionView? {
         val quiz = state.phase as? LessonUiState.Phase.Quiz ?: return null
         return QuizQuestionView(
-            questionType = quiz.currentQuestionType,
-            answers = when (quiz.currentQuestionType) {
-                QuestionType.MEANING -> quiz.currentItem.meanings
-                QuestionType.READING -> quiz.currentItem.readings
+            questionType = quiz.question.type,
+            answers = when (quiz.question.type) {
+                QuestionType.MEANING -> quiz.question.item.meanings
+                QuestionType.READING -> quiz.question.item.readings
             },
-            feedbackPresent = quiz.feedback != null,
-            feedbackIsCorrect = quiz.feedback?.isCorrect,
-            answerRevealed = quiz.answerRevealed,
-            answerHint = quiz.answerHint,
+            feedbackPresent = quiz.question.feedback != null,
+            feedbackIsCorrect = quiz.question.feedback?.isCorrect,
+            answerRevealed = quiz.question.grade?.answerRevealed,
+            answerHint = quiz.question.grade?.answerHint,
             // The lesson keeps pitch accents in a top-level map and folds them into the hint at render
             // time, so this is the same value the screen would show.
-            pitchAccents = state.pitchAccentsBySubjectId[quiz.currentItem.subjectId],
+            pitchAccents = state.pitchAccentsBySubjectId[quiz.question.item.subjectId],
             remainingCount = quiz.remainingQuizCount,
-            answerTypeMismatchCount = quiz.answerTypeMismatchCount,
-            answerInput = quiz.answerInput,
-            timing = quiz.timing
+            answerTypeMismatchCount = quiz.question.answerTypeMismatchCount,
+            answerInput = quiz.question.answerInput,
+            timing = quiz.question.timing
         )
     }
 
@@ -219,9 +219,9 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
         var guard = 0
         while (state.phase is LessonUiState.Phase.Quiz && guard++ < 20) {
             val quiz = state.phase as LessonUiState.Phase.Quiz
-            val answer = when (quiz.currentQuestionType) {
-                QuestionType.MEANING -> quiz.currentItem.meanings.first()
-                QuestionType.READING -> quiz.currentItem.readings.first()
+            val answer = when (quiz.question.type) {
+                QuestionType.MEANING -> quiz.question.item.meanings.first()
+                QuestionType.READING -> quiz.question.item.readings.first()
             }
             viewModel.onAnswerInputChange(answer)
             awaitItem()
@@ -331,7 +331,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             var state = awaitItem()
             while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
 
-            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
+            while (state.question!!.type != QuestionType.READING) {
                 secondViewModel.onAnswerInputChange("Water")
                 awaitItem()
                 secondViewModel.submitAnswer()
@@ -345,14 +345,15 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             secondViewModel.submitAnswer()
             var graded = awaitItem()
             val feedbackState = graded.phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            assertThat(feedbackState.answerHint?.reading).isEqualTo("みず")
+            assertThat(feedbackState.question.feedback?.isCorrect).isTrue()
+            assertThat(feedbackState.question.grade?.answerHint?.reading).isEqualTo("みず")
             // Only comes back populated if resumeQuizPhase pointed the observation at the seeded
             // item, since this ViewModel instance never went through Phase.Study.
             val expected = PitchAccentUiState.Available(
                 listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0))
             )
-            while (graded.pitchAccentsBySubjectId[feedbackState.currentItem.subjectId] != expected) graded = awaitItem()
+            val subjectId = feedbackState.question.item.subjectId
+            while (graded.pitchAccentsBySubjectId[subjectId] != expected) graded = awaitItem()
         }
     }
 
@@ -372,8 +373,8 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             val quizState = awaitItem()
 
             val quiz = quizState.phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.timing.sessionActiveSegmentStartMs).isNotNull()
-            assertThat(quiz.timing.questionActiveSegmentStartMs).isNotNull()
+            assertThat(quiz.question.timing.sessionActiveSegmentStartMs).isNotNull()
+            assertThat(quiz.question.timing.questionActiveSegmentStartMs).isNotNull()
         }
     }
 
@@ -540,7 +541,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
 
             viewModel.nextStudyCard()
             val quiz = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.currentQuestionType).isEqualTo(QuestionType.MEANING)
+            assertThat(quiz.question.type).isEqualTo(QuestionType.MEANING)
             assertThat(quiz.totalQuizCount).isEqualTo(1)
         }
     }
@@ -609,7 +610,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat(feedbackState.question.feedback?.isCorrect).isTrue()
 
             viewModel.onContinue()
             val finalState = awaitItem()
@@ -655,10 +656,11 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat(feedbackState.question.feedback?.isCorrect).isTrue()
             // radicalAssignmentsJson fixes the cached assignment at srs_stage 0 (Locked) — every
             // lesson item starts the same way, straight to the SRS system's starting stage.
-            assertThat(feedbackState.rankChange).isEqualTo(RankChange(SrsStage.LOCKED, SrsStage.APPRENTICE_1))
+            assertThat(feedbackState.question.grade?.rankChange)
+                .isEqualTo(RankChange(SrsStage.LOCKED, SrsStage.APPRENTICE_1))
 
             viewModel.onContinue()
             val finalState = awaitItem()
@@ -704,7 +706,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
+            assertThat(feedbackState.question.feedback?.isCorrect).isTrue()
 
             viewModel.viewModelScope.cancel()
         }
@@ -734,18 +736,18 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback?.isCorrect).isFalse()
+            assertThat(feedbackState.question.feedback?.isCorrect).isFalse()
             assertThat(feedbackState.remainingQuizCount).isEqualTo(1)
-            val questionSequenceBeforeRequeue = feedbackState.questionSequence
+            val questionSequenceBeforeRequeue = feedbackState.question.sequence
 
             viewModel.onContinue()
             val requeuedState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(requeuedState.currentQuestionType).isEqualTo(QuestionType.MEANING)
+            assertThat(requeuedState.question.type).isEqualTo(QuestionType.MEANING)
             // Regression: the same item/type reappearing must still clear the answer field and
             // force the answer field to reset — questionSequence has to change even though nothing
             // else about the requeued question's identity did.
-            assertThat(requeuedState.answerInput).isEqualTo("")
-            assertThat(requeuedState.questionSequence).isNotEqualTo(questionSequenceBeforeRequeue)
+            assertThat(requeuedState.question.answerInput).isEqualTo("")
+            assertThat(requeuedState.question.sequence).isNotEqualTo(questionSequenceBeforeRequeue)
         }
     }
 
@@ -770,7 +772,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
 
             viewModel.dontKnowAnswer()
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback?.isCorrect).isFalse()
+            assertThat(feedbackState.question.feedback?.isCorrect).isFalse()
             assertThat(feedbackState.remainingQuizCount).isEqualTo(1)
         }
     }
@@ -842,7 +844,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
             val quiz = state.phase as LessonUiState.Phase.Quiz
             assertThat(quiz.totalQuizCount).isEqualTo(1)
-            assertThat(quiz.currentItem.assignmentId).isEqualTo(101L)
+            assertThat(quiz.question.item.assignmentId).isEqualTo(101L)
         }
         assertThat(server.requestCount).isEqualTo(requestCountAfterFirstLoad)
     }
@@ -1000,7 +1002,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             awaitItem()
             viewModel.submitAnswer()
             val missedState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(missedState.feedback?.isCorrect).isFalse()
+            assertThat(missedState.question.feedback?.isCorrect).isFalse()
 
             viewModel.onContinue()
             awaitItem() // requeued question shown again
@@ -1045,7 +1047,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             var safetyCounter = 0
             while (!isComplete && safetyCounter < 10) {
                 safetyCounter++
-                val item = (state.phase as LessonUiState.Phase.Quiz).currentItem
+                val item = state.question!!.item
                 viewModel.onAnswerInputChange(item.meanings.first())
                 awaitItem()
                 viewModel.submitAnswer()
@@ -1102,7 +1104,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
                 safetyCounter++
                 when (val phase = state.phase) {
                     is LessonUiState.Phase.Quiz -> {
-                        secondViewModel.onAnswerInputChange(phase.currentItem.meanings.first())
+                        secondViewModel.onAnswerInputChange(phase.question.item.meanings.first())
                         awaitItem()
                         secondViewModel.submitAnswer()
                         awaitItem()
@@ -1144,7 +1146,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             var safetyCounter = 0
             while (!oneCompleted && safetyCounter < 10) {
                 safetyCounter++
-                val item = (state.phase as LessonUiState.Phase.Quiz).currentItem
+                val item = state.question!!.item
                 if (item.assignmentId == 101L) {
                     firstViewModel.onAnswerInputChange("Mouth")
                     awaitItem()
@@ -1181,7 +1183,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
                 safetyCounter++
                 when (val phase = state.phase) {
                     is LessonUiState.Phase.Quiz -> {
-                        secondViewModel.onAnswerInputChange(phase.currentItem.meanings.first())
+                        secondViewModel.onAnswerInputChange(phase.question.item.meanings.first())
                         awaitItem()
                         secondViewModel.submitAnswer()
                         awaitItem()
@@ -1238,12 +1240,12 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             var state = awaitItem()
             while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
             val quiz = state.phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.timing.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)
-            assertThat(quiz.timing.sessionActiveSegmentStartMs).isNotNull()
+            assertThat(quiz.question.timing.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)
+            assertThat(quiz.question.timing.sessionActiveSegmentStartMs).isNotNull()
 
             // Forces a fresh persisted snapshot so the resumed accumulated time can be inspected —
             // answering just one of the kanji's two questions leaves the quiz still in progress.
-            val answer = if (quiz.currentQuestionType == QuestionType.MEANING) "Water" else "mizu"
+            val answer = if (quiz.question.type == QuestionType.MEANING) "Water" else "mizu"
             secondViewModel.onAnswerInputChange(answer)
             awaitItem()
             secondViewModel.submitAnswer()
@@ -1384,6 +1386,9 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
         fixtures = kanjiQueue, target = QuestionType.MEANING,
         answerOfTheWrongType = "mizu", correctAnswer = "Water"
     )
+
+    @Test
+    fun `a refused answer does not carry its count into the next question`() = aRefusedAnswerDoesNotCarryIntoTheNextQuestion()
 
     @Test
     fun `submitting a meaning into a reading question rejects it instead of grading a miss`() = wrongTypeAnswerIsRejectedNotGraded(
@@ -1624,7 +1629,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             viewModel.submitAnswer()
             expectNoEvents()
             val quiz = viewModel.uiState.value.phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.feedback).isNull()
+            assertThat(quiz.question.feedback).isNull()
             assertThat(quiz.remainingQuizCount).isEqualTo(1)
         }
     }
@@ -1648,7 +1653,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             awaitItem()
             viewModel.submitAnswer()
             val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback).isNotNull()
+            assertThat(feedbackState.question.feedback).isNotNull()
             val remainingAfterFirstSubmit = feedbackState.remainingQuizCount
 
             // Second submit while feedback is visible — must be a no-op

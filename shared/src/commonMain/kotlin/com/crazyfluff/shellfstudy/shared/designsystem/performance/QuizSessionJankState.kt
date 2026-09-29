@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.performance
 
 import androidx.compose.runtime.Composable
+import com.crazyfluff.shellfstudy.shared.quiz.QuizQuestionState
 
 /**
  * What a quiz screen is doing with the current question, as far as the jank harness is concerned.
@@ -54,4 +55,16 @@ fun ReportQuizSessionJankState(
     hasRankChange: Boolean
 ) {
     ReportJankState(*quizSessionJankTags(screen, phaseName, answerState, hasRankChange).toTypedArray())
+}
+
+/** Which answering state a question is in, for the jank harness — [QuizAnswerJankState.NotAnswering]
+ *  when no question is on screen. */
+fun QuizQuestionState<*>?.answerJankState(): QuizAnswerJankState {
+    val grade = this?.grade
+    return when {
+        this == null -> QuizAnswerJankState.NotAnswering
+        grade == null -> QuizAnswerJankState.Answering
+        grade.answerRevealed -> QuizAnswerJankState.FeedbackRevealed
+        else -> QuizAnswerJankState.FeedbackHidden
+    }
 }

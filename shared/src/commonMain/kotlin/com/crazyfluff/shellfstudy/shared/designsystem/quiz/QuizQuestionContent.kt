@@ -57,11 +57,10 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.RankChangeChipEnterD
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
-import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.shared.quiz.QuizQuestionState
 import com.crazyfluff.shellfstudy.shared.quiz.label
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
-import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionPhase
 
 private val RankChangeChipWarmupValue = RankChange(from = SrsStage.APPRENTICE_1, to = SrsStage.APPRENTICE_2)
 
@@ -104,77 +103,15 @@ data class AnswerReadingHint(
     val audio: PronunciationAudio? = null
 )
 
-/** Everything [QuizQuestionContent] needs to render one quiz question — a read-only projection
- *  each feature's own (differently-shaped) UI state builds right before rendering. */
-data class QuizQuestionUiState<T : QuizDisplayItem>(
-    val item: T,
-    val questionType: QuestionType,
-    val totalCount: Int,
-    val remainingCount: Int,
-    val answerInput: String,
-    val feedback: AnswerFeedback?,
-    val rankChange: RankChange?,
-    val undoCounter: Int,
-    val questionSequence: Int,
-    val answerTypeMismatchCount: Int,
-    val questionElapsedMs: Long?,
-    val questionActiveElapsedMs: Long,
-    val questionActiveSegmentStartMs: Long?,
-    val sessionActiveElapsedMs: Long,
-    val sessionActiveSegmentStartMs: Long?,
-    // Review defers submitting a correct answer to WaniKani until Continue is pressed, so it can
-    // still be undone up to that point — Lesson has no such pending-submission window, so it leaves
-    // this at the default and undo stays incorrect-only there.
-    val allowUndoAfterCorrect: Boolean = false,
-    // Whether the correct-answer text is visible for the current (wrong) feedback — gated behind an
-    // extra tap when "require tap to reveal answer" is on. Always true for correct/close-match
-    // answers and give-ups, and whenever the setting is off — see the ViewModel's gradeAnswer.
-    val answerRevealed: Boolean = true,
-    // The reading/pitch-accent/audio hint for the just-graded reading question. Whether it is shown
-    // at all is a display setting, read from LocalDisplaySettings where the hint is consumed.
-    val answerHint: AnswerReadingHint? = null,
-    // Which batch of the session this question belongs to ("Batch 2 of 4") — null
-    // when there's nothing worth saying, which is the case for every review question and for a lesson
-    // session that fits in a single batch.
-    val sessionContextLabel: String? = null
-)
-
 /**
- * The question UI state both quiz screens build from their phase — the same field-for-field mapping,
- * written out twice until [com.crazyfluff.shellfstudy.shared.quiz.QuizSessionPhase] gave the two phases
- * a shared shape.
- *
- * The four values that differ are parameters, and each is a real difference rather than a translation:
- * a lesson counts its batch ([totalCount]/[remainingCount]), names which batch it is
- * ([sessionContextLabel]) and folds its live pitch accents into the hint ([answerHint]); a review lets
- * a correct answer be undone until Continue submits it ([allowUndoAfterCorrect]).
+ * Where the question sits in what is being asked: [total] questions in this pass, [remaining] of them
+ * still to go, and — for a lesson plan of several batches — which batch this is ("Batch 2 of 4"), so
+ * "3 / 10" isn't read as the whole session.
  */
-fun <T : QuizDisplayItem, P : QuizSessionPhase<T, P>> P.toQuizQuestionUiState(
-    totalCount: Int,
-    remainingCount: Int,
-    allowUndoAfterCorrect: Boolean = false,
-    sessionContextLabel: String? = null,
-    answerHint: AnswerReadingHint? = null
-): QuizQuestionUiState<T> = QuizQuestionUiState(
-    item = currentItem,
-    questionType = currentQuestionType,
-    totalCount = totalCount,
-    remainingCount = remainingCount,
-    answerInput = answerInput,
-    feedback = feedback,
-    rankChange = rankChange,
-    undoCounter = undoCounter,
-    questionSequence = questionSequence,
-    answerTypeMismatchCount = answerTypeMismatchCount,
-    questionElapsedMs = timing.questionElapsedMs,
-    questionActiveElapsedMs = timing.questionActiveElapsedMs,
-    questionActiveSegmentStartMs = timing.questionActiveSegmentStartMs,
-    sessionActiveElapsedMs = timing.sessionActiveElapsedMs,
-    sessionActiveSegmentStartMs = timing.sessionActiveSegmentStartMs,
-    allowUndoAfterCorrect = allowUndoAfterCorrect,
-    answerRevealed = answerRevealed,
-    answerHint = answerHint,
-    sessionContextLabel = sessionContextLabel
+data class QuizProgress(
+    val total: Int,
+    val remaining: Int,
+    val sessionContextLabel: String? = null
 )
 
 /**
@@ -185,36 +122,47 @@ fun <T : QuizDisplayItem, P : QuizSessionPhase<T, P>> P.toQuizQuestionUiState(
  */
 @Composable
 fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
-    uiState: QuizQuestionUiState<T>,
+    question: QuizQuestionState<T>,
+    progress: QuizProgress,
     onAnswerInputChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onDontKnow: () -> Unit,
     onContinue: () -> Unit,
     onUndo: () -> Unit,
     onReveal: () -> Unit,
-    testTags: QuizQuestionTestTags
+    testTags: QuizQuestionTestTags,
+    // Review defers submitting a correct answer to WaniKani until Continue is pressed, so it can still
+    // be undone up to that point — Lesson has no such window, so undo stays incorrect-only there.
+    allowUndoAfterCorrect: Boolean = false,
+    // The hint to show for a revealed reading answer — the grade's own unless the screen supplies a
+    // fresher one (Lesson folds in its live pitch-accent observation).
+    answerHint: AnswerReadingHint? = question.grade?.answerHint
 ) {
     // Read here rather than taken as parameters: these are app-wide display preferences with no
     // per-call-site variation.
     val display = LocalDisplaySettings.current
-    QuizProgressHeader(uiState, display, testTags)
-    QuizPrompt(uiState, display, testTags)
-    QuizAnswerArea(uiState, display, onAnswerInputChange, onSubmit, onDontKnow, onContinue, onUndo, onReveal, testTags)
+    QuizProgressHeader(question, progress, display, testTags)
+    QuizPrompt(question, answerHint, display, testTags)
+    QuizAnswerArea(
+        question, allowUndoAfterCorrect, display,
+        onAnswerInputChange, onSubmit, onDontKnow, onContinue, onUndo, onReveal, testTags
+    )
 }
 
 /** The progress bar, the "n / total" count with the batch it belongs to, and the timers. */
 @Composable
 private fun <T : QuizDisplayItem> QuizProgressHeader(
-    uiState: QuizQuestionUiState<T>,
+    question: QuizQuestionState<T>,
+    progress: QuizProgress,
     display: DisplaySettings,
     testTags: QuizQuestionTestTags
 ) {
-    val progress = if (uiState.totalCount == 0) 0f else
-        (uiState.totalCount - uiState.remainingCount).toFloat() / uiState.totalCount
-    val accentColor = subjectColor(uiState.item.subjectType)
+    val fraction = if (progress.total == 0) 0f else
+        (progress.total - progress.remaining).toFloat() / progress.total
+    val accentColor = subjectColor(question.item.subjectType)
 
     LinearProgressIndicator(
-        progress = { progress },
+        progress = { fraction },
         modifier = Modifier.fillMaxWidth(),
         color = accentColor,
         drawStopIndicator = {}
@@ -225,14 +173,14 @@ private fun <T : QuizDisplayItem> QuizProgressHeader(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "${uiState.totalCount - uiState.remainingCount} / ${uiState.totalCount}",
+                text = "${progress.total - progress.remaining} / ${progress.total}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.testTag(testTags.progressCount)
             )
             // The count above is this pass's, not the session's — say which pass, so a learner midway
             // through a multi-batch session doesn't read "2 / 10" as the whole thing.
-            uiState.sessionContextLabel?.let { label ->
+            progress.sessionContextLabel?.let { label ->
                 Text(
                     text = " · ",
                     style = MaterialTheme.typography.labelMedium,
@@ -248,7 +196,7 @@ private fun <T : QuizDisplayItem> QuizProgressHeader(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (display.showQuestionTimer) {
-                val questionElapsedMs = uiState.questionElapsedMs
+                val questionElapsedMs = question.timing.questionElapsedMs
                 if (questionElapsedMs != null) {
                     // Frozen at the instant the question was answered, matching the elapsedMs recorded
                     // for the slowest-answers summary, rather than continuing to tick through feedback.
@@ -262,8 +210,8 @@ private fun <T : QuizDisplayItem> QuizProgressHeader(
                     // Pause-aware like the total-session timer below, so backgrounding mid-question
                     // freezes this instead of counting straight through the time spent away.
                     PausableElapsedTimeText(
-                        baseElapsedMs = uiState.questionActiveElapsedMs,
-                        segmentStartMs = uiState.questionActiveSegmentStartMs,
+                        baseElapsedMs = question.timing.questionActiveElapsedMs,
+                        segmentStartMs = question.timing.questionActiveSegmentStartMs,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.testTag(testTags.questionTimerText)
                     )
@@ -278,8 +226,8 @@ private fun <T : QuizDisplayItem> QuizProgressHeader(
             }
             if (display.showTotalTimer) {
                 PausableElapsedTimeText(
-                    baseElapsedMs = uiState.sessionActiveElapsedMs,
-                    segmentStartMs = uiState.sessionActiveSegmentStartMs,
+                    baseElapsedMs = question.timing.sessionActiveElapsedMs,
+                    segmentStartMs = question.timing.sessionActiveSegmentStartMs,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.testTag(testTags.totalTimerText)
@@ -293,24 +241,24 @@ private fun <T : QuizDisplayItem> QuizProgressHeader(
  *  the answer caused below it. */
 @Composable
 private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
-    uiState: QuizQuestionUiState<T>,
+    question: QuizQuestionState<T>,
+    answerHint: AnswerReadingHint?,
     display: DisplaySettings,
     testTags: QuizQuestionTestTags
 ) {
-    val item = uiState.item
-    val questionType = uiState.questionType
+    val item = question.item
+    val questionType = question.type
     Column(
         modifier = Modifier.weight(1f, fill = false).fillMaxWidth().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        val answerHint = uiState.answerHint
         val showAnswerHint = display.showAnswerReadingPitchAccent &&
             questionType == QuestionType.READING &&
             answerHint != null &&
             // Also covers Lesson: its live pitch-accent map isn't itself scoped to grading/reveal,
             // so without this the diagram (and the reading text in ReadingRow, which already gives
             // the answer away on its own) could show before the answer is otherwise revealed.
-            uiState.answerRevealed
+            question.grade?.answerRevealed == true
         AnimatedVisibility(
             visible = showAnswerHint,
             // Slides down from above (unlike RankChangeChip's slide-up-from-below below the glyph)
@@ -374,7 +322,7 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
             layout(0, 0) { placeables.forEach { it.place(0, 0) } }
         }
         AnimatedVisibility(
-            visible = uiState.rankChange != null,
+            visible = question.grade?.rankChange != null,
             // Fade + slide up from below — no scale (a prior scale+overshoot combination visibly
             // clipped the chip's edges against AnimatedVisibility's clip-to-bounds behavior; a
             // pure fade/slide never exceeds its own laid-out bounds, so there's nothing to clip).
@@ -394,7 +342,7 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
                     animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
                 )
         ) {
-            val rankChange = uiState.rankChange
+            val rankChange = question.grade?.rankChange
             if (rankChange != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 RankChangeChip(rankChange, modifier = Modifier.testTag(testTags.rankChangeText))
@@ -407,7 +355,8 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
  *  Continue. */
 @Composable
 private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
-    uiState: QuizQuestionUiState<T>,
+    question: QuizQuestionState<T>,
+    allowUndoAfterCorrect: Boolean,
     display: DisplaySettings,
     onAnswerInputChange: (String) -> Unit,
     onSubmit: () -> Unit,
@@ -417,32 +366,27 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
     onReveal: () -> Unit,
     testTags: QuizQuestionTestTags
 ) {
-    val item = uiState.item
-    val questionType = uiState.questionType
+    val item = question.item
+    val questionType = question.type
     Column(
         modifier = Modifier
             .weight(1f)
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
     ) {
-        val feedbackForField = uiState.feedback
-        val canUndo = feedbackForField != null && (!feedbackForField.isCorrect || uiState.allowUndoAfterCorrect)
+        val feedbackForField = question.feedback
+        val canUndo = feedbackForField != null && (!feedbackForField.isCorrect || allowUndoAfterCorrect)
         QuizAnswerField(
-            value = uiState.answerInput,
+            value = question.answerInput,
             onValueChange = onAnswerInputChange,
             questionType = questionType,
             isAnswered = feedbackForField != null,
-            answerTypeMismatchCount = uiState.answerTypeMismatchCount,
+            answerTypeMismatchCount = question.answerTypeMismatchCount,
             onSubmit = onSubmit,
             testTags = testTags.answerFieldTags,
-            // Also includes undoCounter: undo clears the field and re-enables it without changing
-            // item/questionType, so the field's focus-restoring effect wouldn't otherwise refire and
-            // the user would be left tapped-out of the field they just asked to retry. And
-            // questionSequence: a requeued question (WaniKani's wrong-answer-comes-back-later
-            // behavior) can become current again with the same item/questionType/undoCounter as
-            // before, but the field must still clear — questionSequence increments on every advance
-            // regardless of whether the question repeats.
-            focusResetKey = AnswerFieldFocusKey(item.assignmentId, questionType, uiState.undoCounter, uiState.questionSequence),
+            focusResetKey = AnswerFieldFocusKey(
+                item.assignmentId, questionType, question.undoCounter, question.sequence
+            ),
             useJapaneseKeyboard = display.useJapaneseKeyboard,
             trailingIcon = if (feedbackForField != null) {
                 {
@@ -459,8 +403,8 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        val feedback = uiState.feedback
-        if (feedback == null) {
+        val grade = question.grade
+        if (grade == null) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
                     onClick = onDontKnow,
@@ -468,11 +412,12 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
                 ) { Text("I don't know") }
                 Button(
                     onClick = onSubmit,
-                    enabled = uiState.answerInput.isNotBlank(),
+                    enabled = question.answerInput.isNotBlank(),
                     modifier = Modifier.weight(1f).testTag(testTags.submitButton)
                 ) { Text("Submit") }
             }
         } else {
+            val feedback = grade.feedback
             Text(
                 text = if (feedback.isCorrect) "Correct!" else "Incorrect",
                 color = if (feedback.isCorrect) {
@@ -484,7 +429,7 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
                 modifier = Modifier.testTag(testTags.feedbackText)
             )
             feedbackDetailPrefix(feedback)?.let { prefix ->
-                if (uiState.answerRevealed) {
+                if (grade.answerRevealed) {
                     // Capped at a fixed height + internally scrollable rather than left unbounded:
                     // an item with many accepted synonyms could otherwise grow past this
                     // non-scrolling Column's bounds and push the Continue button down underneath
@@ -524,7 +469,7 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
                 onContinue = onContinue,
                 continueButtonTestTag = testTags.continueButton,
                 modifier = Modifier.fillMaxWidth(),
-                revealed = uiState.answerRevealed
+                revealed = grade.answerRevealed
             )
         }
 
@@ -540,12 +485,12 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
 /**
  * What the answer field resets its text and focus on. Also includes [undoCounter]: undo clears the
  * field and re-enables it without changing item/question type, so the field's focus-restoring effect
- * wouldn't otherwise refire. And [questionSequence]: a requeued question can become current again with
+ * wouldn't otherwise refire. And [sequence]: a requeued question can become current again with
  * the same item, type and undo count, but the field must still clear.
  */
 private data class AnswerFieldFocusKey(
     val assignmentId: Long,
     val questionType: QuestionType,
     val undoCounter: Int,
-    val questionSequence: Int
+    val sequence: Int
 )
