@@ -2,18 +2,16 @@ package com.crazyfluff.shellfstudy.core.sync
 
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
+import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
-import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.Dispatcher
-import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
-import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -44,20 +42,10 @@ class SyncOrchestratorTest {
     @Before
     fun setUp() {
         server = MockWebServer()
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
-                requestedPaths += path
-                return when {
-                    path.startsWith("/review_statistics") && reviewStatisticsShouldFail -> emptyResponse(500)
-                    path.startsWith("/spaced_repetition_systems") -> emptyCollection("srs_system")
-                    path.startsWith("/subjects") -> emptyCollection("kanji")
-                    path.startsWith("/assignments") -> emptyCollection("assignment")
-                    path.startsWith("/review_statistics") -> emptyCollection("review_statistic")
-                    path.startsWith("/level_progressions") -> emptyCollection("level_progression")
-                    else -> emptyResponse(404)
-                }
-            }
+        server.dispatcher = waniKaniCollectionDispatcher { request ->
+            val path = request.path.orEmpty()
+            requestedPaths += path
+            if (reviewStatisticsShouldFail && path.startsWith("/review_statistics")) emptyResponse(500) else null
         }
         server.start()
         repositories = buildTestRepositories(server.url("/").toString())
@@ -120,23 +108,14 @@ class SyncOrchestratorTest {
         )
         val firstRequestReceived = CountDownLatch(1)
         val releaseFirstRequest = CountDownLatch(1)
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
-                requestedPaths += path
-                if (path.startsWith("/spaced_repetition_systems")) {
-                    firstRequestReceived.countDown()
-                    releaseFirstRequest.await(2, TimeUnit.SECONDS)
-                }
-                return when {
-                    path.startsWith("/spaced_repetition_systems") -> emptyCollection("srs_system")
-                    path.startsWith("/subjects") -> emptyCollection("kanji")
-                    path.startsWith("/assignments") -> emptyCollection("assignment")
-                    path.startsWith("/review_statistics") -> emptyCollection("review_statistic")
-                    path.startsWith("/level_progressions") -> emptyCollection("level_progression")
-                    else -> emptyResponse(404)
-                }
+        server.dispatcher = waniKaniCollectionDispatcher { request ->
+            val path = request.path.orEmpty()
+            requestedPaths += path
+            if (path.startsWith("/spaced_repetition_systems")) {
+                firstRequestReceived.countDown()
+                releaseFirstRequest.await(2, TimeUnit.SECONDS)
             }
+            null
         }
 
         // Runs on a real dispatcher (not the test scheduler) so it genuinely executes concurrently
@@ -215,7 +194,4 @@ class SyncOrchestratorTest {
         requestedPaths.toList()
     }.map { it.substringBefore('?') }
 
-    private fun emptyCollection(objectType: String) = jsonResponse(
-        """{"object":"$objectType","url":"https://api.wanikani.com/v2/$objectType","data":[]}"""
-    )
 }

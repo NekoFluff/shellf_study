@@ -28,6 +28,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentU
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
+import com.crazyfluff.shellfstudy.fakes.emptyCollectionJson
 import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePronunciationAudioPlayer
@@ -2778,9 +2779,6 @@ class ReviewViewModelTest {
         }
     """.trimIndent()
 
-    private fun emptyCollectionJson() = """
-        {"object": "collection", "url": "https://api.wanikani.com/v2/x", "total_count": 0, "data": []}
-    """.trimIndent()
 
     /** The ViewModel no longer calls POST /reviews at all (that's the background sync worker's
      *  job), so this response is never actually consumed — it just needs to exist as the

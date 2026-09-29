@@ -7,9 +7,6 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.ListenableWorker
-import androidx.work.WorkerFactory
-import androidx.work.WorkerParameters
-import androidx.work.testing.TestListenableWorkerBuilder
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
@@ -19,6 +16,7 @@ import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxStatus
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.ReadingData
+import com.crazyfluff.shellfstudy.fakes.buildTestWorker
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
@@ -68,15 +66,9 @@ class OutboxSyncWorkerTest {
             assignmentRepository = repositories.assignmentRepository,
             outboxRepository = outboxRepository
         )
-        return TestListenableWorkerBuilder<OutboxSyncWorker>(context)
-            .setWorkerFactory(object : WorkerFactory() {
-                override fun createWorker(
-                    appContext: Context,
-                    workerClassName: String,
-                    workerParameters: WorkerParameters
-                ): ListenableWorker = OutboxSyncWorker(appContext, workerParameters, drainer)
-            })
-            .build()
+        return buildTestWorker(context) { appContext, params ->
+            OutboxSyncWorker(appContext, params, drainer)
+        }
     }
 
     /** Seeds both the assignment and its subject — optimistic/reconciliation logic needs the

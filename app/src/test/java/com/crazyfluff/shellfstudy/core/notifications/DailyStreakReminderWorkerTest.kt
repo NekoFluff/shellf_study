@@ -4,9 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.ListenableWorker
-import androidx.work.WorkerFactory
-import androidx.work.WorkerParameters
-import androidx.work.testing.TestListenableWorkerBuilder
+import com.crazyfluff.shellfstudy.fakes.buildTestWorker
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -20,15 +18,9 @@ class DailyStreakReminderWorkerTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
     private fun buildWorker(coordinator: FakeNotificationCoordinator): DailyStreakReminderWorker =
-        TestListenableWorkerBuilder<DailyStreakReminderWorker>(context)
-            .setWorkerFactory(object : WorkerFactory() {
-                override fun createWorker(
-                    appContext: Context,
-                    workerClassName: String,
-                    workerParameters: WorkerParameters
-                ): ListenableWorker = DailyStreakReminderWorker(appContext, workerParameters, coordinator)
-            })
-            .build()
+        buildTestWorker(context) { appContext, params ->
+            DailyStreakReminderWorker(appContext, params, coordinator)
+        }
 
     @Test
     fun `evaluates and reschedules tomorrow's reminder on success`() = runTest {

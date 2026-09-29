@@ -6,11 +6,11 @@ import androidx.datastore.preferences.core.Preferences
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
+import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationScheduler
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
-import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
@@ -59,8 +59,6 @@ class SettingsViewModelTest {
         return SettingsViewModel(settingsRepository, notificationCoordinator, notificationScheduler, syncOrchestrator)
     }
 
-    private fun emptyCollectionResponse(objectType: String): MockResponse =
-        jsonResponse("""{"object":"$objectType","url":"https://api.wanikani.com/v2/$objectType","data":[]}""")
 
     @Test
     fun `onDailyLessonGoalChange updates the state`() = runTest(mainDispatcherRule.dispatcher) {
@@ -342,20 +340,7 @@ class SettingsViewModelTest {
     @Test
     fun `full refresh reports loading then clears on success`() = runTest(mainDispatcherRule.dispatcher) {
         val server = MockWebServer()
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty().substringBefore('?')
-                return when {
-                    path.startsWith("/spaced_repetition_systems") -> emptyCollectionResponse("srs_system")
-                    path.startsWith("/subjects") -> emptyCollectionResponse("kanji")
-                    path.startsWith("/assignments") -> emptyCollectionResponse("assignment")
-                    path.startsWith("/review_statistics") -> emptyCollectionResponse("review_statistic")
-                    path.startsWith("/study_materials") -> emptyCollectionResponse("study_material")
-                    path.startsWith("/level_progressions") -> emptyCollectionResponse("level_progression")
-                    else -> emptyResponse(404)
-                }
-            }
-        }
+        server.dispatcher = waniKaniCollectionDispatcher()
         server.start()
         val viewModel = createViewModel(buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher).syncOrchestrator)
 

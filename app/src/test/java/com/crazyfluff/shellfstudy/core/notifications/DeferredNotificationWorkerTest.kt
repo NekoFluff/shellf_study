@@ -4,10 +4,8 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.ListenableWorker
-import androidx.work.WorkerFactory
-import androidx.work.WorkerParameters
-import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
+import com.crazyfluff.shellfstudy.fakes.buildTestWorker
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.DeferredNotificationCategory
 import com.google.common.truth.Truth.assertThat
@@ -25,18 +23,12 @@ class DeferredNotificationWorkerTest {
         coordinator: FakeNotificationCoordinator,
         category: String? = null
     ): DeferredNotificationWorker {
-        val builder = TestListenableWorkerBuilder<DeferredNotificationWorker>(context)
-            .setWorkerFactory(object : WorkerFactory() {
-                override fun createWorker(
-                    appContext: Context,
-                    workerClassName: String,
-                    workerParameters: WorkerParameters
-                ): ListenableWorker = DeferredNotificationWorker(appContext, workerParameters, coordinator)
-            })
-        if (category != null) {
-            builder.setInputData(workDataOf(DeferredNotificationWorker.KEY_CATEGORY to category))
+        return buildTestWorker(
+            context = context,
+            inputData = category?.let { workDataOf(DeferredNotificationWorker.KEY_CATEGORY to it) }
+        ) { appContext, params ->
+            DeferredNotificationWorker(appContext, params, coordinator)
         }
-        return builder.build()
     }
 
     @Test

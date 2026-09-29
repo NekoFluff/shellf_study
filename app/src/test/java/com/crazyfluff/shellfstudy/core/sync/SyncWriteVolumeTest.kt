@@ -1,15 +1,12 @@
 package com.crazyfluff.shellfstudy.core.sync
 
+import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
-import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
-import mockwebserver3.Dispatcher
-import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
-import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -41,19 +38,7 @@ class SyncWriteVolumeTest {
     @Before
     fun setUp() {
         server = MockWebServer()
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
-                return when {
-                    path.startsWith("/spaced_repetition_systems") -> emptyCollection("srs_system")
-                    path.startsWith("/subjects") -> emptyCollection("kanji")
-                    path.startsWith("/assignments") -> emptyCollection("assignment")
-                    path.startsWith("/review_statistics") -> emptyCollection("review_statistic")
-                    path.startsWith("/level_progressions") -> emptyCollection("level_progression")
-                    else -> emptyResponse(404)
-                }
-            }
-        }
+        server.dispatcher = waniKaniCollectionDispatcher()
         server.start()
         repositories = buildTestRepositories(server.url("/").toString())
     }
@@ -117,18 +102,13 @@ class SyncWriteVolumeTest {
      */
     @Test
     fun `a pass with real data writes each changed resource exactly once`() = runTest {
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
-                return when {
-                    path.startsWith("/spaced_repetition_systems") -> emptyCollection("srs_system")
-                    path.startsWith("/subjects") -> collectionOfOne("kanji", subjectJson(id = 1))
-                    path.startsWith("/assignments") ->
-                        collectionOfOne("assignment", assignmentJson(id = 1, subjectId = 1))
-                    path.startsWith("/review_statistics") -> emptyCollection("review_statistic")
-                    path.startsWith("/level_progressions") -> emptyCollection("level_progression")
-                    else -> emptyResponse(404)
-                }
+        server.dispatcher = waniKaniCollectionDispatcher { request ->
+            when {
+                request.path.orEmpty().startsWith("/subjects") ->
+                    collectionOfOne("kanji", subjectJson(id = 1))
+                request.path.orEmpty().startsWith("/assignments") ->
+                    collectionOfOne("assignment", assignmentJson(id = 1, subjectId = 1))
+                else -> null
             }
         }
         repositories.writeLog.reset()
@@ -140,9 +120,6 @@ class SyncWriteVolumeTest {
         assertThat(repositories.writeLog.rowCountFor("assignments")).isEqualTo(1)
     }
 
-    private fun emptyCollection(objectType: String) = jsonResponse(
-        """{"object":"$objectType","url":"https://api.wanikani.com/v2/$objectType","data":[]}"""
-    )
 
     private fun collectionOfOne(objectType: String, itemJson: String) = jsonResponse(
         """{"object":"collection","url":"https://api.wanikani.com/v2/$objectType","total_count":1,"data":[$itemJson]}"""

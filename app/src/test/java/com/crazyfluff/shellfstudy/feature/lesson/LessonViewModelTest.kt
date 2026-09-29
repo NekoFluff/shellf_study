@@ -35,6 +35,7 @@ import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.fakes.emptyCollectionJson
 import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
 import com.crazyfluff.shellfstudy.fakes.FakePitchAccentBundledSource
@@ -3037,9 +3038,6 @@ class LessonViewModelTest {
         }
     """.trimIndent()
 
-    private fun emptyCollectionJson() = """
-        {"object": "collection", "url": "https://api.wanikani.com/v2/x", "total_count": 0, "data": []}
-    """.trimIndent()
     private fun startAssignmentResultJson() = """
         {
           "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",

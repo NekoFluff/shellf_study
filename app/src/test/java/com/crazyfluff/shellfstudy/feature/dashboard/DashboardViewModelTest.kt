@@ -31,9 +31,8 @@ import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
-import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.hours
+import com.crazyfluff.shellfstudy.fakes.emptyCollectionJson
 import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeFriendStatsDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
@@ -886,9 +885,6 @@ class DashboardViewModelTest {
         }
     }
 
-    private fun emptyCollectionJson() = """
-        {"object": "collection", "url": "https://api.wanikani.com/v2/x", "total_count": 0, "data": []}
-    """.trimIndent()
 
     private fun startedTodayAssignmentsJson(count: Int) = """
         {

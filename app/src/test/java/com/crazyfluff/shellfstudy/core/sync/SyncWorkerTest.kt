@@ -4,19 +4,15 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.ListenableWorker
-import androidx.work.WorkerFactory
-import androidx.work.WorkerParameters
-import androidx.work.testing.TestListenableWorkerBuilder
+import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
+import com.crazyfluff.shellfstudy.fakes.buildTestWorker
+import com.crazyfluff.shellfstudy.fakes.emptyCollection
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakeOutboxSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
-import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
-import mockwebserver3.Dispatcher
-import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
-import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -35,19 +31,11 @@ class SyncWorkerTest {
     @Before
     fun setUp() {
         server = MockWebServer()
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
-                return when {
-                    path.startsWith("/review_statistics") && reviewStatisticsShouldFail -> emptyCollection("review_statistic", 500)
-                    path.startsWith("/spaced_repetition_systems") -> emptyCollection("srs_system")
-                    path.startsWith("/subjects") -> emptyCollection("kanji")
-                    path.startsWith("/assignments") -> emptyCollection("assignment")
-                    path.startsWith("/review_statistics") -> emptyCollection("review_statistic")
-                    path.startsWith("/study_materials") -> emptyCollection("study_material")
-                    path.startsWith("/level_progressions") -> emptyCollection("level_progression")
-                    else -> jsonResponse("{}", 404)
-                }
+        server.dispatcher = waniKaniCollectionDispatcher { request ->
+            if (reviewStatisticsShouldFail && request.path.orEmpty().startsWith("/review_statistics")) {
+                emptyCollection("review_statistic", 500)
+            } else {
+                null
             }
         }
         server.start()
@@ -62,21 +50,15 @@ class SyncWorkerTest {
 
     private fun buildWorker(): SyncWorker {
         val repos = buildTestRepositories(server.url("/").toString())
-        return TestListenableWorkerBuilder<SyncWorker>(context)
-            .setWorkerFactory(object : WorkerFactory() {
-                override fun createWorker(
-                    appContext: Context,
-                    workerClassName: String,
-                    workerParameters: WorkerParameters
-                ): ListenableWorker = SyncWorker(
-                    appContext = appContext,
-                    params = workerParameters,
-                    syncOrchestrator = repos.syncOrchestrator,
-                    notificationCoordinator = notificationCoordinator,
-                    outboxSyncScheduler = outboxSyncScheduler
-                )
-            })
-            .build()
+        return buildTestWorker(context) { appContext, params ->
+            SyncWorker(
+                appContext = appContext,
+                params = params,
+                syncOrchestrator = repos.syncOrchestrator,
+                notificationCoordinator = notificationCoordinator,
+                outboxSyncScheduler = outboxSyncScheduler
+            )
+        }
     }
 
     @Test
@@ -100,6 +82,4 @@ class SyncWorkerTest {
         assertThat(outboxSyncScheduler.requestCount).isEqualTo(0)
     }
 
-    private fun emptyCollection(objectType: String, code: Int = 200): MockResponse =
-        jsonResponse("""{"object":"$objectType","url":"https://api.wanikani.com/v2/$objectType","data":[]}""", code)
 }

@@ -1,15 +1,12 @@
 package com.crazyfluff.shellfstudy.core.sync
 
+import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
-import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
-import mockwebserver3.Dispatcher
-import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
-import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -49,43 +46,24 @@ class DashboardResumeSyncTest {
         repositories = buildTestRepositories(server.url("/").toString())
     }
 
-    private fun assignmentsReturnOneRow() = object : Dispatcher() {
-        override fun dispatch(request: RecordedRequest): MockResponse {
-            val path = request.path.orEmpty()
-            return when {
-                path.startsWith("/spaced_repetition_systems") -> emptyCollection("srs_system")
-                path.startsWith("/subjects") -> emptyCollection("kanji")
-                path.startsWith("/assignments") -> jsonResponse(
-                    """{"object":"collection","url":"https://api.wanikani.com/v2/assignments","total_count":1,"data":[
-                       {"id":1,"object":"assignment","url":"https://api.wanikani.com/v2/assignments/1",
-                        "data_updated_at":"2026-01-01T00:00:00.000000Z",
-                        "data":{"created_at":"2026-01-01T00:00:00.000000Z","subject_id":440,
-                        "subject_type":"kanji","srs_stage":1,"hidden":false}}]}"""
-                )
-                path.startsWith("/review_statistics") -> emptyCollection("review_statistic")
-                path.startsWith("/level_progressions") -> emptyCollection("level_progression")
-                else -> emptyResponse(404)
-            }
+    /** One real assignment row, so the resume path has something it could rewrite. */
+    private fun assignmentsReturnOneRow() = waniKaniCollectionDispatcher { request ->
+        if (request.path.orEmpty().startsWith("/assignments")) {
+            jsonResponse(
+                """{"object":"collection","url":"https://api.wanikani.com/v2/assignments","total_count":1,"data":[
+                   {"id":1,"object":"assignment","url":"https://api.wanikani.com/v2/assignments/1",
+                    "data_updated_at":"2026-01-01T00:00:00.000000Z",
+                    "data":{"created_at":"2026-01-01T00:00:00.000000Z","subject_id":440,
+                    "subject_type":"kanji","srs_stage":1,"hidden":false}}]}"""
+            )
+        } else {
+            null
         }
     }
 
     @After
     fun tearDown() {
         server.shutdown()
-    }
-
-    private fun emptyEverything(objectType: String = "assignment") = object : Dispatcher() {
-        override fun dispatch(request: RecordedRequest): MockResponse {
-            val path = request.path.orEmpty()
-            return when {
-                path.startsWith("/spaced_repetition_systems") -> emptyCollection("srs_system")
-                path.startsWith("/subjects") -> emptyCollection("kanji")
-                path.startsWith("/assignments") -> emptyCollection("assignment")
-                path.startsWith("/review_statistics") -> emptyCollection("review_statistic")
-                path.startsWith("/level_progressions") -> emptyCollection("level_progression")
-                else -> emptyResponse(404)
-            }
-        }
     }
 
     /**
@@ -140,7 +118,4 @@ class DashboardResumeSyncTest {
         assertThat(repositories.writeLog.rowCountFor("assignments")).isEqualTo(1)
     }
 
-    private fun emptyCollection(objectType: String) = jsonResponse(
-        """{"object":"$objectType","url":"https://api.wanikani.com/v2/$objectType","data":[]}"""
-    )
 }

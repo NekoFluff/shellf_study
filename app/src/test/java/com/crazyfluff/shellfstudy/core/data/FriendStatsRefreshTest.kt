@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
 import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
 import com.crazyfluff.shellfstudy.fakes.FakeFriendStatsDao
 import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
@@ -26,10 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import kotlin.time.Clock
 import kotlinx.serialization.json.Json
-import mockwebserver3.Dispatcher
-import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
-import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -67,17 +65,12 @@ class FriendStatsRefreshTest {
     @Before
     fun setUp() {
         server = MockWebServer()
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
-                if (shouldFail(path)) return emptyResponse(failingCode)
-                return when {
-                    path.startsWith("/user") -> jsonResponse(USER_JSON)
-                    path.startsWith("/assignments") -> emptyCollection("assignment")
-                    path.startsWith("/review_statistics") -> emptyCollection("review_statistic")
-                    path.startsWith("/level_progressions") -> emptyCollection("level_progression")
-                    else -> emptyResponse(404)
-                }
+        server.dispatcher = waniKaniCollectionDispatcher { request ->
+            val path = request.path.orEmpty()
+            when {
+                shouldFail(path) -> emptyResponse(failingCode)
+                path.startsWith("/user") -> jsonResponse(USER_JSON)
+                else -> null
             }
         }
         server.start()
@@ -225,8 +218,6 @@ class FriendStatsRefreshTest {
         burnedAllTime = burnedAllTime
     )
 
-    private fun emptyCollection(objectType: String, code: Int = 200): MockResponse =
-        jsonResponse("""{"object":"$objectType","url":"https://api.wanikani.com/v2/$objectType","data":[]}""", code)
 
     private companion object {
         const val FRIEND_ID = "friend-1"
