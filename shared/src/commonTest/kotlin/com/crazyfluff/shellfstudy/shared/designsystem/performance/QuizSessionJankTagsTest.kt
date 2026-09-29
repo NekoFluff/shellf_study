@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
 class QuizSessionJankTagsTest {
 
     @Test
-    fun `reports the screen, phase, answer state and rank change in that order`() {
+    fun `reports the screen phase answer state and rank change in that order`() {
         val tags = quizSessionJankTags(
             screen = "review",
             phaseName = "active",

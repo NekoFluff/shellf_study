@@ -26,6 +26,12 @@ import java.io.File
  *    duplication that produced the divergence in the first place, so a *new* ambient value added to a
  *    single root cannot happen again.
  *
+ * 5. **Backticked test names in `shared/src/commonTest` stay legal for Kotlin/Native.** That source set
+ *    compiles for iOS too, and the Native backend rejects the characters in [NATIVE_ILLEGAL_NAME_CHARS]
+ *    — a comma in a descriptive name is the easy mistake, and nothing else catches it: the JVM suite
+ *    passes, the metadata compile does not read test sources, and CI runs on Linux, where the Apple
+ *    targets are never compiled at all. The first sign is a macOS `./gradlew build`.
+ *
  * Deliberate exceptions live in [VM_OWNING_COMPOSABLES] with a reason, so widening either rule is a
  * reviewed edit rather than silent drift.
  */
@@ -80,6 +86,31 @@ class ArchitectureConventionsTest {
         assertThat(callSites).containsExactly(SHARED_ROOT_FILE)
     }
 
+    /**
+     * Enforced because nothing else can: this was broken twice while adding tests for unrelated
+     * changes, and both times the JVM suite, the metadata compile and CI were all green. See the class
+     * comment for the full list of blind spots.
+     *
+     * Note that Gradle cannot see that this test reads those files, so a local
+     * `:app:testDebugUnitTest` may be skipped as up-to-date after a change under `shared/`; re-run it
+     * with `--rerun` to be sure, or rely on CI, which always runs it against a fresh checkout.
+     */
+    @Test
+    fun `common test names avoid characters Kotlin Native cannot compile`() {
+        val offenders = sequenceOf("shared/src/commonTest")
+            .map { File(repoRoot(), it) }
+            .flatMap { root -> root.walkTopDown().filter { it.isFile && it.extension == "kt" } }
+            .flatMap { file ->
+                BACKTICKED_NAME.findAll(file.readText().withoutComments())
+                    .map { match -> match.groupValues[1] }
+                    .filter { name -> name.any { it in NATIVE_ILLEGAL_NAME_CHARS } }
+                    .map { name -> "${file.name}: $name" }
+            }
+            .toList()
+
+        assertThat(offenders).isEmpty()
+    }
+
     /** The main (non-test) Kotlin sources of both modules. */
     private fun mainSources(): Sequence<File> = sequenceOf("shared/src", "app/src")
         .map { File(repoRoot(), it) }
@@ -131,6 +162,11 @@ class ArchitectureConventionsTest {
         )
 
         /** A *call* to the nav host — the lookbehind excludes its declaration. */
+        val BACKTICKED_NAME = Regex("""fun\s+`([^`]*)`""")
+
+        /** Refused by the Kotlin/Native backend, whose declaration names double as Objective-C selectors. */
+        const val NATIVE_ILLEGAL_NAME_CHARS = ".;[]/<>:\\,"
+
         val NAV_HOST_CALL = Regex("""(?<!fun )ShellfStudyNavHost\(""")
 
         /**

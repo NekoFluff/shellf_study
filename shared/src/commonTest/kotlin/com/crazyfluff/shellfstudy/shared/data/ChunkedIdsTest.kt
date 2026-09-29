@@ -31,7 +31,7 @@ class ChunkedIdsTest {
     }
 
     @Test
-    fun `a list that already fits is queried once, unchunked`() = runTest {
+    fun `a list that already fits is queried once without chunking`() = runTest {
         var queryCount = 0
 
         val rows = chunkedIds(listOf(1L, 2L, 3L)) { chunk ->
