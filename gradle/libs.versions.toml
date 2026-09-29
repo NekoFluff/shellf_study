@@ -1,5 +1,12 @@
 [versions]
 agp = "9.3.1"
+# Android SDK levels and the JVM bytecode target live here rather than in each module: :app and
+# :shared both read them, and minSdk in particular used to be written out twice — a value that has to
+# be identical for the two modules to link at all.
+androidCompileSdk = "37"
+androidMinSdk = "28"
+androidTargetSdk = "37"
+jvmTarget = "11"
 coreKtx = "1.19.0"
 jankStats = "1.0.0"
 junit = "4.13.2"
@@ -45,6 +52,7 @@ androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-p
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }

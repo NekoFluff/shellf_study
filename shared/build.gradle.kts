@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
@@ -26,11 +28,11 @@ kotlin {
 
     android {
         namespace = "com.crazyfluff.shellfstudy.shared"
-        compileSdk = 37
-        minSdk = 28
+        compileSdk = libs.versions.androidCompileSdk.get().toInt()
+        minSdk = libs.versions.androidMinSdk.get().toInt()
 
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+            jvmTarget.set(JvmTarget.fromTarget(libs.versions.jvmTarget.get()))
         }
 
         withHostTestBuilder {}.configure {}
@@ -84,9 +86,9 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.androidx.activity.compose)
-            // The Android-only jank harness — see JankStatsTracker. Declared here rather than in :app
-            // because the tracker is shared/androidMain code: :app cannot be referenced from :shared,
-            // and the reporter seam has to reach commonMain so shared screens can report state.
+            // The Android-only jank harness — see JankStatsTracker. Declared here rather than only in
+            // :app because the tracker is shared/androidMain code: :app cannot be referenced from
+            // :shared, and the reporter seam has to reach commonMain so shared screens can report state.
             implementation(libs.androidx.metrics.performance)
         }
         iosMain.dependencies {
@@ -100,7 +102,7 @@ dependencies {
     add("kspIosArm64", libs.androidx.room.compiler)
     add("kspIosSimulatorArm64", libs.androidx.room.compiler)
     add("androidMainImplementation", platform(libs.androidx.compose.bom))
-    add("androidMainImplementation", "androidx.compose.foundation:foundation")
+    add("androidMainImplementation", libs.androidx.compose.foundation)
 }
 
 // AGP's lint reads the KSP-generated sources but does not declare them as inputs, so Gradle fails the

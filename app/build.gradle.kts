@@ -1,4 +1,5 @@
 import com.google.firebase.appdistribution.gradle.firebaseAppDistribution
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
@@ -12,13 +13,13 @@ plugins {
 android {
     namespace = "com.crazyfluff.shellfstudy"
     compileSdk {
-        version = release(37)
+        version = release(libs.versions.androidCompileSdk.get().toInt())
     }
 
     defaultConfig {
         applicationId = "com.crazyfluff.shellfstudy"
-        minSdk = 28
-        targetSdk = 37
+        minSdk = libs.versions.androidMinSdk.get().toInt()
+        targetSdk = libs.versions.androidTargetSdk.get().toInt()
         versionCode = 12
         versionName = "1.11"
 
@@ -38,8 +39,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.toVersion(libs.versions.jvmTarget.get())
+        targetCompatibility = JavaVersion.toVersion(libs.versions.jvmTarget.get())
     }
     buildFeatures {
         compose = true
@@ -60,18 +61,21 @@ android {
     }
 }
 
+// The bytecode target, declared for Kotlin as well as Java so it is a setting rather than a
+// side effect of compileOptions.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.fromTarget(libs.versions.jvmTarget.get()))
+    }
+}
+
 dependencies {
     implementation(project(":shared"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.core.ktx)
-    // Per-frame UI-thread timing with state tags — the jank harness. Debug-only in practice; see
-    // JankStatsTracker for the gate and the rationale.
-    implementation(libs.androidx.metrics.performance)
     implementation(libs.androidx.lifecycle.process)
 
     implementation(platform(libs.koin.bom))
@@ -84,7 +88,6 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
 
     implementation(libs.okhttp.core)
-    implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.coil.compose)
@@ -97,6 +100,12 @@ dependencies {
 
     // Unit tests
     testImplementation(libs.junit)
+    // These three are used by the test sources only — nothing in :app's main sources references
+    // material3, ui-graphics or kotlinx.serialization — so they stay off the main compile classpath
+    // rather than widening it for every build.
+    testImplementation(libs.kotlinx.serialization.json)
+    testImplementation(libs.androidx.compose.material3)
+    testImplementation(libs.androidx.compose.ui.graphics)
     testImplementation(libs.truth)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
