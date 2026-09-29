@@ -47,6 +47,7 @@ import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingHint
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
@@ -402,7 +403,25 @@ class ReviewViewModel(
         sessionTiming.resume()
 
         items.forEach { item -> progressByAssignmentId[item.assignmentId] = ItemProgress(item) }
-        queue.build(items, typesFor = { item -> questionTypesFor(item.subjectType) }, cap = MAX_IN_FLIGHT_REVIEW_ITEMS)
+        // Read straight from the DataStore rather than the `latestSettings` field the per-answer
+        // paths use: this runs once, during the loading spinner, so the extra read costs nothing,
+        // and `latestSettings` isn't reliable here — loadOrResume() (called first in init) can build
+        // this queue before the settings collector coroutine has taken its first emission.
+        // The level is likewise fetched once per build (not per admission), matching
+        // MAX_IN_FLIGHT_REVIEW_ITEMS's "sort once at session start" contract — an item that reaches
+        // Guru mid-session keeps whatever admission order it was queued with rather than being
+        // re-sorted out from under the reserve.
+        val priority = settingsRepository.settings.first().reviewPriority
+        val tierOf = ReviewPrioritizer.tierSelector(statsRepository.observeCurrentLevel().first())
+        // The tier key, not a pre-sorted list: QuizQueue sorts the *whole* queue by tier, so the
+        // reserve stays in priority order too and admitNext keeps feeding level-up kanji in as slots
+        // free. DEFAULT passes no key at all, leaving build on its original shuffled-selection path.
+        queue.build(
+            items,
+            typesFor = { item -> questionTypesFor(item.subjectType) },
+            cap = MAX_IN_FLIGHT_REVIEW_ITEMS,
+            priorityOf = if (priority == ReviewPriority.DEFAULT) null else tierOf
+        )
         totalQuestions = queue.size
 
         if (queue.isEmpty) {

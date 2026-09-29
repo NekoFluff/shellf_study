@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.feature.settings
 
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import kotlinx.coroutines.Job
 
 /**
@@ -51,6 +52,8 @@ interface SettingsActions {
     fun onRequireTapToRevealMeaningAnswerChange(enabled: Boolean)
 
     fun onRequireTapToRevealReadingAnswerChange(enabled: Boolean)
+
+    fun onReviewPriorityChange(priority: ReviewPriority)
 
     fun onReviewsAvailableEnabledChange(enabled: Boolean)
 

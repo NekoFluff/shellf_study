@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Job
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsActions
@@ -108,6 +109,21 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE)
             .performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
+    fun reviewPriorityOptions_showCurrentSelectionAndInvokeCallback() {
+        val actions = RecordingSettingsActions()
+        setContent(
+            uiState = SettingsUiState(reviewPriority = ReviewPriority.DEFAULT),
+            actions = actions
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.reviewPriorityOptionTag(ReviewPriority.DEFAULT))
+            .performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.reviewPriorityOptionTag(ReviewPriority.RANK_UP))
+            .performScrollTo().performClick()
+        assertThat(actions.lastArgumentOf("onReviewPriorityChange")).isEqualTo(ReviewPriority.RANK_UP)
     }
 
     @Test
@@ -423,6 +439,7 @@ private class RecordingSettingsActions : SettingsActions {
     override fun onRequireTapToRevealReadingAnswerChange(enabled: Boolean) = record("onRequireTapToRevealReadingAnswerChange", enabled)
     override fun onShowAnswerReadingPitchAccentChange(enabled: Boolean) = record("onShowAnswerReadingPitchAccentChange", enabled)
     override fun onHideContextSentenceTranslationsChange(enabled: Boolean) = record("onHideContextSentenceTranslationsChange", enabled)
+    override fun onReviewPriorityChange(priority: ReviewPriority) = record("onReviewPriorityChange", priority)
     override fun onReviewsAvailableEnabledChange(enabled: Boolean) = record("onReviewsAvailableEnabledChange", enabled)
     override fun onReviewsBacklogEnabledChange(enabled: Boolean) = record("onReviewsBacklogEnabledChange", enabled)
     override fun onBacklogThresholdChange(threshold: Int) = record("onBacklogThresholdChange", threshold)

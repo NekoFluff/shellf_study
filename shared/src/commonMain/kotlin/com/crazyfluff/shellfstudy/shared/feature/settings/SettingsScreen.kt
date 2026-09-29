@@ -56,6 +56,7 @@ import com.crazyfluff.shellfstudy.shared.data.BACKLOG_THRESHOLD_RANGE
 import com.crazyfluff.shellfstudy.shared.data.DAILY_LESSON_GOAL_RANGE
 import com.crazyfluff.shellfstudy.shared.data.LESSON_BATCH_SIZE_RANGE
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 
 object SettingsScreenTestTags {
     const val BACK_BUTTON = "settings_back_button"
@@ -81,6 +82,7 @@ object SettingsScreenTestTags {
     const val REQUIRE_TAP_TO_REVEAL_MEANING_ANSWER_TOGGLE = "settings_require_tap_to_reveal_meaning_answer_toggle"
     const val REQUIRE_TAP_TO_REVEAL_READING_ANSWER_TOGGLE = "settings_require_tap_to_reveal_reading_answer_toggle"
     const val ANSWER_READING_PITCH_ACCENT_TOGGLE = "settings_answer_reading_pitch_accent_toggle"
+    fun reviewPriorityOptionTag(priority: ReviewPriority) = "settings_review_priority_${priority.name.lowercase()}_option"
     const val HIDE_CONTEXT_SENTENCE_TRANSLATIONS_TOGGLE = "settings_hide_context_sentence_translations_toggle"
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
     const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
@@ -392,6 +394,30 @@ private fun formatHour(hour: Int): String {
     return "$hour12:00 $suffix"
 }
 
+/** One radio-style choice row — shared by the theme picker and the review-priority picker, which
+ *  differ only in the type they enumerate. */
+@Composable
+private fun <T> OptionRow(
+    label: String,
+    value: T,
+    selected: T,
+    onSelect: (T) -> Unit,
+    testTag: String
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect(value) }
+            .testTag(testTag)
+            .padding(vertical = 8.dp)
+    ) {
+        RadioButton(selected = selected == value, onClick = { onSelect(value) })
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(label)
+    }
+}
+
 @Composable
 private fun ThemeOptionRow(
     label: String,
@@ -399,20 +425,7 @@ private fun ThemeOptionRow(
     selected: ThemeMode,
     onSelect: (ThemeMode) -> Unit,
     testTag: String
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onSelect(mode) }
-            .testTag(testTag)
-            .padding(vertical = 8.dp)
-    ) {
-        RadioButton(selected = selected == mode, onClick = { onSelect(mode) })
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(label)
-    }
-}
+) = OptionRow(label = label, value = mode, selected = selected, onSelect = onSelect, testTag = testTag)
 
 /** One settings section: the state it renders and the actions it offers. */
 @Composable
@@ -635,6 +648,39 @@ private fun ReviewsSection(
             onCheckedChange = actions::onShowAnswerReadingPitchAccentChange,
             testTag = SettingsScreenTestTags.ANSWER_READING_PITCH_ACCENT_TOGGLE
         )
+        ReviewPriorityRow(
+            selected = uiState.reviewPriority,
+            onSelect = actions::onReviewPriorityChange
+        )
+    }
+}
+
+/** Picks which due items a review session admits into its in-flight working set first — the radio
+ *  treatment [AppearanceSection] gives the theme, rather than a dropdown, so both options can carry
+ *  the sentence explaining what the setting does and does not change. */
+@Composable
+private fun ReviewPriorityRow(
+    selected: ReviewPriority,
+    onSelect: (ReviewPriority) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Text("Review priority", style = MaterialTheme.typography.bodyLarge)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = "Only ten items are worked on at a time during a review. This picks which of your due items fill those slots as they free up — it never changes when an item comes back for review.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 52.dp)
+        )
+        ReviewPriority.entries.forEach { priority ->
+            OptionRow(
+                label = priority.label,
+                value = priority,
+                selected = selected,
+                onSelect = onSelect,
+                testTag = SettingsScreenTestTags.reviewPriorityOptionTag(priority)
+            )
+        }
     }
 }
 

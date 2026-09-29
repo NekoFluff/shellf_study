@@ -10,6 +10,10 @@ data class PendingQuestion<T>(val item: T, val type: QuestionType)
  * real `cap`, to bound how many distinct items can be in flight at once (mirrors WaniKani's own
  * review session — see ReviewViewModel.MAX_IN_FLIGHT_REVIEW_ITEMS). Lesson never sets a cap; it
  * already bounds its own working set by batch size before ever building a queue.
+ *
+ * [reserve] is a priority FIFO: [admitNext] always takes from its head, so the order it was built
+ * with decides which items get admitted next. Review's rank-up priority setting rides on exactly
+ * that, via [build]'s [priorityOf] tier key.
  */
 class QuizQueue<T> {
     private val inFlight = ArrayDeque<PendingQuestion<T>>()
@@ -39,12 +43,39 @@ class QuizQueue<T> {
      * into [inFlight] immediately — the original all-at-once behavior Lesson's fixed-size batches
      * rely on. A finite [cap] admits only that many items up front, holding the rest in [reserve]
      * for [admitNext] to pull from as items finish.
+     *
+     * [priorityOf] is an optional tier key — lower is admitted first — used by Review's rank-up
+     * priority setting. Null (every caller but Review) keeps the original behavior exactly: [items]
+     * is shuffled as one pool and the first [cap] are admitted, so the *selection* is an arbitrary
+     * draw. When it's supplied, [items] is stably sorted by tier instead, so selection is no longer
+     * arbitrary: every lower-tier item is admitted ahead of every higher-tier one, and [reserve] keeps
+     * that order too — which is what makes [admitNext], drawing from its head, keep feeding
+     * higher-priority items in as slots free. Within a tier the caller's own order survives. Draw
+     * order is still shuffled either way; only selection is affected.
      */
-    fun build(items: List<T>, typesFor: (T) -> List<QuestionType>, shuffle: Boolean = true, cap: Int? = null) {
+    fun build(
+        items: List<T>,
+        typesFor: (T) -> List<QuestionType>,
+        shuffle: Boolean = true,
+        cap: Int? = null,
+        priorityOf: ((T) -> Int)? = null
+    ) {
         shuffleOnAdmit = shuffle
-        val order = if (shuffle) items.shuffled() else items
-        val admittedItems = if (cap == null) order else order.take(cap)
-        val heldItems = if (cap == null) emptyList() else order.drop(cap)
+        val admittedItems: List<T>
+        val heldItems: List<T>
+        if (priorityOf == null) {
+            val order = if (shuffle) items.shuffled() else items
+            admittedItems = if (cap == null) order else order.take(cap)
+            heldItems = if (cap == null) emptyList() else order.drop(cap)
+        } else {
+            // Sorted, NOT shuffled, before the split: which items get admitted (and the order the
+            // reserve feeds them in) is the whole point of the priority setting, so randomizing here
+            // would randomize the selection. The shuffle below is what keeps the *draw* order inside
+            // each set random. Ties keep `items`' own order — sortedBy is stable.
+            val tiered = items.sortedBy(priorityOf)
+            admittedItems = if (cap == null) tiered else tiered.take(cap)
+            heldItems = if (cap == null) emptyList() else tiered.drop(cap)
+        }
 
         inFlight.clear()
         inFlight.addAll(admittedItems.flatMap { item -> typesFor(item).map { PendingQuestion(item, it) } })

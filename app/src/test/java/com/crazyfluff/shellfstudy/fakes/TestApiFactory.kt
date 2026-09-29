@@ -70,6 +70,10 @@ class TestRepositories(
     val outboxDao: FakeOutboxDao,
     val outboxSyncScheduler: FakeOutboxSyncScheduler,
     val reviewStatisticDao: FakeReviewStatisticDao,
+    /** Exposed so a test can seed the *current level* — [StatsRepository] keeps this DAO private,
+     *  and a review session's rank-up priority reads the level from it (see
+     *  `ReviewPrioritizer.tierSelector`). */
+    val levelProgressionDao: FakeLevelProgressionDao,
     val subjectRepository: SubjectRepository,
     val assignmentRepository: AssignmentRepository,
     val pitchAccentRepository: PitchAccentRepository,
@@ -100,18 +104,19 @@ fun buildTestRepositories(
     val outboxDao = FakeOutboxDao()
     val outboxSyncScheduler = FakeOutboxSyncScheduler()
     val reviewStatisticDao = FakeReviewStatisticDao()
+    val levelProgressionDao = FakeLevelProgressionDao()
 
     val pitchAccentRepository = PitchAccentRepository(FakePitchAccentBundledSource(pitchAccentEntries))
     val subjectRepository =
         SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository, defaultDispatcher)
     val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao, defaultDispatcher)
-    val statsRepository = StatsRepository(api, reviewStatisticDao, FakeLevelProgressionDao(), studyActivityDao, syncStateDao, defaultDispatcher)
+    val statsRepository = StatsRepository(api, reviewStatisticDao, levelProgressionDao, studyActivityDao, syncStateDao, defaultDispatcher)
     val waniKaniRepository = WaniKaniRepository(api)
     val syncOrchestrator = SyncOrchestrator(subjectRepository, assignmentRepository, statsRepository, syncStateDao)
 
     return TestRepositories(
         api, subjectDao, assignmentDao, srsSystemDao, syncStateDao, studyActivityDao, outboxDao, outboxSyncScheduler,
-        reviewStatisticDao, subjectRepository, assignmentRepository, pitchAccentRepository,
+        reviewStatisticDao, levelProgressionDao, subjectRepository, assignmentRepository, pitchAccentRepository,
         statsRepository, waniKaniRepository, syncOrchestrator
     )
 }

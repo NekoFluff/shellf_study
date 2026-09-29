@@ -13,6 +13,7 @@ import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsViewModel
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
@@ -71,6 +72,21 @@ class SettingsViewModelTest {
             viewModel.onDailyLessonGoalChange(20)
             assertThat(awaitItem().dailyLessonGoal).isEqualTo(20)
         }
+    }
+
+    @Test
+    fun `onReviewPriorityChange updates the state and persists`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            // Defaults to the pre-setting behavior, so an existing install sees no change on upgrade.
+            assertThat(awaitItem().reviewPriority).isEqualTo(ReviewPriority.DEFAULT)
+
+            viewModel.onReviewPriorityChange(ReviewPriority.RANK_UP)
+            assertThat(awaitItem().reviewPriority).isEqualTo(ReviewPriority.RANK_UP)
+        }
+
+        assertThat(settingsRepository.settings.first().reviewPriority).isEqualTo(ReviewPriority.RANK_UP)
     }
 
     @Test

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -49,7 +50,13 @@ data class AppSettings(
     val showAnswerReadingPitchAccent: Boolean = false,
     val hideContextSentenceTranslations: Boolean = true,
     val requireTapToRevealMeaningAnswer: Boolean = false,
-    val requireTapToRevealReadingAnswer: Boolean = false
+    val requireTapToRevealReadingAnswer: Boolean = false,
+    /** Which due items a review session admits into its in-flight working set first — see
+     *  [com.crazyfluff.shellfstudy.shared.feature.review.ReviewPriority]. A persisted preference
+     *  rather than a per-session browsing choice (unlike the lesson picker's `LessonSort`), since it
+     *  expresses how the learner wants their whole backlog worked through, not how one screen is
+     *  currently sorted. */
+    val reviewPriority: ReviewPriority = ReviewPriority.DEFAULT
 )
 
 data class NotificationSettings(
@@ -83,6 +90,7 @@ class SettingsRepository(
     private val hideContextSentenceTranslationsKey = booleanPreferencesKey("hide_context_sentence_translations")
     private val requireTapToRevealMeaningAnswerKey = booleanPreferencesKey("require_tap_to_reveal_meaning_answer")
     private val requireTapToRevealReadingAnswerKey = booleanPreferencesKey("require_tap_to_reveal_reading_answer")
+    private val reviewPriorityKey = stringPreferencesKey("review_priority")
 
     private val notificationsEnabledKey = booleanPreferencesKey("notifications_enabled")
     private val reviewsAvailableEnabledKey = booleanPreferencesKey("notif_reviews_available_enabled")
@@ -120,7 +128,11 @@ class SettingsRepository(
             showAnswerReadingPitchAccent = prefs[showAnswerReadingPitchAccentKey] ?: false,
             hideContextSentenceTranslations = prefs[hideContextSentenceTranslationsKey] ?: true,
             requireTapToRevealMeaningAnswer = prefs[requireTapToRevealMeaningAnswerKey] ?: false,
-            requireTapToRevealReadingAnswer = prefs[requireTapToRevealReadingAnswerKey] ?: false
+            requireTapToRevealReadingAnswer = prefs[requireTapToRevealReadingAnswerKey] ?: false,
+            // Unknown/renamed values fall back to DEFAULT rather than failing the read, same
+            // runCatching treatment ThemeMode gets above.
+            reviewPriority = prefs[reviewPriorityKey]?.let { raw -> runCatching { ReviewPriority.valueOf(raw) }.getOrNull() }
+                ?: ReviewPriority.DEFAULT
         )
     }.distinctUntilChanged()
 
@@ -201,6 +213,10 @@ class SettingsRepository(
 
     suspend fun setRequireTapToRevealReadingAnswer(enabled: Boolean) {
         dataStore.edit { it[requireTapToRevealReadingAnswerKey] = enabled }
+    }
+
+    suspend fun setReviewPriority(priority: ReviewPriority) {
+        dataStore.edit { it[reviewPriorityKey] = priority.name }
     }
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {

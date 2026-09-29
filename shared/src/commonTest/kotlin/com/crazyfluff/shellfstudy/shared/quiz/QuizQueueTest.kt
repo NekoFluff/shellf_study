@@ -189,6 +189,100 @@ class QuizQueueTest {
     }
 
     @Test
+    fun build_withPriority_admitsLowestTierItemsFirst() {
+        val queue = QuizQueue<String>()
+        // "A" and "B" are tier 0, "C" and "D" tier 1 — but they sit in the *reverse* order here, so
+        // a queue that ignored the tier key would admit C first.
+        queue.build(
+            listOf("C", "D", "A", "B"),
+            typesFor = { listOf(QuestionType.MEANING) },
+            shuffle = false,
+            cap = 2,
+            priorityOf = { if (it == "A" || it == "B") 0 else 1 }
+        )
+        assertEquals(setOf("A", "B"), queue.toList().map { it.item }.toSet())
+        assertEquals(setOf("C", "D"), queue.reserveList().map { it.item }.toSet())
+    }
+
+    @Test
+    fun build_withPriority_ordersReserveByTier_soAdmitNextKeepsFeedingPriorityItems() {
+        val queue = QuizQueue<String>()
+        queue.build(
+            listOf("C", "D", "A", "B"),
+            typesFor = { listOf(QuestionType.MEANING) },
+            shuffle = false,
+            cap = 2,
+            priorityOf = { if (it == "A" || it == "B") 0 else 1 }
+        )
+        // Nothing tier-0 is left behind, so the reserve is just the tier-1 items, in queue order.
+        assertEquals(listOf("C", "D"), queue.reserveList().map { it.item })
+
+        // With three tier-0 items and a cap of one, the two left behind must be admitted before the
+        // tier-1 one — this is the property the whole setting rests on.
+        val second = QuizQueue<String>()
+        second.build(
+            listOf("C", "A", "B"),
+            typesFor = { listOf(QuestionType.MEANING) },
+            shuffle = false,
+            cap = 1,
+            priorityOf = { if (it == "C") 1 else 0 }
+        )
+        assertEquals(listOf("A"), second.toList().map { it.item })
+        assertEquals(listOf("B", "C"), second.reserveList().map { it.item })
+        second.admitNext(cap = 2)
+        assertTrue(second.toList().any { it.item == "B" })
+    }
+
+    @Test
+    fun build_withPriorityAndShuffle_stillLeadsWithAPriorityItemAndKeepsReserveTierOrdered() {
+        val queue = QuizQueue<String>()
+        // Every tier-0 item must be admitted ahead of every tier-1 item, but *which* of the two
+        // tier-0 items shows up first is left to the shuffle.
+        repeat(20) {
+            queue.build(
+                listOf("C", "D", "A", "B"),
+                typesFor = { listOf(QuestionType.MEANING) },
+                shuffle = true,
+                cap = 2,
+                priorityOf = { if (it == "A" || it == "B") 0 else 1 }
+            )
+            assertEquals(setOf("A", "B"), queue.toList().map { it.item }.toSet())
+            assertEquals(setOf("C", "D"), queue.reserveList().map { it.item }.toSet())
+        }
+    }
+
+    @Test
+    fun buildWithoutPriority_isUnchangedByTheNewParameter() {
+        val queue = QuizQueue<String>()
+        // No tier key: the first `cap` items of the (unshuffled) list are admitted, exactly as before.
+        queue.build(
+            listOf("A", "B", "C"),
+            typesFor = { listOf(QuestionType.MEANING) },
+            shuffle = false,
+            cap = 2
+        )
+        assertEquals(listOf("A", "B"), queue.toList().map { it.item })
+        assertEquals(listOf("C"), queue.reserveList().map { it.item })
+    }
+
+    @Test
+    fun buildWithoutPriority_ignoresTiersEntirely() {
+        val queue = QuizQueue<String>()
+        // The same list and the same tier key as build_withPriority_admitsLowestTierItemsFirst, but
+        // with priorityOf omitted — which is exactly how Review's DEFAULT mode calls build. A "B"
+        // that would have led is admitted only in its own position, proving DEFAULT is the untouched
+        // pre-setting path rather than a tier function that happens to rank everything equally.
+        queue.build(
+            listOf("C", "D", "A", "B"),
+            typesFor = { listOf(QuestionType.MEANING) },
+            shuffle = false,
+            cap = 2
+        )
+        assertEquals(listOf("C", "D"), queue.toList().map { it.item })
+        assertEquals(listOf("A", "B"), queue.reserveList().map { it.item })
+    }
+
+    @Test
     fun noneMatches_returnsFalseWhenAnEntryMatchesPredicate() {
         val queue = QuizQueue<String>()
         queue.build(listOf("A"), typesFor = { listOf(QuestionType.MEANING) }, shuffle = false)

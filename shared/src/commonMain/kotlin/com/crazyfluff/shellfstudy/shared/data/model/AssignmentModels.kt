@@ -21,6 +21,24 @@ data class ReviewForecast(
     val availableNowCountsByNextStage: Map<ItemSpreadBucket, Int> = emptyMap()
 )
 
+/** Which due items a review session admits into its in-flight working set first — a persisted
+ *  preference (`AppSettings.reviewPriority`), applied by
+ *  [com.crazyfluff.shellfstudy.shared.feature.review.ReviewPrioritizer].
+ *
+ *  Deliberately narrower than the lesson picker's `LessonSort`: it changes *admission only* — which
+ *  items fill the ten in-flight slots and which wait in reserve — never the order the admitted items
+ *  are drawn in, and never when an item is next due. An item that never gets admitted this session is
+ *  still due, untouched, for the next one.
+ *
+ *  [DEFAULT] is the queue's own original selection path — a shuffle of the whole due list, so which
+ *  items land in the batch is an arbitrary draw, exactly as every session behaved before this setting
+ *  existed. [RANK_UP] makes selection deterministic instead, favoring the current level's not-yet-Guru
+ *  kanji, the only items that can move WaniKani's level-up bar (90% of a level's kanji at Guru+). */
+enum class ReviewPriority(val label: String) {
+    DEFAULT("Default"),
+    RANK_UP("Rank up")
+}
+
 /** Which dimension [ReviewForecastCard][com.crazyfluff.shellfstudy.shared.feature.dashboard.ReviewForecastCard]'s
  *  bar segments break down by — user-selectable via its color-mode toggle. Pure display state (both
  *  breakdowns are always present on [ReviewForecast]), unlike [ReviewForecastWindow] which changes

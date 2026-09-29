@@ -20,7 +20,9 @@ import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
+import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
@@ -35,6 +37,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -2131,6 +2134,111 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `rank-up review priority admits the current level's not-yet-Guru kanji ahead of older due vocabulary`() = runTest(mainDispatcherRule.dispatcher) {
+        seedLevel(3)
+        dispatch(
+            jsonResponse(manyVocabAndKanjiAssignmentsJson(vocabCount = 12, kanjiCount = 2)),
+            jsonResponse(manyVocabAndKanjiSubjectsJson(vocabCount = 12, kanjiCount = 2, kanjiLevel = 3))
+        )
+        settingsRepository.setReviewPriority(ReviewPriority.RANK_UP)
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            // Read off the persisted session rather than inferred from draws, so the shuffle inside
+            // the working set can't make this flaky. Both level-3 kanji take slots ahead of the
+            // vocabulary that has been due longer — the vocabulary can only lose those slots to a
+            // priority rule that ignores due order.
+            val session = reviewSessionRepository.load()!!
+            val inFlight = session.queue.map { it.assignmentId }.toSet()
+            assertThat(inFlight).containsAtLeast(1012L, 1013L)
+            assertThat(inFlight).hasSize(10)
+            // The other eight slots go to the oldest vocabulary items, in due order.
+            assertThat(inFlight - setOf(1012L, 1013L)).containsExactly(1000L, 1001L, 1002L, 1003L, 1004L, 1005L, 1006L, 1007L)
+            // The remaining four items wait in reserve — the last two vocabulary items, which gave up
+            // their slots to the kanji, plus nothing else: the reserve is due-order after tier order.
+            assertThat(session.reserve.map { it.assignmentId }.toSet())
+                .containsExactly(1008L, 1009L, 1010L, 1011L)
+
+            // And the session can actually draw them.
+            val admitted = drawInFlightItems(viewModel) { awaitItem() }
+            assertThat(admitted).containsAtLeast(1012L, 1013L)
+        }
+    }
+
+    @Test
+    fun `default review priority keeps the pre-setting ten-item batch and holds the rest in reserve`() = runTest(mainDispatcherRule.dispatcher) {
+        seedLevel(3)
+        dispatch(
+            jsonResponse(manyVocabAndKanjiAssignmentsJson(vocabCount = 12, kanjiCount = 2)),
+            jsonResponse(manyVocabAndKanjiSubjectsJson(vocabCount = 12, kanjiCount = 2, kanjiLevel = 3))
+        )
+        // No setReviewPriority call: an untouched preference must reproduce the pre-setting behavior.
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            assertThat((state.phase as ReviewUiState.Phase.Active).totalCount).isEqualTo(28)
+
+            // DEFAULT keeps the pre-setting selection exactly: the ten in-flight slots are filled
+            // from a shuffle of the whole due queue, *not* by due order, so which ten are admitted is
+            // an arbitrary draw and must not be asserted item-by-item here. What is guaranteed is the
+            // shape — ten distinct items in flight, the remaining four held in reserve, all still in
+            // the session. (That DEFAULT ignores tiers even when a level is known is pinned
+            // deterministically at the queue level, in QuizQueueTest.)
+            val session = reviewSessionRepository.load()!!
+            assertThat(session.queue.map { it.assignmentId }.toSet()).hasSize(10)
+            assertThat(session.reserve.map { it.assignmentId }.toSet()).hasSize(4)
+        }
+    }
+
+    /** Seeds the level the review-priority rule reads via `ReviewPrioritizer.tierSelector`. */
+    private suspend fun seedLevel(level: Int) {
+        repositories.levelProgressionDao.upsertAll(
+            listOf(
+                LevelProgressionEntity(
+                    id = 1, level = level, createdAt = "2026-01-01T00:00:00Z",
+                    unlockedAt = null, startedAt = null, passedAt = null, completedAt = null, abandonedAt = null
+                )
+            )
+        )
+    }
+
+    /**
+     * Answers wrong until every item the session has admitted has been drawn — wrong answers
+     * re-queue their question, so a fixed number of draws can revisit the same item. Always-wrong
+     * means nothing ever completes, which is what keeps the in-flight pool (and therefore the result
+     * set) fixed at the cap for the whole loop. [awaitNextState] is the caller's Turbine `awaitItem`,
+     * threaded through so the same collection drives both this loop and the test's assertions.
+     */
+    private suspend fun drawInFlightItems(
+        viewModel: ReviewViewModel,
+        awaitNextState: suspend () -> ReviewUiState
+    ): Set<Long> {
+        val seen = mutableSetOf<Long>()
+        var state = viewModel.uiState.value
+        // 10 distinct items drawn uniformly with replacement needs ~29 draws on average (coupon
+        // collector) and can in principle run long — the pool is fixed at 10 because nothing ever
+        // completes, so this always terminates, and the bound only guards against a regression that
+        // let the pool grow.
+        var safetyCounter = 0
+        while (seen.size < 10 && safetyCounter < 400) {
+            safetyCounter++
+            seen += (state.phase as ReviewUiState.Phase.Active).currentItem.assignmentId
+            viewModel.dontKnowAnswer()
+            awaitNextState()
+            viewModel.onContinue()
+            state = awaitNextState()
+        }
+        return seen
+    }
+
+    @Test
     fun `an auth error during load sets an error message and clears the loading state`() = runTest(mainDispatcherRule.dispatcher) {
         // 401 is an auth error — fetchFreshQueue surfaces Phase.Error instead of auto-falling back,
         // so loading clears and the error is visible. Loading and Error are disjoint sealed variants.
@@ -2331,6 +2439,55 @@ class ReviewViewModelTest {
             {
               "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": $count,
               "data": [$entries]
+            }
+        """.trimIndent()
+    }
+
+    /** [vocabCount] vocabulary items due *earlier* than [kanjiCount] kanji, so which items a session
+     *  admits first is decided purely by the review-priority setting rather than by due time. Both
+     *  subject types here need a reading, giving every item exactly two questions. */
+    private fun manyVocabAndKanjiAssignmentsJson(vocabCount: Int, kanjiCount: Int): String {
+        fun entry(index: Int, subjectType: String, day: String) = """
+            {
+              "id": ${1000 + index}, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/${1000 + index}",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": ${5000 + index}, "subject_type": "$subjectType",
+                "srs_stage": 3, "available_at": "${day}T00:00:00.000000Z", "hidden": false
+              }
+            }
+        """.trimIndent()
+
+        val entries = (0 until vocabCount).map { entry(it, "vocabulary", "2026-01-${(it + 1).toString().padStart(2, '0')}") } +
+            (0 until kanjiCount).map { entry(vocabCount + it, "kanji", "2026-02-0${it + 1}") }
+        return """
+            {
+              "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": ${vocabCount + kanjiCount},
+              "data": [${entries.joinToString(",\n")}]
+            }
+        """.trimIndent()
+    }
+
+    private fun manyVocabAndKanjiSubjectsJson(vocabCount: Int, kanjiCount: Int, kanjiLevel: Int): String {
+        fun entry(index: Int, objectType: String, level: Int, characters: String, reading: String) = """
+            {
+              "id": ${5000 + index}, "object": "$objectType", "url": "https://api.wanikani.com/v2/subjects/${5000 + index}",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": $level, "slug": "subject-$index",
+                "characters": "$characters",
+                "meanings": [{"meaning": "Meaning$index", "primary": true, "accepted_meaning": true}],
+                "readings": [{"reading": "$reading", "primary": true, "accepted_reading": true}]
+              }
+            }
+        """.trimIndent()
+
+        val entries = (0 until vocabCount).map { entry(it, "vocabulary", 1, "語$it", "ご$it") } +
+            (0 until kanjiCount).map { entry(vocabCount + it, "kanji", kanjiLevel, if (it == 0) "水" else "火", "みず$it") }
+        return """
+            {
+              "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": ${vocabCount + kanjiCount},
+              "data": [${entries.joinToString(",\n")}]
             }
         """.trimIndent()
     }

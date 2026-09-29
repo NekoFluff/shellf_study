@@ -6,6 +6,7 @@ import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
@@ -33,6 +34,7 @@ data class SettingsUiState(
     val hideContextSentenceTranslations: Boolean = true,
     val requireTapToRevealMeaningAnswer: Boolean = false,
     val requireTapToRevealReadingAnswer: Boolean = false,
+    val reviewPriority: ReviewPriority = ReviewPriority.DEFAULT,
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
@@ -78,6 +80,7 @@ class SettingsViewModel(
             hideContextSentenceTranslations = app.hideContextSentenceTranslations,
             requireTapToRevealMeaningAnswer = app.requireTapToRevealMeaningAnswer,
             requireTapToRevealReadingAnswer = app.requireTapToRevealReadingAnswer,
+            reviewPriority = app.reviewPriority,
             notificationsEnabled = notif.notificationsEnabled,
             reviewsAvailableEnabled = notif.reviewsAvailableEnabled,
             reviewsBacklogEnabled = notif.reviewsBacklogEnabled,
@@ -154,6 +157,10 @@ class SettingsViewModel(
 
     override fun onRequireTapToRevealReadingAnswerChange(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setRequireTapToRevealReadingAnswer(enabled) }
+    }
+
+    override fun onReviewPriorityChange(priority: ReviewPriority) {
+        viewModelScope.launch { settingsRepository.setReviewPriority(priority) }
     }
 
     /**
