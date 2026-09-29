@@ -163,15 +163,16 @@ class StatsRepository(
 
     fun observeDaysOnCurrentLevel(): Flow<Int?> =
         levelProgressionDao.observeAll().map { progressions ->
-            val current = currentLevelProgression(progressions)
+            val current = progressions.currentLevelProgression()
             val startedAtRaw = current?.startedAt ?: current?.unlockedAt
             startedAtRaw?.let { ((Clock.System.now() - Instant.parse(it)).inWholeDays + 1).toInt() }
         }
 
     /** The level currently being studied (highest not-yet-passed level). */
     fun observeCurrentLevel(): Flow<Int?> =
-        levelProgressionDao.observeAll().map { progressions -> currentLevelProgression(progressions)?.level }
-
-    private fun currentLevelProgression(progressions: List<LevelProgressionEntity>): LevelProgressionEntity? =
-        progressions.filter { it.passedAt == null && it.abandonedAt == null }.maxByOrNull { it.level }
+        levelProgressionDao.observeAll().map { progressions -> progressions.currentLevelProgression()?.level }
 }
+
+/** The level currently being studied: the highest one neither passed nor abandoned by a reset. */
+internal fun List<LevelProgressionEntity>.currentLevelProgression(): LevelProgressionEntity? =
+    filter { it.passedAt == null && it.abandonedAt == null }.maxByOrNull { it.level }

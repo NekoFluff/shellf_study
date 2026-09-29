@@ -10,9 +10,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelTimelinePoint
 import com.crazyfluff.shellfstudy.shared.data.model.SELF_ROSTER_INDEX
 import com.crazyfluff.shellfstudy.shared.data.model.friendRosterIndex
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.number
-import kotlinx.datetime.toLocalDateTime
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
@@ -33,162 +30,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Instant
 
 private val FRIEND_STATS_TTL = 30.minutes
-private val DAY = 1.days
-
-@Serializable
-internal data class TimelinePointJson(val daysSinceStart: Int, val level: Int)
-
-internal fun buildTimeline(sortedProgressions: List<Pair<Int, String>>): List<TimelinePointJson> {
-    if (sortedProgressions.isEmpty()) return emptyList()
-    val startMillis = parseIsoToMillis(sortedProgressions.first().second) ?: return emptyList()
-    return sortedProgressions.mapNotNull { (level, ts) ->
-        val ms = parseIsoToMillis(ts) ?: return@mapNotNull null
-        TimelinePointJson(daysSinceStart = ((ms - startMillis).milliseconds / DAY).toInt(), level = level)
-    }
-}
-
-private fun parseIsoToMillis(iso: String): Long? =
-    runCatching { Instant.parse(iso).toEpochMilliseconds() }.getOrNull()
-
-internal data class WindowedCounts(val today: Int, val week: Int, val month: Int, val year: Int, val allTime: Int)
-
-internal fun computeActivityBuckets(
-    isoTimestamps: List<String?>,
-    nowMillis: Long,
-    tz: TimeZone = TimeZone.currentSystemDefault()
-): ActivityBuckets {
-    val nowDt = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(tz)
-    val nowTotalMonths = nowDt.year * 12 + (nowDt.month.number - 1)
-    val nowLocalDays = nowDt.date.toEpochDays()
-
-    val weekDays = IntArray(7)
-    val monthDays = IntArray(30)
-    val yearMonths = IntArray(12)
-
-    // Parse all timestamps up front so we can find the earliest month for allTimeMonths sizing
-    val parsed = isoTimestamps.mapNotNull { ts ->
-        ts?.let { runCatching { Instant.parse(it) }.getOrNull() }
-    }
-
-    val earliestTotalMonths = parsed.minOfOrNull { inst ->
-        val dt = inst.toLocalDateTime(tz)
-        dt.year * 12 + (dt.month.number - 1)
-    } ?: nowTotalMonths
-    val allTimeLen = (nowTotalMonths - earliestTotalMonths + 1).coerceAtLeast(1)
-    val allTimeMonths = IntArray(allTimeLen)
-
-    for (inst in parsed) {
-        val tsDt = inst.toLocalDateTime(tz)
-        val daysAgo = (nowLocalDays - tsDt.date.toEpochDays()).toInt()
-        if (daysAgo in 0..6) weekDays[6 - daysAgo]++
-        if (daysAgo in 0..29) monthDays[29 - daysAgo]++
-        val tsTotalMonths = tsDt.year * 12 + (tsDt.month.number - 1)
-        val monthsAgo = nowTotalMonths - tsTotalMonths
-        if (monthsAgo in 0..11) yearMonths[11 - monthsAgo]++
-        val allTimeIdx = tsTotalMonths - earliestTotalMonths
-        if (allTimeIdx in 0 until allTimeLen) allTimeMonths[allTimeIdx]++
-    }
-
-    return ActivityBuckets(weekDays.toList(), monthDays.toList(), yearMonths.toList(), allTimeMonths.toList())
-}
-
-/**
- * Derived directly from [ActivityBuckets] — the same buckets rendered as the graph's bars — so a
- * window total is *structurally* guaranteed to equal the sum of the matching bars, rather than
- * relying on two separate implementations of the same calendar-day math staying in sync by
- * coincidence. `today` is the bucket for daysAgo == 0, i.e. the last entry of `weekDays`.
- */
-internal fun computeWindowedCounts(buckets: ActivityBuckets): WindowedCounts = WindowedCounts(
-    today = buckets.weekDays.last(),
-    week = buckets.weekDays.sum(),
-    month = buckets.monthDays.sum(),
-    year = buckets.yearMonths.sum(),
-    allTime = buckets.allTimeMonths.sum()
-)
-
-internal fun computeAvgDaysPerLevel(sortedProgressions: List<Pair<Int, String>>): Float? {
-    if (sortedProgressions.size < 2) return null
-    val millis = sortedProgressions.mapNotNull { (_, ts) -> parseIsoToMillis(ts) }
-    if (millis.size < 2) return null
-    val intervals = millis.zipWithNext().map { (a, b) -> ((b - a).milliseconds / DAY).toFloat() }
-    return intervals.average().toFloat()
-}
-
-internal data class StatsCore(
-    val reviewAccuracy: Float?,
-    val avgDaysPerLevel: Float?,
-    val daysSinceStart: Int?,
-    val timeline: List<TimelinePointJson>,
-    val learned: ActivityStats,
-    val burned: ActivityStats,
-    val learnedBuckets: ActivityBuckets,
-    val burnedBuckets: ActivityBuckets
-)
-
-/**
- * Shared arithmetic behind both [FriendStatsRepository.fetchFriendStats] (network path, API item
- * lists) and [FriendStatsRepository.buildSelfStats] (local-DB path, Room entities) — each caller
- * extracts its own input-shape-specific raw timestamps first, then converges here.
- *
- * An assignment only counts as learned/burned once it has a real, parseable started_at/burned_at.
- * [computeWindowedCounts] is derived from the same [ActivityBuckets] rendered as the graph, so the
- * table's totals and the graph's bars can never disagree.
- */
-internal fun buildStatsCore(
-    burnedTimestamps: List<String?>,
-    learnedTimestamps: List<String?>,
-    totalCorrect: Float,
-    totalAttempts: Float,
-    sortedProgressions: List<Pair<Int, String>>,
-    nowMillis: Long
-): StatsCore {
-    val learnedBuckets = computeActivityBuckets(learnedTimestamps, nowMillis)
-    val burnedBuckets = computeActivityBuckets(burnedTimestamps, nowMillis)
-    val learnedCounts = computeWindowedCounts(learnedBuckets)
-    val burnedCounts = computeWindowedCounts(burnedBuckets)
-
-    val accuracy = if (totalAttempts > 0) totalCorrect / totalAttempts else null
-
-    val avgDaysPerLevel = computeAvgDaysPerLevel(sortedProgressions)
-    val daysSinceStart = sortedProgressions.firstOrNull()?.let { (_, unlockedAt) ->
-        val startMillis = parseIsoToMillis(unlockedAt)
-        if (startMillis != null) ((nowMillis - startMillis).milliseconds / DAY).toInt() else null
-    }
-    val timeline = buildTimeline(sortedProgressions)
-
-    return StatsCore(
-        reviewAccuracy = accuracy,
-        avgDaysPerLevel = avgDaysPerLevel,
-        daysSinceStart = daysSinceStart,
-        timeline = timeline,
-        learned = ActivityStats(
-            today = learnedCounts.today,
-            week = learnedCounts.week,
-            month = learnedCounts.month,
-            year = learnedCounts.year,
-            allTime = learnedCounts.allTime
-        ),
-        burned = ActivityStats(
-            today = burnedCounts.today,
-            week = burnedCounts.week,
-            month = burnedCounts.month,
-            year = burnedCounts.year,
-            allTime = burnedCounts.allTime
-        ),
-        learnedBuckets = learnedBuckets,
-        burnedBuckets = burnedBuckets
-    )
-}
 
 /**
  * A friend a [FriendStatsRepository.refreshAllIfStale] fan-out could not update. Carries the nickname
@@ -336,54 +184,26 @@ class FriendStatsRepository(
      * means "this friend has none", which is indistinguishable from "that call failed", so treating
      * a failure as an empty list silently cached a zeroed friend over real figures.
      */
-    private suspend fun fetchFriendStats(friendId: String, api: WaniKaniApi): ApiResult<FriendStatsEntity> {
-        val userData = when (val userResult = safeApiCall { api.getUser() }) {
-            is ApiResult.Error -> return userResult
-            is ApiResult.Success -> userResult.data.data
-        }
-
+    private suspend fun fetchFriendStats(friendId: String, api: WaniKaniApi): ApiResult<FriendStatsEntity> = safeApiCall {
+        val userData = api.getUser().data
         val nowMillis = Clock.System.now().toEpochMilliseconds()
 
-        // All burned assignments → all-time + windowed burned counts
-        val burnedItems = when (
-            val burnedResult = safeApiCall {
-                collectAllPages(
-                    firstPage = { api.getAssignments(burned = true) },
-                    nextPage = { url -> api.getAssignmentsPage(url) }
-                )
-            }
-        ) {
-            is ApiResult.Error -> return burnedResult
-            is ApiResult.Success -> burnedResult.data
-        }
-        val burnedTimestamps = burnedItems.map { it.data.burnedAt }
-
-        // All started assignments → all-time + windowed learned counts
-        val learnedItems = when (
-            val learnedResult = safeApiCall {
-                collectAllPages(
-                    firstPage = { api.getAssignments(started = true) },
-                    nextPage = { url -> api.getAssignmentsPage(url) }
-                )
-            }
-        ) {
-            is ApiResult.Error -> return learnedResult
-            is ApiResult.Success -> learnedResult.data
-        }
-        val learnedTimestamps = learnedItems.map { it.data.startedAt }
+        // Every started assignment → all-time + windowed learned counts, and, from the ones among
+        // them that are burned, the burned counts too. One walk rather than a second `burned=true`
+        // one: a burned assignment is always a started one, and this is the largest collection a
+        // friend refresh pages through.
+        val startedItems = collectAllPages(
+            firstPage = { api.getAssignments(started = true) },
+            nextPage = { url -> api.getAssignmentsPage(url) }
+        )
+        val learnedTimestamps = startedItems.map { it.data.startedAt }
+        val burnedTimestamps = startedItems.mapNotNull { it.data.burnedAt }
 
         // Review statistics → accuracy + all-time totals
-        val statsItems = when (
-            val statsResult = safeApiCall {
-                collectAllPages(
-                    firstPage = { api.getReviewStatistics() },
-                    nextPage = { url -> api.getReviewStatisticsPage(url) }
-                )
-            }
-        ) {
-            is ApiResult.Error -> return statsResult
-            is ApiResult.Success -> statsResult.data
-        }
+        val statsItems = collectAllPages(
+            firstPage = { api.getReviewStatistics() },
+            nextPage = { url -> api.getReviewStatisticsPage(url) }
+        )
         val totalCorrect = statsItems.sumOf { it.data.meaningCorrect + it.data.readingCorrect }.toFloat()
         val totalAttempts = statsItems.sumOf {
             it.data.meaningCorrect + it.data.meaningIncorrect +
@@ -391,12 +211,9 @@ class FriendStatsRepository(
         }
 
         // Level progressions → timeline + avg speed
-        val sortedProgressions = when (val progressionsResult = safeApiCall { api.getLevelProgressions() }) {
-            is ApiResult.Error -> return progressionsResult
-            is ApiResult.Success -> progressionsResult.data.data
-                .mapNotNull { item -> item.data.unlockedAt?.let { item.data.level to it } }
-                .sortedBy { it.second }
-        }
+        val sortedProgressions = api.getLevelProgressions().data
+            .mapNotNull { item -> item.data.unlockedAt?.let { item.data.level to it } }
+            .sortedBy { it.second }
 
         val core = buildStatsCore(
             burnedTimestamps = burnedTimestamps,
@@ -409,29 +226,27 @@ class FriendStatsRepository(
 
         val timelineJson = json.encodeToString(ListSerializer(TimelinePointJson.serializer()), core.timeline)
 
-        return ApiResult.Success(
-            FriendStatsEntity(
-                friendId = friendId,
-                username = userData.username,
-                level = userData.level,
-                reviewAccuracy = core.reviewAccuracy,
-                avgDaysPerLevel = core.avgDaysPerLevel,
-                daysSinceStart = core.daysSinceStart,
-                levelTimelineJson = timelineJson,
-                fetchedAtMillis = nowMillis,
-                learnedToday = core.learned.today,
-                learnedWeek = core.learned.week,
-                learnedMonth = core.learned.month,
-                learnedYear = core.learned.year,
-                learnedAllTime = core.learned.allTime,
-                burnedToday = core.burned.today,
-                burnedWeek = core.burned.week,
-                burnedMonth = core.burned.month,
-                burnedYear = core.burned.year,
-                burnedAllTime = core.burned.allTime,
-                learnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.learnedBuckets),
-                burnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.burnedBuckets)
-            )
+        FriendStatsEntity(
+            friendId = friendId,
+            username = userData.username,
+            level = userData.level,
+            reviewAccuracy = core.reviewAccuracy,
+            avgDaysPerLevel = core.avgDaysPerLevel,
+            daysSinceStart = core.daysSinceStart,
+            levelTimelineJson = timelineJson,
+            fetchedAtMillis = nowMillis,
+            learnedToday = core.learned.today,
+            learnedWeek = core.learned.week,
+            learnedMonth = core.learned.month,
+            learnedYear = core.learned.year,
+            learnedAllTime = core.learned.allTime,
+            burnedToday = core.burned.today,
+            burnedWeek = core.burned.week,
+            burnedMonth = core.burned.month,
+            burnedYear = core.burned.year,
+            burnedAllTime = core.burned.allTime,
+            learnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.learnedBuckets),
+            burnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.burnedBuckets)
         )
     }
 
@@ -465,7 +280,9 @@ class FriendStatsRepository(
             friendEntryId = "",
             nickname = "You",
             username = "",
-            level = progressions.maxOfOrNull { it.level } ?: 0,
+            // The level being studied, as the dashboard reports it — the highest level a reset has
+            // not abandoned — falling back to the highest level for an account that has passed them all.
+            level = progressions.currentLevelProgression()?.level ?: progressions.maxOfOrNull { it.level } ?: 0,
             reviewAccuracy = core.reviewAccuracy,
             avgDaysPerLevel = core.avgDaysPerLevel,
             daysSinceStart = core.daysSinceStart,

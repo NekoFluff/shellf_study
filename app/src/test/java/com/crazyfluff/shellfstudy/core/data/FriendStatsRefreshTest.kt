@@ -58,6 +58,9 @@ class FriendStatsRefreshTest {
 
     /** Requests whose path matches fail with [failingCode]; the rest answer normally. */
     private var shouldFail: (String) -> Boolean = { false }
+    /** What `/assignments` answers with, when a test cares — an empty collection otherwise. */
+    private var assignmentsJson: String? = null
+    private val requestedPaths = java.util.Collections.synchronizedList(mutableListOf<String>())
     private var failingCode: Int = 500
 
     private val entry = FriendEntry(id = FRIEND_ID, nickname = "durtle_fan", encryptedToken = "enc:token")
@@ -67,9 +70,11 @@ class FriendStatsRefreshTest {
         server = MockWebServer()
         server.dispatcher = waniKaniCollectionDispatcher { request ->
             val path = request.path.orEmpty()
+            requestedPaths += path
             when {
                 shouldFail(path) -> emptyResponse(failingCode)
                 path.startsWith("/user") -> jsonResponse(USER_JSON)
+                path.startsWith("/assignments") && assignmentsJson != null -> jsonResponse(assignmentsJson!!)
                 else -> null
             }
         }
@@ -138,6 +143,34 @@ class FriendStatsRefreshTest {
             assertThat(stored?.username).isEqualTo("durtle_fan")
             assertThat(stored?.level).isEqualTo(12)
         }
+
+    @Test
+    fun `burned counts come from the same started-assignments walk as learned counts`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Every burned assignment is a started one, so one walk answers both; a second
+            // `burned=true` walk re-paged the largest collection a refresh fetches.
+            assignmentsJson = """
+                {"object":"collection","url":"https://api.wanikani.com/v2/assignments","pages":{"next_url":null},"data":[
+                  ${assignmentJson(1, burnedAt = "2024-01-01T00:00:00.000000Z")},
+                  ${assignmentJson(2, burnedAt = null)},
+                  ${assignmentJson(3, burnedAt = null)}
+                ]}
+            """.trimIndent()
+
+            repository.refreshFriend(entry)
+
+            val stored = friendStatsDao.getById(FRIEND_ID)!!
+            assertThat(stored.learnedAllTime).isEqualTo(3)
+            assertThat(stored.burnedAllTime).isEqualTo(1)
+            assertThat(requestedPaths.filter { it.startsWith("/assignments") }).hasSize(1)
+            assertThat(requestedPaths.none { "burned=" in it }).isTrue()
+        }
+
+    private fun assignmentJson(id: Long, burnedAt: String?) = """
+        {"id":$id,"object":"assignment","url":"https://api.wanikani.com/v2/assignments/$id","data_updated_at":"2024-01-01T00:00:00.000000Z",
+         "data":{"created_at":"2023-01-01T00:00:00.000000Z","subject_id":$id,"subject_type":"kanji","srs_stage":${if (burnedAt != null) 9 else 5},
+                 "started_at":"2023-06-01T00:00:00.000000Z","burned_at":${burnedAt?.let { "\"$it\"" } ?: "null"}}}
+    """.trimIndent()
 
     @Test
     fun `a revoked token surfaces as an auth error rather than a generic failure`() =
