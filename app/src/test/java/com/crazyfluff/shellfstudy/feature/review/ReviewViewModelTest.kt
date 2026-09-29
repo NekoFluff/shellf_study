@@ -179,7 +179,8 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     ) = ReviewViewModel(
         assignmentRepository, outboxRepository, statsRepository,
         ReviewSessionController(backgroundScope, reviewSessionRepository), lastSessionSummaryRepository,
-        pronunciationAudioPlayer, settingsRepository, pitchAccentRepository, appForegroundTracker, backgroundScope
+        pronunciationAudioPlayer, settingsRepository, pitchAccentRepository, appForegroundTracker, backgroundScope,
+        repositories.syncOrchestrator
     )
 
 
@@ -329,7 +330,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
         assertThat(repositories.outboxSyncScheduler.requestCount).isEqualTo(1)
         // No POST /reviews should ever have been made from the ViewModel path — the network call is
         // now exclusively the background sync worker's job.
-        assertThat(server.requestCount).isAtMost(2) // just the assignments + subjects sync
+        assertThat(server.requestCount).isAtMost(3) // just the queue sync: SRS systems, subjects, assignments
     }
 
     @Test

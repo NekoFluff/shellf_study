@@ -51,6 +51,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentU
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlin.time.Clock
+import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -184,7 +185,8 @@ class ReviewViewModel(
     private val settingsRepository: SettingsRepository,
     private val pitchAccentRepository: PitchAccentRepository,
     private val appForegroundTracker: AppForegroundTracker,
-    private val applicationScope: CoroutineScope
+    private val applicationScope: CoroutineScope,
+    private val syncOrchestrator: SyncOrchestrator
 ) : QuizSessionViewModel<ReviewItem, ReviewUiState.Phase.Active, ReviewUiState>(), ReviewActions {
 
     override val _uiState = MutableStateFlow(ReviewUiState())
@@ -305,7 +307,7 @@ class ReviewViewModel(
     }
 
     private suspend fun fetchFreshQueue() {
-        when (val result = assignmentRepository.refreshReviewQueue()) {
+        when (val result = syncOrchestrator.syncQueue()) {
             is ApiResult.Error -> {
                 // Auth errors require user action (re-login) — surface them explicitly. Network
                 // errors auto-fall back to cached data so the user can review without connectivity,

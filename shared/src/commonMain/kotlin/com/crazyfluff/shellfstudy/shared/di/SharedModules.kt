@@ -101,7 +101,6 @@ val repositoryModule = module {
             assignmentDao = get(),
             subjectDao = get(),
             syncStateDao = get(),
-            subjectRepository = get(),
             srsSystemDao = get()
         )
     }
@@ -286,7 +285,8 @@ val viewModelModule = module {
             strokeOrderRepository = get(),
             pronunciationAudioPlayer = get(),
             appForegroundTracker = get(),
-            applicationScope = get(APPLICATION_SCOPE)
+            applicationScope = get(APPLICATION_SCOPE),
+            syncOrchestrator = get()
         )
     }
 
@@ -301,7 +301,8 @@ val viewModelModule = module {
             settingsRepository = get(),
             pitchAccentRepository = get(),
             appForegroundTracker = get(),
-            applicationScope = get(APPLICATION_SCOPE)
+            applicationScope = get(APPLICATION_SCOPE),
+            syncOrchestrator = get()
         )
     }
 }

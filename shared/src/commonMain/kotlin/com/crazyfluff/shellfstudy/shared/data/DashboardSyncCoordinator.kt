@@ -19,8 +19,8 @@ class DashboardSyncCoordinator(
 
     suspend fun sync(force: Boolean): ApiResult<Unit> = syncOrchestrator.syncAll(force)
 
-    /** [sync] with assignments forced but the other resources left staleness-gated — the resume path's
-     *  combination. See [SyncOrchestrator.syncAllForResume]. */
+    /** [sync] with assignments on a short freshness window and every other resource on its normal one —
+     *  the resume path's combination. See [SyncOrchestrator.syncAllForResume]. */
     suspend fun syncForResume(): ApiResult<Unit> = syncOrchestrator.syncAllForResume()
 
     /**

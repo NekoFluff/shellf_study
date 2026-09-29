@@ -116,7 +116,7 @@ fun buildTestRepositories(
     val pitchAccentRepository = PitchAccentRepository(FakePitchAccentBundledSource(pitchAccentEntries))
     val subjectRepository =
         SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository, defaultDispatcher)
-    val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao, defaultDispatcher)
+    val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, srsSystemDao, defaultDispatcher)
     val statsRepository = StatsRepository(api, reviewStatisticDao, levelProgressionDao, studyActivityDao, syncStateDao, defaultDispatcher)
     val waniKaniRepository = WaniKaniRepository(api)
     val syncTransactionRunner = RecordingSyncTransactionRunner()

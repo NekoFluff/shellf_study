@@ -143,7 +143,6 @@ class AssignmentRepository(
     private val assignmentDao: AssignmentDao,
     private val subjectDao: SubjectDao,
     private val syncStateDao: SyncStateDao,
-    private val subjectRepository: SubjectRepository,
     private val srsSystemDao: SrsSystemDao,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
@@ -174,23 +173,6 @@ class AssignmentRepository(
             },
             write = { assignmentDao.upsertAll(it) }
         )
-
-    /**
-     * Ensures assignments and subjects are up to date before starting a review/lesson session —
-     * both staleness-gated, not forced, since the dashboard already syncs this same data on load
-     * and on every resume. Subjects are needed alongside assignments: without subject content
-     * already cached, [observeReviewQueue] and [observeLessonQueue] would join to nothing and
-     * silently show an empty queue.
-     */
-    suspend fun refreshReviewQueue(): ApiResult<Unit> = refreshQueue()
-
-    suspend fun refreshLessonQueue(): ApiResult<Unit> = refreshQueue()
-
-    private suspend fun refreshQueue(): ApiResult<Unit> {
-        val subjectsResult = subjectRepository.syncSubjects()
-        if (subjectsResult is ApiResult.Error) return subjectsResult
-        return syncAssignments(force = false)
-    }
 
     suspend fun startAssignment(assignmentId: Long): ApiResult<Unit> = safeApiCall {
         val response = api.startAssignment(assignmentId)

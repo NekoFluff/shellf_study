@@ -68,6 +68,28 @@ class SyncOrchestratorTest {
     }
 
     @Test
+    fun `syncQueue fetches only what a quiz queue joins against, and nothing once it is fresh`() = runTest {
+        val first = repositories.syncOrchestrator.syncQueue()
+
+        assertThat(first).isEqualTo(ApiResult.Success(Unit))
+        assertThat(pathsRequested()).containsExactly("/spaced_repetition_systems", "/subjects", "/assignments")
+
+        // Straight after, every one of those is inside its freshness window.
+        requestedPaths.clear()
+        val second = repositories.syncOrchestrator.syncQueue()
+
+        assertThat(second).isEqualTo(ApiResult.Success(Unit))
+        assertThat(requestedPaths).isEmpty()
+    }
+
+    @Test
+    fun `syncQueue does not fail over a statistics endpoint it never needed`() = runTest {
+        reviewStatisticsShouldFail = true
+
+        assertThat(repositories.syncOrchestrator.syncQueue()).isEqualTo(ApiResult.Success(Unit))
+    }
+
+    @Test
     fun `syncAll returns Error when one resource fails, but the others still sync`() = runTest {
         reviewStatisticsShouldFail = true
 

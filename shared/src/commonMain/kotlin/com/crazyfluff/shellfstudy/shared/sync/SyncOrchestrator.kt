@@ -65,6 +65,17 @@ class SyncOrchestrator(
     }
 
     /**
+     * What the lesson and review screens need before they can build a queue: assignments, and the
+     * subjects and SRS systems they resolve against — without the queue load waiting on (or failing
+     * over) statistics it does not show. Every resource stays on its normal freshness window.
+     *
+     * Takes the same lock as [syncAll], so it can never interleave with a pass writing the same cursors.
+     */
+    suspend fun syncQueue(): ApiResult<Unit> = trackingSyncActivity {
+        syncMutex.withLock { syncAllLocked(force = false, resumeAssignments = false, resources = QUEUE_RESOURCES) }
+    }
+
+    /**
      * Runs [block] with [SyncActivity] marked as syncing for its whole duration.
      *
      * `finally` rather than a success path: a pass that fails, or is cancelled, is still over, and
@@ -109,45 +120,42 @@ class SyncOrchestrator(
      * same order, so a concurrent reader inside the transaction never observes an assignment whose
      * subject row does not exist yet.
      */
-    private suspend fun syncAllLocked(force: Boolean, resumeAssignments: Boolean): ApiResult<Unit> {
+    private suspend fun syncAllLocked(
+        force: Boolean,
+        resumeAssignments: Boolean,
+        resources: Set<String> = ALL_RESOURCES
+    ): ApiResult<Unit> {
         // Each fetch is wrapped individually rather than letting the coroutineScope propagate the
         // first failure. `awaitAll` over bare `async` blocks aborts the whole scope on the first
         // throw, cancelling its siblings — so one failing resource would silently stop the others
         // being fetched *or* written, the opposite of the contract this pass has always had (see
         // SyncOrchestratorTest: one resource failing still leaves the rest synced). A resource that
         // is fresh enough to skip yields Success(null) and contributes nothing.
+        val fetchers: List<ResourceFetch> = listOf(
+            ResourceFetch(SyncResources.SRS_SYSTEMS) { subjectRepository.fetchSrsSystems(force) },
+            ResourceFetch(SyncResources.SUBJECTS) { subjectRepository.fetchSubjects(force) },
+            ResourceFetch(SyncResources.ASSIGNMENTS) {
+                assignmentRepository.fetchAssignments(
+                    force = force,
+                    // The resume path gets a short window rather than an unconditional force — see
+                    // syncAllForResume.
+                    staleness = if (resumeAssignments) ASSIGNMENTS_RESUME_STALENESS else ASSIGNMENTS_STALENESS
+                )
+            },
+            ResourceFetch(SyncResources.REVIEW_STATISTICS) { statsRepository.fetchReviewStatistics(force) },
+            ResourceFetch(SyncResources.LEVEL_PROGRESSIONS) { statsRepository.fetchLevelProgressions(force) }
+        ).filter { it.resource in resources }
+
         val fetched: List<ApiResult<ResourceSync<*>?>> = coroutineScope {
-            val srs = async { safeApiCall { subjectRepository.fetchSrsSystems(force) } }
-            val subjects = async { safeApiCall { subjectRepository.fetchSubjects(force) } }
-            val assignments = async {
-                safeApiCall {
-                    assignmentRepository.fetchAssignments(
-                        force = force,
-                        // The resume path gets a short window rather than an unconditional force — see
-                        // syncAllForResume.
-                        staleness = if (resumeAssignments) {
-                            ASSIGNMENTS_RESUME_STALENESS
-                        } else {
-                            ASSIGNMENTS_STALENESS
-                        }
-                    )
-                }
-            }
-            val reviewStatistics = async { safeApiCall { statsRepository.fetchReviewStatistics(force) } }
-            val levelProgressions = async { safeApiCall { statsRepository.fetchLevelProgressions(force) } }
-            listOf(srs, subjects, assignments, reviewStatistics, levelProgressions).awaitAll()
+            fetchers.map { async { safeApiCall { it.fetch() } } }.awaitAll()
         }
 
-        // Written in dependency order. SRS systems before subjects (subjects reference them), subjects
-        // before assignments and statistics (both resolve subject content), and level progressions
-        // last as they reference nothing.
-        val writes: List<Pair<String, ResourceSync<*>>> = listOfNotNull(
-            (fetched[0] as? ApiResult.Success)?.data?.let { SyncResources.SRS_SYSTEMS to it },
-            (fetched[1] as? ApiResult.Success)?.data?.let { SyncResources.SUBJECTS to it },
-            (fetched[2] as? ApiResult.Success)?.data?.let { SyncResources.ASSIGNMENTS to it },
-            (fetched[3] as? ApiResult.Success)?.data?.let { SyncResources.REVIEW_STATISTICS to it },
-            (fetched[4] as? ApiResult.Success)?.data?.let { SyncResources.LEVEL_PROGRESSIONS to it }
-        )
+        // Written in dependency order — the order [fetchers] lists them in. SRS systems before subjects
+        // (subjects reference them), subjects before assignments and statistics (both resolve subject
+        // content), and level progressions last as they reference nothing.
+        val writes: List<Pair<String, ResourceSync<*>>> = fetchers.zip(fetched).mapNotNull { (fetcher, result) ->
+            (result as? ApiResult.Success)?.data?.let { fetcher.resource to it }
+        }
 
         // Whatever did arrive is still written. Reporting a failure without persisting the successes
         // would discard work already paid for over the network, and the next pass would refetch it.
@@ -180,3 +188,15 @@ class SyncOrchestrator(
         }
     }
 }
+
+private class ResourceFetch(val resource: String, val fetch: suspend () -> ResourceSync<*>?)
+
+private val ALL_RESOURCES = setOf(
+    SyncResources.SRS_SYSTEMS,
+    SyncResources.SUBJECTS,
+    SyncResources.ASSIGNMENTS,
+    SyncResources.REVIEW_STATISTICS,
+    SyncResources.LEVEL_PROGRESSIONS
+)
+
+private val QUEUE_RESOURCES = setOf(SyncResources.SRS_SYSTEMS, SyncResources.SUBJECTS, SyncResources.ASSIGNMENTS)

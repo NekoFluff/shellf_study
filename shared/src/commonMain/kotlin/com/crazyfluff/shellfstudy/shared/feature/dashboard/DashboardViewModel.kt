@@ -473,10 +473,8 @@ class DashboardViewModel(
                 return@launch
             }
 
-            // Assignments forced, everything else staleness-gated — see
-            // SyncOrchestrator.syncAllForResume for why this is one pass rather than a
-            // `sync(force = false)` followed by a separate forced syncAssignments, which fetched and
-            // rewrote the assignments table twice per resume.
+            // One pass, with assignments on a short freshness window — see
+            // SyncOrchestrator.syncAllForResume.
             dashboardSyncCoordinator.syncForResume()
 
             val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()

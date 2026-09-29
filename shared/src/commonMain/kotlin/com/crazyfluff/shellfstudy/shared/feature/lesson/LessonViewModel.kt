@@ -54,6 +54,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionState
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionViewModel
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import kotlin.time.Clock
+import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -239,7 +240,8 @@ class LessonViewModel(
     private val strokeOrderRepository: StrokeOrderRepository,
     override val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val appForegroundTracker: AppForegroundTracker,
-    private val applicationScope: CoroutineScope
+    private val applicationScope: CoroutineScope,
+    private val syncOrchestrator: SyncOrchestrator
 ) : QuizSessionViewModel<LessonItem, LessonUiState.Phase.Quiz, LessonUiState>(), LessonActions {
 
     override val _uiState = MutableStateFlow(LessonUiState())
@@ -609,7 +611,7 @@ class LessonViewModel(
     private suspend fun fetchFreshQueue() {
         clearSessionState()
 
-        when (val result = assignmentRepository.refreshLessonQueue()) {
+        when (val result = syncOrchestrator.syncQueue()) {
             is ApiResult.Error -> {
                 // Auth errors require user action (re-login) — surface them explicitly. Network
                 // errors auto-fall back to cached data so the user can study without connectivity,

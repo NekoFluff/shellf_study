@@ -198,7 +198,8 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
         assignmentRepository, repositories.statsRepository, outboxRepository,
         LessonSessionController(backgroundScope, lessonSessionRepository),
         lastSessionSummaryRepository, pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository,
-        pronunciationAudioPlayer, appForegroundTracker, backgroundScope
+        pronunciationAudioPlayer, appForegroundTracker, backgroundScope,
+        repositories.syncOrchestrator
     )
 
     /** Waits for the session summary, which is where the last batch's questions lead directly. */
