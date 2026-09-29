@@ -5,6 +5,12 @@ import android.view.View
 import androidx.metrics.performance.FrameData
 import androidx.metrics.performance.JankStats
 import androidx.metrics.performance.PerformanceMetricsState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import com.crazyfluff.shellfstudy.shared.sync.SyncActivity
 import java.util.WeakHashMap
 
 /**
@@ -64,6 +70,9 @@ object JankStatsTracker {
     /** The state key screens report their identity under. */
     const val STATE_SCREEN = "screen"
 
+    /** The state key the app reports sync activity under — see [startSyncCollection]. */
+    const val STATE_SYNC = "sync"
+
     @Volatile
     var isEnabled: Boolean = false
         private set
@@ -102,6 +111,7 @@ object JankStatsTracker {
             // non-null Holder with a null `state`, which silently disabled every state tag (the frames
             // logged fine, they just all said `no-state`).
             stateHolder = PerformanceMetricsState.getHolderForHierarchy(decorView)?.state
+            startSyncCollection()
             Log.i(TAG, "tracking started (stateHolder=${stateHolder != null})")
         }.onFailure { Log.w(TAG, "could not start JankStats: ${it.message}") }
     }
@@ -109,17 +119,60 @@ object JankStatsTracker {
     /** Stops tracking. Called from `onDestroy` so a recreated Activity can register again. */
     fun stop() {
         jankStats?.let { runCatching { it.isTrackingEnabled = false } }
+        syncCollectionJob?.cancel()
+        syncCollectionJob = null
         jankStats = null
         trackedView = null
         stateHolder = null
-        reportedState.clear()
+        attachedState.clear()
+        screenTags.clear()
+        appTags.clear()
     }
+
+    private var syncCollectionJob: Job? = null
+
+    /**
+     * Keeps the app-wide `sync` tag current without any screen having to report it.
+     *
+     * A sync pass is the app's single largest burst of background work and the prime suspect for the
+     * cold-start stalls the harness found, but a screen cannot observe it: it spans the dashboard's
+     * fetch, the orchestrator's writes, and work that outlives the composition. Collecting
+     * [SyncActivity] here means the tag is correct on every frame regardless of which screen is
+     * showing, and no screen has to remember to report it.
+     *
+     * Runs on [Dispatchers.Default] rather than the collector's context, so this collection is not
+     * itself main-thread work inside a main-thread measurement.
+     */
+    private fun startSyncCollection() {
+        if (syncCollectionJob != null) return
+        syncCollectionJob = CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            SyncActivity.isSyncing.collect { syncing ->
+                setAppTag(STATE_SYNC, if (syncing) "inflight" else "idle")
+            }
+        }
+    }
+
+    /**
+     * Sets a single app-wide tag, leaving screen-reported tags alone.
+     *
+     * Separate from [setState] because the two have different owners: screens replace their own set on
+     * navigation, while this one is updated by the sync collector. Folding them into one map would let
+     * whichever reported last erase the other's tags.
+     */
+    private fun setAppTag(key: String, value: String) {
+        if (appTags[key] == value) return
+        appTags[key] = value
+        publish()
+    }
+
+    /** App-owned tags, merged over whatever the current screen reported. */
+    private val appTags = mutableMapOf<String, String>()
 
     /** Cached state holder for [trackedView], resolved once rather than per tag update. */
     private var stateHolder: PerformanceMetricsState? = null
 
-    /** What is currently attached to [stateHolder], so [setState] can diff rather than re-put. */
-    private val reportedState = mutableMapOf<String, String>()
+    /** What is currently attached to [stateHolder], so [publish] can diff rather than re-put. */
+    private val attachedState = mutableMapOf<String, String>()
 
     /**
      * Replaces the tags attached to subsequent frames.
@@ -128,26 +181,40 @@ object JankStatsTracker {
      * measurements. A frame that stalls is then logged with whichever of these were true while it was
      * produced, which is the whole point of the harness.
      *
-     * Replaced, not merged: the tags are a complete description of the current state, so anything the
-     * new report omits is removed. That matters because a tag left attached after its screen is gone
-     * would mislabel every later frame.
+     * Replaced, not merged: a report is a complete description of the current screen, so anything it
+     * omits is removed. A tag left attached after its screen is gone would mislabel every later frame.
+     * App-owned tags (see [setAppTag]) are exempt — they have a different owner and are merged in on
+     * top, so a screen navigating cannot erase them.
      */
     fun setState(tags: Map<String, String>) {
         if (!isEnabled) return
         // Null before start() has run, which is expected: screens compose before the window is
         // resumable. Reports during that window are simply dropped.
+        if (stateHolder == null) return
+        screenTags.clear()
+        screenTags.putAll(tags)
+        publish()
+    }
+
+    /** The current screen's tags — replaced wholesale by [setState]. */
+    private val screenTags = mutableMapOf<String, String>()
+
+    /**
+     * Pushes the merged tag set to JankStats, diffing against what is already attached.
+     *
+     * `putState` rather than `putSingleFrameState` deliberately: a single-frame tag is attached only to
+     * the frame it is published on, and a stall almost never happens on that exact frame, so the tags
+     * would be missing from precisely the log lines that need them. These describe what is true now,
+     * which is persistent by nature.
+     */
+    private fun publish() {
         val state = stateHolder ?: return
+        val merged = screenTags + appTags
         runCatching {
-            // Diffed against what is currently attached: keys the new report drops are removed, and
-            // keys whose value changed are replaced. `putState` rather than `putSingleFrameState`
-            // deliberately — a single-frame tag is only attached to the frame it is published on, and
-            // a stall almost never happens on that exact frame, so the tags would be missing from
-            // precisely the log lines that need them. These tags describe what is on screen now, which
-            // is persistent by nature.
-            (reportedState.keys - tags.keys).forEach { stale -> state.removeState(stale) }
-            tags.forEach { (key, value) -> if (reportedState[key] != value) state.putState(key, value) }
-            reportedState.clear()
-            reportedState.putAll(tags)
+            (attachedState.keys - merged.keys).forEach { stale -> state.removeState(stale) }
+            merged.forEach { (key, value) -> if (attachedState[key] != value) state.putState(key, value) }
+            attachedState.clear()
+            attachedState.putAll(merged)
         }
     }
 

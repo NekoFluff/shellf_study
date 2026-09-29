@@ -33,8 +33,8 @@ class SyncOrchestrator(
     // the very cursors it just cleared, corrupting which `updated_after` value ends up persisted.
     private val syncMutex = Mutex()
 
-    suspend fun syncAll(force: Boolean = false): ApiResult<Unit> = syncMutex.withLock {
-        syncAllLocked(force = force, forceAssignments = false)
+    suspend fun syncAll(force: Boolean = false): ApiResult<Unit> = trackingSyncActivity {
+        syncMutex.withLock { syncAllLocked(force = force, forceAssignments = false) }
     }
 
     /**
@@ -52,8 +52,24 @@ class SyncOrchestrator(
      * broadcast to every observable assignments query. Forcing the resource *within* the pass still
      * reuses its saved `updated_after` cursor, so this stays an incremental fetch, not a full resync.
      */
-    suspend fun syncAllForcingAssignments(): ApiResult<Unit> = syncMutex.withLock {
-        syncAllLocked(force = false, forceAssignments = true)
+    suspend fun syncAllForcingAssignments(): ApiResult<Unit> = trackingSyncActivity {
+        syncMutex.withLock { syncAllLocked(force = false, forceAssignments = true) }
+    }
+
+    /**
+     * Runs [block] with [SyncActivity] marked as syncing for its whole duration.
+     *
+     * `finally` rather than a success path: a pass that fails, or is cancelled, is still over, and
+     * leaving the flag stuck on would tag every later frame `sync=inflight` and make the harness
+     * actively misleading — worse than not having the tag at all.
+     */
+    private suspend fun <T> trackingSyncActivity(block: suspend () -> T): T {
+        SyncActivity.passStarted()
+        return try {
+            block()
+        } finally {
+            SyncActivity.passFinished()
+        }
     }
 
     /**
@@ -136,8 +152,10 @@ class SyncOrchestrator(
      * `updated_after=null` full refetch — for recovering from a local mapping bug (data that's
      * wrong on-device despite being unchanged on WaniKani), not routine use.
      */
-    suspend fun fullRefresh(): ApiResult<Unit> = syncMutex.withLock {
-        syncStateDao.clearAll()
-        syncAllLocked(force = true, forceAssignments = false)
+    suspend fun fullRefresh(): ApiResult<Unit> = trackingSyncActivity {
+        syncMutex.withLock {
+            syncStateDao.clearAll()
+            syncAllLocked(force = true, forceAssignments = false)
+        }
     }
 }
