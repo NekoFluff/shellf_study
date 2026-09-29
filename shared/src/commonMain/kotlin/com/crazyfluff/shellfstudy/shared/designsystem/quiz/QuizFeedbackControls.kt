@@ -15,11 +15,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -93,7 +93,13 @@ fun GatedContinueButton(
             enabled = continueUnlocked,
             modifier = Modifier
                 .fillMaxWidth()
-                .scale(popScale.value)
+                // Read in the draw phase rather than in composition: this Animatable runs a spring
+                // on every Continue tap, and a composition read recomposed the button (and the ring
+                // drawn inside it) on every frame of that animation.
+                .graphicsLayer {
+                    scaleX = popScale.value
+                    scaleY = popScale.value
+                }
                 .drawWithContent {
                     drawContent()
                     if (!continueUnlocked && !wasGated) {

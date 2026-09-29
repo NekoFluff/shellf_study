@@ -168,7 +168,10 @@ private fun LevelRaceChart(leaderboard: Leaderboard, modifier: Modifier) {
 
     val subtitle = levelChartSubtitle(window)
 
-    val textMeasurer = rememberTextMeasurer()
+    val textMeasurer = // The default cache holds 8 measured strings; each chart draws more than that per frame (5 Y
+    // ticks, 4-6 X labels, a header and a row label per user), so every frame of a pinch-zoom
+    // missed the cache and re-measured all of them.
+    rememberTextMeasurer(cacheSize = 32)
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val labelStyle = MaterialTheme.typography.labelSmall
@@ -440,7 +443,10 @@ private fun ActivityWindowChart(
 
     val subtitle = activityChartSubtitle(leaderboard.window)
 
-    val textMeasurer = rememberTextMeasurer()
+    val textMeasurer = // The default cache holds 8 measured strings; each chart draws more than that per frame (5 Y
+    // ticks, 4-6 X labels, a header and a row label per user), so every frame of a pinch-zoom
+    // missed the cache and re-measured all of them.
+    rememberTextMeasurer(cacheSize = 32)
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val labelStyle = MaterialTheme.typography.labelSmall

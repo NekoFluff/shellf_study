@@ -23,22 +23,14 @@ import androidx.compose.runtime.remember
  * syncing=true" identifies a composition; "dashboard is slow" does not. Prefer a small set of
  * low-cardinality tags over many, because the point is comparing one log line against another.
  *
- * Reporting is cheap but not free (it allocates a map and crosses into the tracker), so call it from
- * a `remember` keyed on the values that actually change rather than on every recomposition.
+ * Reporting is cheap but not free (it allocates a map and crosses into the tracker); [ReportJankState]
+ * is what keeps callers from paying for it on every recomposition.
  */
 val LocalJankStateReporter = compositionLocalOf<(Map<String, String>) -> Unit> { { } }
 
 /** The tag key a screen reports its identity under. Declared here because common code is what sets it. */
 const val JANK_STATE_SCREEN = "screen"
 
-/**
- * Reports [tags] as the current state for as long as this composable is in the composition, and
- * retracts nothing on leaving — the next screen's report replaces them, and the tracker attaches
- * state to individual frames rather than holding it.
- *
- * [tags] is spread as alternating key/value pairs to keep call sites readable:
- * `ReportJankState("screen" to "dashboard", "syncing" to "true")`.
- */
 /**
  * Builds the stable key for a set of tags, and the map the tracker receives.
  *
@@ -55,6 +47,17 @@ const val JANK_STATE_SCREEN = "screen"
 internal fun jankStateKey(tags: List<Pair<String, String>>): String =
     tags.joinToString(separator = "\u0000") { "${it.first}=${it.second}" }
 
+/**
+ * Reports [tags] as the current state for as long as this composable is in the composition, and
+ * retracts nothing on leaving — the next screen's report replaces them, and the tracker attaches
+ * state to individual frames rather than holding it.
+ *
+ * [tags] is spread as alternating key/value pairs to keep call sites readable:
+ * `ReportJankState("screen" to "dashboard", "syncing" to "true")`.
+ *
+ * The map is rebuilt only when a tag *value* changes (see [jankStateKey]), so a caller can report
+ * unconditionally from a composition body without re-entering the tracker on every recomposition.
+ */
 @Composable
 fun ReportJankState(vararg tags: Pair<String, String>) {
     val reporter = LocalJankStateReporter.current

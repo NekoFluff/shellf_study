@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.feature.subjectdetail
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,7 +42,13 @@ fun rememberSubjectDetailSheetState(): SubjectDetailSheetState = remember { Subj
 @Composable
 fun SubjectDetailSheetHost(state: SubjectDetailSheetState) {
     var lastShownSubjectId by remember { mutableStateOf<Long?>(null) }
-    state.subjectId?.let { lastShownSubjectId = it }
+    // In a LaunchedEffect, not written during composition: a backwards write from the composition
+    // body is not a legal way to propagate state, and Compose is free to run that body for a
+    // composition it then discards. The delay is a frame, and this only decides mounting — the
+    // sheet's own open/close animation is driven by `expanded` below.
+    LaunchedEffect(state.subjectId) {
+        state.subjectId?.let { lastShownSubjectId = it }
+    }
 
     lastShownSubjectId?.let { id ->
         val dismiss = { state.dismiss() }

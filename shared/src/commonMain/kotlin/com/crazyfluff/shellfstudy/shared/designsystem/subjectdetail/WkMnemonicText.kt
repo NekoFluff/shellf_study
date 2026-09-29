@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
@@ -102,12 +103,21 @@ fun WkMnemonicText(
     modifier: Modifier = Modifier,
     style: TextStyle = LocalTextStyle.current
 ) {
-    val annotated = parseWkMarkup(
-        text = text,
-        radicalColor = subjectColor(SubjectType.RADICAL),
-        kanjiColor = subjectColor(SubjectType.KANJI),
-        vocabularyColor = subjectColor(SubjectType.VOCABULARY),
-        linkColor = themeAwareColor(DefaultLinkColor, MaterialTheme.colorScheme.primary)
-    )
+    val linkColor = themeAwareColor(DefaultLinkColor, MaterialTheme.colorScheme.primary)
+    val radicalColor = subjectColor(SubjectType.RADICAL)
+    val kanjiColor = subjectColor(SubjectType.KANJI)
+    val vocabularyColor = subjectColor(SubjectType.VOCABULARY)
+    // Remembered on every input the parse depends on: this runs a regex pass over the text and
+    // builds an AnnotatedString, and a mnemonic is long enough that redoing it on each of the
+    // (frequent, data-driven) recompositions of the sheet is pure waste.
+    val annotated = remember(text, radicalColor, kanjiColor, vocabularyColor, linkColor) {
+        parseWkMarkup(
+            text = text,
+            radicalColor = radicalColor,
+            kanjiColor = kanjiColor,
+            vocabularyColor = vocabularyColor,
+            linkColor = linkColor
+        )
+    }
     Text(text = annotated, modifier = modifier, style = style)
 }

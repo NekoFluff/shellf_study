@@ -38,11 +38,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
@@ -195,7 +195,6 @@ private fun SubjectTypeProgressRow(
             // before the user ever taps the chevron; the animation below only ever clips/fades an
             // already-built subtree, so the tap itself stays cheap. Trade-off: paging levels via the
             // arrows now pre-warms the newly-shown level's grid too, even while collapsed.
-            val density = LocalDensity.current
             var naturalHeightPx by remember { mutableIntStateOf(0) }
             val animatedHeightPx by animateIntAsState(if (showDetail) naturalHeightPx else 0)
             val animatedAlpha by animateFloatAsState(if (showDetail) 1f else 0f)
@@ -203,9 +202,19 @@ private fun SubjectTypeProgressRow(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(with(density) { animatedHeightPx.toDp() })
+                    // Both animated values are read inside lambdas that run in the layout and draw
+                    // phases, never in composition. Read in composition they recomposed this whole
+                    // row — glyph tiles and all — on every frame of the expand/collapse animation,
+                    // which is the cost the unconditional composition above exists to avoid.
+                    .layout { measurable, constraints ->
+                        val height = animatedHeightPx
+                        val placeable = measurable.measure(
+                            constraints.copy(minHeight = height, maxHeight = height)
+                        )
+                        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                    }
                     .clipToBounds()
-                    .alpha(animatedAlpha)
+                    .graphicsLayer { alpha = animatedAlpha }
                     .semantics { if (!showDetail) hideFromAccessibility() }
             ) {
                 // Mounted only while expanded. This grid used to be composed unconditionally so that

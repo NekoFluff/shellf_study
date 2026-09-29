@@ -40,16 +40,24 @@ import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.firstOrNull
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import org.koin.dsl.onClose
 
 val APPLICATION_SCOPE = named("applicationScope")
 
 val coroutineScopeModule = module {
-    single(APPLICATION_SCOPE) { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
+    // onClose cancels the scope with the container. Koin tears down on stopKoin(), which the
+    // Robolectric tests call between classes: without this, each test run left a live scope still
+    // driving session controllers and outbox drains into the next test, and the application's own
+    // onCreate guard (GlobalContext.getOrNull() == null) could bind a new graph to beans from the
+    // previous one.
+    single<CoroutineScope>(APPLICATION_SCOPE) { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
+        .onClose { it?.cancel() }
 }
 
 val appForegroundTrackerModule = module {

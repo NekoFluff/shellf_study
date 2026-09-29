@@ -17,9 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.State
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun DashboardLoadingSkeleton(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "skeleton_pulse")
-    val alpha by transition.animateFloat(
+    // Held as a State and read in the draw phase (see SkeletonBlock): this pulse runs for the whole
+    // load, and reading it in composition would recompose all eight blocks every frame.
+    val alpha = transition.animateFloat(
         initialValue = 0.35f,
         targetValue = 0.8f,
         animationSpec = infiniteRepeatable(tween(900), repeatMode = RepeatMode.Reverse),
@@ -64,14 +66,18 @@ fun DashboardLoadingSkeleton(modifier: Modifier = Modifier) {
 @Composable
 private fun SkeletonBlock(
     height: Dp,
-    alpha: Float,
+    alpha: State<Float>,
     modifier: Modifier = Modifier,
     width: Dp? = null
 ) {
     val sizeModifier = if (width != null) modifier.width(width).height(height) else modifier.height(height)
     Box(
         modifier = sizeModifier
-            .alpha(alpha)
+            // Read inside graphicsLayer, not in composition: `alpha` changes every frame of an
+            // infinite animation, so a composition read here recomposed every block — and rebuilt
+            // every modifier chain and RoundedCornerShape — for as long as the skeleton was on
+            // screen. A State passed as a parameter also keeps this composable skippable.
+            .graphicsLayer { this.alpha = alpha.value }
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
     )
 }
