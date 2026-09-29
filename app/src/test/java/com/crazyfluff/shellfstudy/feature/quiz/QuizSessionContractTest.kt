@@ -19,6 +19,7 @@ import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.AnswerReadingHint
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.TestScope
@@ -59,6 +60,9 @@ data class QuizQuestionView(
     val feedbackIsCorrect: Boolean?,
     val answerRevealed: Boolean,
     val answerHint: AnswerReadingHint?,
+    /** The pitch accents rendered alongside the hint. A lesson keeps them in a top-level map its hint
+     *  folds in at render time; a review folds them into the hint itself. */
+    val pitchAccents: PitchAccentUiState?,
     val remainingCount: Int,
     val answerTypeMismatchCount: Int
 )
@@ -123,6 +127,9 @@ abstract class QuizSessionContractTest<STATE : Any> {
 
     /** The suite's fixtures for a kanji queue, where a reading question has no hint to show. */
     protected abstract val kanjiQueue: QuizQueueFixtures
+
+    /** The suite's fixtures for a kanji queue whose subjects carry pronunciation audio. */
+    protected abstract val kanjiAudioQueue: QuizQueueFixtures
 
     protected abstract fun createSubject(scope: TestScope): QuizSessionSubject<STATE>
 
@@ -337,5 +344,92 @@ abstract class QuizSessionContractTest<STATE : Any> {
         type(correctAnswer)
         submit()
         assertThat(awaitGraded().feedbackIsCorrect).isTrue()
+    }
+
+    /**
+     * A correct reading answer surfaces the reading for the hint when the setting is on — and no pitch
+     * pattern with it, because the fixture is a fabricated word the bundled dictionary cannot know.
+     */
+    protected fun readingHintShowsTheReading() = quizSession(
+        fixtures = vocabQueue,
+        beforeSession = { settingsRepository.setShowAnswerReadingPitchAccent(true) }
+    ) {
+        awaitQuestionOfType(QuestionType.READING)
+        type("けんあ")
+        submit()
+        val graded = awaitGraded()
+        assertThat(graded.feedbackIsCorrect).isTrue()
+        assertThat(graded.answerHint?.reading).isEqualTo("けんあ")
+        // "件亜" is fabricated — guaranteed absent from the real bundled pitch-accent dictionary, so
+        // the reading still surfaces but with no pitch pattern alongside it.
+        assertThat(graded.pitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
+    }
+
+    /** With the setting off, the reading is not published at all. */
+    protected fun readingHintStaysEmptyWithTheSettingOff() = quizSession(vocabQueue) {
+        awaitQuestionOfType(QuestionType.READING)
+        type("けんあ")
+        submit()
+        val graded = awaitGraded()
+        assertThat(graded.feedbackIsCorrect).isTrue()
+        assertThat(graded.answerHint).isNull()
+    }
+
+    /**
+     * Only a reading question gets a hint. The setting is on in both of these, so a meaning question
+     * publishing one would be the bug they exist to catch.
+     */
+    protected fun meaningQuestionNeverShowsAReadingHint() = quizSession(
+        fixtures = vocabQueue,
+        beforeSession = { settingsRepository.setShowAnswerReadingPitchAccent(true) }
+    ) {
+        awaitQuestionOfType(QuestionType.MEANING)
+        type("Testword")
+        submit()
+        val graded = awaitGraded()
+        assertThat(graded.feedbackIsCorrect).isTrue()
+        assertThat(graded.answerHint).isNull()
+    }
+
+    /**
+     * Pitch accent is a word-level concept and the bundled source is keyed by whole headwords, so a
+     * kanji's reading question never gets a hint even with the setting on.
+     */
+    protected fun kanjiReadingQuestionNeverShowsAHint() = quizSession(
+        fixtures = kanjiQueue,
+        beforeSession = { settingsRepository.setShowAnswerReadingPitchAccent(true) }
+    ) {
+        awaitQuestionOfType(QuestionType.READING)
+        type("みず")
+        submit()
+        val graded = awaitGraded()
+        assertThat(graded.feedbackIsCorrect).isTrue()
+        assertThat(graded.answerHint).isNull()
+    }
+
+    /**
+     * The two question types are gated independently: requiring a reveal tap for one must not gate the
+     * other. Both halves are the same scenario with the requirement and the asked-for type swapped.
+     */
+    protected fun gatingOneQuestionTypeDoesNotGateTheOther(
+        gatedType: QuestionType,
+        askedType: QuestionType
+    ) = quizSession(
+        fixtures = kanjiAudioQueue,
+        beforeSession = {
+            if (gatedType == QuestionType.MEANING) {
+                settingsRepository.setRequireTapToRevealMeaningAnswer(true)
+            } else {
+                settingsRepository.setRequireTapToRevealReadingAnswer(true)
+            }
+        }
+    ) {
+        awaitQuestionOfType(askedType)
+
+        type("wrong")
+        submit()
+        val graded = awaitGraded()
+        assertThat(graded.feedbackIsCorrect).isFalse()
+        assertThat(graded.answerRevealed).isTrue()
     }
 }

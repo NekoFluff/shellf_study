@@ -93,6 +93,9 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
         subjects = kanjiSubjectsJson()
     )
 
+    /** The review's kanji fixtures already carry pronunciation audio. */
+    override val kanjiAudioQueue = kanjiQueue
+
     override fun createSubject(scope: TestScope): QuizSessionSubject<ReviewUiState> =
         scope.createViewModel().asSubject()
 
@@ -112,6 +115,8 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
             feedbackIsCorrect = active.feedback?.isCorrect,
             answerRevealed = active.answerRevealed,
             answerHint = active.answerHint,
+            // A review folds the live pitch accents into the hint itself.
+            pitchAccents = active.answerHint?.pitchAccents,
             remainingCount = active.remainingCount,
             answerTypeMismatchCount = active.answerTypeMismatchCount
         )
@@ -1119,126 +1124,16 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
-    fun `answering a reading question with the setting on surfaces the reading for the hint`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
-            // Queue order is shuffled — answer meaning questions correctly until reading comes up.
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange("Testword")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("けんあ")
-            awaitItem()
-            viewModel.submitAnswer()
-            var settled = awaitItem()
-            while ((settled.phase as ReviewUiState.Phase.Active).answerHint == null) settled = awaitItem()
-            val active = settled.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback?.isCorrect).isTrue()
-            assertThat(active.answerHint?.reading).isEqualTo("けんあ")
-            // "件亜" is a fabricated word — guaranteed absent from the real bundled pitch-accent
-            // dictionary, so the reading still surfaces but with no pitch pattern alongside it.
-            assertThat(active.answerHint?.pitchAccents).isEqualTo(PitchAccentUiState.Unavailable)
-        }
-    }
+    fun `answering a reading question with the setting on surfaces the reading for the hint`() = readingHintShowsTheReading()
 
     @Test
-    fun `answering a reading question with the setting off leaves the hint fields empty`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange("Testword")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("けんあ")
-            awaitItem()
-            viewModel.submitAnswer()
-            val feedbackState = awaitItem()
-            val active = feedbackState.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback?.isCorrect).isTrue()
-            assertThat(active.answerHint).isNull()
-        }
-    }
+    fun `answering a reading question with the setting off leaves the hint fields empty`() = readingHintStaysEmptyWithTheSettingOff()
 
     @Test
-    fun `answering a meaning question never surfaces the reading hint even with the setting on`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.MEANING) {
-                viewModel.onAnswerInputChange("けんあ")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("Testword")
-            awaitItem()
-            viewModel.submitAnswer()
-            val feedbackState = awaitItem()
-            val active = feedbackState.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback?.isCorrect).isTrue()
-            assertThat(active.answerHint).isNull()
-        }
-    }
+    fun `answering a meaning question never surfaces the reading hint even with the setting on`() = meaningQuestionNeverShowsAReadingHint()
 
     @Test
-    fun `a kanji reading question never surfaces the hint even with the setting on`() = runTest(mainDispatcherRule.dispatcher) {
-        // Vocabulary-only scoping: pitch accent is a word-level concept, and the bundled
-        // source is keyed by whole dictionary headwords, not single kanji.
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange("Water")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("みず")
-            awaitItem()
-            viewModel.submitAnswer()
-            val feedbackState = awaitItem()
-            val active = feedbackState.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback?.isCorrect).isTrue()
-            assertThat(active.answerHint).isNull()
-        }
-    }
+    fun `a kanji reading question never surfaces the hint even with the setting on`() = kanjiReadingQuestionNeverShowsAHint()
 
     @Test
     fun `undoing a reading answer clears the surfaced reading and pitch accents`() = runTest(mainDispatcherRule.dispatcher) {
@@ -1344,64 +1239,14 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     fun `require tap to reveal answer withholds a wrong reading question's answer hint until revealed`() = wrongReadingWaitsForRevealBeforeShowingItsHint()
 
     @Test
-    fun `require tap to reveal meaning answer does not gate a wrong reading answer`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("wrong")
-            awaitItem()
-            viewModel.submitAnswer()
-            var settled = awaitItem()
-            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
-            val active = settled.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback?.isCorrect).isFalse()
-            assertThat(active.answerRevealed).isTrue()
-        }
-    }
+    fun `require tap to reveal meaning answer does not gate a wrong reading answer`() = gatingOneQuestionTypeDoesNotGateTheOther(
+        gatedType = QuestionType.MEANING, askedType = QuestionType.READING
+    )
 
     @Test
-    fun `require tap to reveal reading answer does not gate a wrong meaning answer`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealReadingAnswer(true)
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.MEANING) {
-                viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("wrong")
-            awaitItem()
-            viewModel.submitAnswer()
-            var settled = awaitItem()
-            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
-            val active = settled.phase as ReviewUiState.Phase.Active
-            assertThat(active.feedback?.isCorrect).isFalse()
-            assertThat(active.answerRevealed).isTrue()
-        }
-    }
+    fun `require tap to reveal reading answer does not gate a wrong meaning answer`() = gatingOneQuestionTypeDoesNotGateTheOther(
+        gatedType = QuestionType.READING, askedType = QuestionType.MEANING
+    )
 
     @Test
     fun `session summary reports missed items, slowest answers capped at five, and non-negative timing`() = runTest(mainDispatcherRule.dispatcher) {

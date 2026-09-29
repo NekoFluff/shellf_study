@@ -103,6 +103,11 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
         subjects = kanjiSubjectsJson()
     )
 
+    override val kanjiAudioQueue = QuizQueueFixtures(
+        assignments = kanjiAssignmentsJson(),
+        subjects = kanjiSubjectsJsonWithAudio()
+    )
+
     override fun createSubject(scope: TestScope): QuizSessionSubject<LessonUiState> =
         scope.createViewModel().asSubject()
 
@@ -119,6 +124,9 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
             feedbackIsCorrect = quiz.feedback?.isCorrect,
             answerRevealed = quiz.answerRevealed,
             answerHint = quiz.answerHint,
+            // The lesson keeps pitch accents in a top-level map and folds them into the hint at render
+            // time, so this is the same value the screen would show.
+            pitchAccents = state.pitchAccentsBySubjectId[quiz.currentItem.subjectId],
             remainingCount = quiz.remainingQuizCount,
             answerTypeMismatchCount = quiz.answerTypeMismatchCount
         )
@@ -245,147 +253,16 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
 
 
     @Test
-    fun `answering a reading question with the setting on surfaces the reading for the hint`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            state = awaitItem() // quiz begins
-
-            // Queue order is shuffled — answer meaning questions correctly until reading comes up.
-            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange("Testword")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("けんあ")
-            awaitItem()
-            viewModel.submitAnswer()
-            val graded = awaitItem()
-            val feedbackState = graded.phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            assertThat(feedbackState.answerHint?.reading).isEqualTo("けんあ")
-            // "件亜" is a fabricated word — guaranteed absent from the real bundled pitch-accent
-            // dictionary, so the reading still surfaces but with no pitch pattern alongside it.
-            assertThat(graded.pitchAccentsBySubjectId[feedbackState.currentItem.subjectId])
-                .isEqualTo(PitchAccentUiState.Unavailable)
-        }
-    }
+    fun `answering a reading question with the setting on surfaces the reading for the hint`() = readingHintShowsTheReading()
 
     @Test
-    fun `answering a reading question with the setting off leaves the hint fields empty`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            state = awaitItem() // quiz begins
-
-            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange("Testword")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("けんあ")
-            awaitItem()
-            viewModel.submitAnswer()
-            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            assertThat(feedbackState.answerHint).isNull()
-        }
-    }
+    fun `answering a reading question with the setting off leaves the hint fields empty`() = readingHintStaysEmptyWithTheSettingOff()
 
     @Test
-    fun `answering a meaning question never surfaces the reading hint even with the setting on`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            state = awaitItem() // quiz begins
-
-            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.MEANING) {
-                viewModel.onAnswerInputChange("けんあ")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("Testword")
-            awaitItem()
-            viewModel.submitAnswer()
-            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            assertThat(feedbackState.answerHint).isNull()
-        }
-    }
+    fun `answering a meaning question never surfaces the reading hint even with the setting on`() = meaningQuestionNeverShowsAReadingHint()
 
     @Test
-    fun `a kanji reading question never surfaces the hint even with the setting on`() = runTest(mainDispatcherRule.dispatcher) {
-        // Vocabulary-only scoping: pitch accent is a word-level concept, and the bundled
-        // source is keyed by whole dictionary headwords, not single kanji.
-        settingsRepository.setShowAnswerReadingPitchAccent(true)
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            state = awaitItem() // quiz begins
-
-            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange("Water")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("みず")
-            awaitItem()
-            viewModel.submitAnswer()
-            val feedbackState = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(feedbackState.feedback?.isCorrect).isTrue()
-            assertThat(feedbackState.answerHint).isNull()
-        }
-    }
+    fun `a kanji reading question never surfaces the hint even with the setting on`() = kanjiReadingQuestionNeverShowsAHint()
 
     @Test
     fun `undoing a reading answer clears the surfaced reading and pitch accents`() = runTest(mainDispatcherRule.dispatcher) {
@@ -470,72 +347,14 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     }
 
     @Test
-    fun `require tap to reveal meaning answer does not gate a wrong reading answer`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealMeaningAnswer(true)
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJsonWithAudio()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            state = awaitItem() // quiz begins
-
-            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange(if ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("wrong")
-            awaitItem()
-            viewModel.submitAnswer()
-            val quiz = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.feedback?.isCorrect).isFalse()
-            assertThat(quiz.answerRevealed).isTrue()
-        }
-    }
+    fun `require tap to reveal meaning answer does not gate a wrong reading answer`() = gatingOneQuestionTypeDoesNotGateTheOther(
+        gatedType = QuestionType.MEANING, askedType = QuestionType.READING
+    )
 
     @Test
-    fun `require tap to reveal reading answer does not gate a wrong meaning answer`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealReadingAnswer(true)
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJsonWithAudio()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-
-            viewModel.startSelectedLessons()
-            awaitItem()
-            viewModel.nextStudyCard()
-            state = awaitItem() // quiz begins
-
-            while ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType != QuestionType.MEANING) {
-                viewModel.onAnswerInputChange(if ((state.phase as LessonUiState.Phase.Quiz).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("wrong")
-            awaitItem()
-            viewModel.submitAnswer()
-            val quiz = awaitItem().phase as LessonUiState.Phase.Quiz
-            assertThat(quiz.feedback?.isCorrect).isFalse()
-            assertThat(quiz.answerRevealed).isTrue()
-        }
-    }
+    fun `require tap to reveal reading answer does not gate a wrong meaning answer`() = gatingOneQuestionTypeDoesNotGateTheOther(
+        gatedType = QuestionType.READING, askedType = QuestionType.MEANING
+    )
 
     @Test
     fun `resuming a persisted quiz session still resolves the answer hint's pitch accents`() = runTest(mainDispatcherRule.dispatcher) {
