@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverters
+import androidx.sqlite.SQLiteDriver
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 
@@ -38,10 +39,19 @@ expect object AppDatabaseConstructor : RoomDatabaseConstructor<AppDatabase> {
 
 internal const val APP_DATABASE_FILE_NAME = "shellf_study.db"
 
-/** Applies the driver/dispatcher common to every platform's [AppDatabase] builder. */
-fun buildAppDatabase(builder: RoomDatabase.Builder<AppDatabase>): AppDatabase =
+/**
+ * Applies the driver/dispatcher common to every platform's [AppDatabase] builder.
+ *
+ * [driver] is overridable for the one caller that cannot use the bundled one: `:app`'s host tests
+ * build this database on a plain JVM through Robolectric, where the bundled driver's native library
+ * is absent, and pass [androidx.sqlite.driver.AndroidSQLiteDriver] instead.
+ */
+fun buildAppDatabase(
+    builder: RoomDatabase.Builder<AppDatabase>,
+    driver: SQLiteDriver = BundledSQLiteDriver()
+): AppDatabase =
     builder
-        .setDriver(BundledSQLiteDriver())
+        .setDriver(driver)
         // Dispatchers.IO isn't public on every Kotlin/Native target for this coroutines version;
         // Default is fine here since queries just run against the bundled SQLite driver.
         .setQueryCoroutineContext(Dispatchers.Default)

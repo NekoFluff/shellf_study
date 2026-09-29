@@ -193,8 +193,10 @@ private fun buildSearchTarget(characters: String?, slug: String, meanings: List<
  *  pattern, so a literal `%` or `_` typed by the user (e.g. searching for a romanization
  *  containing an underscore) matches that literal character instead of being treated as a SQL
  *  wildcard. Order matters: the escape character itself must be escaped first, or a `\` inserted
- *  by escaping a later `%`/`_` would itself be re-escaped. */
-private fun escapeLikeWildcards(query: String): String =
+ *  by escaping a later `%`/`_` would itself be re-escaped — which is the case
+ *  EscapeLikeWildcardsTest pins down, alongside SubjectSearchQueryTest running the escaped pattern
+ *  through real SQLite. */
+internal fun escapeLikeWildcards(query: String): String =
     query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 /** Katakana-normalized primary reading, for exact-match "phonetically similar" lookups — falls back

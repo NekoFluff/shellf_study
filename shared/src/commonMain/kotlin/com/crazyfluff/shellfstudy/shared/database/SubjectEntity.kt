@@ -63,7 +63,28 @@ interface SubjectDao {
     /** [query] must already have its own literal `\`, `%` and `_` characters backslash-escaped by
      *  the caller (see [com.crazyfluff.shellfstudy.shared.data.SubjectRepository.observeSearch]) —
      *  Room can't do that for you, and without it a query containing a literal `%`/`_` is
-     *  interpreted as a wildcard instead of matching that literal character. */
+     *  interpreted as a wildcard instead of matching that literal character.
+     *
+     * The leading wildcard makes this a full scan of the subject library, which was measured rather
+     * than assumed. Against this schema with 9,000 rows of realistic payloads (a 9.7 MB table):
+     * `EXPLAIN QUERY PLAN` reports `SCAN subjects`, and the selective case — a query matching one
+     * row near the end, so `LIMIT 200` never cuts the scan short — reads 2,257 pages through
+     * `PRAGMA stats`, the whole table, in 2-3 ms warm on the host.
+     *
+     * No index can narrow a substring search, and adding one cannot help this query at all: with an
+     * index on `searchTarget` present, the plan for this `SELECT *` is still `SCAN subjects`, since a
+     * row's other columns have to come from the table whatever the filter does. An index would
+     * therefore only add writes to every sync of the library.
+     *
+     * The shape that does use it was measured too and passed over. Selecting only ids plans as
+     * `SCAN subjects USING COVERING INDEX index_subjects_searchTarget` — 120 page reads, ~18x less
+     * I/O — and [observeByIds] would then fetch the at most 200 matches. But that returns the first
+     * 200 matches in index (alphabetical) order where today's returns the 200 lowest ids, and asking
+     * for `ORDER BY id` to match gives the order back by giving up the index (planned and measured:
+     * `SCAN subjects` again, 2,257 pages). With the search debounced to at most one query per 200 ms
+     * of typing (see `SearchViewModel.QUERY_DEBOUNCE_MILLIS`) on Room's own dispatcher, the saving is
+     * not worth a migration plus a reordering. An FTS table was rejected as well: it matches tokens
+     * and prefixes where this search box matches any substring. */
     @Query("SELECT * FROM subjects WHERE searchTarget LIKE '%' || :query || '%' ESCAPE '\\' LIMIT 200")
     fun observeSearch(query: String): Flow<List<SubjectEntity>>
 
