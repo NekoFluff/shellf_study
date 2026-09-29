@@ -90,7 +90,7 @@ fun SubjectGlyph(
         }
         characterImageUrl != null -> Box(modifier = modifier.width(size).height(boxHeight), contentAlignment = Alignment.Center) {
             // These SVGs are flat monochrome line art (fill:none, a single stroke color) baked to a
-            // hardcoded fallback black by SvgCssVariableInterceptor — tinting to the same
+            // hardcoded fallback black by inlineSvgStyles — tinting to the same
             // subject-type color the text-glyph branch above uses keeps them visible and consistent
             // across light/dark/e-ink themes instead of stuck black. Bounded to [GlyphInkScale] of
             // [size] and centered so an image-only radical matches a character glyph's visual size.

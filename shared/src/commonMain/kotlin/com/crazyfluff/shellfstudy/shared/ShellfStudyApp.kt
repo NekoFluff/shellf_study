@@ -9,6 +9,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import coil3.compose.setSingletonImageLoaderFactory
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
@@ -23,6 +24,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.performance.rememberJankSt
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.toDisplaySettings
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.newSubjectImageLoader
 import com.crazyfluff.shellfstudy.shared.designsystem.text.LocalShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.ShellfStudyTheme
@@ -53,6 +55,7 @@ fun ShellfStudyApp(
     pendingDestination: String? = null,
     onPendingDestinationConsumed: () -> Unit = {}
 ) {
+    setSingletonImageLoaderFactory(::newSubjectImageLoader)
     val themeViewModel: ThemeViewModel = koinViewModel()
     val themeMode by themeViewModel.themeMode.collectAsState()
     // Provided here, at the root, so any reading's play button can dispatch without a callback

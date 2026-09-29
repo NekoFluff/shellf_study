@@ -4,13 +4,7 @@ import android.app.Application
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.Configuration
 import androidx.work.WorkerFactory
-import coil3.ImageLoader
-import coil3.PlatformContext
-import coil3.SingletonImageLoader
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
-import coil3.svg.SvgDecoder
 import com.crazyfluff.shellfstudy.shared.di.APPLICATION_SCOPE
-import com.crazyfluff.shellfstudy.core.designsystem.subjectdetail.SvgCssVariableInterceptor
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.core.notifications.AndroidNotificationChannels
 import com.crazyfluff.shellfstudy.di.appModules
@@ -18,34 +12,16 @@ import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
 import org.koin.android.ext.android.get
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.koin.workManagerFactory
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 
-class ShellfStudyApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
+class ShellfStudyApplication : Application(), Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(get<WorkerFactory>()).build()
-
-    // Radicals with no Unicode glyph (e.g. "Death Star") render via character_images, which the
-    // WaniKani API only ever supplies as SVG — the decoder must be registered explicitly here.
-    // A dedicated OkHttpClient (rather than the default one coil-network-okhttp would otherwise
-    // use) carries SvgCssVariableInterceptor, which works around AndroidSVG's lack of CSS var()
-    // support — see that class for why these SVGs render blank without it.
-    override fun newImageLoader(context: PlatformContext): ImageLoader =
-        ImageLoader.Builder(context)
-            .components {
-                add(OkHttpNetworkFetcherFactory(callFactory = { svgOkHttpClient }))
-                add(SvgDecoder.Factory())
-            }
-            .build()
-
-    private val svgOkHttpClient by lazy {
-        OkHttpClient.Builder().addInterceptor(SvgCssVariableInterceptor).build()
-    }
 
     override fun onCreate() {
         super.onCreate()

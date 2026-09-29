@@ -91,8 +91,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
-    implementation(libs.coil.svg)
 
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.datasource)
@@ -100,6 +98,7 @@ dependencies {
 
     // Unit tests
     testImplementation(libs.junit)
+    testImplementation(libs.androidsvg)
     // These three are used by the test sources only — nothing in :app's main sources references
     // material3, ui-graphics or kotlinx.serialization — so they stay off the main compile classpath
     // rather than widening it for every build.
