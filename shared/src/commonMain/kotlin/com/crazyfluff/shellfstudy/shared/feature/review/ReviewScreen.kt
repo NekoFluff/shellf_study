@@ -9,7 +9,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
@@ -18,7 +17,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +31,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
+import com.crazyfluff.shellfstudy.shared.designsystem.components.AbandonSessionMenuItem
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizEmptyQueueContent
@@ -224,17 +223,10 @@ fun ReviewScreen(
                                     modifier = Modifier.testTag(ReviewScreenTestTags.WRAP_UP_MENU_ITEM)
                                 )
                                 HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Abandon session", color = MaterialTheme.colorScheme.error) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Close,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    },
-                                    onClick = { menuExpanded = false; showAbandonConfirm = true },
-                                    modifier = Modifier.testTag(ReviewScreenTestTags.ABANDON_MENU_ITEM)
+                                AbandonSessionMenuItem(
+                                    label = "Abandon session",
+                                    testTag = ReviewScreenTestTags.ABANDON_MENU_ITEM,
+                                    onClick = { menuExpanded = false; showAbandonConfirm = true }
                                 )
                             }
                         }

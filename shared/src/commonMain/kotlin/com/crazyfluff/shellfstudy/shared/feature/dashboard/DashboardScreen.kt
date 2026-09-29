@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -60,6 +59,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.JANK_STATE_SCREEN
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.TimedComposition
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankState
+import com.crazyfluff.shellfstudy.shared.designsystem.components.AbandonSessionMenuItem
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
@@ -729,16 +729,6 @@ private fun DashboardStatusBanner(bannerState: DashboardBannerState, onRetry: ()
 
 
 private enum class AbandonConfirmKind { Review, Lesson }
-
-@Composable
-private fun AbandonSessionMenuItem(label: String, testTag: String, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(label, color = MaterialTheme.colorScheme.error) },
-        leadingIcon = { Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-        onClick = onClick,
-        modifier = Modifier.testTag(testTag)
-    )
-}
 
 @Composable
 private fun BannerRow(

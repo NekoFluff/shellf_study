@@ -36,7 +36,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
@@ -80,6 +79,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.designsystem.components.AbandonSessionMenuItem
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SectionTitle
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
@@ -314,17 +314,10 @@ fun LessonScreen(
                                 onDismissRequest = { menuExpanded = false },
                                 shape = RoundedCornerShape(16.dp)
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("Abandon session", color = MaterialTheme.colorScheme.error) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Close,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    },
-                                    onClick = { menuExpanded = false; showAbandonConfirm = true },
-                                    modifier = Modifier.testTag(LessonScreenTestTags.ABANDON_MENU_ITEM)
+                                AbandonSessionMenuItem(
+                                    label = "Abandon session",
+                                    testTag = LessonScreenTestTags.ABANDON_MENU_ITEM,
+                                    onClick = { menuExpanded = false; showAbandonConfirm = true }
                                 )
                             }
                         }
