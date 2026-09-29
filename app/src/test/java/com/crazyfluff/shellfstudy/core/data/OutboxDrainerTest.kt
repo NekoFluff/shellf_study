@@ -15,7 +15,12 @@ import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -105,6 +110,34 @@ class OutboxDrainerTest {
         val body = server.takeRequest().body.readUtf8()
         assertThat(body).contains("\"incorrect_meaning_answers\":2")
         assertThat(body).contains("\"incorrect_reading_answers\":1")
+        assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
+    }
+
+    @Test
+    fun `overlapping drains submit each pending review exactly once`() = runTest {
+        // POST /reviews is not idempotent. Two passes that both read the row before either deletes
+        // it would submit it twice — the slow response keeps the first pass in flight long enough
+        // for the second to start.
+        val reviewPosts = AtomicInteger()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.method == "POST" && request.path.orEmpty().startsWith("/reviews")) {
+                    reviewPosts.incrementAndGet()
+                    Thread.sleep(200)
+                    return jsonResponse(reviewResultJson(101, 1, 1, 2))
+                }
+                return emptyResponse(404)
+            }
+        }
+        queueReview(assignmentId = 101, subjectId = 1)
+        val drainer = buildDrainer()
+
+        val outcomes = withContext(Dispatchers.Default) {
+            listOf(async { drainer.drain() }, async { drainer.drain() }).awaitAll()
+        }
+
+        assertThat(outcomes).containsExactly(DrainOutcome.SUCCESS, DrainOutcome.SUCCESS)
+        assertThat(reviewPosts.get()).isEqualTo(1)
         assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
     }
 

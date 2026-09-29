@@ -2,6 +2,10 @@ package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 enum class DrainOutcome { SUCCESS, RETRY, AUTH_FAILURE }
 
@@ -9,6 +13,13 @@ enum class DrainOutcome { SUCCESS, RETRY, AUTH_FAILURE }
  * Drains the outbox queues in-process: lesson starts first (reviews reference started assignments),
  * then review submissions. Returns [DrainOutcome] so the caller can distinguish a transient failure
  * (worth retrying) from an auth failure (stop until re-auth) from a clean pass.
+ *
+ * Passes are serialised by [drainLock], and each row's submit-then-record runs non-cancellably.
+ * `POST /reviews` is not idempotent, so both matter: two overlapping passes would read the same
+ * PENDING row and submit it twice, and a pass cancelled between the server accepting a row and the
+ * row being deleted would leave it PENDING for the next pass to submit again. Both happen in
+ * practice — iOS requests a drain on every grade, and WorkManager's REPLACE cancels a running
+ * worker when a new request comes in.
  */
 class OutboxDrainer(
     private val outboxDao: OutboxDao,
@@ -16,13 +27,15 @@ class OutboxDrainer(
     private val assignmentRepository: AssignmentRepository,
     private val outboxRepository: OutboxRepository
 ) {
-    suspend fun drain(): DrainOutcome {
+    private val drainLock = Mutex()
+
+    suspend fun drain(): DrainOutcome = drainLock.withLock {
         val lessonResult = drainLessonStarts()
         if (lessonResult != DrainOutcome.SUCCESS) return lessonResult
         val reviewResult = drainReviewSubmissions()
         if (reviewResult != DrainOutcome.SUCCESS) return reviewResult
         outboxRepository.setBlockedOnAuth(false)
-        return DrainOutcome.SUCCESS
+        DrainOutcome.SUCCESS
     }
 
     private suspend fun drainLessonStarts(): DrainOutcome = drain(
@@ -83,8 +96,11 @@ class OutboxDrainer(
     ): DrainOutcome {
         var retryNeeded = false
         for (row in rows) {
-            when (val result = submit(row)) {
-                is ApiResult.Success -> onSuccess(row, result.data)
+            val result = withContext(NonCancellable) {
+                submit(row).also { if (it is ApiResult.Success) onSuccess(row, it.data) }
+            }
+            when (result) {
+                is ApiResult.Success -> Unit
                 is ApiResult.Error -> {
                     if (result.isAuthError) {
                         outboxRepository.setBlockedOnAuth(true)
