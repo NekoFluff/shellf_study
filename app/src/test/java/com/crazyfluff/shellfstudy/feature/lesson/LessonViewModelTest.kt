@@ -61,6 +61,15 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import com.crazyfluff.shellfstudy.fakes.AssignmentFixture
+import com.crazyfluff.shellfstudy.fakes.FIXTURE_INSTANT
+import com.crazyfluff.shellfstudy.fakes.KANJI_SUBJECT
+import com.crazyfluff.shellfstudy.fakes.RADICAL_SUBJECT
+import com.crazyfluff.shellfstudy.fakes.VOCAB_SUBJECT
+import com.crazyfluff.shellfstudy.fakes.waniKaniAssignmentsJson
+import com.crazyfluff.shellfstudy.fakes.waniKaniSubjectsJson
+import com.crazyfluff.shellfstudy.fakes.MIZU_AUDIO
+import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
 
 class LessonViewModelTest {
 
@@ -154,15 +163,13 @@ class LessonViewModelTest {
         subjectsResponse: MockResponse,
         startResponse: MockResponse? = null
     ) {
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
-                return when {
-                    path.contains("/start") -> startResponse ?: startAssignmentResultJson().let(::jsonResponse)
-                    path.startsWith("/assignments") -> assignmentsResponse
-                    path.startsWith("/subjects") -> subjectsResponse
-                    else -> jsonResponse(emptyCollectionJson())
-                }
+        server.dispatcher = waniKaniCollectionDispatcher { request ->
+            val path = request.path.orEmpty()
+            when {
+                path.contains("/start") -> startResponse ?: jsonResponse(startAssignmentResultJson())
+                path.startsWith("/assignments") -> assignmentsResponse
+                path.startsWith("/subjects") -> subjectsResponse
+                else -> null
             }
         }
     }
@@ -2619,149 +2626,29 @@ class LessonViewModelTest {
 
     // --- Fixtures -----------------------------------------------------------------------------
 
-    private fun kanjiAssignmentsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
-          "data": [{
-            "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "kanji",
-              "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun kanjiAssignmentsJson() = waniKaniAssignmentsJson(
+        AssignmentFixture(id = 101, subjectId = 1, subjectType = "kanji", srsStage = 0, unlockedAt = FIXTURE_INSTANT)
+    )
 
-    private fun kanjiSubjectsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
-          "data": [{
-            "id": 1, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/1",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2020-01-01T00:00:00.000000Z", "level": 3, "slug": "water",
-              "characters": "水",
-              "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
-              "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}]
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun kanjiSubjectsJson() = waniKaniSubjectsJson(KANJI_SUBJECT)
 
-    private fun kanjiSubjectsJsonWithAudio() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
-          "data": [{
-            "id": 1, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/1",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2020-01-01T00:00:00.000000Z", "level": 3, "slug": "water",
-              "characters": "水",
-              "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
-              "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}],
-              "pronunciation_audios": [
-                {
-                  "url": "https://api.wanikani.com/audio/mizu.mp3",
-                  "content_type": "audio/mpeg",
-                  "metadata": {"gender": "female", "pronunciation": "みず"}
-                }
-              ]
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun kanjiSubjectsJsonWithAudio() = waniKaniSubjectsJson(
+        KANJI_SUBJECT.copy(audio = MIZU_AUDIO)
+    )
 
-    private fun vocabAssignmentsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
-          "data": [{
-            "id": 606, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/606",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 8001, "subject_type": "vocabulary",
-              "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun vocabAssignmentsJson() = waniKaniAssignmentsJson(
+        AssignmentFixture(id = 606, subjectId = 8001, subjectType = "vocabulary", srsStage = 0, unlockedAt = FIXTURE_INSTANT)
+    )
+    private fun vocabSubjectsJson() = waniKaniSubjectsJson(VOCAB_SUBJECT)
+    private fun twoVocabAssignmentsJson() = waniKaniAssignmentsJson(
+        AssignmentFixture(id = 606, subjectId = 8001, subjectType = "vocabulary", srsStage = 0, unlockedAt = FIXTURE_INSTANT),
+        AssignmentFixture(id = 607, subjectId = 8002, subjectType = "vocabulary", srsStage = 0, unlockedAt = FIXTURE_INSTANT),
+    )
 
-    // "件亜" / "けんあ" is a fabricated, non-dictionary word — deliberately not a real vocabulary
-    // item, so tests relying on its pitch-accent data being absent from the bundled dictionary don't
-    // depend on the real (83k-line) bundled dictionary's actual contents.
-    private fun vocabSubjectsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
-          "data": [{
-            "id": 8001, "object": "vocabulary", "url": "https://api.wanikani.com/v2/subjects/8001",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "testword",
-              "characters": "件亜",
-              "meanings": [{"meaning": "Testword", "primary": true, "accepted_meaning": true}],
-              "readings": [{"reading": "けんあ", "primary": true, "accepted_reading": true}]
-            }
-          }]
-        }
-    """.trimIndent()
-
-    // Two fabricated vocabulary words — used where a test needs the quiz to advance on to a
-    // genuinely different item rather than finishing the batch.
-    private fun twoVocabAssignmentsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 2,
-          "data": [
-            {
-              "id": 606, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/606",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 8001, "subject_type": "vocabulary",
-                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-              }
-            },
-            {
-              "id": 607, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/607",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 8002, "subject_type": "vocabulary",
-                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-              }
-            }
-          ]
-        }
-    """.trimIndent()
-
-    private fun twoVocabSubjectsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 2,
-          "data": [
-            {
-              "id": 8001, "object": "vocabulary", "url": "https://api.wanikani.com/v2/subjects/8001",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "testword",
-                "characters": "件亜",
-                "meanings": [{"meaning": "Testword", "primary": true, "accepted_meaning": true}],
-                "readings": [{"reading": "けんあ", "primary": true, "accepted_reading": true}]
-              }
-            },
-            {
-              "id": 8002, "object": "vocabulary", "url": "https://api.wanikani.com/v2/subjects/8002",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "tuesday",
-                "characters": "火曜",
-                "meanings": [{"meaning": "Tuesday", "primary": true, "accepted_meaning": true}],
-                "readings": [{"reading": "かよう", "primary": true, "accepted_reading": true}]
-              }
-            }
-          ]
-        }
-    """.trimIndent()
-
-    // "水" ("みず"/water) is a real bundled-dictionary headword (heiban, pitch number 0) — used
-    // specifically where a test needs a genuine pitch-accent match rather than the fabricated
-    // "件亜" word above.
+    private fun twoVocabSubjectsJson() = waniKaniSubjectsJson(
+        VOCAB_SUBJECT,
+        VOCAB_SUBJECT.copy(id = 8002, slug = "tuesday", characters = "火曜", meaning = "Tuesday", reading = "かよう")
+    )
     private fun vocabWithRealPitchAccentAssignmentsJson() = """
         {
           "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
@@ -2792,106 +2679,25 @@ class LessonViewModelTest {
         }
     """.trimIndent()
 
-    private fun radicalAssignmentsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
-          "data": [{
-            "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "radical",
-              "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun radicalAssignmentsJson() = waniKaniAssignmentsJson(
+        AssignmentFixture(id = 101, subjectId = 1, subjectType = "radical", srsStage = 0, unlockedAt = FIXTURE_INSTANT)
+    )
 
-    private fun radicalSubjectsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
-          "data": [{
-            "id": 1, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/1",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "mouth",
-              "characters": "口",
-              "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
-              "readings": [],
-              "meaning_mnemonic": "A stream of water."
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun radicalSubjectsJson() = waniKaniSubjectsJson(
+        RADICAL_SUBJECT.copy(mnemonic = "A stream of water.")
+    )
 
-    private fun threeRadicalAssignmentsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 3,
-          "data": [
-            {
-              "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "radical",
-                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-              }
-            },
-            {
-              "id": 102, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/102",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 2, "subject_type": "radical",
-                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-              }
-            },
-            {
-              "id": 103, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/103",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 3, "subject_type": "radical",
-                "srs_stage": 0, "unlocked_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-              }
-            }
-          ]
-        }
-    """.trimIndent()
+    private fun threeRadicalAssignmentsJson() = waniKaniAssignmentsJson(
+        AssignmentFixture(id = 101, subjectId = 1, subjectType = "radical", srsStage = 0, unlockedAt = FIXTURE_INSTANT),
+        AssignmentFixture(id = 102, subjectId = 2, subjectType = "radical", srsStage = 0, unlockedAt = FIXTURE_INSTANT),
+        AssignmentFixture(id = 103, subjectId = 3, subjectType = "radical", srsStage = 0, unlockedAt = FIXTURE_INSTANT),
+    )
 
-    private fun threeRadicalSubjectsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 3,
-          "data": [
-            {
-              "id": 1, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/1",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "mouth",
-                "characters": "口",
-                "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
-                "readings": []
-              }
-            },
-            {
-              "id": 2, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/2",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "ground",
-                "characters": "一",
-                "meanings": [{"meaning": "Ground", "primary": true, "accepted_meaning": true}],
-                "readings": []
-              }
-            },
-            {
-              "id": 3, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/3",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "two",
-                "characters": "二",
-                "meanings": [{"meaning": "Two", "primary": true, "accepted_meaning": true}],
-                "readings": []
-              }
-            }
-          ]
-        }
-    """.trimIndent()
+    private fun threeRadicalSubjectsJson() = waniKaniSubjectsJson(
+        RADICAL_SUBJECT,
+        RADICAL_SUBJECT.copy(id = 2, slug = "ground", characters = "一", meaning = "Ground"),
+        RADICAL_SUBJECT.copy(id = 3, slug = "two", characters = "二", meaning = "Two"),
+    )
 
     private fun twoRadicalAssignmentsJson() = """
         {

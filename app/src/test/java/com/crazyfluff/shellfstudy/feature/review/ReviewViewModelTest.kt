@@ -52,6 +52,15 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import com.crazyfluff.shellfstudy.fakes.AssignmentFixture
+import com.crazyfluff.shellfstudy.fakes.FIXTURE_INSTANT
+import com.crazyfluff.shellfstudy.fakes.RADICAL_SUBJECT
+import com.crazyfluff.shellfstudy.fakes.SubjectFixture
+import com.crazyfluff.shellfstudy.fakes.VOCAB_SUBJECT
+import com.crazyfluff.shellfstudy.fakes.waniKaniAssignmentsJson
+import com.crazyfluff.shellfstudy.fakes.waniKaniSubjectsJson
+import com.crazyfluff.shellfstudy.fakes.MIZU_AUDIO
+import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
 
 class ReviewViewModelTest {
 
@@ -112,15 +121,13 @@ class ReviewViewModelTest {
 
     /** Routes by path — refreshing the review queue now syncs subjects and assignments, in either order. */
     private fun dispatch(assignmentsResponse: MockResponse, subjectsResponse: MockResponse, reviewResponse: MockResponse? = null) {
-        server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path.orEmpty()
-                return when {
-                    request.method == "POST" && path.startsWith("/reviews") -> reviewResponse ?: jsonResponse(reviewResultJson())
-                    path.startsWith("/assignments") -> assignmentsResponse
-                    path.startsWith("/subjects") -> subjectsResponse
-                    else -> jsonResponse(emptyCollectionJson())
-                }
+        server.dispatcher = waniKaniCollectionDispatcher { request ->
+            val path = request.path.orEmpty()
+            when {
+                request.method == "POST" && path.startsWith("/reviews") -> reviewResponse ?: jsonResponse(reviewResultJson())
+                path.startsWith("/assignments") -> assignmentsResponse
+                path.startsWith("/subjects") -> subjectsResponse
+                else -> null
             }
         }
     }
@@ -2329,75 +2336,17 @@ class ReviewViewModelTest {
         }
     }
 
-    private fun threeRadicalAssignmentsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 3,
-          "data": [
-            {
-              "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "radical",
-                "srs_stage": 1, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-              }
-            },
-            {
-              "id": 102, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/102",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 2, "subject_type": "radical",
-                "srs_stage": 1, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-              }
-            },
-            {
-              "id": 103, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/103",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 3, "subject_type": "radical",
-                "srs_stage": 1, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-              }
-            }
-          ]
-        }
-    """.trimIndent()
+    private fun threeRadicalAssignmentsJson() = waniKaniAssignmentsJson(
+        AssignmentFixture(id = 101, subjectId = 1, subjectType = "radical", srsStage = 1, availableAt = FIXTURE_INSTANT),
+        AssignmentFixture(id = 102, subjectId = 2, subjectType = "radical", srsStage = 1, availableAt = FIXTURE_INSTANT),
+        AssignmentFixture(id = 103, subjectId = 3, subjectType = "radical", srsStage = 1, availableAt = FIXTURE_INSTANT),
+    )
 
-    private fun threeRadicalSubjectsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 3,
-          "data": [
-            {
-              "id": 1, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/1",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "mouth",
-                "characters": "口",
-                "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
-                "readings": []
-              }
-            },
-            {
-              "id": 2, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/2",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "ground",
-                "characters": "一",
-                "meanings": [{"meaning": "Ground", "primary": true, "accepted_meaning": true}],
-                "readings": []
-              }
-            },
-            {
-              "id": 3, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/3",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "tree",
-                "characters": "木",
-                "meanings": [{"meaning": "Tree", "primary": true, "accepted_meaning": true}],
-                "readings": []
-              }
-            }
-          ]
-        }
-    """.trimIndent()
+    private fun threeRadicalSubjectsJson() = waniKaniSubjectsJson(
+        RADICAL_SUBJECT,
+        RADICAL_SUBJECT.copy(id = 2, slug = "ground", characters = "一", meaning = "Ground"),
+        RADICAL_SUBJECT.copy(id = 3, slug = "tree", characters = "木", meaning = "Tree"),
+    )
 
     /** [count] distinct radical assignments — meaning-only, single-question items, so each one's
      *  own completeness is controlled by a single answer. Used to exercise the in-flight cap, which
@@ -2495,35 +2444,11 @@ class ReviewViewModelTest {
         """.trimIndent()
     }
 
-    private fun radicalAssignmentsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
-          "data": [{
-            "id": 101, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/101",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 1, "subject_type": "radical",
-              "srs_stage": 1, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun radicalAssignmentsJson() = waniKaniAssignmentsJson(
+        AssignmentFixture(id = 101, subjectId = 1, subjectType = "radical", srsStage = 1, availableAt = FIXTURE_INSTANT)
+    )
 
-    private fun radicalSubjectsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
-          "data": [{
-            "id": 1, "object": "radical", "url": "https://api.wanikani.com/v2/subjects/1",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "mouth",
-              "characters": "口",
-              "meanings": [{"meaning": "Mouth", "primary": true, "accepted_meaning": true}],
-              "readings": []
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun radicalSubjectsJson() = waniKaniSubjectsJson(RADICAL_SUBJECT)
 
     /** Same fixture as [radicalSubjectsJson] but with a pronunciation clip attached, to prove the
      *  autoplay gate is on question type (MEANING never autoplays) rather than on audio presence. */
@@ -2550,42 +2475,16 @@ class ReviewViewModelTest {
         }
     """.trimIndent()
 
-    private fun kanjiAssignmentsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
-          "data": [{
-            "id": 555, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/555",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 440, "subject_type": "kanji",
-              "srs_stage": 3, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun kanjiAssignmentsJson() = waniKaniAssignmentsJson(
+        AssignmentFixture(id = 555, subjectId = 440, subjectType = "kanji", srsStage = 3, availableAt = FIXTURE_INSTANT)
+    )
 
-    private fun kanjiSubjectsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
-          "data": [{
-            "id": 440, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/440",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2020-01-01T00:00:00.000000Z", "level": 3, "slug": "water",
-              "characters": "水",
-              "meanings": [{"meaning": "Water", "primary": true, "accepted_meaning": true}],
-              "readings": [{"reading": "みず", "primary": true, "accepted_reading": true}],
-              "pronunciation_audios": [
-                {
-                  "url": "https://api.wanikani.com/audio/mizu.mp3",
-                  "content_type": "audio/mpeg",
-                  "metadata": {"gender": "female", "pronunciation": "みず"}
-                }
-              ]
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun kanjiSubjectsJson() = waniKaniSubjectsJson(
+        SubjectFixture(
+            id = 440, subjectType = "kanji", level = 3, slug = "water", characters = "水",
+            meaning = "Water", reading = "みず", audio = MIZU_AUDIO
+        )
+    )
 
     private fun twoItemAssignmentsJson() = """
         {
@@ -2692,92 +2591,22 @@ class ReviewViewModelTest {
         }
     """.trimIndent()
 
-    private fun vocabAssignmentsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 1,
-          "data": [{
-            "id": 606, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/606",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 8001, "subject_type": "vocabulary",
-              "srs_stage": 3, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-            }
-          }]
-        }
-    """.trimIndent()
-
-    // "件亜" / "けんあ" is a fabricated, non-dictionary word — deliberately not a real vocabulary
-    // item, so tests relying on its pitch-accent data being absent from the bundled dictionary don't
-    // depend on the real (83k-line) bundled dictionary's actual contents.
-    private fun vocabSubjectsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 1,
-          "data": [{
-            "id": 8001, "object": "vocabulary", "url": "https://api.wanikani.com/v2/subjects/8001",
-            "data_updated_at": "2026-01-01T00:00:00.000000Z",
-            "data": {
-              "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "testword",
-              "characters": "件亜",
-              "meanings": [{"meaning": "Testword", "primary": true, "accepted_meaning": true}],
-              "readings": [{"reading": "けんあ", "primary": true, "accepted_reading": true}]
-            }
-          }]
-        }
-    """.trimIndent()
+    private fun vocabAssignmentsJson() = waniKaniAssignmentsJson(
+        AssignmentFixture(id = 606, subjectId = 8001, subjectType = "vocabulary", srsStage = 3, availableAt = FIXTURE_INSTANT)
+    )
+    private fun vocabSubjectsJson() = waniKaniSubjectsJson(VOCAB_SUBJECT)
 
     /** Two fabricated vocabulary words — used where a test needs the question to advance on to a
      *  genuinely different item rather than completing the session. */
-    private fun twoVocabAssignmentsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/assignments", "total_count": 2,
-          "data": [
-            {
-              "id": 606, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/606",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 8001, "subject_type": "vocabulary",
-                "srs_stage": 3, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-              }
-            },
-            {
-              "id": 607, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/607",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2026-01-01T00:00:00.000000Z", "subject_id": 8002, "subject_type": "vocabulary",
-                "srs_stage": 3, "available_at": "2026-01-01T00:00:00.000000Z", "hidden": false
-              }
-            }
-          ]
-        }
-    """.trimIndent()
+    private fun twoVocabAssignmentsJson() = waniKaniAssignmentsJson(
+        AssignmentFixture(id = 606, subjectId = 8001, subjectType = "vocabulary", srsStage = 3, availableAt = FIXTURE_INSTANT),
+        AssignmentFixture(id = 607, subjectId = 8002, subjectType = "vocabulary", srsStage = 3, availableAt = FIXTURE_INSTANT),
+    )
 
-    private fun twoVocabSubjectsJson() = """
-        {
-          "object": "collection", "url": "https://api.wanikani.com/v2/subjects", "total_count": 2,
-          "data": [
-            {
-              "id": 8001, "object": "vocabulary", "url": "https://api.wanikani.com/v2/subjects/8001",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "testword",
-                "characters": "件亜",
-                "meanings": [{"meaning": "Testword", "primary": true, "accepted_meaning": true}],
-                "readings": [{"reading": "けんあ", "primary": true, "accepted_reading": true}]
-              }
-            },
-            {
-              "id": 8002, "object": "vocabulary", "url": "https://api.wanikani.com/v2/subjects/8002",
-              "data_updated_at": "2026-01-01T00:00:00.000000Z",
-              "data": {
-                "created_at": "2020-01-01T00:00:00.000000Z", "level": 1, "slug": "tuesday",
-                "characters": "火曜",
-                "meanings": [{"meaning": "Tuesday", "primary": true, "accepted_meaning": true}],
-                "readings": [{"reading": "かよう", "primary": true, "accepted_reading": true}]
-              }
-            }
-          ]
-        }
-    """.trimIndent()
+    private fun twoVocabSubjectsJson() = waniKaniSubjectsJson(
+        VOCAB_SUBJECT,
+        VOCAB_SUBJECT.copy(id = 8002, slug = "tuesday", characters = "火曜", meaning = "Tuesday", reading = "かよう")
+    )
 
 
     /** The ViewModel no longer calls POST /reviews at all (that's the background sync worker's
