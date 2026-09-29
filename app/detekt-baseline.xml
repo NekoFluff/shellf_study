@@ -3,8 +3,6 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>FunctionOnlyReturningConstant:WaniKaniFixtures.kt:fun emptyCollectionJson: String</ID>
-    <ID>InvalidPackageDeclaration:DomainModelsTest.kt:package com.crazyfluff.shellfstudy.shared.data.model</ID>
-    <ID>InvalidPackageDeclaration:SrsStageTest.kt:package com.crazyfluff.shellfstudy.shared.data.model</ID>
     <ID>LargeClass:AssignmentRepositoryTest.kt:AssignmentRepositoryTest</ID>
     <ID>LargeClass:DashboardViewModelTest.kt:DashboardViewModelTest</ID>
     <ID>LargeClass:LessonScreenTest.kt:LessonScreenTest</ID>
@@ -89,7 +87,6 @@
     <ID>MaxLineLength:LogoutCoordinatorTest.kt:LogoutCoordinatorTest$assignmentDao.upsertAll(listOf(AssignmentEntity(id = 1, subjectId = 1, subjectType = "kanji", srsStage = 1, createdAt = "2026-08-01T00:00:00Z", hidden = false)))</ID>
     <ID>MaxLineLength:LogoutCoordinatorTest.kt:LogoutCoordinatorTest$fun</ID>
     <ID>MaxLineLength:LogoutCoordinatorTest.kt:LogoutCoordinatorTest$reviewSessionRepository.save(PersistedReviewSession(queue = listOf(PersistedQuestion(1, "MEANING")), progress = emptyList(), totalQuestions = 1))</ID>
-    <ID>MaxLineLength:NotificationBuilderTest.kt:NotificationBuilderTest$buckets = listOf(ReviewForecastBucket(hoursFromNow = 1, availableAt = Clock.System.now(), newlyAvailableCount = 0))</ID>
     <ID>MaxLineLength:NotificationChannels.kt:AndroidNotificationChannels$NotificationChannelCompat.Builder(NotificationChannels.REVIEWS_AVAILABLE, NotificationManagerCompat.IMPORTANCE_DEFAULT)</ID>
     <ID>MaxLineLength:NotificationChannels.kt:AndroidNotificationChannels$NotificationChannelCompat.Builder(NotificationChannels.REVIEWS_BACKLOG, NotificationManagerCompat.IMPORTANCE_HIGH)</ID>
     <ID>MaxLineLength:NotificationChannels.kt:AndroidNotificationChannels$NotificationChannelCompat.Builder(NotificationChannels.STUDY_REMINDER, NotificationManagerCompat.IMPORTANCE_DEFAULT)</ID>

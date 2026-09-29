@@ -18,7 +18,9 @@ class NotificationBuilderTest {
     fun `reviewsAvailable reuses the shared forecast summary as its body`() {
         val forecast = ReviewForecast(
             reviewsAvailableNow = 4,
-            buckets = listOf(ReviewForecastBucket(hoursFromNow = 1, availableAt = Clock.System.now(), newlyAvailableCount = 0))
+            buckets = listOf(
+                ReviewForecastBucket(hoursFromNow = 1, availableAt = Clock.System.now(), newlyAvailableCount = 0)
+            )
         )
         val spec = NotificationBuilder.reviewsAvailable(forecast = forecast)
 
