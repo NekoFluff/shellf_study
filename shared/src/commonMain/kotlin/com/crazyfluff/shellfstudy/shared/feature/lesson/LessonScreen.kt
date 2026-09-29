@@ -56,7 +56,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -227,8 +227,8 @@ fun LessonRoute(
     viewModel: LessonViewModel = koinViewModel(),
     searchViewModel: SearchViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val searchUiState by searchViewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchUiState by searchViewModel.uiState.collectAsStateWithLifecycle()
 
     // Reported to the jank harness in the same shape as the review screen's, so the two quiz screens
     // are comparable rather than one being attributable and the other not.
@@ -763,12 +763,18 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
         mutableStateOf(levelsWithSelection)
     }
 
+    // Each chip's count and fill scan the whole queue; worked out once per change to the queue or the
+    // selection rather than per chip on every recomposition.
+    val typeChips = remember(select.availableLessons, select.selectedAssignmentIds) {
+        select.availableTypes.map { type -> TypeChip(type, select.countOfType(type), select.isTypeFullySelected(type)) }
+    }
+
     Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
         Text("Choose lessons to study", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Text("$selectedCount of $total selected", style = MaterialTheme.typography.bodyMedium)
 
-        if (select.availableTypes.size > 1) {
+        if (typeChips.size > 1) {
             Spacer(modifier = Modifier.height(12.dp))
             // Whole-type shortcuts, shown in both picker modes: one tap gets every kanji (or clears
             // them again), which is the fastest route to a kanji-only session. A chip is filled in
@@ -779,8 +785,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                select.availableTypes.forEach { type ->
-                    val allSelected = select.isTypeFullySelected(type)
+                typeChips.forEach { (type, count, allSelected) ->
                     FilterChip(
                         selected = allSelected,
                         onClick = { actions.toggleLessonTypeSelection(type) },
@@ -789,7 +794,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                         ),
                         border = if (allSelected) null else FilterChipDefaults.filterChipBorder(enabled = true, selected = false),
-                        label = { Text("${subjectTypeLabel(type)} · ${select.countOfType(type)}") },
+                        label = { Text("${subjectTypeLabel(type)} · $count") },
                         modifier = Modifier.testTag(LessonScreenTestTags.typeSelectorChipTag(type))
                     )
                 }
@@ -892,7 +897,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                 }
                 // Order only means anything once the queue mixes types — an all-kanji queue sorts to
                 // itself either way, so the control would just be noise.
-                if (select.availableTypes.size > 1) {
+                if (typeChips.size > 1) {
                     LessonSortDropdownButton(selectedSort = select.sort, onSortChange = actions::setLessonSort)
                 }
             }
@@ -905,7 +910,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
             lessonsByLevel.forEach { (level, itemsForLevel) ->
                 val levelExpanded = level in expandedLevels
                 val selectedInLevel = itemsForLevel.count { it.assignmentId in select.selectedAssignmentIds }
-                item {
+                item(key = "level-$level") {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -928,7 +933,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                     }
                 }
                 if (levelExpanded) {
-                    item {
+                    item(key = "level-$level-lessons") {
                         FlowRow(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -952,10 +957,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                     }
                 }
             }
-            item { Spacer(modifier = Modifier.height(16.dp)) }
+            item(key = "bottom-spacer") { Spacer(modifier = Modifier.height(16.dp)) }
         }
     }
 }
+
+/** One whole-type shortcut in the lesson picker. */
+private data class TypeChip(val type: SubjectType, val count: Int, val allSelected: Boolean)
 
 @Composable
 private fun LessonGlyphTile(

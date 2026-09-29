@@ -20,7 +20,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import com.crazyfluff.shellfstudy.shared.designsystem.rememberPermissionRequest
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberPushUpTextFieldState
@@ -48,7 +48,7 @@ fun AuthRoute(
     onAuthenticated: () -> Unit,
     viewModel: AuthViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val requestPermission = rememberPermissionRequest { granted ->
         viewModel.onNotificationPermissionResult(granted)

@@ -41,7 +41,7 @@ import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -241,7 +241,7 @@ private fun ColumnScope.SubjectDetailBody(
     autoPlayStrokeOrder: Boolean,
     viewModel: SubjectDetailViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(subjectId) { viewModel.open(subjectId) }
     DisposableEffect(Unit) { onDispose { viewModel.stopPlayback() } }

@@ -7,7 +7,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import com.crazyfluff.shellfstudy.shared.data.PlaybackState
@@ -51,7 +51,7 @@ fun ReadingRow(
     val playbackState = if (player == null) {
         PlaybackState.IDLE
     } else {
-        player.state.collectAsState().value
+        player.state.collectAsStateWithLifecycle().value
     }
     // Only to decide whether a button belongs here at all — cheap and pure (a list filter plus, at
     // most, a random pick among candidates), so calling it again in the click handler below is what

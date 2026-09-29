@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -57,14 +57,14 @@ fun ShellfStudyApp(
 ) {
     setSingletonImageLoaderFactory(::newSubjectImageLoader)
     val themeViewModel: ThemeViewModel = koinViewModel()
-    val themeMode by themeViewModel.themeMode.collectAsState()
+    val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
     // Provided here, at the root, so any reading's play button can dispatch without a callback
     // threaded down through every screen in between — see LocalPronunciationAudioPlayer.
     val audioPlayer: PronunciationAudioPlayer = koinInject()
     // AppSettings' defaults match SettingsRepository's DataStore defaults, so the first frame before
     // the flow's initial emission renders production defaults rather than everything switched off.
     val settingsRepository: SettingsRepository = koinInject()
-    val appSettings by settingsRepository.settings.collectAsState(initial = AppSettings())
+    val appSettings by settingsRepository.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     val displaySettings = remember(appSettings) { appSettings.toDisplaySettings() }
     val shareText = rememberShareText()
     // The app's one browse-detail sheet. Mounted here rather than per screen because the host has no

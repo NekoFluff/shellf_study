@@ -67,6 +67,7 @@ kotlin {
             api(libs.androidx.datastore.preferences.core)
             implementation(libs.okio)
             api(libs.androidx.lifecycle.viewmodel)
+            implementation(libs.androidx.lifecycle.runtime.compose)
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)

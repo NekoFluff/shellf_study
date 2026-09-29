@@ -11,7 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -128,8 +128,8 @@ fun ReviewRoute(
     viewModel: ReviewViewModel = koinViewModel(),
     searchViewModel: SearchViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val searchUiState by searchViewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchUiState by searchViewModel.uiState.collectAsStateWithLifecycle()
 
     // Reported to the jank harness so a stalled frame on this screen says what it was doing. The
     // review screen produced 45 of the 94 stalls in the first real session and the two largest
