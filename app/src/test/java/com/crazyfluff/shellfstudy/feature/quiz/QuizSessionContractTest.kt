@@ -311,4 +311,31 @@ abstract class QuizSessionContractTest<STATE : Any> {
         assertThat(revealed.answerRevealed).isTrue()
         assertThat(revealed.answerHint?.reading).isEqualTo("けんあ")
     }
+
+    /**
+     * An answer of the wrong type — a reading typed into a meaning question, or the reverse — is
+     * rejected outright rather than graded as a miss: the mismatch is counted, no feedback appears,
+     * and the question stays put with the queue untouched. Three scenarios across the two suites were
+     * this same body, differing only in which type was asked for and which answers were typed.
+     */
+    protected fun wrongTypeAnswerIsRejectedNotGraded(
+        fixtures: QuizQueueFixtures,
+        target: QuestionType,
+        answerOfTheWrongType: String,
+        correctAnswer: String
+    ) = quizSession(fixtures) {
+        val question = awaitQuestionOfType(target)
+        val remainingBeforeMismatch = question.remainingCount
+
+        type(answerOfTheWrongType)
+        submit()
+        val mismatch = awaitQuestion()
+        assertThat(mismatch.answerTypeMismatchCount).isEqualTo(1)
+        assertThat(mismatch.feedbackPresent).isFalse()
+        assertThat(mismatch.remainingCount).isEqualTo(remainingBeforeMismatch)
+
+        type(correctAnswer)
+        submit()
+        assertThat(awaitGraded().feedbackIsCorrect).isTrue()
+    }
 }

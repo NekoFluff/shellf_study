@@ -428,110 +428,22 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
-    fun `submitting a reading into a meaning question rejects it instead of grading a miss`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            assertThat((state.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)
-
-            viewModel.onAnswerInputChange("くち")
-            awaitItem()
-            viewModel.submitAnswer()
-            val mismatchState = awaitItem()
-            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).answerTypeMismatchCount).isEqualTo(1)
-            // Rejected outright, not graded as a miss — feedback stays null and the question isn't
-            // consumed (remainingCount unchanged, no requeue).
-            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).feedback).isNull()
-            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(1)
-
-            viewModel.onAnswerInputChange("Mouth")
-            awaitItem()
-            viewModel.submitAnswer()
-            val correctState = awaitItem()
-            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
-        }
-    }
+    fun `submitting a reading into a meaning question rejects it instead of grading a miss`() = wrongTypeAnswerIsRejectedNotGraded(
+        fixtures = radicalQueue, target = QuestionType.MEANING,
+        answerOfTheWrongType = "くち", correctAnswer = "Mouth"
+    )
 
     @Test
-    fun `submitting a romaji reading into a meaning question rejects it instead of grading a miss`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            // Queue order is shuffled — answer reading questions correctly until meaning comes up.
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.MEANING) {
-                viewModel.onAnswerInputChange("mizu")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-            val remainingBeforeMismatch = (state.phase as ReviewUiState.Phase.Active).remainingCount
-
-            viewModel.onAnswerInputChange("mizu")
-            awaitItem()
-            viewModel.submitAnswer()
-            val mismatchState = awaitItem()
-            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).answerTypeMismatchCount).isEqualTo(1)
-            // Rejected outright, not graded as a miss — feedback stays null and the question isn't
-            // consumed (remainingCount unchanged, no requeue).
-            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).feedback).isNull()
-            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(remainingBeforeMismatch)
-
-            viewModel.onAnswerInputChange("Water")
-            awaitItem()
-            viewModel.submitAnswer()
-            val correctState = awaitItem()
-            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
-        }
-    }
+    fun `submitting a romaji reading into a meaning question rejects it instead of grading a miss`() = wrongTypeAnswerIsRejectedNotGraded(
+        fixtures = kanjiQueue, target = QuestionType.MEANING,
+        answerOfTheWrongType = "mizu", correctAnswer = "Water"
+    )
 
     @Test
-    fun `submitting a meaning into a reading question rejects it instead of grading a miss`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            // Queue order is shuffled — answer meaning questions correctly until reading comes up.
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange("Water")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-            // Captured before the mismatch submission — if the reading question happened to be
-            // drawn first, the meaning question is still outstanding, so this is 2, not 1.
-            val remainingBeforeMismatch = (state.phase as ReviewUiState.Phase.Active).remainingCount
-
-            viewModel.onAnswerInputChange("Water")
-            awaitItem()
-            viewModel.submitAnswer()
-            val mismatchState = awaitItem()
-            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).answerTypeMismatchCount).isEqualTo(1)
-            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).feedback).isNull()
-            // Rejected outright, not graded as a miss — the queue is untouched.
-            assertThat((mismatchState.phase as ReviewUiState.Phase.Active).remainingCount).isEqualTo(remainingBeforeMismatch)
-
-            viewModel.onAnswerInputChange("mizu")
-            awaitItem()
-            viewModel.submitAnswer()
-            val correctState = awaitItem()
-            assertThat((correctState.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isTrue()
-        }
-    }
+    fun `submitting a meaning into a reading question rejects it instead of grading a miss`() = wrongTypeAnswerIsRejectedNotGraded(
+        fixtures = kanjiQueue, target = QuestionType.READING,
+        answerOfTheWrongType = "Water", correctAnswer = "mizu"
+    )
 
     @Test
     fun `dontKnowAnswer grades as incorrect and requeues, without auto-expanding details`() = runTest(mainDispatcherRule.dispatcher) {
