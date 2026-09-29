@@ -99,7 +99,7 @@ class WaniKaniApi(
 
     /** Follows a review_statistics collection's `pages.next_url` — see [collectAllPages]. */
     suspend fun getReviewStatisticsPage(url: String): WkCollectionResponse<ReviewStatisticData> =
-        httpClient.get(url).body()
+        httpClient.get(validatedPageUrl(url)).body()
 
     // GET /v2/reviews is deliberately not implemented: it's deprecated and always returns an empty
     // array of data (confirmed against the docs) — WaniKani no longer stores individual review

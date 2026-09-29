@@ -65,6 +65,27 @@ class WaniKaniApiTest {
         assertTrue(requested.isEmpty(), "the off-origin cursor was fetched: $requested")
     }
 
+    /** Every page follower goes through the same check — review statistics once skipped it. */
+    @Test
+    fun everyPageFollowerRefusesACursorOutsideTheApiOrigin() = runTest {
+        val requested = mutableListOf<String>()
+        val api = apiCapturing(
+            response = """{"object":"collection","url":"https://api.wanikani.com/v2/x","data":[]}""",
+            onRequest = { requested += it.url.toString() }
+        )
+        val followers: List<suspend (String) -> Unit> = listOf(
+            { api.getAssignmentsPage(it) },
+            { api.getSubjectsPage(it) },
+            { api.getReviewStatisticsPage(it) }
+        )
+
+        followers.forEach { follow ->
+            assertFailsWith<PaginationException> { follow("https://evil.example/v2/x?page_after_id=1") }
+        }
+
+        assertTrue(requested.isEmpty(), "an off-origin cursor was fetched: $requested")
+    }
+
     @Test
     fun getAssignmentsPageFollowsACursorOnTheApiOrigin() = runTest {
         val requested = mutableListOf<String>()
