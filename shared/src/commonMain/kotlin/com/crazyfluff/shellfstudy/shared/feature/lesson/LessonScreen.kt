@@ -75,6 +75,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.JANK_STATE_SCREEN
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankState
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
@@ -187,6 +189,39 @@ object LessonScreenTestTags {
     const val FINISH_FOR_NOW_BUTTON = "lesson_finish_for_now_button"
 }
 
+/**
+ * Reports the lesson screen's current state to the jank harness.
+ *
+ * The Study phase is separated from the Quiz phases because they are genuinely different rendering
+ * modes with different costs — a study card renders stroke-order data and mnemonics, the quiz renders
+ * a question and grading feedback — and a stall attributed to "lesson" alone would not say which.
+ */
+@Composable
+private fun LessonJankState(uiState: LessonUiState) {
+    val phase = uiState.phase
+    ReportJankState(
+        JANK_STATE_SCREEN to "lesson",
+        "phase" to when (phase) {
+            LessonUiState.Phase.Loading -> "loading"
+            is LessonUiState.Phase.Error -> "error"
+            LessonUiState.Phase.NoLessonsAvailable -> "empty"
+            is LessonUiState.Phase.Select -> "select"
+            is LessonUiState.Phase.Study -> "study"
+            is LessonUiState.Phase.Quiz -> "quiz"
+            else -> "other"
+        },
+        "answer" to when (phase) {
+            is LessonUiState.Phase.Quiz -> when {
+                phase.feedback == null -> "answering"
+                phase.answerRevealed -> "feedback_revealed"
+                else -> "feedback_hidden"
+            }
+            else -> "n/a"
+        },
+        "rankChange" to if ((phase as? LessonUiState.Phase.Quiz)?.rankChange != null) "shown" else "none"
+    )
+}
+
 @Composable
 fun LessonRoute(
     onSessionComplete: () -> Unit,
@@ -196,6 +231,10 @@ fun LessonRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
+
+    // Reported to the jank harness in the same shape as the review screen's, so the two quiz screens
+    // are comparable rather than one being attributable and the other not.
+    LessonJankState(uiState)
 
     // Both exits navigate back; which one it was is the ViewModel's business (abandoning cleared the
     // persisted session, parking kept it), and the dashboard reads the difference from whether a

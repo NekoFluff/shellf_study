@@ -31,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.JANK_STATE_SCREEN
+import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankState
 import org.koin.compose.viewmodel.koinViewModel
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
@@ -101,6 +103,40 @@ object ReviewScreenTestTags {
     const val SESSION_CONTEXT_LABEL = "review_session_context_label"
 }
 
+/**
+ * Reports the review screen's current state to the jank harness.
+ *
+ * Kept as its own composable so the mapping from [ReviewUiState] to tags reads as one piece, and so
+ * [ReviewRoute] stays about wiring rather than about instrumentation.
+ */
+@Composable
+private fun ReviewJankState(uiState: ReviewUiState) {
+    val phase = uiState.phase
+    ReportJankState(
+        JANK_STATE_SCREEN to "review",
+        "phase" to when (phase) {
+            ReviewUiState.Phase.Loading -> "loading"
+            is ReviewUiState.Phase.Error -> "error"
+            ReviewUiState.Phase.NoReviewsAvailable -> "empty"
+            is ReviewUiState.Phase.Active -> "active"
+            is ReviewUiState.Phase.Complete -> "complete"
+        },
+        // Only meaningful while Active. `answering` means no feedback yet, so the frame belongs to
+        // typing/revealing; `feedback` covers the window in which the grade was applied — the
+        // optimistic SRS write, the outbox enqueue and the session persist — which is the flow the
+        // per-answer work runs through.
+        "answer" to when (phase) {
+            is ReviewUiState.Phase.Active -> when {
+                phase.feedback == null -> "answering"
+                phase.answerRevealed -> "feedback_revealed"
+                else -> "feedback_hidden"
+            }
+            else -> "n/a"
+        },
+        "rankChange" to if ((phase as? ReviewUiState.Phase.Active)?.rankChange != null) "shown" else "none"
+    )
+}
+
 @Composable
 fun ReviewRoute(
     onSessionComplete: () -> Unit,
@@ -110,6 +146,17 @@ fun ReviewRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
+
+    // Reported to the jank harness so a stalled frame on this screen says what it was doing. The
+    // review screen produced 45 of the 94 stalls in the first real session and the two largest
+    // non-sync frames, but with no tags of its own they were all just `screen=review` — which is
+    // exactly the unattributable state the harness exists to end.
+    //
+    // These are the states a stall could plausibly belong to, in the order they occur per item:
+    // answering (no feedback yet), showing feedback (grading has happened — the optimistic SRS write,
+    // the outbox enqueue and the session persist are all in or just after this window), and the rank
+    // change animating.
+    ReviewJankState(uiState)
 
     LaunchedEffect(uiState.isAbandoned) {
         if (uiState.isAbandoned) onBack()
