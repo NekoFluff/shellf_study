@@ -18,6 +18,9 @@ import com.crazyfluff.shellfstudy.shared.network.ReviewResultData
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
+import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.fakes.DEFAULT_TEST_SRS_SYSTEM
+import com.crazyfluff.shellfstudy.fakes.FakeSrsSystemDao
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -205,6 +208,30 @@ class AssignmentRepositoryTest {
         val rankChange = repository.computeReviewRankChange(item, ReviewGrade(meaningCorrect = true, readingCorrect = true))
 
         assertThat(rankChange).isNull()
+    }
+
+    @Test
+    fun `a warm after SRS systems first sync replaces a cache filled while there were none`() = runTest {
+        // The first session after install warms before its queue sync has ever brought SRS systems
+        // in. A warm-once cache kept that empty map for the life of the process.
+        val srsSystemDao = FakeSrsSystemDao()
+        val repository = AssignmentRepository(
+            repositories.api, repositories.assignmentDao, repositories.subjectDao,
+            repositories.syncStateDao, srsSystemDao
+        )
+        val item = ReviewItem(
+            assignmentId = 101, subjectId = 1, subjectType = SubjectType.RADICAL, characters = "口",
+            level = 3, srsStage = 3, meanings = listOf("Mouth"), readings = emptyList(), srsSystemId = 0
+        )
+        val grade = ReviewGrade(meaningCorrect = true, readingCorrect = true)
+
+        repository.warmSrsSystemCache()
+        assertThat(repository.computeReviewRankChange(item, grade)).isNull()
+
+        srsSystemDao.seed(DEFAULT_TEST_SRS_SYSTEM)
+        repository.warmSrsSystemCache()
+
+        assertThat(repository.computeReviewRankChange(item, grade)?.to?.raw).isEqualTo(4)
     }
 
     @Test

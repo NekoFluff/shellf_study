@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.data
 
+import kotlin.concurrent.Volatile
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
 import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
@@ -208,21 +209,22 @@ class AssignmentRepository(
         return RankChange(SrsStage.LOCKED, SrsStage.fromRaw(srsSystem.startingStagePosition))
     }
 
-    // Small, rarely-changing reference data — WaniKani only has a couple of SRS systems — cached
-    // in memory once so a review item's rank change can be predicted with zero DB access at all
+    // Small, rarely-changing reference data — WaniKani only has a couple of SRS systems — held in
+    // memory so a review item's rank change can be predicted with zero DB access at all
     // ([computeReviewRankChange]), and so the deferred write
     // (applyOptimisticReviewResult/applyOptimisticLessonStart) doesn't need a DB round trip for the
-    // SRS system either, only for the assignment row itself. Safe to treat as immutable for a
-    // session: SRS systems don't change after the initial sync.
+    // SRS system either, only for the assignment row itself. Replaced wholesale on every warm, and
+    // written from the loading path while graded answers read it, hence @Volatile.
+    @Volatile
     private var srsSystemCache: Map<Long, SrsSystemEntity>? = null
 
-    /** Warms [srsSystemCache] if it isn't already — call once before a grading session starts
-     *  (e.g. when the review/lesson queue loads), so every review answer in that session can
-     *  compute its rank change synchronously via [computeReviewRankChange]. */
+    /** Reloads [srsSystemCache] — call before a grading session starts, and again once a sync may
+     *  have brought SRS systems in, so every answer in that session can compute its rank change
+     *  synchronously via [computeReviewRankChange]. A reload rather than a warm-once: the first
+     *  session after install loads the queue before SRS systems have ever synced, and a cache
+     *  filled then would stay empty for the life of the process. */
     suspend fun warmSrsSystemCache() {
-        if (srsSystemCache == null) {
-            srsSystemCache = srsSystemDao.observeAll().first().associateBy { it.id }
-        }
+        srsSystemCache = srsSystemDao.observeAll().first().associateBy { it.id }
     }
 
     /** Cache-first lookup, falling back to a direct DB read if the cache hasn't been warmed (or

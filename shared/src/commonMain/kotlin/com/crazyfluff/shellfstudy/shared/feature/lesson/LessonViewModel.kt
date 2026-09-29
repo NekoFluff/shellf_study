@@ -611,7 +611,10 @@ class LessonViewModel(
     private suspend fun fetchFreshQueue() {
         clearSessionState()
 
-        when (val result = syncOrchestrator.syncQueue()) {
+        val result = syncOrchestrator.syncQueue()
+        // Again after the sync, which may have been the first to bring SRS systems in.
+        assignmentRepository.warmSrsSystemCache()
+        when (result) {
             is ApiResult.Error -> {
                 // Auth errors require user action (re-login) — surface them explicitly. Network
                 // errors auto-fall back to cached data so the user can study without connectivity,
