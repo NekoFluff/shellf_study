@@ -142,6 +142,7 @@ class AssignmentRepository(
             resource = SyncResources.ASSIGNMENTS,
             force = force,
             staleness = ASSIGNMENTS_STALENESS,
+            countRows = { it.size },
             fetch = { cursor ->
                 collectAllPages(
                     firstPage = { api.getAssignments(updatedAfter = cursor) },

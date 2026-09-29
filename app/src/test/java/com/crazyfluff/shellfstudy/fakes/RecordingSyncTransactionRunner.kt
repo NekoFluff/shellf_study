@@ -27,6 +27,9 @@ class RecordingSyncTransactionRunner : SyncTransactionRunner {
      */
     var onEnter: (() -> Unit)? = null
 
+    /** Invoked immediately after the block returns, so a test can compare a before/after snapshot. */
+    var onExit: (() -> Unit)? = null
+
     override suspend fun <T> runInTransaction(block: suspend () -> T): T {
         transactionCount++
         isInsideTransaction = true
@@ -35,6 +38,7 @@ class RecordingSyncTransactionRunner : SyncTransactionRunner {
             block()
         } finally {
             isInsideTransaction = false
+            onExit?.invoke()
         }
     }
 }

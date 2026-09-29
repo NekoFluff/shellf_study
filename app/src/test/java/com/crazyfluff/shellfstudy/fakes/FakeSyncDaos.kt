@@ -18,10 +18,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
-class FakeSrsSystemDao : SrsSystemDao {
+class FakeSrsSystemDao(private val writeLog: SyncWriteLog? = null) : SrsSystemDao {
     private val systems = MutableStateFlow<Map<Long, SrsSystemEntity>>(emptyMap())
 
     override suspend fun upsertAll(systems: List<SrsSystemEntity>) {
+        writeLog?.record("srs_systems", systems.size)
         this.systems.value = this.systems.value + systems.associateBy { it.id }
     }
 
@@ -36,10 +37,11 @@ class FakeSrsSystemDao : SrsSystemDao {
     }
 }
 
-class FakeReviewStatisticDao : ReviewStatisticDao {
+class FakeReviewStatisticDao(private val writeLog: SyncWriteLog? = null) : ReviewStatisticDao {
     private val statistics = MutableStateFlow<Map<Long, ReviewStatisticEntity>>(emptyMap())
 
     override suspend fun upsertAll(statistics: List<ReviewStatisticEntity>) {
+        writeLog?.record("review_statistics", statistics.size)
         this.statistics.value = this.statistics.value + statistics.associateBy { it.id }
     }
 
@@ -54,10 +56,11 @@ class FakeReviewStatisticDao : ReviewStatisticDao {
     }
 }
 
-class FakeLevelProgressionDao : LevelProgressionDao {
+class FakeLevelProgressionDao(private val writeLog: SyncWriteLog? = null) : LevelProgressionDao {
     private val progressions = MutableStateFlow<Map<Long, LevelProgressionEntity>>(emptyMap())
 
     override suspend fun upsertAll(progressions: List<LevelProgressionEntity>) {
+        writeLog?.record("level_progressions", progressions.size)
         this.progressions.value = this.progressions.value + progressions.associateBy { it.id }
     }
 

@@ -61,12 +61,24 @@ object SyncResources {
  *
  * @param cursorToRecord the `updated_after` value to persist on success, or null for a resource whose
  *   fetch is not cursor-based (level progressions, which always refetch in full).
+ * @param rowCount how many rows the fetch produced, so [completeResourceSync] can skip the write
+ *   entirely when there are none.
+ * @param canSkipWhenEmpty whether an empty fetch is a no-op. True for a cursor-based fetch, where
+ *   "nothing came back since your cursor" means no row changed and there is nothing to store —
+ *   writing then would still refresh Room's invalidation tracker and wake every observer for nothing.
+ *   False for a full refetch, where an empty response may mean the server genuinely has nothing and
+ *   skipping would leave the previous rows in place.
  */
 class ResourceSync<T>(
     val cursorToRecord: String?,
     private val rows: T,
+    val rowCount: Int,
+    val canSkipWhenEmpty: Boolean,
     private val write: suspend (T) -> Unit
 ) {
+    /** Whether this fetch produced anything at all. */
+    val hasRows: Boolean get() = rowCount > 0
+
     /** Performs the database write. Called inside a transaction by the orchestrator, or on its own by
      *  the resource's own `sync…` entry point. */
     suspend fun persist() = write(rows)
@@ -80,7 +92,8 @@ class ResourceSync<T>(
  * [completeResourceSync] is the second half.
  *
  * @param useCursor false for resources with no documented `updated_after` filter, which always do a
- *   full refetch.
+ *   full refetch. It also decides whether an empty fetch may be skipped — see [ResourceSync].
+ * @param countRows how many rows [T] holds, needed to decide emptiness generically.
  */
 internal suspend fun <T> fetchResourceSync(
     syncStateDao: SyncStateDao,
@@ -88,6 +101,7 @@ internal suspend fun <T> fetchResourceSync(
     force: Boolean,
     staleness: Duration,
     useCursor: Boolean = true,
+    countRows: (T) -> Int,
     fetch: suspend (cursor: String?) -> T,
     write: suspend (T) -> Unit
 ): ResourceSync<T>? {
@@ -100,6 +114,8 @@ internal suspend fun <T> fetchResourceSync(
     return ResourceSync(
         cursorToRecord = if (useCursor) startedAt else null,
         rows = rows,
+        rowCount = countRows(rows),
+        canSkipWhenEmpty = useCursor,
         write = write
     )
 }
@@ -107,15 +123,31 @@ internal suspend fun <T> fetchResourceSync(
 /**
  * Persists [sync]'s rows and records its cursor as one unit.
  *
- * Not transactional by itself. Callers that sync a single resource (the review/lesson queue refresh,
- * a subject detail refetch) get the same non-atomic behaviour the repository always had, since there
- * is only one write to broadcast either way; callers syncing several resources should hand this to
- * [com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator], which runs them all in one transaction.
+ * **An empty incremental fetch skips the write but still records success.** If a cursor-based fetch
+ * came back with nothing, no row changed, so there is nothing to store — and the write would be pure
+ * cost, because Room refreshes its invalidation tracker after every outermost write operation
+ * regardless of whether it stored anything. Storing zero rows still wakes every observable query in
+ * the app, which on a resume that finds nothing changed (the common case, given the staleness gate)
+ * was five pointless wake-ups per app open.
  *
- * A resource that has no cursor to record is still persisted — [ResourceSync.cursorToRecord] being
- * null means "always refetch in full", not "nothing to do".
+ * The success record is *not* skipped, and that distinction is the whole correctness of this guard.
+ * "Fetched, nothing changed" is a successful sync; treating it as a no-op that never happened would
+ * leave the resource permanently stale, so every subsequent pass would refetch it — and, since the
+ * fetch would again return nothing, refetch it forever. Recording success is what lets the staleness
+ * gate do its job on the next pass.
+ *
+ * A *full* refetch is never skipped when empty, because there an empty response may be the server
+ * genuinely having nothing — and skipping would silently leave the previous rows in place. See
+ * [ResourceSync.canSkipWhenEmpty].
+ *
+ * Not transactional by itself. Callers that sync a single resource get the same non-atomic behaviour
+ * the repository always had, since there is only one write to broadcast either way; callers syncing
+ * several resources should hand this to [com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator],
+ * which runs them all in one transaction.
  */
 internal suspend fun completeResourceSync(syncStateDao: SyncStateDao, resource: String, sync: ResourceSync<*>) {
-    sync.persist()
+    if (sync.hasRows || !sync.canSkipWhenEmpty) {
+        sync.persist()
+    }
     recordSyncSuccess(syncStateDao, resource, cursor = sync.cursorToRecord)
 }

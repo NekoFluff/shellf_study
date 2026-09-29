@@ -81,7 +81,9 @@ class TestRepositories(
     val waniKaniRepository: WaniKaniRepository,
     val syncOrchestrator: SyncOrchestrator,
     /** Exposed so sync tests can assert how a pass groups its writes — see RecordingSyncTransactionRunner. */
-    val syncTransactionRunner: RecordingSyncTransactionRunner
+    val syncTransactionRunner: RecordingSyncTransactionRunner,
+    /** Exposed so tests can count the write operations a sync pass issues — see SyncWriteLog. */
+    val writeLog: SyncWriteLog
 )
 
 /**
@@ -98,15 +100,18 @@ fun buildTestRepositories(
     defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ): TestRepositories {
     val api = buildTestApi(baseUrl)
-    val subjectDao = FakeSubjectDao()
-    val assignmentDao = FakeAssignmentDao(subjectsAtLevel = subjectDao::subjectsAtLevel)
-    val srsSystemDao = FakeSrsSystemDao().apply { seed(DEFAULT_TEST_SRS_SYSTEM) }
+    // Shared across every bulk-write DAO so a test can assert how many write operations a sync pass
+    // issued, not just what ended up stored — see SyncWriteLog.
+    val writeLog = SyncWriteLog()
+    val subjectDao = FakeSubjectDao(writeLog)
+    val assignmentDao = FakeAssignmentDao(subjectsAtLevel = subjectDao::subjectsAtLevel, writeLog = writeLog)
+    val srsSystemDao = FakeSrsSystemDao(writeLog).apply { seed(DEFAULT_TEST_SRS_SYSTEM) }
     val syncStateDao = FakeSyncStateDao()
     val studyActivityDao = FakeStudyActivityDao()
     val outboxDao = FakeOutboxDao()
     val outboxSyncScheduler = FakeOutboxSyncScheduler()
-    val reviewStatisticDao = FakeReviewStatisticDao()
-    val levelProgressionDao = FakeLevelProgressionDao()
+    val reviewStatisticDao = FakeReviewStatisticDao(writeLog)
+    val levelProgressionDao = FakeLevelProgressionDao(writeLog)
 
     val pitchAccentRepository = PitchAccentRepository(FakePitchAccentBundledSource(pitchAccentEntries))
     val subjectRepository =
@@ -120,6 +125,6 @@ fun buildTestRepositories(
     return TestRepositories(
         api, subjectDao, assignmentDao, srsSystemDao, syncStateDao, studyActivityDao, outboxDao, outboxSyncScheduler,
         reviewStatisticDao, levelProgressionDao, subjectRepository, assignmentRepository, pitchAccentRepository,
-        statsRepository, waniKaniRepository, syncOrchestrator, syncTransactionRunner
+        statsRepository, waniKaniRepository, syncOrchestrator, syncTransactionRunner, writeLog
     )
 }

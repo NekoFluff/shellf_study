@@ -169,21 +169,26 @@ class SyncOrchestratorTest {
     }
 
     /**
-     * And it groups only the writes. A Room database has one write connection, so holding it across a
-     * paged network fetch would block every other writer in the app — so every fetch must complete
-     * before the transaction opens. Capturing the request list at the moment the transaction is
-     * entered proves that ordering, rather than merely asserting it in a comment.
+     * And it groups only the writes. A Room database has exactly one write connection, so issuing a
+     * network fetch while holding it would block every other writer in the app for the fetch's
+     * duration — and can throw once the connection is held past its timeout.
+     *
+     * Asserted as "no request arrives *between* entering and leaving the transaction", not as "every
+     * request arrived before it". The weaker phrasing is a race: the fetches run concurrently, so
+     * which of them has reached the server by the time the write connection is taken is not
+     * deterministic, and a test written that way fails intermittently for no real reason.
      */
     @Test
-    fun `fetches complete before the transaction opens`() = runTest {
-        repositories.syncTransactionRunner.onEnter = { pathsAtTransactionStart = pathsRequested() }
+    fun `no fetch happens while the transaction is open`() = runTest {
+        var requestsAtEntry = -1
+        var requestsAtExit = -1
+        repositories.syncTransactionRunner.onEnter = { requestsAtEntry = server.requestCount }
+        repositories.syncTransactionRunner.onExit = { requestsAtExit = server.requestCount }
 
         repositories.syncOrchestrator.syncAll(force = true)
 
-        assertThat(pathsAtTransactionStart).containsAtLeast(
-            "/spaced_repetition_systems", "/subjects", "/assignments",
-            "/review_statistics", "/level_progressions"
-        )
+        assertThat(requestsAtEntry).isAtLeast(0)
+        assertThat(requestsAtExit).isEqualTo(requestsAtEntry)
     }
 
     /** A pass where every resource is already fresh must not open a transaction at all. */
@@ -196,9 +201,6 @@ class SyncOrchestratorTest {
 
         assertThat(repositories.syncTransactionRunner.transactionCount).isEqualTo(afterFirstPass)
     }
-
-    /** Snapshot taken by [fetches complete before the transaction opens] when the transaction opens. */
-    private var pathsAtTransactionStart: List<String> = emptyList()
 
     private fun pathsRequested(): List<String> = requestedPaths.map { it.substringBefore('?') }
 

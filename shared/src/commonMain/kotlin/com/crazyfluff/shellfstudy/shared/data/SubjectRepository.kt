@@ -58,6 +58,7 @@ class SubjectRepository(
             resource = SyncResources.SUBJECTS,
             force = force,
             staleness = SUBJECTS_STALENESS,
+            countRows = { it.size },
             fetch = { cursor ->
                 collectAllPages(
                     firstPage = { api.getSubjects(updatedAfter = cursor) },
@@ -121,6 +122,7 @@ class SubjectRepository(
             resource = SyncResources.SRS_SYSTEMS,
             force = force,
             staleness = SUBJECTS_STALENESS,
+            countRows = { it.size },
             fetch = { cursor ->
                 api.getSpacedRepetitionSystems(updatedAfter = cursor).data.map { item ->
                     SrsSystemEntity(

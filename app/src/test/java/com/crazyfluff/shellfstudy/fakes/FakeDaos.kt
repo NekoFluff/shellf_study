@@ -16,11 +16,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
 /** In-memory stand-in for [SubjectDao] used by repository/ViewModel unit tests. */
-class FakeSubjectDao : SubjectDao {
+class FakeSubjectDao(private val writeLog: SyncWriteLog? = null) : SubjectDao {
     private val subjects = MutableStateFlow<Map<Long, SubjectEntity>>(emptyMap())
     private val unlockedIds = MutableStateFlow<Set<Long>>(emptySet())
 
     override suspend fun upsertAll(subjects: List<SubjectEntity>) {
+        writeLog?.record("subjects", subjects.size)
         this.subjects.value = this.subjects.value + subjects.associateBy { it.id }
     }
 
@@ -66,11 +67,13 @@ class FakeSubjectDao : SubjectDao {
 
 /** In-memory stand-in for [AssignmentDao] used by repository/ViewModel unit tests. */
 class FakeAssignmentDao(
-    private val subjectsAtLevel: (Int) -> List<SubjectEntity> = { emptyList() }
+    private val subjectsAtLevel: (Int) -> List<SubjectEntity> = { emptyList() },
+    private val writeLog: SyncWriteLog? = null
 ) : AssignmentDao {
     private val assignments = MutableStateFlow<Map<Long, AssignmentEntity>>(emptyMap())
 
     override suspend fun upsertAll(assignments: List<AssignmentEntity>) {
+        writeLog?.record("assignments", assignments.size)
         this.assignments.value = this.assignments.value + assignments.associateBy { it.id }
     }
 

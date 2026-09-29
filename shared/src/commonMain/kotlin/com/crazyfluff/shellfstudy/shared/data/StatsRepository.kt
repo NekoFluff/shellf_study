@@ -50,6 +50,7 @@ class StatsRepository(
             resource = SyncResources.REVIEW_STATISTICS,
             force = force,
             staleness = STALENESS,
+            countRows = { it.size },
             fetch = { cursor ->
                 collectAllPages(
                     firstPage = { api.getReviewStatistics(updatedAfter = cursor) },
@@ -110,6 +111,7 @@ class StatsRepository(
             force = force,
             staleness = STALENESS,
             useCursor = false,
+            countRows = { it.size },
             fetch = {
                 api.getLevelProgressions().data.map { item ->
                     LevelProgressionEntity(
