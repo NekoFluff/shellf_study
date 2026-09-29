@@ -60,6 +60,7 @@ import com.crazyfluff.shellfstudy.shared.quiz.AnswerFeedback
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.label
 import com.crazyfluff.shellfstudy.shared.util.formatAnswerList
+import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionPhase
 
 private val RankChangeChipWarmupValue = RankChange(from = SrsStage.APPRENTICE_1, to = SrsStage.APPRENTICE_2)
 
@@ -135,6 +136,44 @@ data class QuizQuestionUiState<T : QuizDisplayItem>(
     // when there's nothing worth saying, which is the case for every review question and for a lesson
     // session that fits in a single batch.
     val sessionContextLabel: String? = null
+)
+
+/**
+ * The question UI state both quiz screens build from their phase — the same field-for-field mapping,
+ * written out twice until [com.crazyfluff.shellfstudy.shared.quiz.QuizSessionPhase] gave the two phases
+ * a shared shape.
+ *
+ * The four values that differ are parameters, and each is a real difference rather than a translation:
+ * a lesson counts its batch ([totalCount]/[remainingCount]), names which batch it is
+ * ([sessionContextLabel]) and folds its live pitch accents into the hint ([answerHint]); a review lets
+ * a correct answer be undone until Continue submits it ([allowUndoAfterCorrect]).
+ */
+fun <T : QuizDisplayItem, P : QuizSessionPhase<T, P>> P.toQuizQuestionUiState(
+    totalCount: Int,
+    remainingCount: Int,
+    allowUndoAfterCorrect: Boolean = false,
+    sessionContextLabel: String? = null,
+    answerHint: AnswerReadingHint? = null
+): QuizQuestionUiState<T> = QuizQuestionUiState(
+    item = currentItem,
+    questionType = currentQuestionType,
+    totalCount = totalCount,
+    remainingCount = remainingCount,
+    answerInput = answerInput,
+    feedback = feedback,
+    rankChange = rankChange,
+    undoCounter = undoCounter,
+    questionSequence = questionSequence,
+    answerTypeMismatchCount = answerTypeMismatchCount,
+    questionElapsedMs = timing.questionElapsedMs,
+    questionActiveElapsedMs = timing.questionActiveElapsedMs,
+    questionActiveSegmentStartMs = timing.questionActiveSegmentStartMs,
+    sessionActiveElapsedMs = timing.sessionActiveElapsedMs,
+    sessionActiveSegmentStartMs = timing.sessionActiveSegmentStartMs,
+    allowUndoAfterCorrect = allowUndoAfterCorrect,
+    answerRevealed = answerRevealed,
+    answerHint = answerHint,
+    sessionContextLabel = sessionContextLabel
 )
 
 /**

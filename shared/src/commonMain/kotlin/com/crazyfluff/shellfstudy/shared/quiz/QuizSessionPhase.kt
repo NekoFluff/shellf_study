@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.quiz
 
 import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
+import com.crazyfluff.shellfstudy.shared.data.model.RankChange
 
 /**
  * The part of a quiz screen's state that one question lives in — Lesson's `Phase.Quiz` and Review's
@@ -26,6 +27,9 @@ interface QuizSessionPhase<T : QuizDisplayItem, SELF : QuizSessionPhase<T, SELF>
     val answerRevealed: Boolean
     val isDetailsExpanded: Boolean
     val answerTypeMismatchCount: Int
+    val rankChange: RankChange?
+    val undoCounter: Int
+    val questionSequence: Int
     val timing: QuizTimingUiState
 
     fun withAnswerInput(value: String): SELF

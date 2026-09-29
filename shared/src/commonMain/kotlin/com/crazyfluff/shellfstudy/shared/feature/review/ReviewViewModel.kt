@@ -84,12 +84,12 @@ data class ReviewUiState(
             override val currentQuestionType: QuestionType,
             override val answerInput: String = "",
             override val feedback: AnswerFeedback? = null,
-            val rankChange: RankChange? = null,
-            val undoCounter: Int = 0,
+            override val rankChange: RankChange? = null,
+            override val undoCounter: Int = 0,
             // Bumped on every advance to a new current question, even a requeued one that repeats
             // the same item/type — see QuizQuestionContent's focusResetKey, which needs a signal
             // that's guaranteed to change on advance regardless of whether the question repeats.
-            val questionSequence: Int = 0,
+            override val questionSequence: Int = 0,
             override val isDetailsExpanded: Boolean = false,
             override val answerTypeMismatchCount: Int = 0,
             val totalCount: Int = 0,

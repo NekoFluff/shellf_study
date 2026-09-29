@@ -62,10 +62,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,10 +90,10 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizErrorTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizLoadingContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSummaryDisplay
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.toQuizQuestionUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
@@ -481,9 +481,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
     actions: LessonActions
 ) {
     QuizQuestionContent(
-        uiState = QuizQuestionUiState(
-            item = phase.currentItem,
-            questionType = phase.currentQuestionType,
+        uiState = phase.toQuizQuestionUiState(
             totalCount = phase.totalQuizCount,
             remainingCount = phase.remainingQuizCount,
             // Which pass of the session this question belongs to: a plan of several batches needs
@@ -492,21 +490,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
                 phase.batchCount > 1 -> "Batch ${phase.batchIndex + 1} of ${phase.batchCount}"
                 else -> null
             },
-            answerInput = phase.answerInput,
-            feedback = phase.feedback,
-            rankChange = phase.rankChange,
-            undoCounter = phase.undoCounter,
-            questionSequence = phase.questionSequence,
-            answerTypeMismatchCount = phase.answerTypeMismatchCount,
-            questionElapsedMs = phase.timing.questionElapsedMs,
-            questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
-            questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
-            sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
-            sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
             // Pitch accents are folded in from the live map rather than a copy taken at grading time
             // — a batch's own quiz needs the same up-to-the-moment knowledge its study cards showed.
             // An absent entry has not been looked up yet.
-            answerRevealed = phase.answerRevealed,
             answerHint = phase.answerHint?.copy(
                 pitchAccents = pitchAccentsBySubjectId[phase.currentItem.subjectId]
                     ?: PitchAccentUiState.Unavailable

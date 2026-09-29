@@ -24,9 +24,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -42,10 +42,10 @@ import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizErrorTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizLoadingContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags
-import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionSummaryDisplay
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.quiz.toQuizQuestionUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.toDetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
@@ -395,24 +395,10 @@ private fun ColumnScope.ReviewActivePhase(
     actions: ReviewActions
 ) {
     QuizQuestionContent(
-        uiState = QuizQuestionUiState(
-            item = phase.currentItem,
-            questionType = phase.currentQuestionType,
+        uiState = phase.toQuizQuestionUiState(
             totalCount = phase.totalCount,
             remainingCount = phase.remainingCount,
-            answerInput = phase.answerInput,
-            feedback = phase.feedback,
-            rankChange = phase.rankChange,
-            undoCounter = phase.undoCounter,
-            questionSequence = phase.questionSequence,
-            answerTypeMismatchCount = phase.answerTypeMismatchCount,
-            questionElapsedMs = phase.timing.questionElapsedMs,
-            questionActiveElapsedMs = phase.timing.questionActiveElapsedMs,
-            questionActiveSegmentStartMs = phase.timing.questionActiveSegmentStartMs,
-            sessionActiveElapsedMs = phase.timing.sessionActiveElapsedMs,
-            sessionActiveSegmentStartMs = phase.timing.sessionActiveSegmentStartMs,
             allowUndoAfterCorrect = true,
-            answerRevealed = phase.answerRevealed,
             answerHint = phase.answerHint
         ),
         onAnswerInputChange = actions::onAnswerInputChange,
