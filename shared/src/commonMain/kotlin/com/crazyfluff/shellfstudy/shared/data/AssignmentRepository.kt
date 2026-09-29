@@ -44,8 +44,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.LocalDate
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
@@ -91,6 +90,15 @@ private fun ReviewGrade.nextStage(currentStage: Int, srsSystem: SrsSystemEntity)
     }
 
 private fun Instant.truncatedToHour(): Instant = Instant.fromEpochSeconds((epochSeconds / 3600) * 3600)
+
+/** Local midnight for [date] as a string comparable against the `startedAt` values WaniKani returns.
+ *
+ *  Built by hand rather than via `toString()` on a parsed instant: the comparison in
+ *  [AssignmentDao.observeStartedSinceCount] is lexicographic, and every `startedAt` WaniKani writes
+ *  carries an explicit zero fraction (`2023-04-04T07:56:05.000000Z`). `Instant.toString()` drops a
+ *  zero fraction entirely and emits a variable number of fractional digits otherwise, either of which
+ *  makes `'.' < 'Z'` decide the comparison instead of the digits. */
+internal fun localMidnightIso(date: LocalDate): String = "$date" + "T00:00:00.000000Z"
 
 /** Owns the full assignment mirror — SRS progress for every subject the user has encountered. */
 class AssignmentRepository(
@@ -379,7 +387,7 @@ class AssignmentRepository(
             val nowIso = now.toString()
             val currentHourStart = now.truncatedToHour()
             combine(
-                assignmentDao.observeDueForReview(nowIso),
+                assignmentDao.observeAvailableNow(nowIso),
                 assignmentDao.observeUpcoming(nowIso)
             ) { availableNow, upcoming ->
                 // Grouped straight into window.bucketCount buckets (not one bucket per hour then
@@ -482,21 +490,23 @@ class AssignmentRepository(
 
     /**
      * Count of assignments started on the current local calendar date — used for the "lessons done
-     * today" indicator. [assignmentDao.observeAllStartedTimestamps] only re-emits on a DB write, so
-     * combining with [dailyRolloverTicks] is what actually rolls the count over at local midnight —
-     * otherwise, on a night with no new assignments, the count would stay frozen at whatever it was
-     * last computed until the next unrelated write (or app restart) happened to recompute it.
+     * today" indicator.
+     *
+     * The counting is done in SQL ([AssignmentDao.observeStartedSinceCount]) from a local-midnight
+     * cutoff, rather than by loading every started timestamp and parsing each one in Kotlin. The
+     * ticker is still what makes the value roll over at local midnight: the DAO flow only re-emits on
+     * a write, so without it the count would stay frozen at yesterday's until some unrelated write
+     * happened to land in the assignments table.
+     *
+     * [flatMapLatest] rather than `combine` because the cutoff is a query *parameter*: a day change
+     * has to re-subscribe with the new cutoff, not just recompute from a stale result.
      */
-    fun observeLessonsCompletedToday(): Flow<Int> =
-        combine(
-            assignmentDao.observeAllStartedTimestamps(),
-            dailyRolloverTicks()
-        ) { timestamps, today ->
-            val timeZone = TimeZone.currentSystemDefault()
-            timestamps.count { ts ->
-                runCatching { Instant.parse(ts).toLocalDateTime(timeZone).date == today }.getOrDefault(false)
-            }
-        }.flowOn(defaultDispatcher)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeLessonsCompletedToday(): Flow<Int> = dailyRolloverTicks()
+        .flatMapLatest { today ->
+            assignmentDao.observeStartedSinceCount(localMidnightIso(today))
+        }
+        .flowOn(defaultDispatcher)
 
     /**
      * How many of the current level's kanji are at Guru or higher, out of the total — WaniKani

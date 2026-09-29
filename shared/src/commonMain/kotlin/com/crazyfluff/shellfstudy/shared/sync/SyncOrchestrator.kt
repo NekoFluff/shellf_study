@@ -29,13 +29,32 @@ class SyncOrchestrator(
 
     suspend fun syncAll(force: Boolean = false): ApiResult<Unit> = syncMutex.withLock { syncAllLocked(force) }
 
-    private suspend fun syncAllLocked(force: Boolean): ApiResult<Unit> = coroutineScope {
+    /**
+     * [syncAll] with assignments forced and every other resource left staleness-gated.
+     *
+     * The dashboard's resume path needs exactly that combination: it refetches the banner counts from
+     * `/summary` on every resume, but `syncAll(force = false)` only refetches assignments once
+     * `ASSIGNMENTS_STALENESS` has elapsed — leaving the forecast, item-spread and level-progress cards
+     * (all derived from the local assignments table) trailing the banner by up to an hour.
+     *
+     * This exists as a parameter rather than as "call `syncAll(force = false)` and then also call
+     * `assignmentRepository.syncAssignments(force = true)`", which is what the dashboard used to do.
+     * That fetched and rewrote the assignments table twice on every resume — the second pass superseding
+     * the first — and each rewrite is its own Room write transaction and therefore its own invalidation
+     * broadcast to every observable assignments query. Forcing the resource *within* the pass still
+     * reuses its saved `updated_after` cursor, so this stays an incremental fetch, not a full resync.
+     */
+    suspend fun syncAllForcingAssignments(): ApiResult<Unit> = syncMutex.withLock {
+        syncAllLocked(force = false, forceAssignments = true)
+    }
+
+    private suspend fun syncAllLocked(force: Boolean, forceAssignments: Boolean = false): ApiResult<Unit> = coroutineScope {
         // SRS systems and subjects first — everything else references subject IDs, and subjects
         // reference spaced_repetition_system_id.
         val srsResult = subjectRepository.syncSrsSystems(force)
         val subjectsResult = subjectRepository.syncSubjects(force)
 
-        val assignmentsDeferred = async { assignmentRepository.syncAssignments(force) }
+        val assignmentsDeferred = async { assignmentRepository.syncAssignments(force || forceAssignments) }
         val reviewStatisticsDeferred = async { statsRepository.syncReviewStatistics(force) }
         val levelProgressionsDeferred = async { statsRepository.syncLevelProgressions(force) }
 

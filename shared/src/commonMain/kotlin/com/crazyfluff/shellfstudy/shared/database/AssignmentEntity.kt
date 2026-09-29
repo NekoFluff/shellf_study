@@ -9,7 +9,34 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
-@Entity(tableName = "assignments", indices = [Index("subjectId"), Index("availableAt")])
+/**
+ * Indexes are chosen from the query plans of the dashboard's observable queries, not added
+ * speculatively — every index also costs write time on each sync's bulk upsert, so one that no plan
+ * uses is pure loss.
+ *
+ * - `(hidden, startedAt)`: `observeItemsSeenCount`, `observeAllStartedTimestamps` and
+ *   `observeStartedSinceCount` all filter on exactly this pair; the first two previously
+ *   `SCAN assignments`.
+ * - `(hidden, availableAt)`: `observeDueForReviewCount` / `observeAvailableNow`, which is why the
+ *   bare `availableAt` index alone is no longer declared — with `hidden = 0` in every one of these
+ *   predicates, a composite starting with `hidden` supersedes it.
+ * - `(hidden, srsStage, subjectType)`: `observeSrsStageAndTypeCounts`'s GROUP BY, which previously
+ *   ran as `SCAN assignments` plus `USE TEMP B-TREE FOR GROUP BY`.
+ *
+ * Deliberately *not* added: `(hidden, unlockedAt, startedAt)` for the lesson queries. Those match at
+ * most a few dozen rows (`observeDueForLesson` returns 17 on a level-30 account), so the composite
+ * would make the SELECT scan fewer rows while never being worth its write cost.
+ */
+@Entity(
+    tableName = "assignments",
+    indices = [
+        Index("subjectId"),
+        Index("availableAt"),
+        Index("hidden", "startedAt"),
+        Index("hidden", "availableAt"),
+        Index("hidden", "srsStage", "subjectType")
+    ]
+)
 data class AssignmentEntity(
     @PrimaryKey val id: Long,
     val subjectId: Long,
@@ -42,6 +69,16 @@ data class LevelProgressItemRow(
 /** One kanji assignment's SRS stage at a given level — the level-up-progress source. */
 data class KanjiLevelUpRow(val srsStage: Int)
 
+/** The three columns the review forecast buckets — see [AssignmentDao.observeUpcoming]. Deliberately
+ *  not an [AssignmentEntity]: that would decode eleven more columns per upcoming assignment, none of
+ *  which the forecast reads. On a maxed-out account the upcoming set runs to a few thousand rows, so
+ *  the difference is a 1.2 KB/row projection against a 158-byte one. */
+data class UpcomingAssignmentRow(
+    val availableAt: String?,
+    val subjectType: String,
+    val srsStage: Int
+)
+
 @Dao
 interface AssignmentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -72,6 +109,24 @@ interface AssignmentDao {
     @Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt <= :nowIso AND EXISTS (SELECT 1 FROM subjects WHERE subjects.id = assignments.subjectId)")
     fun observeDueForReviewCount(nowIso: String): Flow<Int>
 
+    /** Reviews available right now, projected like [observeUpcoming], for the forecast's "now" column.
+     *
+     *  Not [observeDueForReview], which is also the review-queue source and so has to load whole rows
+     *  — the forecast reads only a count and two groupings, so it must not pay the queue's projection.
+     *
+     *  Keeps [observeDueForReviewCount]'s subject-existence check, though, because the forecast's
+     *  "N due now" and the dashboard's review badge describe the same quantity and must not disagree.
+     *  That check is what makes them agree with what a session can actually contain: queue builders
+     *  drop assignments whose subject isn't cached. */
+    @Query(
+        """
+        SELECT availableAt, subjectType, srsStage FROM assignments
+        WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt <= :nowIso
+          AND EXISTS (SELECT 1 FROM subjects WHERE subjects.id = assignments.subjectId)
+        """
+    )
+    fun observeAvailableNow(nowIso: String): Flow<List<UpcomingAssignmentRow>>
+
     /** Lessons available right now: unlocked but not yet started. */
     @Query("SELECT * FROM assignments WHERE hidden = 0 AND unlockedAt IS NOT NULL AND startedAt IS NULL")
     fun observeDueForLesson(): Flow<List<AssignmentEntity>>
@@ -80,9 +135,14 @@ interface AssignmentDao {
     @Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND unlockedAt IS NOT NULL AND startedAt IS NULL AND EXISTS (SELECT 1 FROM subjects WHERE subjects.id = assignments.subjectId)")
     fun observeDueForLessonCount(): Flow<Int>
 
-    /** Reviews that will become available later — the review-forecast source. */
-    @Query("SELECT * FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt > :nowIso ORDER BY availableAt ASC")
-    fun observeUpcoming(nowIso: String): Flow<List<AssignmentEntity>>
+    /** Reviews that will become available later — the review-forecast source.
+     *
+     *  Projects only the three columns the forecast buckets. This previously selected whole
+     *  [AssignmentEntity] rows, which meant decoding nine unused columns — including two nullable
+     *  timestamp strings parsed per row — for a set that runs to a few thousand rows on a
+     *  maxed-out account. */
+    @Query("SELECT availableAt, subjectType, srsStage FROM assignments WHERE hidden = 0 AND availableAt IS NOT NULL AND availableAt > :nowIso ORDER BY availableAt ASC")
+    fun observeUpcoming(nowIso: String): Flow<List<UpcomingAssignmentRow>>
 
     /** SRS-stage distribution by subject type across every started assignment — the item-spread source. */
     @Query("SELECT srsStage, subjectType, COUNT(*) as count FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL GROUP BY srsStage, subjectType")
@@ -108,6 +168,18 @@ interface AssignmentDao {
 
     @Query("SELECT startedAt FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL")
     fun observeAllStartedTimestamps(): Flow<List<String>>
+
+    /** How many assignments were started at or after [sinceIso] — the "lessons done today" source.
+     *
+     *  Counted in SQL rather than by materializing every started timestamp and parsing each one in
+     *  Kotlin ([observeAllStartedTimestamps]'s approach), which meant one ISO-8601 string allocation
+     *  plus one [kotlin.time.Instant.parse] per started assignment on every recompute — a few
+     *  thousand of each on a maxed-out account, just to count the handful started today.
+     *
+     *  [sinceIso] must be in the same canonical form WaniKani writes (`...T00:00:00.000000Z`), so the
+     *  lexicographic comparison the index provides stays correct. See `Instant.toWkIsoString`. */
+    @Query("SELECT COUNT(*) FROM assignments WHERE hidden = 0 AND startedAt IS NOT NULL AND startedAt >= :sinceIso")
+    fun observeStartedSinceCount(sinceIso: String): Flow<Int>
 
     @Query("SELECT burnedAt FROM assignments WHERE hidden = 0 AND burnedAt IS NOT NULL")
     fun observeAllBurnedTimestamps(): Flow<List<String>>

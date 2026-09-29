@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.fakes
 
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
+import com.crazyfluff.shellfstudy.shared.database.UpcomingAssignmentRow
 import com.crazyfluff.shellfstudy.shared.database.KanjiLevelUpRow
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressItemRow
 import com.crazyfluff.shellfstudy.shared.database.SrsStageTypeCount
@@ -103,11 +104,18 @@ class FakeAssignmentDao(
     override fun observeDueForLessonCount(): Flow<Int> =
         observeDueForLesson().map { it.size }
 
-    override fun observeUpcoming(nowIso: String): Flow<List<AssignmentEntity>> = assignments.map { map ->
+    override fun observeUpcoming(nowIso: String): Flow<List<UpcomingAssignmentRow>> = assignments.map { map ->
         map.values.filter {
             val availableAt = it.availableAt
             !it.hidden && availableAt != null && availableAt > nowIso
-        }
+        }.map { UpcomingAssignmentRow(it.availableAt, it.subjectType, it.srsStage) }
+    }
+
+    override fun observeAvailableNow(nowIso: String): Flow<List<UpcomingAssignmentRow>> = assignments.map { map ->
+        map.values.filter {
+            val availableAt = it.availableAt
+            !it.hidden && availableAt != null && availableAt <= nowIso
+        }.map { UpcomingAssignmentRow(it.availableAt, it.subjectType, it.srsStage) }
     }
 
     override fun observeSrsStageAndTypeCounts(): Flow<List<SrsStageTypeCount>> = assignments.map { map ->
@@ -147,6 +155,12 @@ class FakeAssignmentDao(
 
     override fun observeAllStartedTimestamps(): Flow<List<String>> = assignments.map { map ->
         map.values.mapNotNull { if (!it.hidden) it.startedAt else null }
+    }
+
+    /** Mirrors the real DAO's lexicographic `startedAt >= :sinceIso` comparison — canonical
+     *  WaniKani timestamps sort correctly as strings, so a plain string compare is faithful. */
+    override fun observeStartedSinceCount(sinceIso: String): Flow<Int> = assignments.map { map ->
+        map.values.count { !it.hidden && it.startedAt?.let { startedAt -> startedAt >= sinceIso } == true }
     }
 
     override fun observeAllBurnedTimestamps(): Flow<List<String>> = assignments.map { map ->

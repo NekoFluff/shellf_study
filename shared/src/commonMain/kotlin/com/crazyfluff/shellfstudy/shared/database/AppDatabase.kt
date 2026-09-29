@@ -17,7 +17,7 @@ import kotlinx.coroutines.Dispatchers
         LevelProgressionEntity::class,
         SyncStateEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -45,7 +45,10 @@ fun buildAppDatabase(builder: RoomDatabase.Builder<AppDatabase>): AppDatabase =
         // Dispatchers.IO isn't public on every Kotlin/Native target for this coroutines version;
         // Default is fine here since queries just run against the bundled SQLite driver.
         .setQueryCoroutineContext(Dispatchers.Default)
-        // Local cache only (subjects/assignments/etc. re-fetched from the API), so a destructive
-        // migration on schema changes is simpler than hand-written Migration objects.
+        // Real migrations first — see [APP_DATABASE_MIGRATIONS]. The destructive fallback stays as a
+        // safety net for a version jump no migration covers, where the alternative is a crash on open.
+        // The local data is a cache re-fetchable from the API, so that trade is worth taking, but it is
+        // the last resort rather than the normal path it used to be.
+        .addMigrations(*APP_DATABASE_MIGRATIONS)
         .fallbackToDestructiveMigration(dropAllTables = true)
         .build()

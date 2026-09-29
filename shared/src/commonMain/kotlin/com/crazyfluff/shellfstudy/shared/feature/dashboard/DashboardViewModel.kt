@@ -305,7 +305,21 @@ class DashboardViewModel(
             hasLastSessionSummary = hasLastSessionSummary,
             reviewForecast = reviewForecast
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
+    }
+        // Room's invalidation is table-level, so every write anywhere in the assignments, subjects,
+        // outbox or level_progressions tables re-runs *all* of the flows above — including writes
+        // that cannot change any value this screen shows (a friend-stats refresh, a sync-cursor
+        // update, an outbox status flip). `combine` re-emits on every input emission regardless of
+        // whether the combined result differs, so without this each of those writes published a
+        // brand-new DashboardUiState instance to the screen. That matters far more than the extra
+        // recomputation it looks like: a new instance defeats every equality check downstream, so the
+        // whole dashboard tree — both Canvas charts and the level-progress chip grid included —
+        // recomposed for writes that changed nothing on screen.
+        //
+        // DashboardUiState is a data class whose every field is a value or an immutable data class, so
+        // structural equality is exactly "would this render differently".
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
 
     private var hasCompletedInitialSync = false
 
@@ -435,15 +449,11 @@ class DashboardViewModel(
                 return@launch
             }
 
-            dashboardSyncCoordinator.sync(force = false)
-
-            // fetchUserAndSummary below refetches the banner counts unconditionally on every
-            // resume, but syncAll(force = false) above only refetches assignments once
-            // ASSIGNMENTS_STALENESS has elapsed — leaving the forecast/item-spread/level-progress
-            // cards (all derived from the local assignments table) trailing the banner by up to an
-            // hour. Force this one resource specifically; it still reuses its saved `updated_after`
-            // cursor, so this stays an incremental fetch rather than a full resync.
-            assignmentRepository.syncAssignments(force = true)
+            // Assignments forced, everything else staleness-gated — see
+            // SyncOrchestrator.syncAllForcingAssignments for why this is one pass rather than a
+            // `sync(force = false)` followed by a separate forced syncAssignments, which fetched and
+            // rewrote the assignments table twice per resume.
+            dashboardSyncCoordinator.syncForcingAssignments()
 
             val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()
 
