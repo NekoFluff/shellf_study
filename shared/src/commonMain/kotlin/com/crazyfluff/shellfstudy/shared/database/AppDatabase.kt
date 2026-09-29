@@ -17,7 +17,7 @@ import kotlinx.coroutines.Dispatchers
         LevelProgressionEntity::class,
         SyncStateEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

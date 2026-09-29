@@ -17,9 +17,13 @@ import kotlinx.coroutines.flow.Flow
  * - `(hidden, startedAt)`: `observeItemsSeenCount`, `observeAllStartedTimestamps` and
  *   `observeStartedSinceCount` all filter on exactly this pair; the first two previously
  *   `SCAN assignments`.
- * - `(hidden, availableAt)`: `observeDueForReviewCount` / `observeAvailableNow`, which is why the
- *   bare `availableAt` index alone is no longer declared — with `hidden = 0` in every one of these
- *   predicates, a composite starting with `hidden` supersedes it.
+ * - `(hidden, availableAt)`: `observeDueForReviewCount` / `observeAvailableNow` / `observeUpcoming`.
+ *   Every query that filters on `availableAt` also filters on `hidden = 0`, so a composite starting
+ *   with `hidden` supersedes the bare `availableAt` index — which this entity declared anyway until
+ *   the 10->11 migration dropped it. It was pure write cost: one more index for every row of every
+ *   bulk sync write, serving no plan.
+ * - `(hidden, burnedAt)`: `observeAllBurnedTimestamps`, the self-stats "burned over time" source.
+ *   Without it that query scanned the whole table on every assignments write.
  * - `(hidden, srsStage, subjectType)`: `observeSrsStageAndTypeCounts`'s GROUP BY, which previously
  *   ran as `SCAN assignments` plus `USE TEMP B-TREE FOR GROUP BY`.
  *
@@ -31,9 +35,9 @@ import kotlinx.coroutines.flow.Flow
     tableName = "assignments",
     indices = [
         Index("subjectId"),
-        Index("availableAt"),
         Index("hidden", "startedAt"),
         Index("hidden", "availableAt"),
+        Index("hidden", "burnedAt"),
         Index("hidden", "srsStage", "subjectType")
     ]
 )

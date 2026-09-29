@@ -111,6 +111,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.sqlite.framework)
     testImplementation(libs.androidx.work.testing)
     testImplementation(platform(libs.koin.bom))
     testImplementation(libs.koin.test)
