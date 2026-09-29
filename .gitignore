@@ -16,3 +16,6 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 tools/kanjium/__pycache__/
+
+# Jank harness output from tools/jank/collect.py — local measurement artifacts.
+jank-reports/
