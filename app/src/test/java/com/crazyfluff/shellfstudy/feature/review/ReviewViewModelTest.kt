@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
-import com.crazyfluff.shellfstudy.shared.data.PlaybackState
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
@@ -567,42 +566,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
-    fun `answering a reading question autoplays the correct pronunciation when the setting is enabled`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        // Real DataStore reads settle asynchronously on their own IO dispatcher, unlike the
-        // Main-dispatcher ViewModel coroutines the test rule makes run synchronously — so wait for
-        // the play() side effect via the player's own state flow rather than checking playedAudios
-        // immediately after the uiState turbine block exits.
-        pronunciationAudioPlayer.state.test {
-            assertThat(awaitItem()).isEqualTo(PlaybackState.IDLE)
-
-            viewModel.uiState.test {
-                var state = awaitItem()
-                while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-                while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
-                    viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
-                    awaitItem()
-                    viewModel.submitAnswer()
-                    awaitItem()
-                    viewModel.onContinue()
-                    state = awaitItem()
-                }
-
-                viewModel.onAnswerInputChange("mizu")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-            }
-
-            assertThat(awaitItem()).isEqualTo(PlaybackState.PLAYING)
-        }
-
-        assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
-        assertThat(pronunciationAudioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
-    }
+    fun `answering a reading question autoplays the correct pronunciation when the setting is enabled`() = answeringAReadingQuestionAutoplaysItsPronunciation()
 
     @Test
     fun `answering a meaning question never autoplays pronunciation audio`() = runTest(mainDispatcherRule.dispatcher) {
@@ -1201,39 +1165,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     fun `a correct close-match answer is never gated by the require-tap setting`() = closeMatchIsNeverGated()
 
     @Test
-    fun `require tap to reveal answer withholds a wrong reading question's pronunciation audio until revealed`() = runTest(mainDispatcherRule.dispatcher) {
-        settingsRepository.setRequireTapToRevealReadingAnswer(true)
-        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            while ((state.phase as ReviewUiState.Phase.Active).currentQuestionType != QuestionType.READING) {
-                viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")
-                awaitItem()
-                viewModel.submitAnswer()
-                awaitItem()
-                viewModel.onContinue()
-                state = awaitItem()
-            }
-
-            viewModel.onAnswerInputChange("wrong")
-            awaitItem()
-            viewModel.submitAnswer()
-            var settled = awaitItem()
-            while ((settled.phase as ReviewUiState.Phase.Active).feedback == null) settled = awaitItem()
-            assertThat((settled.phase as ReviewUiState.Phase.Active).feedback?.isCorrect).isFalse()
-            assertThat(pronunciationAudioPlayer.playedAudios).isEmpty()
-
-            viewModel.revealAnswer()
-            awaitItem()
-        }
-
-        assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
-        assertThat(pronunciationAudioPlayer.playedAudios.first().url).isEqualTo("https://api.wanikani.com/audio/mizu.mp3")
-    }
+    fun `require tap to reveal answer withholds a wrong reading question's pronunciation audio until revealed`() = wrongReadingWithholdsItsAudioUntilRevealed()
 
     @Test
     fun `require tap to reveal answer withholds a wrong reading question's answer hint until revealed`() = wrongReadingWaitsForRevealBeforeShowingItsHint()

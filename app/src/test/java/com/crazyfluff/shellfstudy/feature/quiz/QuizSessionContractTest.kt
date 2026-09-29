@@ -8,6 +8,8 @@ import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
+import com.crazyfluff.shellfstudy.shared.data.PlaybackState
+import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -174,6 +176,24 @@ abstract class QuizSessionContractTest<STATE : Any> {
             scenarioBody.scenario()
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    /**
+     * Waits for the player to be handed audio and returns it. Whether a reading answer plays its
+     * pronunciation is decided by a display setting, and a real DataStore read settles on its own IO
+     * dispatcher — after the Main-dispatcher ViewModel work a scenario's awaits have already run
+     * through — so reading `playedAudios` straight after a grade would race the setting. The player's
+     * state flow is the arrival signal; a player that is never asked to play times out instead of
+     * passing.
+     */
+    protected suspend fun awaitPlayedAudio(): PronunciationAudio {
+        pronunciationAudioPlayer.state.test {
+            while (awaitItem() != PlaybackState.PLAYING) {
+                // Nothing to do but wait for the side effect to land.
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+        return pronunciationAudioPlayer.playedAudios.last()
     }
 
     /**
@@ -431,5 +451,42 @@ abstract class QuizSessionContractTest<STATE : Any> {
         val graded = awaitGraded()
         assertThat(graded.feedbackIsCorrect).isFalse()
         assertThat(graded.answerRevealed).isTrue()
+    }
+
+    /** A correct reading answer plays its pronunciation — autoplay is on unless turned off. */
+    protected fun answeringAReadingQuestionAutoplaysItsPronunciation() = quizSession(kanjiAudioQueue) {
+        awaitQuestionOfType(QuestionType.READING)
+
+        type("mizu")
+        submit()
+        assertThat(awaitGraded().feedbackIsCorrect).isTrue()
+
+        assertThat(awaitPlayedAudio().url).isEqualTo(KANJI_AUDIO_URL)
+    }
+
+    /**
+     * A wrong reading answer's audio waits with its text and its hint: nothing plays until the reveal
+     * tap, which plays it. The size check after the reveal is what makes the emptiness before it mean
+     * something — a second, wrongly-timed play would show up as two entries.
+     */
+    protected fun wrongReadingWithholdsItsAudioUntilRevealed() = quizSession(
+        fixtures = kanjiAudioQueue,
+        beforeSession = { settingsRepository.setRequireTapToRevealReadingAnswer(true) }
+    ) {
+        awaitQuestionOfType(QuestionType.READING)
+
+        type("wrong")
+        submit()
+        assertThat(awaitGraded().feedbackIsCorrect).isFalse()
+        assertThat(pronunciationAudioPlayer.playedAudios).isEmpty()
+
+        reveal()
+        assertThat(awaitPlayedAudio().url).isEqualTo(KANJI_AUDIO_URL)
+        assertThat(pronunciationAudioPlayer.playedAudios).hasSize(1)
+    }
+
+    private companion object {
+        /** The pronunciation the kanji in the audio-carrying fixtures carries. */
+        const val KANJI_AUDIO_URL = "https://api.wanikani.com/audio/mizu.mp3"
     }
 }
