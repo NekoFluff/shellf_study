@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.fakes
 
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.AssignmentStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
@@ -76,6 +77,7 @@ class TestRepositories(
     val levelProgressionDao: FakeLevelProgressionDao,
     val subjectRepository: SubjectRepository,
     val assignmentRepository: AssignmentRepository,
+    val assignmentStatsRepository: AssignmentStatsRepository,
     val pitchAccentRepository: PitchAccentRepository,
     val statsRepository: StatsRepository,
     val waniKaniRepository: WaniKaniRepository,
@@ -124,7 +126,8 @@ fun buildTestRepositories(
 
     return TestRepositories(
         api, subjectDao, assignmentDao, srsSystemDao, syncStateDao, studyActivityDao, outboxDao, outboxSyncScheduler,
-        reviewStatisticDao, levelProgressionDao, subjectRepository, assignmentRepository, pitchAccentRepository,
+        reviewStatisticDao, levelProgressionDao, subjectRepository, assignmentRepository,
+        AssignmentStatsRepository(assignmentDao, subjectDao, defaultDispatcher), pitchAccentRepository,
         statsRepository, waniKaniRepository, syncOrchestrator, syncTransactionRunner, writeLog
     )
 }

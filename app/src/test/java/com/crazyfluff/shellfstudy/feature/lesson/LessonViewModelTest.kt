@@ -195,7 +195,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     }
 
     private fun TestScope.createViewModel() = LessonViewModel(
-        assignmentRepository, repositories.statsRepository, outboxRepository,
+        assignmentRepository, repositories.assignmentStatsRepository, repositories.statsRepository, outboxRepository,
         LessonSessionController(backgroundScope, lessonSessionRepository),
         lastSessionSummaryRepository, pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository,
         pronunciationAudioPlayer, appForegroundTracker, backgroundScope,

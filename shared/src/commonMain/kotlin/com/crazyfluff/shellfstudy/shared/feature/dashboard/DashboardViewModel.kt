@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.AssignmentStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
@@ -178,6 +179,7 @@ class DashboardViewModel(
     private val settingsRepository: SettingsRepository,
     private val subjectRepository: SubjectRepository,
     private val assignmentRepository: AssignmentRepository,
+    private val assignmentStatsRepository: AssignmentStatsRepository,
     private val statsRepository: StatsRepository,
     private val outboxRepository: OutboxRepository,
     private val outboxSyncScheduler: OutboxSyncScheduler,
@@ -211,7 +213,7 @@ class DashboardViewModel(
 
     private val completionProjectionFlow: Flow<CompletionProjection> = combine(
         subjectRepository.observeTotalSubjectCount(),
-        assignmentRepository.observeItemsSeenCount(),
+        assignmentStatsRepository.observeItemsSeenCount(),
         settingsRepository.settings
     ) { totalItems, itemsSeen, settings -> buildCompletionProjection(totalItems, itemsSeen, settings.dailyLessonGoal) }
 
@@ -226,9 +228,9 @@ class DashboardViewModel(
     ) { reviewCount, lessonCount -> LocalDueCounts(reviewCount, lessonCount) }
 
     private val progressStatsState: Flow<ProgressStatsState> = combine(
-        assignmentRepository.observeLessonsCompletedToday(),
+        assignmentStatsRepository.observeLessonsCompletedToday(),
         statsRepository.observeDaysOnCurrentLevel(),
-        assignmentRepository.observeSrsItemSpread(),
+        assignmentStatsRepository.observeSrsItemSpread(),
         completionProjectionFlow
     ) { lessonsToday, daysOnLevel, itemSpread, projection ->
         ProgressStatsState(lessonsToday, daysOnLevel, itemSpread, projection)
@@ -247,7 +249,7 @@ class DashboardViewModel(
     private val reviewForecastFlow: Flow<ReviewForecast> = _dashboardData
         .map { it.selectedForecastWindow }
         .distinctUntilChanged()
-        .flatMapLatest { window -> assignmentRepository.observeReviewForecast(window) }
+        .flatMapLatest { window -> assignmentStatsRepository.observeReviewForecast(window) }
         .distinctUntilChanged()
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -256,9 +258,9 @@ class DashboardViewModel(
             flowOf(LevelDependentState())
         } else {
             combine(
-                assignmentRepository.observeLevelUpProgress(level),
+                assignmentStatsRepository.observeLevelUpProgress(level),
                 selectedProgressLevel.map { it ?: level }.distinctUntilChanged()
-                    .flatMapLatest { pagedLevel -> assignmentRepository.observeLevelProgress(pagedLevel) }
+                    .flatMapLatest { pagedLevel -> assignmentStatsRepository.observeLevelProgress(pagedLevel) }
             ) { levelUp, levelProgress ->
                 LevelDependentState(levelUp, levelProgress)
             }

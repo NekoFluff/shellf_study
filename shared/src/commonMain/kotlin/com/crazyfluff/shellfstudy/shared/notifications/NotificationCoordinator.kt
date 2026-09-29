@@ -1,6 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.notifications
 
-import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.AssignmentStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
@@ -36,7 +36,7 @@ interface NotificationCoordinator {
 }
 
 class DefaultNotificationCoordinator(
-    private val assignmentRepository: AssignmentRepository,
+    private val assignmentStatsRepository: AssignmentStatsRepository,
     private val statsRepository: StatsRepository,
     private val settingsRepository: SettingsRepository,
     private val notificationStateRepository: NotificationStateRepository,
@@ -74,7 +74,7 @@ class DefaultNotificationCoordinator(
             notificationScheduler.cancelNextReviewCheck()
             return
         }
-        val forecast = assignmentRepository.observeReviewForecast().first()
+        val forecast = assignmentStatsRepository.observeReviewForecast().first()
         val nextBucket = forecast.buckets.firstOrNull { it.newlyAvailableCount > 0 }
         notificationScheduler.scheduleNextReviewCheck(nextBucket?.availableAt)
     }
@@ -82,7 +82,7 @@ class DefaultNotificationCoordinator(
     override suspend fun evaluateReviewsAndBacklog() {
         val settings = settingsRepository.notificationSettings.first()
         if (!settings.notificationsEnabled) return
-        val forecast = assignmentRepository.observeReviewForecast().first()
+        val forecast = assignmentStatsRepository.observeReviewForecast().first()
         val state = notificationStateRepository.state.first()
         val now = Clock.System.now()
 

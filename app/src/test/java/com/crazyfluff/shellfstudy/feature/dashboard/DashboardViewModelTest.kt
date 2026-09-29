@@ -178,6 +178,7 @@ class DashboardViewModelTest {
                     settingsRepository = settingsRepository,
                     subjectRepository = repositories.subjectRepository,
                     assignmentRepository = repositories.assignmentRepository,
+                    assignmentStatsRepository = repositories.assignmentStatsRepository,
                     statsRepository = repositories.statsRepository,
                     outboxRepository = outboxRepository,
                     outboxSyncScheduler = repositories.outboxSyncScheduler,

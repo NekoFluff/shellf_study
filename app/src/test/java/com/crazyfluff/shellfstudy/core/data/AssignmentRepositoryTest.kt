@@ -45,6 +45,9 @@ class AssignmentRepositoryTest {
     private lateinit var repositories: TestRepositories
     private val repository get() = repositories.assignmentRepository
 
+    /** The read models split out of [AssignmentRepository]; tested here, against the same fixtures. */
+    private val stats get() = repositories.assignmentStatsRepository
+
     @Before
     fun setUp() {
         server = MockWebServer()
@@ -286,7 +289,7 @@ class AssignmentRepositoryTest {
 
         repository.syncAssignments(force = true)
 
-        repository.observeLessonsCompletedToday().test {
+        stats.observeLessonsCompletedToday().test {
             assertThat(awaitItem()).isEqualTo(1)
         }
     }
@@ -312,7 +315,7 @@ class AssignmentRepositoryTest {
         server.enqueue(jsonResponse(assignmentJson(id = 1, startedAt = justBeforeMidnight.toString())))
         repository.syncAssignments(force = true)
 
-        repository.observeLessonsCompletedToday().test {
+        stats.observeLessonsCompletedToday().test {
             // Yesterday's lesson: not counted.
             assertThat(awaitItem()).isEqualTo(0)
 
@@ -344,7 +347,7 @@ class AssignmentRepositoryTest {
 
         repository.syncAssignments(force = true)
 
-        repository.observeLevelUpProgress(12).test {
+        stats.observeLevelUpProgress(12).test {
             val progress = awaitItem()
             assertThat(progress.kanjiTotal).isEqualTo(2)
             assertThat(progress.kanjiGuruedOrHigher).isEqualTo(1)
@@ -368,7 +371,7 @@ class AssignmentRepositoryTest {
 
         repository.syncAssignments(force = true)
 
-        repository.observeLevelProgress(12).test {
+        stats.observeLevelProgress(12).test {
             val progress = awaitItem()
             val kanji = progress.breakdown.first { it.subjectType == SubjectType.KANJI }
             assertThat(kanji.items.first { it.subjectId == 1L }.srsStage).isEqualTo(SrsStage.GURU_1)
@@ -394,7 +397,7 @@ class AssignmentRepositoryTest {
 
         repository.syncAssignments(force = true)
 
-        repository.observeLevelProgress(12).test {
+        stats.observeLevelProgress(12).test {
             val progress = awaitItem()
             val kanji = progress.breakdown.first { it.subjectType == SubjectType.KANJI }
             assertThat(kanji.items.map { it.subjectId }).containsExactly(1L, 2L)
@@ -424,7 +427,7 @@ class AssignmentRepositoryTest {
 
         repository.syncAssignments(force = true)
 
-        repository.observeLevelProgress(12).test {
+        stats.observeLevelProgress(12).test {
             val progress = awaitItem()
             val kanji = progress.breakdown.first { it.subjectType == SubjectType.KANJI }
             assertThat(kanji.items.map { it.subjectId }).containsExactly(1L, 2L)
@@ -451,7 +454,7 @@ class AssignmentRepositoryTest {
 
         repository.syncAssignments(force = true)
 
-        repository.observeLevelUpProgress(12).test {
+        stats.observeLevelUpProgress(12).test {
             val progress = awaitItem()
             assertThat(progress.kanjiTotal).isEqualTo(2)
             assertThat(progress.kanjiGuruedOrHigher).isEqualTo(1)
@@ -475,7 +478,7 @@ class AssignmentRepositoryTest {
 
         repository.syncAssignments(force = true)
 
-        repository.observeSrsItemSpread().test {
+        stats.observeSrsItemSpread().test {
             val spread = awaitItem()
             assertThat(spread.apprenticeCount).isEqualTo(1)
             assertThat(spread.burnedCount).isEqualTo(1)
@@ -505,7 +508,7 @@ class AssignmentRepositoryTest {
 
         repository.syncAssignments(force = true)
 
-        repository.observeSrsItemSpread().test {
+        stats.observeSrsItemSpread().test {
             val spread = awaitItem()
             assertThat(spread.guruCount).isEqualTo(4)
             val guruByType = spread.countsByType.getValue(ItemSpreadBucket.GURU)
@@ -534,7 +537,7 @@ class AssignmentRepositoryTest {
 
         repository.syncAssignments(force = true)
 
-        repository.observeReviewForecast().test {
+        stats.observeReviewForecast().test {
             val forecast = awaitItem()
             val bucket = forecast.buckets.first { it.newlyAvailableCount == 1 }
             assertThat(bucket.availableAt).isEqualTo(nextHour)
@@ -562,7 +565,7 @@ class AssignmentRepositoryTest {
             )
         )
 
-        repository.observeReviewForecast().test {
+        stats.observeReviewForecast().test {
             val forecast = awaitItem()
             assertThat(forecast.availableNowCountsByType[SubjectType.VOCABULARY]).isEqualTo(1)
             val bucket = forecast.buckets.first { it.availableAt == nextHour }
@@ -595,7 +598,7 @@ class AssignmentRepositoryTest {
             )
         )
 
-        repository.observeReviewForecast().test {
+        stats.observeReviewForecast().test {
             val forecast = awaitItem()
             assertThat(forecast.availableNowCountsByNextStage[ItemSpreadBucket.BURNED]).isEqualTo(1)
             val bucket = forecast.buckets.first { it.availableAt == nextHour }
@@ -630,7 +633,7 @@ class AssignmentRepositoryTest {
             )
         )
 
-        repository.observeReviewForecast(ReviewForecastWindow.WEEK).test {
+        stats.observeReviewForecast(ReviewForecastWindow.WEEK).test {
             val forecast = awaitItem()
             assertThat(forecast.buckets).hasSize(ReviewForecastWindow.WEEK.bucketCount)
             assertThat(forecast.buckets[0].newlyAvailableCount).isEqualTo(2)

@@ -9,6 +9,7 @@ import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.AssignmentStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
@@ -218,6 +219,7 @@ private fun QuizSessionSummary<LessonItem>.toCompletePhase() = LessonUiState.Pha
 @OptIn(ExperimentalCoroutinesApi::class)
 class LessonViewModel(
     private val assignmentRepository: AssignmentRepository,
+    private val assignmentStatsRepository: AssignmentStatsRepository,
     private val statsRepository: StatsRepository,
     private val outboxRepository: OutboxRepository,
     private val sessionController: LessonSessionController,
@@ -570,14 +572,14 @@ class LessonViewModel(
      *  itself is what failed but a previously-cached queue is still available). */
     private suspend fun buildLessonSelectionFromCache() {
         val currentLevel = statsRepository.observeCurrentLevel().first() ?: 0
-        val lessonsToday = assignmentRepository.observeLessonsCompletedToday().first()
+        val lessonsToday = assignmentStatsRepository.observeLessonsCompletedToday().first()
         val settings = settingsRepository.settings.first()
         val dailyGoal = settings.dailyLessonGoal
         val batchSize = LessonSessionPlanner.normalizeBatchSize(settings.lessonBatchSize)
         // Retained so a later sort change re-orders the same queue instead of re-reading Room.
         val picker = LessonPicker(
             queue = assignmentRepository.observeLessonQueue().first(),
-            levelUpProgress = assignmentRepository.observeLevelUpProgress(currentLevel).first(),
+            levelUpProgress = assignmentStatsRepository.observeLevelUpProgress(currentLevel).first(),
             isStrained = lessonsToday >= dailyGoal
         )
         this.picker = picker

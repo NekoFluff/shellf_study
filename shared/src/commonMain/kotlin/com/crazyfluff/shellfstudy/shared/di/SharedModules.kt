@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.shared.ThemeViewModel
 import com.crazyfluff.shellfstudy.shared.data.AccountDataCleaner
 import com.crazyfluff.shellfstudy.shared.data.CmpPitchAccentBundledSource
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.AssignmentStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardSyncCoordinator
 import com.crazyfluff.shellfstudy.shared.data.FriendRepository
@@ -104,6 +105,8 @@ val repositoryModule = module {
             srsSystemDao = get()
         )
     }
+
+    single { AssignmentStatsRepository(assignmentDao = get(), subjectDao = get()) }
 
     single {
         StatsRepository(
@@ -224,7 +227,7 @@ val notificationCoordinatorModule = module {
     single { NotificationStateRepository(get()) }
     single {
         DefaultNotificationCoordinator(
-            assignmentRepository = get(),
+            assignmentStatsRepository = get(),
             statsRepository = get(),
             settingsRepository = get(),
             notificationStateRepository = get(),
@@ -261,6 +264,7 @@ val viewModelModule = module {
             settingsRepository = get(),
             subjectRepository = get(),
             assignmentRepository = get(),
+            assignmentStatsRepository = get(),
             statsRepository = get(),
             outboxRepository = get(),
             outboxSyncScheduler = get(),
@@ -275,6 +279,7 @@ val viewModelModule = module {
     viewModel {
         LessonViewModel(
             assignmentRepository = get(),
+            assignmentStatsRepository = get(),
             statsRepository = get(),
             outboxRepository = get(),
             sessionController = get(),

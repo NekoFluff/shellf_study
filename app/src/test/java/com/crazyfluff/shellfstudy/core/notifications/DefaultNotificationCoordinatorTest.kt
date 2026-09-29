@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
+import com.crazyfluff.shellfstudy.shared.data.AssignmentStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
@@ -35,6 +36,7 @@ class DefaultNotificationCoordinatorTest {
     private lateinit var subjectDao: FakeSubjectDao
     private lateinit var assignmentDao: FakeAssignmentDao
     private lateinit var assignmentRepository: AssignmentRepository
+    private lateinit var assignmentStatsRepository: AssignmentStatsRepository
     private lateinit var statsRepository: StatsRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var notificationStateRepository: NotificationStateRepository
@@ -51,6 +53,7 @@ class DefaultNotificationCoordinatorTest {
         subjectDao = repos.subjectDao
         assignmentDao = repos.assignmentDao
         assignmentRepository = repos.assignmentRepository
+        assignmentStatsRepository = repos.assignmentStatsRepository
         statsRepository = repos.statsRepository
 
         val settingsDataStore: DataStore<Preferences> =
@@ -65,7 +68,7 @@ class DefaultNotificationCoordinatorTest {
         notificationPoster = FakeNotificationPoster()
 
         coordinator = DefaultNotificationCoordinator(
-            assignmentRepository,
+            assignmentStatsRepository,
             statsRepository,
             settingsRepository,
             notificationStateRepository,
