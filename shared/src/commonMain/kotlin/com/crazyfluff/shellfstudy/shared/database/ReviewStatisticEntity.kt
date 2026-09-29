@@ -45,13 +45,10 @@ interface ReviewStatisticDao {
     @Query("DELETE FROM review_statistics")
     suspend fun clearAll()
 
-    @Query("SELECT * FROM review_statistics")
-    fun observeAll(): Flow<List<ReviewStatisticEntity>>
-
     /**
      * Totals for the leaderboard's self accuracy, without materializing a row per subject.
      *
-     * The self-stats flow used to read [observeAll] — every review-statistic row, fourteen columns
+     * The self-stats flow used to read every review-statistic row — fourteen columns
      * each, several thousand on a mature account — to add up two integers. The sum is the only thing
      * it wanted, so it happens where the rows are.
      */

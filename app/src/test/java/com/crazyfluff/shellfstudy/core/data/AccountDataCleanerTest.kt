@@ -159,7 +159,7 @@ class AccountDataCleanerTest {
         buildCleaner().clearAll()
 
         assertThat(assignmentDao.getById(1)).isNull()
-        reviewStatisticDao.observeAll().test { assertThat(awaitItem()).isEmpty() }
+        assertThat(reviewStatisticDao.all()).isEmpty()
         levelProgressionDao.observeAll().test { assertThat(awaitItem()).isEmpty() }
         assertThat(syncStateDao.get("assignments")).isNull()
         assertThat(outboxDao.allReviewSubmissions()).isEmpty()

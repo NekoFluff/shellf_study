@@ -50,7 +50,8 @@ class FakeReviewStatisticDao(private val writeLog: SyncWriteLog? = null) : Revie
         statistics.value = emptyMap()
     }
 
-    override fun observeAll(): Flow<List<ReviewStatisticEntity>> = statistics.map { it.values.toList() }
+    /** Test-only: every stored row. */
+    fun all(): List<ReviewStatisticEntity> = statistics.value.values.toList()
 
     override fun observeAccuracyTotals(): Flow<ReviewAccuracyTotals> = statistics.map { map ->
         if (map.isEmpty()) {
