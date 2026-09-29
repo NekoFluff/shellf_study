@@ -139,6 +139,9 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     override fun isAbandoned(state: LessonUiState): Boolean =
         state.exit == LessonUiState.ExitRequest.Abandoned
 
+    override fun loadError(state: LessonUiState): String? =
+        (state.phase as? LessonUiState.Phase.Error)?.message
+
     override fun dispatchSessionFetches(assignments: MockResponse, subjects: MockResponse) =
         dispatch(assignments, subjects)
 
@@ -146,14 +149,18 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     override suspend fun startSession(
         subject: QuizSessionSubject<LessonUiState>,
         states: ReceiveTurbine<LessonUiState>
-    ) {
+    ): LessonUiState? {
         val viewModel = (subject as LessonSubject).viewModel
         var state = states.awaitItem()
         while (state.phase is LessonUiState.Phase.Loading) state = states.awaitItem()
+        // A failed load has nothing to start; hand the error to the scenario rather than waiting for
+        // another emission it has already consumed.
+        if (state.phase !is LessonUiState.Phase.Select) return state
 
         viewModel.startSelectedLessons()
         states.awaitItem()
         viewModel.nextStudyCard()
+        return null
     }
 
     /** Adapts the ViewModel to the harness's action set — production code carries no test interface. */
@@ -1452,22 +1459,7 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     }
 
     @Test
-    fun `an auth error during load sets an error message and clears the loading state`() = runTest(mainDispatcherRule.dispatcher) {
-        // 401 is an auth error — fetchFreshQueue surfaces Phase.Error instead of auto-falling back,
-        // so loading clears and the error is visible. Loading and Error are disjoint sealed variants.
-        dispatch(
-            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
-            subjectsResponse = jsonResponse("{}", 401)
-        )
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
-            assertThat((state.phase as LessonUiState.Phase.Error).message).isNotEmpty()
-        }
-    }
+    fun `an auth error during load sets an error message and clears the loading state`() = authErrorDuringLoadSurfacesAnError()
 
     @Test
     fun `retrying load() after an auth error clears the error and shows the lesson select screen`() = runTest(mainDispatcherRule.dispatcher) {

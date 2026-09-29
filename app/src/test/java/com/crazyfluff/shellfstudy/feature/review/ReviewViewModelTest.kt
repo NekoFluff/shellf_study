@@ -103,6 +103,9 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
 
     override fun isAbandoned(state: ReviewUiState): Boolean = state.isAbandoned
 
+    override fun loadError(state: ReviewUiState): String? =
+        (state.phase as? ReviewUiState.Phase.Error)?.message
+
     override fun dispatchSessionFetches(assignments: MockResponse, subjects: MockResponse) =
         dispatch(assignments, subjects)
 
@@ -132,7 +135,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     override suspend fun startSession(
         subject: QuizSessionSubject<ReviewUiState>,
         states: ReceiveTurbine<ReviewUiState>
-    ) = Unit
+    ): ReviewUiState? = null
 
     /** Adapts the ViewModel to the harness's action set — production code carries no test interface. */
     private class ReviewSubject(val viewModel: ReviewViewModel) : QuizSessionSubject<ReviewUiState> {
@@ -1741,23 +1744,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
-    fun `an auth error during load sets an error message and clears the loading state`() = runTest(mainDispatcherRule.dispatcher) {
-        // 401 is an auth error — fetchFreshQueue surfaces Phase.Error instead of auto-falling back,
-        // so loading clears and the error is visible. Loading and Error are disjoint sealed variants.
-        dispatch(
-            assignmentsResponse = jsonResponse(radicalAssignmentsJson()),
-            subjectsResponse = jsonResponse("{}", 401)
-        )
-
-        val viewModel = createViewModel()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
-            assertThat((state.phase as? ReviewUiState.Phase.Error)?.message).isNotNull()
-            assertThat((state.phase is ReviewUiState.Phase.Loading)).isFalse()
-        }
-    }
+    fun `an auth error during load sets an error message and clears the loading state`() = authErrorDuringLoadSurfacesAnError()
 
     @Test
     fun `retrying loadOrResume after an auth error clears the error and shows the queue`() = runTest(mainDispatcherRule.dispatcher) {

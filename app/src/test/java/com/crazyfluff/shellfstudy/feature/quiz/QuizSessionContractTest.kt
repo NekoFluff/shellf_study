@@ -34,8 +34,9 @@ import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 
-/** The two responses a session start needs, as the suite's own fixtures render them. */
-data class QuizQueueFixtures(val assignments: String, val subjects: String)
+/** The two responses a session start needs, as the suite's own fixtures render them. [subjectsCode]
+ *  is how a scenario asks for a failing fetch without carrying a response object of its own. */
+data class QuizQueueFixtures(val assignments: String, val subjects: String, val subjectsCode: Int = 200)
 
 /**
  * A quiz session under test, seen through the actions the shared scenarios drive.
@@ -77,6 +78,17 @@ data class QuizQuestionView(
 )
 
 /**
+ * How a suite reads its own state: the question on screen if this state has one, and the states that
+ * are not questions — a finished session's report, an abandoned session, a failed load.
+ */
+data class QuizStateProjections<STATE : Any>(
+    val question: (STATE) -> QuizQuestionView?,
+    val sessionFinished: (STATE) -> Boolean,
+    val isAbandoned: (STATE) -> Boolean,
+    val loadError: (STATE) -> String?
+)
+
+/**
  * The behaviours a quiz session has whether it is teaching or reviewing — the gating rules, giving up,
  * the answer-type rejection, the timers, undo. Each was written twice, once in `LessonViewModelTest`
  * and once in `ReviewViewModelTest`, as the same steps against two different state types: measured
@@ -84,10 +96,14 @@ data class QuizQuestionView(
  * (179 lines), the steps that bring a lesson to its first question (42), one counter's name (7), local
  * variable names and await shapes — and only a handful of genuine behavioural differences.
  *
- * This class holds each scenario once. A suite supplies three things: how to adapt its ViewModel, how
- * to dispatch a session start's fetches, and how to read a question out of its own state. Scenarios
- * stay methods rather than inherited `@Test`s so each suite keeps its test names — they read like the
- * feature they describe, and a failure names the feature's suite.
+ * This class holds each scenario once — all twenty-two of them now. Where the two features really do
+ * behave differently, the difference is a projection above or a parameter (`afterSession`,
+ * `verifyUndo`, `loadPersistedSession`) rather than a second copy of the steps.
+ *
+ * A suite supplies its fixtures, those projections, how to adapt its ViewModel, how to dispatch a
+ * session start's fetches, and how to bring a session to its first question. Scenarios stay methods
+ * rather than inherited `@Test`s so each suite keeps its test names — they read like the feature they
+ * describe, and a failure names the feature's suite.
  */
 abstract class QuizSessionContractTest<STATE : Any> {
 
@@ -158,17 +174,26 @@ abstract class QuizSessionContractTest<STATE : Any> {
      *  differently: a lesson an exit request, a review a boolean. */
     protected abstract fun isAbandoned(state: STATE): Boolean
 
+    /** The message of the load failure this state is showing, or null when it is not one. */
+    protected abstract fun loadError(state: STATE): String?
+
     /**
      * Brings a session to its first live question. A review is there as soon as its queue loads; a
      * lesson must start a session and step past its first study card.
+     *
+     * Returns the state the session stopped at when it never reached a question — a failed load —
+     * so a scenario about that state asserts on it rather than waiting for an emission the start has
+     * already taken off the stream. Null once a question is on screen.
      */
     protected abstract suspend fun startSession(
         subject: QuizSessionSubject<STATE>,
         states: ReceiveTurbine<STATE>
-    )
+    ): STATE?
 
     /**
-     * Runs [scenario] with a session over [fixtures] started and its first question on screen.
+     * Runs [scenario] with a session over [fixtures] started. By default that leaves the session's
+     * first question on screen; a scenario about a session that never gets that far — a load failure —
+     * passes [expectsQuestion] false and awaits the state it is about itself.
      * [beforeSession] runs first, for a scenario that needs a display setting in place before the
      * ViewModel loads — its settings collector reads the stored value as the session starts.
      * [afterSession] runs once the state collection has ended, for what the session left behind in a
@@ -179,19 +204,30 @@ abstract class QuizSessionContractTest<STATE : Any> {
         fixtures: QuizQueueFixtures,
         beforeSession: suspend () -> Unit = {},
         afterSession: suspend () -> Unit = {},
+        expectsQuestion: Boolean = true,
         scenario: suspend QuizScenario<STATE>.() -> Unit
     ) = runTest(mainDispatcherRule.dispatcher) {
         beforeSession()
-        dispatchSessionFetches(jsonResponse(fixtures.assignments), jsonResponse(fixtures.subjects))
+        dispatchSessionFetches(
+            jsonResponse(fixtures.assignments),
+            jsonResponse(fixtures.subjects, fixtures.subjectsCode)
+        )
         val subject = createSubject(this)
 
         subject.uiState.test {
-            startSession(subject, this)
-            val scenarioBody = QuizScenario(subject, this, ::question, ::sessionFinished, ::isAbandoned)
-            // A scenario starts with a live question on screen: a lesson's start leaves it on a study
-            // card and a review emits a few queue states, and typing into either would be dropped —
-            // the shared flow no-ops when no question is showing.
-            scenarioBody.awaitQuestion().also { scenarioBody.startFrom(it) }
+            val stoppedAt = startSession(subject, this)
+            val scenarioBody = QuizScenario(
+                subject,
+                this,
+                QuizStateProjections(::question, ::sessionFinished, ::isAbandoned, ::loadError)
+            )
+            stoppedAt?.let { scenarioBody.startFrom(it) }
+            if (expectsQuestion) {
+                // A scenario starts with a live question on screen: a lesson's start leaves it on a
+                // study card and a review emits a few queue states, and typing into either would be
+                // dropped — the shared flow no-ops when no question is showing.
+                scenarioBody.awaitQuestion().also { scenarioBody.startFrom(it) }
+            }
             scenarioBody.scenario()
             cancelAndIgnoreRemainingEvents()
         }
@@ -225,9 +261,7 @@ abstract class QuizSessionContractTest<STATE : Any> {
     class QuizScenario<STATE : Any>(
         private val subject: QuizSessionSubject<STATE>,
         private val states: ReceiveTurbine<STATE>,
-        private val question: (STATE) -> QuizQuestionView?,
-        private val sessionFinished: (STATE) -> Boolean,
-        private val isAbandoned: (STATE) -> Boolean
+        private val projections: QuizStateProjections<STATE>
     ) {
         /** The question the scenario is looking at — the one the harness waited for before starting. */
         private lateinit var current: QuizQuestionView
@@ -235,8 +269,15 @@ abstract class QuizSessionContractTest<STATE : Any> {
         /** The question on screen right now, without waiting for a new state. */
         val questionOnScreen: QuizQuestionView get() = current
 
+        /** The state a start gave up in, when it never reached a question. */
+        private var stoppedAt: STATE? = null
+
         internal fun startFrom(view: QuizQuestionView) {
             current = view
+        }
+
+        internal fun startFrom(state: STATE) {
+            stoppedAt = state
         }
 
         /** Types [text] into the answer field. */
@@ -262,7 +303,7 @@ abstract class QuizSessionContractTest<STATE : Any> {
         /** The next state that is a question, whatever the ones in between were. */
         suspend fun awaitQuestion(matching: (QuizQuestionView) -> Boolean = { true }): QuizQuestionView {
             while (true) {
-                val view = states.awaitItem().let(question)
+                val view = states.awaitItem().let(projections.question)
                 if (view != null && matching(view)) {
                     current = view
                     return view
@@ -290,12 +331,21 @@ abstract class QuizSessionContractTest<STATE : Any> {
         suspend fun awaitGraded(): QuizQuestionView = awaitQuestion { it.feedbackPresent }
 
         /** Waits out whatever else the session emits until its report is on screen. */
-        suspend fun awaitSessionFinished(): STATE = awaitState(sessionFinished)
+        suspend fun awaitSessionFinished(): STATE = awaitState(projections.sessionFinished)
 
         /** Waits out whatever else the session emits until it is marked abandoned. */
-        suspend fun awaitAbandoned(): STATE = awaitState(isAbandoned)
+        suspend fun awaitAbandoned(): STATE = awaitState(projections.isAbandoned)
+
+        /** Waits out whatever else the session emits until it reports a failed load, and returns the
+         *  message it is showing. */
+        suspend fun awaitLoadError(): String {
+            val state = awaitState { projections.loadError(it) != null }
+            return checkNotNull(projections.loadError(state)) { "no load error in $state" }
+        }
 
         private suspend fun awaitState(matching: (STATE) -> Boolean): STATE {
+            // The start may have consumed the very state a scenario is about.
+            stoppedAt?.let { if (matching(it)) return it }
             while (true) {
                 val state = states.awaitItem()
                 if (matching(state)) return state
@@ -653,6 +703,18 @@ abstract class QuizSessionContractTest<STATE : Any> {
 
         continueToNextQuestion()
         assertThat(awaitQuestion().timing.questionElapsedMs).isNull()
+    }
+
+    /**
+     * A 401 on the fetches a session starts with surfaces the failure: `fetchFreshQueue` reports it
+     * rather than falling back to whatever is cached and rather than leaving the screen loading — the
+     * phase that carries the error is not `Loading`.
+     */
+    protected fun authErrorDuringLoadSurfacesAnError() = quizSession(
+        fixtures = radicalQueue.copy(subjects = "{}", subjectsCode = 401),
+        expectsQuestion = false
+    ) {
+        assertThat(awaitLoadError()).isNotEmpty()
     }
 
     private companion object {
