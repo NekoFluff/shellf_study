@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.quiz
 
+import com.crazyfluff.shellfstudy.shared.designsystem.settings.DisplaySettings
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -193,16 +194,24 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
     onReveal: () -> Unit,
     testTags: QuizQuestionTestTags
 ) {
-    val item = uiState.item
-    val questionType = uiState.questionType
-    // Read here rather than taken as parameters: these five are app-wide display preferences with no
-    // per-call-site variation, and they used to arrive as five fields of QuizQuestionUiState that both
-    // Lesson and Review had to fill in from their own copy of the settings bag.
+    // Read here rather than taken as parameters: these are app-wide display preferences with no
+    // per-call-site variation.
     val display = LocalDisplaySettings.current
+    QuizProgressHeader(uiState, display, testTags)
+    QuizPrompt(uiState, display, testTags)
+    QuizAnswerArea(uiState, display, onAnswerInputChange, onSubmit, onDontKnow, onContinue, onUndo, onReveal, testTags)
+}
 
+/** The progress bar, the "n / total" count with the batch it belongs to, and the timers. */
+@Composable
+private fun <T : QuizDisplayItem> QuizProgressHeader(
+    uiState: QuizQuestionUiState<T>,
+    display: DisplaySettings,
+    testTags: QuizQuestionTestTags
+) {
     val progress = if (uiState.totalCount == 0) 0f else
         (uiState.totalCount - uiState.remainingCount).toFloat() / uiState.totalCount
-    val accentColor = subjectColor(item.subjectType)
+    val accentColor = subjectColor(uiState.item.subjectType)
 
     LinearProgressIndicator(
         progress = { progress },
@@ -278,7 +287,18 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
             }
         }
     }
+}
 
+/** What is being asked: the subject's glyph, the revealed reading hint above it, and the rank change
+ *  the answer caused below it. */
+@Composable
+private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
+    uiState: QuizQuestionUiState<T>,
+    display: DisplaySettings,
+    testTags: QuizQuestionTestTags
+) {
+    val item = uiState.item
+    val questionType = uiState.questionType
     Column(
         modifier = Modifier.weight(1f, fill = false).fillMaxWidth().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -381,7 +401,24 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
             }
         }
     }
+}
 
+/** The answer field, and below it either the Submit / "I don't know" row or the graded feedback with
+ *  Continue. */
+@Composable
+private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
+    uiState: QuizQuestionUiState<T>,
+    display: DisplaySettings,
+    onAnswerInputChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onDontKnow: () -> Unit,
+    onContinue: () -> Unit,
+    onUndo: () -> Unit,
+    onReveal: () -> Unit,
+    testTags: QuizQuestionTestTags
+) {
+    val item = uiState.item
+    val questionType = uiState.questionType
     Column(
         modifier = Modifier
             .weight(1f)
@@ -405,7 +442,7 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
             // behavior) can become current again with the same item/questionType/undoCounter as
             // before, but the field must still clear — questionSequence increments on every advance
             // regardless of whether the question repeats.
-            focusResetKey = listOf(item.assignmentId, questionType, uiState.undoCounter, uiState.questionSequence),
+            focusResetKey = AnswerFieldFocusKey(item.assignmentId, questionType, uiState.undoCounter, uiState.questionSequence),
             useJapaneseKeyboard = display.useJapaneseKeyboard,
             trailingIcon = if (feedbackForField != null) {
                 {
@@ -499,3 +536,16 @@ fun <T : QuizDisplayItem> ColumnScope.QuizQuestionContent(
         Spacer(modifier = Modifier.height(16.dp + SubjectDetailHandleHeight + 24.dp))
     }
 }
+
+/**
+ * What the answer field resets its text and focus on. Also includes [undoCounter]: undo clears the
+ * field and re-enables it without changing item/question type, so the field's focus-restoring effect
+ * wouldn't otherwise refire. And [questionSequence]: a requeued question can become current again with
+ * the same item, type and undo count, but the field must still clear.
+ */
+private data class AnswerFieldFocusKey(
+    val assignmentId: Long,
+    val questionType: QuestionType,
+    val undoCounter: Int,
+    val questionSequence: Int
+)
