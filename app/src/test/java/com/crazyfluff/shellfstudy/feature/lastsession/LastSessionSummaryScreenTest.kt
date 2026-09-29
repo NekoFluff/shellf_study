@@ -51,14 +51,12 @@ import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
-import org.robolectric.annotation.Config
 
 /**
  * Runs under Robolectric (JVM) — this screen is driven purely by state, no device features needed.
  * Pinned to SDK 35: Robolectric 4.15.1 doesn't yet have shadows for this project's targetSdk (37).
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class LastSessionSummaryScreenTest {
 
     @get:Rule

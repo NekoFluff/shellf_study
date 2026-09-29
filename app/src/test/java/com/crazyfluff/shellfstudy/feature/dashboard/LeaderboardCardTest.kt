@@ -28,7 +28,7 @@ import org.robolectric.annotation.Config
  * this project's targetSdk (37). The qualifiers give the card enough vertical room for five rows.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp")
+@Config(qualifiers = "w411dp-h891dp")
 class LeaderboardCardTest {
 
     @get:Rule

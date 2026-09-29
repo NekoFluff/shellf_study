@@ -13,7 +13,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 /**
  * Covers the one behaviour both of its hosts rely on — the dashboard's leaderboard and review-forecast
@@ -22,7 +21,6 @@ import org.robolectric.annotation.Config
  * right option list is wired to the right card.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class TitleRowDropdownTest {
 
     @get:Rule

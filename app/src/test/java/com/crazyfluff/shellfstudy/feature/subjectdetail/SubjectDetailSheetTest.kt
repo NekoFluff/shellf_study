@@ -16,7 +16,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 /**
  * The collapsed peek strip is the only part of [SubjectDetailSheet] reachable without an open
@@ -24,7 +23,6 @@ import org.robolectric.annotation.Config
  * copy and its tap-to-open behavior.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class SubjectDetailSheetTest {
 
     @get:Rule

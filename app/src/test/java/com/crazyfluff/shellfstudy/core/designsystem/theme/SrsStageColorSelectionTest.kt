@@ -15,7 +15,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 /**
  * Covers which palette `srsStageColor` selects under each theme, which the pure-math
@@ -27,7 +26,6 @@ import org.robolectric.annotation.Config
  * asserting on pixels, so CLAUDE.md's "verify visual effects on a device" caveat does not apply.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class SrsStageColorSelectionTest {
 
     @get:Rule

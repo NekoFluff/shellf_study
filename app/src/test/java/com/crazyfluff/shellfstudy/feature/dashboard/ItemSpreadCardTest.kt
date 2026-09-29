@@ -9,12 +9,10 @@ import com.crazyfluff.shellfstudy.shared.data.model.ItemSpread
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.ItemSpreadCard
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.ItemSpreadTestTags
 
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class ItemSpreadCardTest {
 
     @get:Rule

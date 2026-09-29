@@ -13,7 +13,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.dsl.module
 import org.koin.test.verify.verify
-import org.robolectric.annotation.Config
 
 /**
  * Static graph verification: confirms every constructor dependency in the modules the app actually
@@ -30,7 +29,6 @@ import org.robolectric.annotation.Config
  * reports them as missing. Audio wiring is exercised in integration instead.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class AppModulesVerificationTest {
 
     @Test

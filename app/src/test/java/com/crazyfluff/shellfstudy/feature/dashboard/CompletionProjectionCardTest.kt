@@ -8,7 +8,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.CompletionProjection
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
@@ -18,7 +17,6 @@ import com.crazyfluff.shellfstudy.shared.feature.dashboard.CompletionProjectionT
 import kotlin.time.Clock
 
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class CompletionProjectionCardTest {
 
     @get:Rule

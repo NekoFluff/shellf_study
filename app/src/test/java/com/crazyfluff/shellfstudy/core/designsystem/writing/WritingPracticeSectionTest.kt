@@ -18,10 +18,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.writing.WritingPracticeTes
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class WritingPracticeSectionTest {
 
     @get:Rule

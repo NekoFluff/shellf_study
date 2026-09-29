@@ -27,7 +27,7 @@ import com.crazyfluff.shellfstudy.shared.feature.dashboard.LevelProgressCard
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.LevelProgressTestTags
 
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp")
+@Config(qualifiers = "w411dp-h891dp")
 class LevelProgressCardTest {
 
     @get:Rule

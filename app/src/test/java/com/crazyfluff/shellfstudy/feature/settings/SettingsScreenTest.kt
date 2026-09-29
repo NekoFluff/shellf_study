@@ -25,7 +25,7 @@ import org.robolectric.annotation.Config
  * Pinned to SDK 35: Robolectric 4.15.1 doesn't yet have shadows for this project's targetSdk (37).
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp")
+@Config(qualifiers = "w411dp-h891dp")
 class SettingsScreenTest {
 
     @get:Rule

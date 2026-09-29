@@ -23,7 +23,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 private val MIZU = PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)
 
@@ -35,7 +34,6 @@ private val MIZU = PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNum
  * [com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.forReading]'s job, also tested on its own.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class PitchAccentDiagramTest {
 
     @get:Rule

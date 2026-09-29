@@ -15,7 +15,6 @@ import kotlinx.serialization.Serializable
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 /**
  * Regression coverage for the blank-screen bug: [popBackStackSafely] called with nothing left
@@ -27,7 +26,6 @@ import org.robolectric.annotation.Config
  * Pinned to SDK 35: Robolectric 4.15.1 doesn't yet have shadows for this project's targetSdk (37).
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class PopBackStackSafelyTest {
 
     @Serializable data object Start

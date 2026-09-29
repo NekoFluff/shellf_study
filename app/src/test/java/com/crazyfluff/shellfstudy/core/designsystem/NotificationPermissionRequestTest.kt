@@ -9,7 +9,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 /**
  * Covers the override half of the notification-permission seam: that a provided factory is what the
@@ -23,7 +22,6 @@ import org.robolectric.annotation.Config
  * line of glue; the glue lives in `rememberPermissionRequest`, so that is where it is pinned.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class NotificationPermissionRequestTest {
 
     @get:Rule

@@ -12,11 +12,9 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 import java.io.IOException
 
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class ReviewNotificationWorkerTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

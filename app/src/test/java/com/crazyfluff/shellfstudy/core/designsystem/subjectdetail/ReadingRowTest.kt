@@ -19,7 +19,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 /**
  * Covers [ReadingRow] — the reading and its optional play button. Rendering it is how a screen shows a
@@ -28,7 +27,6 @@ import org.robolectric.annotation.Config
  * provider unless the point is that there isn't one.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class ReadingRowTest {
 
     @get:Rule

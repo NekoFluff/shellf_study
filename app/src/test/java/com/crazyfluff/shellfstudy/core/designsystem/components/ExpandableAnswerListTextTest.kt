@@ -16,7 +16,6 @@ import com.crazyfluff.shellfstudy.shared.designsystem.components.ExpandableAnswe
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 private const val TEST_TAG = "expandable_answer_list_text"
 
@@ -30,7 +29,6 @@ private const val TEST_TAG = "expandable_answer_list_text"
  *  clearly can't fit a 20dp-wide box), so a JVM test can't observe that path. Verify it on a
  *  device/emulator instead. */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class ExpandableAnswerListTextTest {
 
     @get:Rule

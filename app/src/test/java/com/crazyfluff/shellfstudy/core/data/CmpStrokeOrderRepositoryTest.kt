@@ -8,7 +8,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 /**
  * The one repository backed directly by a bundled CMP resource (the ~8MB KanjiVG-derived
@@ -17,7 +16,6 @@ import org.robolectric.annotation.Config
  * stroke diagrams in the app, never a test failure.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
 class CmpStrokeOrderRepositoryTest {
 
     @Test
