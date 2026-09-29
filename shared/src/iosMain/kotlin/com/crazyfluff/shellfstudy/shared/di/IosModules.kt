@@ -73,6 +73,7 @@ private val iosSyncModule = module {
     }
     single {
         SyncOrchestrator(
+            transactionRunner = get(),
             subjectRepository = get(),
             assignmentRepository = get(),
             statsRepository = get(),

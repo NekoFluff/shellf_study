@@ -79,7 +79,9 @@ class TestRepositories(
     val pitchAccentRepository: PitchAccentRepository,
     val statsRepository: StatsRepository,
     val waniKaniRepository: WaniKaniRepository,
-    val syncOrchestrator: SyncOrchestrator
+    val syncOrchestrator: SyncOrchestrator,
+    /** Exposed so sync tests can assert how a pass groups its writes — see RecordingSyncTransactionRunner. */
+    val syncTransactionRunner: RecordingSyncTransactionRunner
 )
 
 /**
@@ -112,11 +114,12 @@ fun buildTestRepositories(
     val assignmentRepository = AssignmentRepository(api, assignmentDao, subjectDao, syncStateDao, subjectRepository, srsSystemDao, defaultDispatcher)
     val statsRepository = StatsRepository(api, reviewStatisticDao, levelProgressionDao, studyActivityDao, syncStateDao, defaultDispatcher)
     val waniKaniRepository = WaniKaniRepository(api)
-    val syncOrchestrator = SyncOrchestrator(subjectRepository, assignmentRepository, statsRepository, syncStateDao)
+    val syncTransactionRunner = RecordingSyncTransactionRunner()
+    val syncOrchestrator = SyncOrchestrator(syncTransactionRunner, subjectRepository, assignmentRepository, statsRepository, syncStateDao)
 
     return TestRepositories(
         api, subjectDao, assignmentDao, srsSystemDao, syncStateDao, studyActivityDao, outboxDao, outboxSyncScheduler,
         reviewStatisticDao, levelProgressionDao, subjectRepository, assignmentRepository, pitchAccentRepository,
-        statsRepository, waniKaniRepository, syncOrchestrator
+        statsRepository, waniKaniRepository, syncOrchestrator, syncTransactionRunner
     )
 }

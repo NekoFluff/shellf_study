@@ -152,6 +152,54 @@ class SyncOrchestratorTest {
         assertThat(repositories.syncStateDao.get("subjects")?.lastSyncedAt).isNotEqualTo("2020-01-01T00:00:00Z")
     }
 
+    /**
+     * The whole point of the fetch/persist split: five resources, one database transaction.
+     *
+     * Room broadcasts invalidation — re-running every observable query in the app — once per
+     * *outermost* write operation, so a pass that wrote each resource separately woke the dashboard's
+     * dozen-odd flows once per resource. Asserting the count is what stops a later refactor from
+     * quietly going back to one write per resource, which no functional test would notice.
+     */
+    @Test
+    fun `a sync pass writes every resource inside a single transaction`() = runTest {
+        val result = repositories.syncOrchestrator.syncAll(force = true)
+
+        assertThat(result).isEqualTo(ApiResult.Success(Unit))
+        assertThat(repositories.syncTransactionRunner.transactionCount).isEqualTo(1)
+    }
+
+    /**
+     * And it groups only the writes. A Room database has one write connection, so holding it across a
+     * paged network fetch would block every other writer in the app — so every fetch must complete
+     * before the transaction opens. Capturing the request list at the moment the transaction is
+     * entered proves that ordering, rather than merely asserting it in a comment.
+     */
+    @Test
+    fun `fetches complete before the transaction opens`() = runTest {
+        repositories.syncTransactionRunner.onEnter = { pathsAtTransactionStart = pathsRequested() }
+
+        repositories.syncOrchestrator.syncAll(force = true)
+
+        assertThat(pathsAtTransactionStart).containsAtLeast(
+            "/spaced_repetition_systems", "/subjects", "/assignments",
+            "/review_statistics", "/level_progressions"
+        )
+    }
+
+    /** A pass where every resource is already fresh must not open a transaction at all. */
+    @Test
+    fun `a pass with nothing to sync does not open a transaction`() = runTest {
+        repositories.syncOrchestrator.syncAll(force = true) // leaves every cursor fresh
+        val afterFirstPass = repositories.syncTransactionRunner.transactionCount
+
+        repositories.syncOrchestrator.syncAll(force = false)
+
+        assertThat(repositories.syncTransactionRunner.transactionCount).isEqualTo(afterFirstPass)
+    }
+
+    /** Snapshot taken by [fetches complete before the transaction opens] when the transaction opens. */
+    private var pathsAtTransactionStart: List<String> = emptyList()
+
     private fun pathsRequested(): List<String> = requestedPaths.map { it.substringBefore('?') }
 
     private fun emptyCollection(objectType: String) = jsonResponse(

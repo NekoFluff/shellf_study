@@ -26,8 +26,6 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
-private const val RESOURCE_REVIEW_STATISTICS = "review_statistics"
-private const val RESOURCE_LEVEL_PROGRESSIONS = "level_progressions"
 private val STALENESS = 1.hours
 
 /** Owns review statistics, level progressions, and the local study-activity log (which days had
@@ -40,14 +38,23 @@ class StatsRepository(
     private val syncStateDao: SyncStateDao,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
-    suspend fun syncReviewStatistics(force: Boolean = false): ApiResult<Unit> =
-        runSync(syncStateDao, RESOURCE_REVIEW_STATISTICS, force, STALENESS) { cursor ->
-            val items = collectAllPages(
-                firstPage = { api.getReviewStatistics(updatedAfter = cursor) },
-                nextPage = { url -> api.getReviewStatisticsPage(url) }
-            )
-            reviewStatisticDao.upsertAll(
-                items.map { item ->
+    suspend fun syncReviewStatistics(force: Boolean = false): ApiResult<Unit> = safeApiCall {
+        fetchReviewStatistics(force)?.let { completeResourceSync(syncStateDao, SyncResources.REVIEW_STATISTICS, it) }
+    }
+
+    /** Fetches review statistics without writing them — see [AssignmentRepository.fetchAssignments]
+     *  for why fetch and write are split. Null when they are fresh enough to skip. */
+    internal suspend fun fetchReviewStatistics(force: Boolean = false): ResourceSync<List<ReviewStatisticEntity>>? =
+        fetchResourceSync(
+            syncStateDao = syncStateDao,
+            resource = SyncResources.REVIEW_STATISTICS,
+            force = force,
+            staleness = STALENESS,
+            fetch = { cursor ->
+                collectAllPages(
+                    firstPage = { api.getReviewStatistics(updatedAfter = cursor) },
+                    nextPage = { url -> api.getReviewStatisticsPage(url) }
+                ).map { item ->
                     ReviewStatisticEntity(
                         id = item.id,
                         subjectId = item.data.subjectId,
@@ -65,8 +72,9 @@ class StatsRepository(
                         lastReviewedAt = item.dataUpdatedAt
                     )
                 }
-            )
-        }
+            },
+            write = { reviewStatisticDao.upsertAll(it) }
+        )
 
     /** The subject detail view's accuracy/streak/last-reviewed source — null if the subject has
      *  no review_statistics row yet (not lessoned, or not synced yet). */
@@ -88,11 +96,22 @@ class StatsRepository(
         }
 
     /** level_progressions has no documented updated_after filter — always a full (small) refetch. */
-    suspend fun syncLevelProgressions(force: Boolean = false): ApiResult<Unit> =
-        runSync(syncStateDao, RESOURCE_LEVEL_PROGRESSIONS, force, STALENESS, useCursor = false) {
-            val response = api.getLevelProgressions()
-            levelProgressionDao.upsertAll(
-                response.data.map { item ->
+    suspend fun syncLevelProgressions(force: Boolean = false): ApiResult<Unit> = safeApiCall {
+        fetchLevelProgressions(force)?.let { completeResourceSync(syncStateDao, SyncResources.LEVEL_PROGRESSIONS, it) }
+    }
+
+    /** Fetches level progressions without writing them — see [AssignmentRepository.fetchAssignments].
+     *  No cursor: the API documents no `updated_after` filter for this resource, so every pass is a
+     *  full refetch. Null when they are fresh enough to skip. */
+    internal suspend fun fetchLevelProgressions(force: Boolean = false): ResourceSync<List<LevelProgressionEntity>>? =
+        fetchResourceSync(
+            syncStateDao = syncStateDao,
+            resource = SyncResources.LEVEL_PROGRESSIONS,
+            force = force,
+            staleness = STALENESS,
+            useCursor = false,
+            fetch = {
+                api.getLevelProgressions().data.map { item ->
                     LevelProgressionEntity(
                         id = item.id,
                         level = item.data.level,
@@ -104,8 +123,9 @@ class StatsRepository(
                         abandonedAt = item.data.abandonedAt
                     )
                 }
-            )
-        }
+            },
+            write = { levelProgressionDao.upsertAll(it) }
+        )
 
     /** Marks today as an active study day — local-only, never gated on network (there's nothing to
      *  sync, this data has no server counterpart), called directly from the review-grading path so

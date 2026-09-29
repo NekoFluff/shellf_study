@@ -49,7 +49,6 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
-private const val RESOURCE_ASSIGNMENTS = "assignments"
 private val ASSIGNMENTS_STALENESS = 1.hours
 
 /** Guru or higher is what counts toward leveling up. */
@@ -110,14 +109,29 @@ class AssignmentRepository(
     private val srsSystemDao: SrsSystemDao,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
-    suspend fun syncAssignments(force: Boolean = false): ApiResult<Unit> =
-        runSync(syncStateDao, RESOURCE_ASSIGNMENTS, force, ASSIGNMENTS_STALENESS) { cursor ->
-            val items = collectAllPages(
-                firstPage = { api.getAssignments(updatedAfter = cursor) },
-                nextPage = { url -> api.getAssignmentsPage(url) }
-            )
-            assignmentDao.upsertAll(items.map { it.toEntity() })
-        }
+    suspend fun syncAssignments(force: Boolean = false): ApiResult<Unit> = safeApiCall {
+        fetchAssignments(force)?.let { completeResourceSync(syncStateDao, SyncResources.ASSIGNMENTS, it) }
+    }
+
+    /**
+     * Fetches assignments without writing them — the first half of [syncAssignments], exposed so
+     * [com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator] can fetch every resource and then
+     * write them all inside one transaction. Null when they are fresh enough to skip.
+     */
+    internal suspend fun fetchAssignments(force: Boolean = false): ResourceSync<List<AssignmentEntity>>? =
+        fetchResourceSync(
+            syncStateDao = syncStateDao,
+            resource = SyncResources.ASSIGNMENTS,
+            force = force,
+            staleness = ASSIGNMENTS_STALENESS,
+            fetch = { cursor ->
+                collectAllPages(
+                    firstPage = { api.getAssignments(updatedAfter = cursor) },
+                    nextPage = { url -> api.getAssignmentsPage(url) }
+                ).map { it.toEntity() }
+            },
+            write = { assignmentDao.upsertAll(it) }
+        )
 
     /**
      * Ensures assignments and subjects are up to date before starting a review/lesson session —

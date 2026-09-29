@@ -28,8 +28,6 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlin.time.Duration.Companion.days
 
-private const val RESOURCE_SUBJECTS = "subjects"
-private const val RESOURCE_SRS_SYSTEMS = "srs_systems"
 private val SUBJECTS_STALENESS = 1.days
 
 /** Owns subjects and SRS systems — the full WaniKani content library. */
@@ -44,61 +42,87 @@ class SubjectRepository(
     private val _isSyncingSubjectLibrary = MutableStateFlow(false)
     fun observeIsSyncingSubjectLibrary(): Flow<Boolean> = _isSyncingSubjectLibrary.asStateFlow()
 
-    suspend fun syncSubjects(force: Boolean = false): ApiResult<Unit> =
-        runSync(syncStateDao, RESOURCE_SUBJECTS, force, SUBJECTS_STALENESS) { cursor ->
-            _isSyncingSubjectLibrary.value = true
-            try {
-                val items = collectAllPages(
+    suspend fun syncSubjects(force: Boolean = false): ApiResult<Unit> = safeApiCall {
+        val sync = fetchSubjects(force) ?: return@safeApiCall
+        withSubjectLibrarySyncFlag { completeResourceSync(syncStateDao, SyncResources.SUBJECTS, sync) }
+    }
+
+    /**
+     * Fetches the subject library without writing it — the first half of [syncSubjects], exposed so
+     * [com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator] can fetch several resources and then
+     * write them all inside one transaction. Null when the library is fresh enough to skip.
+     */
+    internal suspend fun fetchSubjects(force: Boolean = false): ResourceSync<List<SubjectEntity>>? =
+        fetchResourceSync(
+            syncStateDao = syncStateDao,
+            resource = SyncResources.SUBJECTS,
+            force = force,
+            staleness = SUBJECTS_STALENESS,
+            fetch = { cursor ->
+                collectAllPages(
                     firstPage = { api.getSubjects(updatedAfter = cursor) },
                     nextPage = { url -> api.getSubjectsPage(url) }
-                )
-                subjectDao.upsertAll(
-                    items.map { item ->
-                        SubjectEntity(
-                            id = item.id,
-                            subjectType = item.objectType,
-                            level = item.data.level,
-                            slug = item.data.slug,
-                            characters = item.data.characters,
-                            characterImageUrl = selectCharacterImageUrl(item.data.characterImages),
-                            meanings = item.data.meanings,
-                            readings = item.data.readings,
-                            auxiliaryMeanings = item.data.auxiliaryMeanings,
-                            documentUrl = item.data.documentUrl,
-                            // Raw WK markup (<radical>/<kanji>/<reading>/etc.) is preserved here — it's
-                            // parsed into colored spans at render time (see WkMnemonicText) rather than
-                            // being stripped at sync time as it was previously.
-                            meaningMnemonic = item.data.meaningMnemonic,
-                            readingMnemonic = item.data.readingMnemonic,
-                            meaningHint = item.data.meaningHint,
-                            readingHint = item.data.readingHint,
-                            lessonPosition = item.data.lessonPosition,
-                            srsSystemId = item.data.srsSystemId,
-                            componentSubjectIds = item.data.componentSubjectIds,
-                            amalgamationSubjectIds = item.data.amalgamationSubjectIds,
-                            visuallySimilarSubjectIds = item.data.visuallySimilarSubjectIds,
-                            partsOfSpeech = item.data.partsOfSpeech,
-                            contextSentences = item.data.contextSentences,
-                            pronunciationAudios = item.data.pronunciationAudios,
-                            hiddenAt = item.data.hiddenAt,
-                            searchTarget = buildSearchTarget(
-                                item.data.characters, item.data.slug, item.data.meanings.map { it.meaning },
-                                item.data.readings.map { it.reading }
-                            ),
-                            primaryReadingKey = primaryReadingKey(item.data.readings)
-                        )
-                    }
-                )
-            } finally {
-                _isSyncingSubjectLibrary.value = false
-            }
-        }
+                ).map { item ->
+                    SubjectEntity(
+                        id = item.id,
+                        subjectType = item.objectType,
+                        level = item.data.level,
+                        slug = item.data.slug,
+                        characters = item.data.characters,
+                        characterImageUrl = selectCharacterImageUrl(item.data.characterImages),
+                        meanings = item.data.meanings,
+                        readings = item.data.readings,
+                        auxiliaryMeanings = item.data.auxiliaryMeanings,
+                        documentUrl = item.data.documentUrl,
+                        // Raw WK markup (<radical>/<kanji>/<reading>/etc.) is preserved here — it's
+                        // parsed into colored spans at render time (see WkMnemonicText) rather than
+                        // being stripped at sync time as it was previously.
+                        meaningMnemonic = item.data.meaningMnemonic,
+                        readingMnemonic = item.data.readingMnemonic,
+                        meaningHint = item.data.meaningHint,
+                        readingHint = item.data.readingHint,
+                        lessonPosition = item.data.lessonPosition,
+                        srsSystemId = item.data.srsSystemId,
+                        componentSubjectIds = item.data.componentSubjectIds,
+                        amalgamationSubjectIds = item.data.amalgamationSubjectIds,
+                        visuallySimilarSubjectIds = item.data.visuallySimilarSubjectIds,
+                        partsOfSpeech = item.data.partsOfSpeech,
+                        contextSentences = item.data.contextSentences,
+                        pronunciationAudios = item.data.pronunciationAudios,
+                        hiddenAt = item.data.hiddenAt,
+                        searchTarget = buildSearchTarget(
+                            item.data.characters, item.data.slug, item.data.meanings.map { it.meaning },
+                            item.data.readings.map { it.reading }
+                        ),
+                        primaryReadingKey = primaryReadingKey(item.data.readings)
+                    )
+                }
+            },
+            write = { subjectDao.upsertAll(it) }
+        )
 
-    suspend fun syncSrsSystems(force: Boolean = false): ApiResult<Unit> =
-        runSync(syncStateDao, RESOURCE_SRS_SYSTEMS, force, SUBJECTS_STALENESS) { cursor ->
-            val response = api.getSpacedRepetitionSystems(updatedAfter = cursor)
-            srsSystemDao.upsertAll(
-                response.data.map { item ->
+    /** Runs [block] with the subject-library syncing indicator held true for its duration. */
+    private suspend fun <T> withSubjectLibrarySyncFlag(block: suspend () -> T): T {
+        _isSyncingSubjectLibrary.value = true
+        return try {
+            block()
+        } finally {
+            _isSyncingSubjectLibrary.value = false
+        }
+    }
+
+    /**
+     * Fetches SRS systems without writing them — see [fetchSubjects]. SRS systems must land before
+     * subjects (subjects reference `spaced_repetition_system_id`), which the orchestrator orders.
+     */
+    internal suspend fun fetchSrsSystems(force: Boolean = false): ResourceSync<List<SrsSystemEntity>>? =
+        fetchResourceSync(
+            syncStateDao = syncStateDao,
+            resource = SyncResources.SRS_SYSTEMS,
+            force = force,
+            staleness = SUBJECTS_STALENESS,
+            fetch = { cursor ->
+                api.getSpacedRepetitionSystems(updatedAfter = cursor).data.map { item ->
                     SrsSystemEntity(
                         id = item.id,
                         name = item.data.name,
@@ -109,8 +133,13 @@ class SubjectRepository(
                         stages = item.data.stages
                     )
                 }
-            )
-        }
+            },
+            write = { srsSystemDao.upsertAll(it) }
+        )
+
+    suspend fun syncSrsSystems(force: Boolean = false): ApiResult<Unit> = safeApiCall {
+        fetchSrsSystems(force)?.let { completeResourceSync(syncStateDao, SyncResources.SRS_SYSTEMS, it) }
+    }
 
     fun observeSearch(query: String): Flow<List<SubjectSummary>> =
         subjectDao.observeSearch(escapeLikeWildcards(query.lowercase())).map { entities -> entities.map { it.toSubjectSummary() } }

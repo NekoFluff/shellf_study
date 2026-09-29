@@ -12,6 +12,7 @@ val syncModule = module {
     single { WorkManagerOutboxSyncScheduler(androidContext()) } bind OutboxSyncScheduler::class
     single {
         SyncOrchestrator(
+            transactionRunner = get(),
             subjectRepository = get(),
             assignmentRepository = get(),
             statsRepository = get(),

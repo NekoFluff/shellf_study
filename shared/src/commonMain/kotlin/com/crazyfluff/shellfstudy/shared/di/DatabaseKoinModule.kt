@@ -11,6 +11,8 @@ import com.crazyfluff.shellfstudy.shared.database.session.SessionDatabase
 import com.crazyfluff.shellfstudy.shared.database.session.buildSessionDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.buildStudyActivityDatabase
+import com.crazyfluff.shellfstudy.shared.sync.RoomSyncTransactionRunner
+import com.crazyfluff.shellfstudy.shared.sync.SyncTransactionRunner
 import org.koin.core.module.Module
 import org.koin.core.scope.Scope
 
@@ -33,6 +35,9 @@ fun Module.registerDatabases(
     sessionDatabaseBuilder: Scope.() -> RoomDatabase.Builder<SessionDatabase>
 ) {
     single { buildAppDatabase(appDatabaseBuilder()) }
+    // Wraps the AppDatabase so a whole sync pass's writes share one Room write connection and one
+    // invalidation broadcast — see SyncTransactionRunner.
+    single<SyncTransactionRunner> { RoomSyncTransactionRunner(get<AppDatabase>()) }
     single { get<AppDatabase>().subjectDao() }
     single { get<AppDatabase>().assignmentDao() }
     single { get<AppDatabase>().srsSystemDao() }
