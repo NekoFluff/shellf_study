@@ -1,3 +1,5 @@
+@file:Suppress("ForbiddenImport") // The wrapper every other file is pointed to instead.
+
 package com.crazyfluff.shellfstudy.shared.designsystem.components
 
 import androidx.compose.foundation.layout.ColumnScope

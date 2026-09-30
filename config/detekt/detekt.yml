@@ -13,3 +13,27 @@ complexity:
   LongParameterList:
     # Composables take their state and callbacks as parameters by design.
     ignoreAnnotated: ['Composable']
+
+style:
+  # Every component that draws in its own window on Android goes through a design-system wrapper,
+  # which keeps windows without a text field out of keyboard focus. Otherwise closing one flashes
+  # the keyboard: fixed for menus in 2ad0303, then reported again for a bottom sheet because
+  # nothing enforced it. See designsystem/window/KeyboardFocus.kt. The wrappers themselves opt out
+  # with @file:Suppress("ForbiddenImport").
+  ForbiddenImport:
+    active: true
+    forbiddenImports:
+      - value: 'androidx.compose.material3.AlertDialog'
+        reason: 'Use AppAlertDialog (no text field) or AppTextInputDialog from designsystem/components, which handle keyboard focus.'
+      - value: 'androidx.compose.material3.BasicAlertDialog'
+        reason: 'Use AppAlertDialog or AppTextInputDialog from designsystem/components, which handle keyboard focus.'
+      - value: 'androidx.compose.material3.ModalBottomSheet'
+        reason: 'Use AppModalBottomSheet from designsystem/components, which keeps the sheet out of keyboard focus.'
+      - value: 'androidx.compose.material3.DropdownMenu'
+        reason: 'Use DropdownMenu from designsystem/components, which keeps the menu out of keyboard focus.'
+      - value: 'androidx.compose.material3.ExposedDropdownMenuBox'
+        reason: 'Use DropdownMenu from designsystem/components, which keeps the menu out of keyboard focus.'
+      - value: 'androidx.compose.ui.window.Dialog'
+        reason: 'Use AppAlertDialog, AppTextInputDialog or AppModalBottomSheet from designsystem/components.'
+      - value: 'androidx.compose.ui.window.Popup'
+        reason: 'Popups take keyboard focus on Android; add a design-system wrapper that keeps them out of it (see DropdownMenu).'

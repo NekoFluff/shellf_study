@@ -1,14 +1,14 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.dialog
 
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import com.crazyfluff.shellfstudy.shared.designsystem.components.AppAlertDialog
 
 /** Generic destructive-action confirmation — shared by every screen that needs a "are you sure"
- *  prompt before an irreversible action, rather than each rolling its own [AlertDialog]. */
+ *  prompt before an irreversible action, rather than each rolling its own dialog. */
 @Composable
 fun ConfirmationDialog(
     title: String,
@@ -19,7 +19,7 @@ fun ConfirmationDialog(
     confirmButtonTestTag: String? = null,
     dismissLabel: String = "Cancel"
 ) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Text(text) },
