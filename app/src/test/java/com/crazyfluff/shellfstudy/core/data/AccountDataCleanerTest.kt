@@ -11,6 +11,7 @@ import com.crazyfluff.shellfstudy.fakes.FakeOutboxDao
 import com.crazyfluff.shellfstudy.fakes.FakeOutboxSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeStudyActivityDao
+import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncStateDao
 import com.crazyfluff.shellfstudy.shared.data.AccountCleanupOutcome
 import com.crazyfluff.shellfstudy.shared.data.AccountDataCleaner
@@ -33,6 +34,7 @@ import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingLessonStartEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDayEntity
+import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeSegmentEntity
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import com.google.common.truth.Truth.assertThat
@@ -65,6 +67,7 @@ class AccountDataCleanerTest {
     private lateinit var syncStateDao: FakeSyncStateDao
     private lateinit var outboxDao: FakeOutboxDao
     private lateinit var studyActivityDao: FakeStudyActivityDao
+    private lateinit var studyTimeDao: FakeStudyTimeDao
     private lateinit var outboxRepository: OutboxRepository
     private lateinit var dashboardCacheRepository: DashboardCacheRepository
     private lateinit var lastSessionSummaryRepository: LastSessionSummaryRepository
@@ -84,6 +87,7 @@ class AccountDataCleanerTest {
         syncStateDao = FakeSyncStateDao()
         outboxDao = FakeOutboxDao()
         studyActivityDao = FakeStudyActivityDao()
+        studyTimeDao = FakeStudyTimeDao()
         outboxRepository = OutboxRepository(outboxDao, FakeOutboxSyncScheduler(), dataStore)
         dashboardCacheRepository = DashboardCacheRepository(dataStore)
         lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json)
@@ -100,6 +104,7 @@ class AccountDataCleanerTest {
         syncStateDao = syncStateDao,
         outboxDao = outboxDao,
         studyActivityDao = studyActivityDao,
+        studyTimeDao = studyTimeDao,
         outboxRepository = outboxRepository,
         dashboardCacheRepository = dashboardCacheRepository,
         lastSessionSummaryRepository = lastSessionSummaryRepository,
@@ -137,6 +142,11 @@ class AccountDataCleanerTest {
             PendingLessonStartEntity(assignmentId = 1, subjectId = 1, startedAt = "2026-08-01T00:00:00Z")
         )
         studyActivityDao.markActive(StudyActivityDayEntity(date = "2026-08-01"))
+        studyTimeDao.insert(
+            StudyTimeSegmentEntity(
+                kind = "REVIEW", startedAtMs = 0L, durationMs = 60_000L, level = 3, itemsAnswered = 5
+            )
+        )
         outboxRepository.setBlockedOnAuth(true)
         dashboardCacheRepository.save(username = "durtle_fan", level = 5, lessonCount = 3, reviewCount = 7, syncedAtMillis = 1L)
         lastSessionSummaryRepository.save(
@@ -165,6 +175,7 @@ class AccountDataCleanerTest {
         assertThat(outboxDao.allReviewSubmissions()).isEmpty()
         assertThat(outboxDao.allLessonStarts()).isEmpty()
         studyActivityDao.observeActiveDays().test { assertThat(awaitItem()).isEmpty() }
+        assertThat(studyTimeDao.all).isEmpty()
         outboxRepository.blockedOnAuth.test { assertThat(awaitItem()).isFalse() }
         dashboardCacheRepository.cachedSummary.test { assertThat(awaitItem()).isNull() }
         assertThat(lastSessionSummaryRepository.loadReview()).isNull()

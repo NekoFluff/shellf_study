@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyKind
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
@@ -27,6 +28,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentU
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
+import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
+import com.crazyfluff.shellfstudy.fakes.buildTestStudyTimeRepository
 import com.crazyfluff.shellfstudy.fakes.emptyCollectionJson
 import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
@@ -174,13 +177,19 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
         server.close()
     }
 
+    /** Where the session clock's stretches land — see StudyTimeRepository.record. */
+    private val studyTimeDao = FakeStudyTimeDao()
+
     private fun TestScope.createViewModel(
         pitchAccentRepository: PitchAccentRepository = repositories.pitchAccentRepository
     ) = ReviewViewModel(
         assignmentRepository, outboxRepository, statsRepository,
         ReviewSessionController(backgroundScope, reviewSessionRepository), lastSessionSummaryRepository,
         pronunciationAudioPlayer, settingsRepository, pitchAccentRepository, appForegroundTracker, backgroundScope,
-        repositories.syncOrchestrator
+        repositories.syncOrchestrator,
+        buildTestStudyTimeRepository(
+            studyTimeDao, dataStore, backgroundScope, mainDispatcherRule.dispatcher, settingsRepository
+        )
     )
 
 
@@ -1378,6 +1387,108 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
 
     @Test
     fun `backgrounding the app pauses the per-question timer, and returning to it resumes without resetting the accumulated time`() = backgroundingPausesThePerQuestionTimer()
+
+    // --- Study time ---
+
+    /** Skips emissions until [predicate] holds — the study-time tests care where the session ends
+     *  up, not how many timing updates it published on the way. */
+    private suspend fun ReceiveTurbine<ReviewUiState>.awaitUntil(predicate: (ReviewUiState) -> Boolean): ReviewUiState {
+        var state = awaitItem()
+        while (!predicate(state)) state = awaitItem()
+        return state
+    }
+
+    @Test
+    fun `completing a session records one review stretch counting the item it finished`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitUntil { it.phase is ReviewUiState.Phase.Active }
+            viewModel.onAnswerInputChange("Mouth")
+            viewModel.submitAnswer()
+            awaitUntil { it.question?.feedback != null }
+            viewModel.onContinue()
+            awaitUntil { it.phase is ReviewUiState.Phase.Complete }
+            cancelAndIgnoreRemainingEvents()
+        }
+        testScheduler.advanceUntilIdle()
+
+        val recorded = studyTimeDao.all.single()
+        assertThat(recorded.kind).isEqualTo(StudyKind.REVIEW.name)
+        assertThat(recorded.itemsAnswered).isEqualTo(1)
+    }
+
+    @Test
+    fun `returning to the app on the completion screen does not restart the study clock`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitUntil { it.phase is ReviewUiState.Phase.Active }
+            viewModel.onAnswerInputChange("Mouth")
+            viewModel.submitAnswer()
+            awaitUntil { it.question?.feedback != null }
+            viewModel.onContinue()
+            awaitUntil { it.phase is ReviewUiState.Phase.Complete }
+            cancelAndIgnoreRemainingEvents()
+        }
+        testScheduler.advanceUntilIdle()
+
+        // Reading the summary is not study: a background/foreground round trip here must neither
+        // resume the frozen clock nor record a second stretch when the screen is left.
+        appForegroundTracker.onStop(FakeLifecycleOwner)
+        appForegroundTracker.onStart(FakeLifecycleOwner)
+        appForegroundTracker.onStop(FakeLifecycleOwner)
+        testScheduler.advanceUntilIdle()
+
+        assertThat(studyTimeDao.all).hasSize(1)
+    }
+
+    @Test
+    fun `backgrounding mid-session records the stretch so far and the next one starts on return`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitUntil { it.phase is ReviewUiState.Phase.Active }
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            awaitUntil { it.question?.timing?.sessionActiveSegmentStartMs == null }
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+            awaitUntil { it.question?.timing?.sessionActiveSegmentStartMs != null }
+            viewModel.onAnswerInputChange("Mouth")
+            viewModel.submitAnswer()
+            awaitUntil { it.question?.feedback != null }
+            viewModel.onContinue()
+            awaitUntil { it.phase is ReviewUiState.Phase.Complete }
+            cancelAndIgnoreRemainingEvents()
+        }
+        testScheduler.advanceUntilIdle()
+
+        // Before backgrounding nothing was finished; the item belongs to the stretch after it.
+        assertThat(studyTimeDao.all.map { it.itemsAnswered }).containsExactly(0, 1).inOrder()
+    }
+
+    @Test
+    fun `undoing a correct answer takes its item back out of the stretch`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitUntil { it.phase is ReviewUiState.Phase.Active }
+            viewModel.onAnswerInputChange("Mouth")
+            viewModel.submitAnswer()
+            awaitUntil { it.question?.feedback?.isCorrect == true }
+            viewModel.undoLastAnswer()
+            awaitUntil { it.question?.feedback == null }
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            awaitUntil { it.question?.timing?.sessionActiveSegmentStartMs == null }
+            cancelAndIgnoreRemainingEvents()
+        }
+        testScheduler.advanceUntilIdle()
+
+        assertThat(studyTimeDao.all.single().itemsAnswered).isEqualTo(0)
+    }
 
     @Test
     fun `backgrounding the app after completing a session does not resurrect a resumable session`() = runTest(mainDispatcherRule.dispatcher) {

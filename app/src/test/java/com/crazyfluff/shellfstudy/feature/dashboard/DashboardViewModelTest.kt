@@ -32,6 +32,8 @@ import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlin.time.Clock
+import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
+import com.crazyfluff.shellfstudy.fakes.buildTestStudyTimeRepository
 import com.crazyfluff.shellfstudy.fakes.emptyCollectionJson
 import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeFriendStatsDao
@@ -134,6 +136,14 @@ class DashboardViewModelTest {
         server.close()
     }
 
+    /** Where the session clock's stretches land — see StudyTimeRepository.record. */
+    private val studyTimeDao = FakeStudyTimeDao()
+
+    private fun buildStudyTimeRepository() = buildTestStudyTimeRepository(
+        studyTimeDao, dataStore, CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
+        mainDispatcherRule.dispatcher, settingsRepository
+    )
+
     private fun createViewModel(): DashboardViewModel {
         val json = Json { ignoreUnknownKeys = true }
         val friendRepository = FriendRepository(dataStore, json, FakeTokenCipher())
@@ -153,6 +163,7 @@ class DashboardViewModelTest {
             syncStateDao = repositories.syncStateDao,
             outboxDao = repositories.outboxDao,
             studyActivityDao = repositories.studyActivityDao,
+            studyTimeDao = studyTimeDao,
             outboxRepository = outboxRepository,
             dashboardCacheRepository = dashboardCacheRepository,
             lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),
@@ -185,7 +196,8 @@ class DashboardViewModelTest {
                     logoutCoordinator = logoutCoordinator,
                     dashboardSyncCoordinator = dashboardSyncCoordinator,
                     lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),
-                    appForegroundTracker = appForegroundTracker
+                    appForegroundTracker = appForegroundTracker,
+                    studyTimeRepository = buildStudyTimeRepository()
                 )
             }
         }

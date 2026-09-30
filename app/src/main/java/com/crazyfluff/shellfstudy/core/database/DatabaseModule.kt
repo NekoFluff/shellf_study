@@ -5,6 +5,7 @@ import com.crazyfluff.shellfstudy.shared.database.friends.getFriendsDatabaseBuil
 import com.crazyfluff.shellfstudy.shared.database.outbox.getOutboxDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.database.session.getSessionDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.getStudyActivityDatabaseBuilder
+import com.crazyfluff.shellfstudy.shared.database.studytime.getStudyTimeDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.di.registerDatabases
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
@@ -15,6 +16,7 @@ val databaseModule = module {
         studyActivityDatabaseBuilder = { getStudyActivityDatabaseBuilder(androidContext()) },
         outboxDatabaseBuilder = { getOutboxDatabaseBuilder(androidContext()) },
         friendsDatabaseBuilder = { getFriendsDatabaseBuilder(androidContext()) },
-        sessionDatabaseBuilder = { getSessionDatabaseBuilder(androidContext()) }
+        sessionDatabaseBuilder = { getSessionDatabaseBuilder(androidContext()) },
+        studyTimeDatabaseBuilder = { getStudyTimeDatabaseBuilder(androidContext()) }
     )
 }

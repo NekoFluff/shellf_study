@@ -11,13 +11,15 @@ import com.crazyfluff.shellfstudy.shared.database.session.SessionDatabase
 import com.crazyfluff.shellfstudy.shared.database.session.buildSessionDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDatabase
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.buildStudyActivityDatabase
+import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeDatabase
+import com.crazyfluff.shellfstudy.shared.database.studytime.buildStudyTimeDatabase
 import com.crazyfluff.shellfstudy.shared.sync.RoomSyncTransactionRunner
 import com.crazyfluff.shellfstudy.shared.sync.SyncTransactionRunner
 import org.koin.core.module.Module
 import org.koin.core.scope.Scope
 
 /**
- * Registers all four Room databases and their DAOs into a Koin [Module] — shared by the Android
+ * Registers all six Room databases and their DAOs into a Koin [Module] — shared by the Android
  * (`app/di/DatabaseModule.kt`) and iOS (`IosModules.kt`) Koin setups, which previously duplicated
  * this exact set of `single { get<X>().yDao() }` bindings verbatim, differing only in how each
  * platform builds a [RoomDatabase.Builder] (Android needs a `Context`, iOS doesn't).
@@ -32,7 +34,8 @@ fun Module.registerDatabases(
     studyActivityDatabaseBuilder: Scope.() -> RoomDatabase.Builder<StudyActivityDatabase>,
     outboxDatabaseBuilder: Scope.() -> RoomDatabase.Builder<OutboxDatabase>,
     friendsDatabaseBuilder: Scope.() -> RoomDatabase.Builder<FriendsDatabase>,
-    sessionDatabaseBuilder: Scope.() -> RoomDatabase.Builder<SessionDatabase>
+    sessionDatabaseBuilder: Scope.() -> RoomDatabase.Builder<SessionDatabase>,
+    studyTimeDatabaseBuilder: Scope.() -> RoomDatabase.Builder<StudyTimeDatabase>
 ) {
     single { buildAppDatabase(appDatabaseBuilder()) }
     // Wraps the AppDatabase so a whole sync pass's writes share one Room write connection and one
@@ -65,4 +68,9 @@ fun Module.registerDatabases(
     // a file with anything else (see SessionDatabase's doc comment for why it left DataStore).
     single { buildSessionDatabase(sessionDatabaseBuilder()) }
     single { get<SessionDatabase>().sessionDao() }
+
+    // Not destructive — how long someone studied can't be re-fetched from the API (see
+    // StudyTimeDatabase's doc comment).
+    single { buildStudyTimeDatabase(studyTimeDatabaseBuilder()) }
+    single { get<StudyTimeDatabase>().studyTimeDao() }
 }

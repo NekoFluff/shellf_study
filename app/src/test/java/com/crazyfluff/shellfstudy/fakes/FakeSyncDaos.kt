@@ -15,6 +15,8 @@ import com.crazyfluff.shellfstudy.shared.database.outbox.PendingLessonStartEntit
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDao
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDayEntity
+import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeDao
+import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeSegmentEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -173,4 +175,22 @@ class FakeOutboxDao : OutboxDao {
     /** Test-only: every row regardless of status, for asserting on terminal/deleted state. */
     fun allReviewSubmissions(): List<PendingReviewSubmissionEntity> = reviewSubmissions.value.values.sortedBy { it.id }
     fun allLessonStarts(): List<PendingLessonStartEntity> = lessonStarts.value.values.sortedBy { it.id }
+}
+
+class FakeStudyTimeDao : StudyTimeDao {
+    private val segments = MutableStateFlow<List<StudyTimeSegmentEntity>>(emptyList())
+    private var nextId = 1L
+
+    /** Every stored row, oldest first — for asserting what a session recorded. */
+    val all: List<StudyTimeSegmentEntity> get() = segments.value
+
+    override suspend fun insert(entity: StudyTimeSegmentEntity) {
+        segments.value = (segments.value + entity.copy(id = nextId++)).sortedBy { it.startedAtMs }
+    }
+
+    override fun observeAll(): Flow<List<StudyTimeSegmentEntity>> = segments
+
+    override suspend fun clearAll() {
+        segments.value = emptyList()
+    }
 }

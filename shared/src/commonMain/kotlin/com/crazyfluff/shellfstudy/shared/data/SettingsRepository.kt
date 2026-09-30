@@ -27,6 +27,15 @@ val LESSON_BATCH_SIZE_RANGE = 1..20
  *  same two numbers as its enable bounds. */
 val DAILY_LESSON_GOAL_RANGE = 1..99
 
+/** Default [AppSettings.dailyStudyMinutesGoal] — about a day's reviews plus a lesson batch for a
+ *  learner keeping a steady WaniKani pace. */
+const val DEFAULT_DAILY_STUDY_MINUTES_GOAL = 30
+
+/** Bounds [AppSettings.dailyStudyMinutesGoal], in [DAILY_STUDY_MINUTES_GOAL_STEP] steps. Shared with
+ *  the settings screen's stepper so its enable bounds match what a save clamps to. */
+val DAILY_STUDY_MINUTES_GOAL_RANGE = 5..240
+const val DAILY_STUDY_MINUTES_GOAL_STEP = 5
+
 /** Bounds [AppSettings.backlogThreshold] — shared with [SettingsRepository.setBacklogThreshold]'s
  *  own clamp and the settings screen's stepper, so its enable bounds can't drift out of sync with
  *  what a value actually gets clamped to on save. */
@@ -36,6 +45,7 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK, EINK }
 
 data class AppSettings(
     val dailyLessonGoal: Int = DEFAULT_DAILY_LESSON_GOAL,
+    val dailyStudyMinutesGoal: Int = DEFAULT_DAILY_STUDY_MINUTES_GOAL,
     val lessonBatchSize: Int = DEFAULT_LESSON_BATCH_SIZE,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val showPitchAccent: Boolean = true,
@@ -75,6 +85,7 @@ class SettingsRepository(
     private val dataStore: DataStore<Preferences>
 ) {
     private val dailyLessonGoalKey = intPreferencesKey("daily_lesson_goal")
+    private val dailyStudyMinutesGoalKey = intPreferencesKey("daily_study_minutes_goal")
     private val lessonBatchSizeKey = intPreferencesKey("lesson_batch_size")
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val showPitchAccentKey = booleanPreferencesKey("show_pitch_accent")
@@ -113,6 +124,7 @@ class SettingsRepository(
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
         AppSettings(
             dailyLessonGoal = prefs[dailyLessonGoalKey] ?: DEFAULT_DAILY_LESSON_GOAL,
+            dailyStudyMinutesGoal = prefs[dailyStudyMinutesGoalKey] ?: DEFAULT_DAILY_STUDY_MINUTES_GOAL,
             lessonBatchSize = prefs[lessonBatchSizeKey] ?: DEFAULT_LESSON_BATCH_SIZE,
             themeMode = prefs[themeModeKey]?.let { raw -> runCatching { ThemeMode.valueOf(raw) }.getOrNull() }
                 ?: ThemeMode.SYSTEM,
@@ -153,6 +165,10 @@ class SettingsRepository(
 
     suspend fun setDailyLessonGoal(goal: Int) {
         dataStore.edit { it[dailyLessonGoalKey] = goal.coerceIn(DAILY_LESSON_GOAL_RANGE) }
+    }
+
+    suspend fun setDailyStudyMinutesGoal(minutes: Int) {
+        dataStore.edit { it[dailyStudyMinutesGoalKey] = minutes.coerceIn(DAILY_STUDY_MINUTES_GOAL_RANGE) }
     }
 
     suspend fun setLessonBatchSize(size: Int) {

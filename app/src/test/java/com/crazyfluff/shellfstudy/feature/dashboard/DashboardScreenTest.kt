@@ -1,5 +1,13 @@
 package com.crazyfluff.shellfstudy.feature.dashboard
 
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.assertTextEquals
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyPace
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeOverview
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeSplit
+import com.crazyfluff.shellfstudy.shared.feature.studytime.StudyTimeTestTags
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -441,6 +449,70 @@ class DashboardScreenTest {
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.LAST_SESSION_SUMMARY_MENU_ITEM).performClick()
         assert(opened)
+    }
+
+    @Test
+    fun studyTimeMenuItem_invokesCallback() {
+        var opened = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1),
+                callbacks = dashboardCallbacks(onOpenStudyTime = { opened = true })
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.STUDY_TIME_MENU_ITEM).performClick()
+        assert(opened)
+    }
+
+    @Test
+    fun studyTimeCard_showsTimeOnTheLevelTodayAgainstTheGoalAndTodaysPlan_andOpensTheScreen() {
+        var opened = false
+        val overview = StudyTimeOverview(
+            today = StudyTimeSplit(lessonMs = 6 * 60_000L, reviewMs = 12 * 60_000L),
+            goalMs = 30 * 60_000L,
+            goalStreakDays = 0,
+            lastSevenDays = emptyList(),
+            pace = StudyPace(reviewMsPerItem = 10_000L, lessonMsPerItem = 120_000L),
+            hasAnyData = true,
+            levelTotalsMs = mapOf(8 to (4 * 60 + 24) * 60_000L)
+        )
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(
+                    fetchState = DashboardFetch.Idle, username = "x", level = 8, daysOnCurrentLevel = 9,
+                    reviewCount = 60, lessonCount = 20, dailyLessonGoal = 15, lessonsCompletedToday = 10,
+                    studyTime = overview
+                ),
+                callbacks = dashboardCallbacks(onOpenStudyTime = { opened = true })
+            )
+        }
+
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(StudyTimeTestTags.DASHBOARD_CARD))
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.DASHBOARD_LEVEL_TIME, useUnmergedTree = true)
+            .assertTextEquals("4h 24m this level")
+        composeTestRule.onNodeWithText("of 30m", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Reviews 12m", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Lessons 6m", useUnmergedTree = true).assertIsDisplayed()
+        // 60 reviews at 10s plus the 5 lessons left for the goal at 2m each.
+        // The card is clickable, so it merges its children; the line is read from the unmerged tree.
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.DASHBOARD_ESTIMATE, useUnmergedTree = true)
+            .assertTextEquals("Today's plan: 60 reviews + 5 lessons ≈ 20m at your pace")
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.DASHBOARD_CARD).performClick()
+        assert(opened)
+    }
+
+    @Test
+    fun studyTimeCard_isAbsentUntilTheStudyTimeLogHasBeenRead() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1),
+                callbacks = dashboardCallbacks()
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(StudyTimeTestTags.DASHBOARD_CARD).assertCountEquals(0)
     }
 
     @Test

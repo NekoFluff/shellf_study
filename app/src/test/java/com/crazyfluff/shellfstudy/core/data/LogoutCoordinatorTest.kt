@@ -13,6 +13,7 @@ import com.crazyfluff.shellfstudy.fakes.FakeOutboxSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeSrsSystemDao
 import com.crazyfluff.shellfstudy.fakes.FakeStudyActivityDao
+import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
 import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncStateDao
@@ -108,6 +109,7 @@ class LogoutCoordinatorTest {
             syncStateDao = syncStateDao,
             outboxDao = outboxDao,
             studyActivityDao = studyActivityDao,
+            studyTimeDao = FakeStudyTimeDao(),
             outboxRepository = outboxRepository,
             dashboardCacheRepository = DashboardCacheRepository(dataStore),
             lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),

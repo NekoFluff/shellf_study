@@ -55,6 +55,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setDailyLessonGoal(goal) }
     }
 
+    override fun onDailyStudyMinutesGoalChange(minutes: Int) {
+        viewModelScope.launch { settingsRepository.setDailyStudyMinutesGoal(minutes) }
+    }
+
     override fun onLessonBatchSizeChange(size: Int) {
         viewModelScope.launch { settingsRepository.setLessonBatchSize(size) }
     }

@@ -34,6 +34,8 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.toLastSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyKind
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeRepository
 import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
@@ -203,7 +205,8 @@ class LessonViewModel(
     override val pronunciationAudioPlayer: PronunciationAudioPlayer,
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope,
-    private val syncOrchestrator: SyncOrchestrator
+    private val syncOrchestrator: SyncOrchestrator,
+    private val studyTimeRepository: StudyTimeRepository
 ) : QuizSessionViewModel<LessonItem, LessonUiState>(), LessonActions {
 
     override val _uiState = MutableStateFlow(LessonUiState())
@@ -244,8 +247,18 @@ class LessonViewModel(
             updateQuizTiming { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
             if (_uiState.value.phase !is LessonUiState.Phase.Quiz) return@pause
             applicationScope.launch { persistCurrentState() }
+        },
+        onSegmentEnded = { startMs, endMs ->
+            studyTimeRepository.record(StudyKind.LESSON, startMs, endMs, segmentItemsCompleted)
+            segmentItemsCompleted = 0
         }
     )
+
+    /** Lesson items that finished their lesson quiz during the running [sessionTiming] segment,
+     *  recorded with it as pace data. Study-phase time has none, so lesson pace spreads reading the
+     *  explanations across the items learned. An undo can't retract one: only incorrect answers are
+     *  undoable here, and those never finish an item. */
+    private var segmentItemsCompleted = 0
 
     // Same idea as sessionTiming, but for the current question — pauses on backgrounding just like
     // the session timer, instead of counting straight through time spent away (see restart()/
@@ -892,6 +905,7 @@ class LessonViewModel(
         // is marked started only the first time, which both the rank-change chip and the outbox
         // enqueue below agree on.
         val isNewlyStarted = graded.completedItem && item.assignmentId !in session.startedAssignmentIds
+        if (isNewlyStarted) segmentItemsCompleted++
         session = session.copy(
             quiz = quiz,
             startedAssignmentIds = if (isNewlyStarted) session.startedAssignmentIds + item.assignmentId else session.startedAssignmentIds

@@ -23,6 +23,8 @@ import kotlinx.coroutines.Job
 interface SettingsActions {
     fun onDailyLessonGoalChange(goal: Int)
 
+    fun onDailyStudyMinutesGoalChange(minutes: Int)
+
     fun onLessonBatchSizeChange(size: Int)
 
     fun onThemeModeChange(mode: ThemeMode)

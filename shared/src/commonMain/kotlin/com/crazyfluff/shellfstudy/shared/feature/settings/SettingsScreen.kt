@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,6 +55,8 @@ import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.rememberPermissionRequest
 import com.crazyfluff.shellfstudy.shared.data.BACKLOG_THRESHOLD_RANGE
 import com.crazyfluff.shellfstudy.shared.data.DAILY_LESSON_GOAL_RANGE
+import com.crazyfluff.shellfstudy.shared.data.DAILY_STUDY_MINUTES_GOAL_RANGE
+import com.crazyfluff.shellfstudy.shared.data.DAILY_STUDY_MINUTES_GOAL_STEP
 import com.crazyfluff.shellfstudy.shared.data.LESSON_BATCH_SIZE_RANGE
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
@@ -63,6 +66,9 @@ object SettingsScreenTestTags {
     const val LESSON_GOAL_DECREASE = "settings_lesson_goal_decrease"
     const val LESSON_GOAL_INCREASE = "settings_lesson_goal_increase"
     const val LESSON_GOAL_VALUE = "settings_lesson_goal_value"
+    const val STUDY_GOAL_DECREASE = "settings_study_goal_decrease"
+    const val STUDY_GOAL_INCREASE = "settings_study_goal_increase"
+    const val STUDY_GOAL_VALUE = "settings_study_goal_value"
     const val LESSON_BATCH_SIZE_DECREASE = "settings_lesson_batch_size_decrease"
     const val LESSON_BATCH_SIZE_INCREASE = "settings_lesson_batch_size_increase"
     const val LESSON_BATCH_SIZE_VALUE = "settings_lesson_batch_size_value"
@@ -174,6 +180,13 @@ fun SettingsScreen(
                 .padding(24.dp)
         ) {
             DailyGoalSection(
+                uiState = uiState,
+                actions = actions,
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            DailyStudyTimeGoalSection(
                 uiState = uiState,
                 actions = actions,
             )
@@ -456,6 +469,46 @@ private fun DailyGoalSection(
                 modifier = Modifier.testTag(SettingsScreenTestTags.LESSON_GOAL_INCREASE)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Increase daily lesson goal")
+            }
+        }
+    }
+}
+
+/** One settings section: the state it renders and the actions it offers. */
+@Composable
+private fun DailyStudyTimeGoalSection(
+    uiState: SettingsUiState,
+    actions: SettingsActions,
+) {
+    val minutes = uiState.app.dailyStudyMinutesGoal
+    SectionCard(title = "Daily study time goal", icon = Icons.Default.Timer) {
+        Text(
+            text = "Minutes of lessons and reviews to aim for each day, shown on the dashboard's study time card.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            IconButton(
+                onClick = { actions.onDailyStudyMinutesGoalChange(minutes - DAILY_STUDY_MINUTES_GOAL_STEP) },
+                enabled = minutes > DAILY_STUDY_MINUTES_GOAL_RANGE.first,
+                modifier = Modifier.testTag(SettingsScreenTestTags.STUDY_GOAL_DECREASE)
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = "Decrease daily study time goal")
+            }
+            Text(
+                text = "$minutes min",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.testTag(SettingsScreenTestTags.STUDY_GOAL_VALUE)
+            )
+            IconButton(
+                onClick = { actions.onDailyStudyMinutesGoalChange(minutes + DAILY_STUDY_MINUTES_GOAL_STEP) },
+                enabled = minutes < DAILY_STUDY_MINUTES_GOAL_RANGE.last,
+                modifier = Modifier.testTag(SettingsScreenTestTags.STUDY_GOAL_INCREASE)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Increase daily study time goal")
             }
         }
     }

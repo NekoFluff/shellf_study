@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -95,6 +96,7 @@ object DashboardScreenTestTags {
     const val ABANDON_REVIEW_CONFIRM_BUTTON = "dashboard_abandon_review_confirm_button"
     const val ABANDON_LESSON_CONFIRM_BUTTON = "dashboard_abandon_lesson_confirm_button"
     const val LAST_SESSION_SUMMARY_MENU_ITEM = "dashboard_last_session_summary_menu_item"
+    const val STUDY_TIME_MENU_ITEM = "dashboard_study_time_menu_item"
 }
 
 /** Bundles [DashboardScreen]'s callback lambdas into one param — the screen otherwise ends up with
@@ -113,6 +115,7 @@ data class DashboardCallbacks(
     val onOpenSettings: () -> Unit,
     val onOpenLeaderboard: () -> Unit,
     val onOpenLastSessionSummary: () -> Unit,
+    val onOpenStudyTime: () -> Unit,
     val onAbandonReviewSession: () -> Unit,
     val onAbandonLessonSession: () -> Unit,
     val onSearchQueryChange: (String) -> Unit,
@@ -130,6 +133,7 @@ fun DashboardRoute(
     onOpenSettings: () -> Unit,
     onOpenLeaderboard: () -> Unit,
     onOpenLastSessionSummary: () -> Unit,
+    onOpenStudyTime: () -> Unit,
     onLoggedOut: () -> Unit,
     pendingDestination: String? = null,
     onPendingDestinationConsumed: () -> Unit = {},
@@ -200,6 +204,7 @@ fun DashboardRoute(
             onOpenSettings = onOpenSettings,
             onOpenLeaderboard = onOpenLeaderboard,
             onOpenLastSessionSummary = onOpenLastSessionSummary,
+            onOpenStudyTime = onOpenStudyTime,
             onLogOut = onLoggedOut
         ),
         uiState = uiState,
@@ -258,6 +263,7 @@ private fun rememberDashboardCallbacks(
     onOpenSettings: () -> Unit,
     onOpenLeaderboard: () -> Unit,
     onOpenLastSessionSummary: () -> Unit,
+    onOpenStudyTime: () -> Unit,
     onLogOut: () -> Unit
 ): DashboardCallbacks = remember(
     viewModel,
@@ -267,6 +273,7 @@ private fun rememberDashboardCallbacks(
     onOpenSettings,
     onOpenLeaderboard,
     onOpenLastSessionSummary,
+    onOpenStudyTime,
     onLogOut
 ) {
     DashboardCallbacks(
@@ -276,6 +283,7 @@ private fun rememberDashboardCallbacks(
         onOpenSettings = onOpenSettings,
         onOpenLeaderboard = onOpenLeaderboard,
         onOpenLastSessionSummary = onOpenLastSessionSummary,
+        onOpenStudyTime = onOpenStudyTime,
         onLogOut = viewModel::logOut,
         onAbandonReviewSession = viewModel::abandonReviewSession,
         onAbandonLessonSession = viewModel::abandonLessonSession,
@@ -399,6 +407,12 @@ private fun DashboardTopBar(
             HorizontalDivider()
         }
         DropdownMenuItem(
+            text = { Text("Study time") },
+            leadingIcon = { Icon(Icons.Default.Timer, contentDescription = null) },
+            onClick = { menuExpanded = false; callbacks.onOpenStudyTime() },
+            modifier = Modifier.testTag(DashboardScreenTestTags.STUDY_TIME_MENU_ITEM)
+        )
+        DropdownMenuItem(
             text = { Text("Settings") },
             leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
             onClick = { menuExpanded = false; callbacks.onOpenSettings() },
@@ -485,8 +499,25 @@ private fun LazyListScope.dashboardItems(uiState: DashboardUiState, callbacks: D
                 }
             }
 
+            if (uiState.studyTime != null) {
+                item(key = "studyTime") {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TimedComposition("studyTimeCard") {
+                        StudyTimeCard(
+                            overview = uiState.studyTime,
+                            planEstimate = uiState.todaysPlanEstimate,
+                            reviewCount = uiState.reviewCount,
+                            lessonsLeftForGoal = uiState.lessonsLeftForGoal,
+                            level = uiState.level,
+                            onOpen = callbacks.onOpenStudyTime,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
             item(key = "reviewForecast") {
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 TimedComposition("reviewForecastCard") {
                     ReviewForecastCard(
                         forecast = uiState.reviewForecast,

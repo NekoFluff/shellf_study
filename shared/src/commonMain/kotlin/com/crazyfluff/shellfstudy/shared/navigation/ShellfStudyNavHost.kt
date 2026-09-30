@@ -10,6 +10,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankStat
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthRoute
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardRoute
 import com.crazyfluff.shellfstudy.shared.feature.lastsession.LastSessionSummaryRoute
+import com.crazyfluff.shellfstudy.shared.feature.studytime.StudyTimeRoute
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardRoute
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonRoute
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewRoute
@@ -26,6 +27,7 @@ sealed interface ShellfStudyDestination {
     @Serializable data object Settings : ShellfStudyDestination
     @Serializable data object Leaderboard : ShellfStudyDestination
     @Serializable data object LastSessionSummary : ShellfStudyDestination
+    @Serializable data object StudyTime : ShellfStudyDestination
 }
 
 /**
@@ -89,6 +91,9 @@ fun ShellfStudyNavHost(
                     onOpenSettings = { navController.navigate(ShellfStudyDestination.Settings) { launchSingleTop = true } },
                     onOpenLeaderboard = { navController.navigate(ShellfStudyDestination.Leaderboard) { launchSingleTop = true } },
                     onOpenLastSessionSummary = { navController.navigate(ShellfStudyDestination.LastSessionSummary) { launchSingleTop = true } },
+                    onOpenStudyTime = {
+                        navController.navigate(ShellfStudyDestination.StudyTime) { launchSingleTop = true }
+                    },
                     onLoggedOut = {
                         navController.navigate(ShellfStudyDestination.Auth) {
                             popUpTo<ShellfStudyDestination.Dashboard> { inclusive = true }
@@ -132,6 +137,11 @@ fun ShellfStudyNavHost(
         composable<ShellfStudyDestination.LastSessionSummary> {
             ReportedDestination("last_session_summary") {
                 LastSessionSummaryRoute(onBack = { navController.popBackStackSafely() })
+            }
+        }
+        composable<ShellfStudyDestination.StudyTime> {
+            ReportedDestination("study_time") {
+                StudyTimeRoute(onBack = { navController.popBackStackSafely() })
             }
         }
     }

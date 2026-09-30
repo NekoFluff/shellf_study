@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.feature.lesson
 
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyKind
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonPhase
 import com.crazyfluff.shellfstudy.shared.data.PersistedLessonSession
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonSort
@@ -34,6 +35,8 @@ import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
+import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
+import com.crazyfluff.shellfstudy.fakes.buildTestStudyTimeRepository
 import com.crazyfluff.shellfstudy.fakes.emptyCollectionJson
 import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
 import com.crazyfluff.shellfstudy.fakes.FakeLifecycleOwner
@@ -194,12 +197,18 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
         server.close()
     }
 
+    /** Where the session clock's stretches land — see StudyTimeRepository.record. */
+    private val studyTimeDao = FakeStudyTimeDao()
+
     private fun TestScope.createViewModel() = LessonViewModel(
         assignmentRepository, repositories.assignmentStatsRepository, repositories.statsRepository, outboxRepository,
         LessonSessionController(backgroundScope, lessonSessionRepository),
         lastSessionSummaryRepository, pitchAccentRepository, settingsRepository, subjectRepository, strokeOrderRepository,
         pronunciationAudioPlayer, appForegroundTracker, backgroundScope,
-        repositories.syncOrchestrator
+        repositories.syncOrchestrator,
+        buildTestStudyTimeRepository(
+            studyTimeDao, dataStore, backgroundScope, mainDispatcherRule.dispatcher, settingsRepository
+        )
     )
 
     /** Waits for the session summary, which is where the last batch's questions lead directly. */
@@ -976,6 +985,76 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
         }
 
         assertThat(lessonSessionRepository.load()).isNull()
+    }
+
+    @Test
+    fun `a finished lesson session records its time as lesson study counting the items learned`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem()
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+            viewModel.onContinue()
+            assertThat(awaitItem().phase).isInstanceOf(LessonUiState.Phase.Complete::class.java)
+        }
+        testScheduler.advanceUntilIdle()
+
+        // Reading the card and taking its quiz are both lesson time; the one item learned is the
+        // pace denominator.
+        assertThat(studyTimeDao.all).isNotEmpty()
+        assertThat(studyTimeDao.all.map { it.kind }.toSet()).containsExactly(StudyKind.LESSON.name)
+        assertThat(studyTimeDao.all.sumOf { it.itemsAnswered }).isEqualTo(1)
+    }
+
+    @Test
+    fun `backgrounding while reading study cards records that time as lesson study with no items yet`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            viewModel.startSelectedLessons()
+            assertThat(awaitItem().phase).isInstanceOf(LessonUiState.Phase.Study::class.java)
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            yield()
+            cancelAndIgnoreRemainingEvents()
+        }
+        testScheduler.advanceUntilIdle()
+
+        val recorded = studyTimeDao.all.single()
+        assertThat(recorded.kind).isEqualTo(StudyKind.LESSON.name)
+        assertThat(recorded.itemsAnswered).isEqualTo(0)
+    }
+
+    @Test
+    fun `picking lessons on the select screen is not recorded as study time`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            yield()
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+            yield()
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            yield()
+            cancelAndIgnoreRemainingEvents()
+        }
+        testScheduler.advanceUntilIdle()
+
+        assertThat(studyTimeDao.all).isEmpty()
     }
 
     @Test

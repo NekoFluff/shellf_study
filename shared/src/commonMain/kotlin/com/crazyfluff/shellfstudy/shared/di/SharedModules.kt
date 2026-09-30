@@ -24,12 +24,14 @@ import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.shared.data.strokeorder.CmpStrokeOrderRepository
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeRepository
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthViewModel
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.feature.lastsession.LastSessionSummaryViewModel
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardViewModel
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewViewModel
+import com.crazyfluff.shellfstudy.shared.feature.studytime.StudyTimeViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsViewModel
 import com.crazyfluff.shellfstudy.shared.feature.splash.SplashViewModel
@@ -123,6 +125,14 @@ val repositoryModule = module {
     single { OutboxRepository(outboxDao = get(), outboxSyncScheduler = get(), dataStore = get()) }
     single { DashboardCacheRepository(get()) }
     single {
+        StudyTimeRepository(
+            studyTimeDao = get(),
+            settingsRepository = get(),
+            dashboardCacheRepository = get(),
+            applicationScope = get(APPLICATION_SCOPE)
+        )
+    }
+    single {
         AccountDataCleaner(
             assignmentDao = get(),
             reviewStatisticDao = get(),
@@ -130,6 +140,7 @@ val repositoryModule = module {
             syncStateDao = get(),
             outboxDao = get(),
             studyActivityDao = get(),
+            studyTimeDao = get(),
             outboxRepository = get(),
             dashboardCacheRepository = get(),
             lastSessionSummaryRepository = get(),
@@ -239,6 +250,7 @@ val notificationCoordinatorModule = module {
 
 val viewModelModule = module {
     viewModel { ThemeViewModel(get()) }
+    viewModel { StudyTimeViewModel(get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get()) }
     viewModel { AuthViewModel(get(), get(), get(), get(), get()) }
     viewModel { SplashViewModel(get(), get(), get()) }
@@ -271,7 +283,8 @@ val viewModelModule = module {
             logoutCoordinator = get(),
             dashboardSyncCoordinator = get(),
             lastSessionSummaryRepository = get(),
-            appForegroundTracker = get()
+            appForegroundTracker = get(),
+            studyTimeRepository = get()
         )
     }
 
@@ -290,7 +303,8 @@ val viewModelModule = module {
             pronunciationAudioPlayer = get(),
             appForegroundTracker = get(),
             applicationScope = get(APPLICATION_SCOPE),
-            syncOrchestrator = get()
+            syncOrchestrator = get(),
+            studyTimeRepository = get()
         )
     }
 
@@ -306,7 +320,8 @@ val viewModelModule = module {
             pitchAccentRepository = get(),
             appForegroundTracker = get(),
             applicationScope = get(APPLICATION_SCOPE),
-            syncOrchestrator = get()
+            syncOrchestrator = get(),
+            studyTimeRepository = get()
         )
     }
 }

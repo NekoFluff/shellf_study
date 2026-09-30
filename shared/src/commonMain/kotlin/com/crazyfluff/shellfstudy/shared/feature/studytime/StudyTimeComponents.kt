@@ -1,0 +1,138 @@
+package com.crazyfluff.shellfstudy.shared.feature.studytime
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.designsystem.components.SegmentedBar
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.format.DayOfWeekNames
+import kotlinx.datetime.format.MonthNames
+import kotlinx.datetime.isoDayNumber
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.datetime.format.Padding
+
+/** Lessons take the Lessons card's blue and reviews the Reviews card's pink, so the colours mean
+ *  the same thing on every screen. */
+@Composable fun lessonTimeColor(): Color = radicalColor()
+
+@Composable fun reviewTimeColor(): Color = kanjiColor()
+
+/** "Nothing here" for heatmap cells, bar stubs and bar tracks. A tint of the content colour rather
+ *  than surfaceVariant, which in the light scheme is the card's own colour and vanishes on it. */
+@Composable internal fun emptyCellColor(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+
+/** A total for people to read: "45s", "23m", "1h 5m", "12h". */
+fun formatStudyDuration(ms: Long): String {
+    if (ms <= 0L) return "0m"
+    return ms.milliseconds.toComponents { hours, minutes, seconds, _ ->
+        when {
+            hours == 0L && minutes == 0 -> "${seconds}s"
+            hours == 0L -> "${minutes}m"
+            minutes == 0 -> "${hours}h"
+            else -> "${hours}h ${minutes}m"
+        }
+    }
+}
+
+private val TENTH_OF_A_SECOND = 100.milliseconds
+
+/** A per-item pace: "6.2s" under a minute, "2m 5s" above. One decimal via whole tenths, since
+ *  commonMain has no String.format. */
+fun formatPace(ms: Long): String {
+    val pace = ms.milliseconds
+    if (pace < 1.minutes) {
+        val tenths = ((pace + TENTH_OF_A_SECOND / 2) / TENTH_OF_A_SECOND).toLong()
+        val tenthsPerSecond = (1.seconds / TENTH_OF_A_SECOND).toLong()
+        return "${tenths / tenthsPerSecond}.${tenths % tenthsPerSecond}s"
+    }
+    return (pace + 0.5.seconds).toComponents { minutes, seconds, _ ->
+        if (seconds == 0) "${minutes}m" else "${minutes}m ${seconds}s"
+    }
+}
+
+/** For [SegmentedBar]'s Int proportions, which milliseconds would overflow on long totals. */
+internal fun Long.toWholeSeconds(): Int = milliseconds.inWholeSeconds.toInt()
+
+internal val SHORT_DATE_FORMAT = LocalDate.Format {
+    monthName(MonthNames.ENGLISH_ABBREVIATED)
+    chars(" ")
+    day(Padding.NONE)
+}
+
+internal fun DayOfWeek.shortLabel(): String = DayOfWeekNames.ENGLISH_ABBREVIATED.names[isoDayNumber - 1]
+
+/** Progress toward the daily goal, filled in the review colour and turning to the lesson colour
+ *  once the goal is met. */
+@Composable
+fun StudyGoalRing(
+    fraction: Float,
+    centerText: String,
+    modifier: Modifier = Modifier,
+    /** A smaller second line under [centerText], e.g. the goal it counts toward. */
+    subText: String? = null,
+    size: Dp = 72.dp,
+    strokeWidth: Dp = 7.dp
+) {
+    Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(
+            progress = { fraction.coerceIn(0f, 1f) },
+            modifier = Modifier.size(size),
+            strokeWidth = strokeWidth,
+            color = if (fraction >= 1f) lessonTimeColor() else reviewTimeColor(),
+            trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = centerText, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+            if (subText != null) {
+                Text(
+                    text = subText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+object StudyTimeTestTags {
+    const val DASHBOARD_CARD = "study_time_dashboard_card"
+    const val DASHBOARD_TODAY = "study_time_dashboard_today"
+    const val DASHBOARD_LEVEL_TIME = "study_time_dashboard_level_time"
+    const val DASHBOARD_RING = "study_time_dashboard_ring"
+    const val DASHBOARD_ESTIMATE = "study_time_dashboard_estimate"
+    const val SCREEN = "study_time_screen"
+    const val EMPTY_STATE = "study_time_empty_state"
+    const val TODAY_TOTAL = "study_time_today_total"
+    const val GOAL_STREAK = "study_time_goal_streak"
+    const val BAR_CHART = "study_time_bar_chart"
+    const val SELECTED_BAR = "study_time_selected_bar"
+    const val PERIOD_TOTAL = "study_time_period_total"
+    const val PERIOD_AVERAGE = "study_time_period_average"
+    const val PERIOD_REVIEW_ITEMS = "study_time_period_review_items"
+    const val PERIOD_LESSON_ITEMS = "study_time_period_lesson_items"
+    const val PERIOD_CHANGE = "study_time_period_change"
+    const val PACE_REVIEW = "study_time_pace_review"
+    const val PACE_LESSON = "study_time_pace_lesson"
+    const val HEATMAP = "study_time_heatmap"
+    const val HEATMAP_CAPTION = "study_time_heatmap_caption"
+    const val BACK_BUTTON = "study_time_back_button"
+
+    fun windowPill(name: String) = "study_time_window_$name"
+    fun levelRow(level: Int) = "study_time_level_$level"
+}

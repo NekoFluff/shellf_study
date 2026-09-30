@@ -7,6 +7,8 @@ import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 import com.crazyfluff.shellfstudy.shared.data.DEFAULT_DAILY_LESSON_GOAL
+import com.crazyfluff.shellfstudy.shared.data.DAILY_STUDY_MINUTES_GOAL_RANGE
+import com.crazyfluff.shellfstudy.shared.data.DEFAULT_DAILY_STUDY_MINUTES_GOAL
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -152,6 +154,27 @@ class SettingsRepositoryTest {
 
         repository.settings.test {
             assertThat(awaitItem().hideContextSentenceTranslations).isFalse()
+        }
+    }
+
+    @Test
+    fun `daily study time goal defaults to thirty minutes, persists, and clamps to the valid range`() = runTest {
+        val repository = createRepository()
+        repository.settings.test {
+            assertThat(awaitItem().dailyStudyMinutesGoal).isEqualTo(DEFAULT_DAILY_STUDY_MINUTES_GOAL)
+        }
+
+        repository.setDailyStudyMinutesGoal(45)
+        repository.settings.test { assertThat(awaitItem().dailyStudyMinutesGoal).isEqualTo(45) }
+
+        repository.setDailyStudyMinutesGoal(1_000)
+        repository.settings.test {
+            assertThat(awaitItem().dailyStudyMinutesGoal).isEqualTo(DAILY_STUDY_MINUTES_GOAL_RANGE.last)
+        }
+
+        repository.setDailyStudyMinutesGoal(0)
+        repository.settings.test {
+            assertThat(awaitItem().dailyStudyMinutesGoal).isEqualTo(DAILY_STUDY_MINUTES_GOAL_RANGE.first)
         }
     }
 

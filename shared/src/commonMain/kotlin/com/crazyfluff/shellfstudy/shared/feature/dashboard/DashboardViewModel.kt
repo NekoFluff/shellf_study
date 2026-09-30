@@ -48,6 +48,10 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
+import com.crazyfluff.shellfstudy.shared.data.studytime.QueueEstimate
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeAggregator
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeOverview
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeRepository
 import kotlin.math.ceil
 import kotlin.time.Clock
 
@@ -78,7 +82,9 @@ data class DashboardUiState(
     val selectedWindow: LeaderboardWindow = LeaderboardWindow.WEEK,
     val selectedForecastWindow: ReviewForecastWindow = ReviewForecastWindow.DAY,
     val selectedForecastColorMode: ReviewForecastColorMode = ReviewForecastColorMode.SUBJECT_TYPE,
-    val hasLastSessionSummary: Boolean = false
+    val hasLastSessionSummary: Boolean = false,
+    /** Null until the study-time log has been read once. */
+    val studyTime: StudyTimeOverview? = null
 ) {
     /** The last fetch failed but cached content is still on screen — see [DashboardFetch.Stale]. */
     val isShowingCachedData: Boolean
@@ -105,6 +111,15 @@ data class DashboardUiState(
 
     val isReviewsCardEnabled: Boolean
         get() = hasActiveReviewSession || reviewCount > 0
+
+    /** Lessons still to do to reach today's lesson goal, capped by how many are available. */
+    val lessonsLeftForGoal: Int
+        get() = minOf(lessonCount, (dailyLessonGoal - lessonsCompletedToday).coerceAtLeast(0))
+
+    /** How long today's plan (every due review plus the rest of the lesson goal) should take at
+     *  the learner's own pace. */
+    val todaysPlanEstimate: QueueEstimate?
+        get() = studyTime?.let { StudyTimeAggregator.estimateQueue(reviewCount, lessonsLeftForGoal, it.pace) }
 }
 
 /**
@@ -170,6 +185,12 @@ private data class LevelDependentState(
 /** Locally-known due counts, reactive to Room writes — see their use in [DashboardViewModel.uiState]
  *  for why these reconcile against the WaniKani `/summary`-derived counts rather than replacing
  *  them outright. */
+private data class SecondaryCardsState(
+    val hasLastSessionSummary: Boolean,
+    val reviewForecast: ReviewForecast,
+    val studyTime: StudyTimeOverview
+)
+
 private data class LocalDueCounts(val reviewCount: Int, val lessonCount: Int)
 
 class DashboardViewModel(
@@ -185,7 +206,8 @@ class DashboardViewModel(
     private val logoutCoordinator: LogoutCoordinator,
     private val dashboardSyncCoordinator: DashboardSyncCoordinator,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
-    private val appForegroundTracker: AppForegroundTracker
+    private val appForegroundTracker: AppForegroundTracker,
+    private val studyTimeRepository: StudyTimeRepository
 ) : ViewModel() {
 
     private val _dashboardData = MutableStateFlow(DashboardUiState())
@@ -282,6 +304,15 @@ class DashboardViewModel(
         .flatMapLatest { (metric, window) -> friendStatsRepository.observeLeaderboard(metric, window) }
         .distinctUntilChanged()
 
+    // Grouped only because the outer combine below is already at the five-flow typed overload.
+    private val secondaryCardsState: Flow<SecondaryCardsState> = combine(
+        lastSessionSummaryRepository.exists,
+        reviewForecastFlow,
+        studyTimeRepository.observeOverview().distinctUntilChanged()
+    ) { hasLastSessionSummary, reviewForecast, studyTime ->
+        SecondaryCardsState(hasLastSessionSummary, reviewForecast, studyTime)
+    }
+
     val uiState: StateFlow<DashboardUiState> = combine(
         combine(_dashboardData, sessionSyncState, progressStatsState, levelDependentState, localDueCounts)
         { imperative, sessionSync, progress, levelDependent, localCounts ->
@@ -320,14 +351,14 @@ class DashboardViewModel(
         },
         leaderboardFlow,
         _leaderboardRefreshing,
-        lastSessionSummaryRepository.exists,
-        reviewForecastFlow
-    ) { dashboardState, leaderboard, leaderboardLoading, hasLastSessionSummary, reviewForecast ->
+        secondaryCardsState
+    ) { dashboardState, leaderboard, leaderboardLoading, secondary ->
         dashboardState.copy(
             leaderboard = leaderboard,
             leaderboardLoading = leaderboardLoading,
-            hasLastSessionSummary = hasLastSessionSummary,
-            reviewForecast = reviewForecast
+            hasLastSessionSummary = secondary.hasLastSessionSummary,
+            reviewForecast = secondary.reviewForecast,
+            studyTime = secondary.studyTime
         )
     }
         // Room's invalidation is table-level, so every write anywhere in the assignments, subjects,

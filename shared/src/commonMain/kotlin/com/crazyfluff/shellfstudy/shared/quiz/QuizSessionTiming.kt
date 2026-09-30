@@ -22,7 +22,11 @@ import kotlin.time.Clock
 class QuizSessionTiming(
     private val onResume: (segmentStartMs: Long) -> Unit,
     private val onPause: (newElapsedMs: Long) -> Unit,
-    private val clock: () -> Long = { Clock.System.now().toEpochMilliseconds() }
+    private val clock: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    /** Called whenever a running segment ends, by [pause] or [freeze] — the hook study-time
+     *  tracking records each stretch through. Not called by [restart], which discards rather than
+     *  ends a segment. */
+    private val onSegmentEnded: (startMs: Long, endMs: Long) -> Unit = { _, _ -> }
 ) {
     /** Active time accumulated across all *completed* segments. Settable so a ViewModel resuming a
      *  persisted session can seed it before starting a fresh segment. */
@@ -72,8 +76,10 @@ class QuizSessionTiming(
      *  segment was running. */
     private fun foldRunningSegment(): Long? {
         val startedAt = segmentStartMs ?: return null
-        elapsedMs += clock() - startedAt
+        val now = clock()
+        elapsedMs += now - startedAt
         segmentStartMs = null
+        onSegmentEnded(startedAt, now)
         return elapsedMs
     }
 

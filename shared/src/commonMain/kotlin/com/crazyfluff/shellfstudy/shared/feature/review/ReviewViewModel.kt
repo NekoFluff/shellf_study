@@ -16,6 +16,8 @@ import com.crazyfluff.shellfstudy.shared.quiz.QuizSession
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.toLastSessionSummary
 import com.crazyfluff.shellfstudy.shared.quiz.QuizSessionTiming
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyKind
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeRepository
 import com.crazyfluff.shellfstudy.shared.quiz.QuizTimingUiState
 import com.crazyfluff.shellfstudy.shared.quiz.SlowAnswer
 import com.crazyfluff.shellfstudy.shared.quiz.isPitchAccentEligible
@@ -133,7 +135,8 @@ class ReviewViewModel(
     private val pitchAccentRepository: PitchAccentRepository,
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope,
-    private val syncOrchestrator: SyncOrchestrator
+    private val syncOrchestrator: SyncOrchestrator,
+    private val studyTimeRepository: StudyTimeRepository
 ) : QuizSessionViewModel<ReviewItem, ReviewUiState>(), ReviewActions {
 
     override val _uiState = MutableStateFlow(ReviewUiState())
@@ -159,8 +162,17 @@ class ReviewViewModel(
         onPause = { newElapsed ->
             updateQuizTiming { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
             applicationScope.launch { persistCurrentState() }
+        },
+        onSegmentEnded = { startMs, endMs ->
+            studyTimeRepository.record(StudyKind.REVIEW, startMs, endMs, segmentItemsCompleted)
+            segmentItemsCompleted = 0
         }
     )
+
+    /** Review items finished during the running [sessionTiming] segment, recorded with it as pace
+     *  data. Items rather than answers, so pace times a due-review count directly — a kanji or
+     *  vocabulary item is two questions. */
+    private var segmentItemsCompleted = 0
 
     // Same idea as sessionTiming, but for the current question — pauses on backgrounding just like
     // the session timer, instead of counting straight through time spent away (see restart()/
@@ -219,8 +231,12 @@ class ReviewViewModel(
                 }
         }
         // The initial value is handled by loadOrResume/sessionTiming.resume() below instead — see
-        // QuizSessionTiming.wireForegroundTracking's doc comment.
-        sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
+        // QuizSessionTiming.wireForegroundTracking's doc comment. Resuming is gated to an active
+        // question, so returning to the app on the completion or loading screen doesn't restart the
+        // clock after it was frozen, which would log that time as study time.
+        sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker) {
+            _uiState.value.phase is ReviewUiState.Phase.Active
+        }
         questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
     }
 
@@ -406,6 +422,7 @@ class ReviewViewModel(
             cap = MAX_IN_FLIGHT_REVIEW_ITEMS
         )
         val graded = quiz.lastGraded ?: return
+        if (graded.completedItem) segmentItemsCompleted++
         val grade = if (graded.completedItem) quiz.progress.getValue(item.assignmentId).toReviewGrade() else null
         // Only recorded as pending here — actually submitting to WaniKani (and bumping the local SRS
         // stage) waits for commitPendingSubmission, so the user can still undo a correct answer
@@ -449,7 +466,9 @@ class ReviewViewModel(
         val feedback = question?.feedback ?: return
 
         viewModelScope.launch {
+            val undoesCompletedItem = session.quiz.lastGraded?.completedItem == true
             val undone = session.quiz.undoLastGrade() ?: return@launch
+            if (undoesCompletedItem) segmentItemsCompleted = (segmentItemsCompleted - 1).coerceAtLeast(0)
             // Retracting a correct answer retracts the submission it made pending.
             session = ReviewSession(
                 quiz = undone,
@@ -541,6 +560,10 @@ class ReviewViewModel(
         commitPendingSubmission()
         val next = session.quiz.current
         if (next == null) {
+            // Stops the clock before the summary is built, so time spent reading the completion
+            // screen counts toward neither the summary nor study time. LessonViewModel's
+            // finishSession() freezes the same way.
+            sessionTiming.freeze()
             sessionController.complete()
             outboxRepository.requestSyncNow()
             val summary = sessionSummary()

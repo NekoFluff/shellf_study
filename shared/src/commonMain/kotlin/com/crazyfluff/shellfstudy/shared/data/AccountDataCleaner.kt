@@ -6,6 +6,7 @@ import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDao
+import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeDao
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlinx.coroutines.CancellationException
@@ -23,6 +24,7 @@ enum class AccountStore {
     PendingReviews,
     PendingLessonStarts,
     StudyActivity,
+    StudyTime,
     OutboxAuthBlock,
     DashboardCache,
     LastSessionSummary,
@@ -61,6 +63,7 @@ class AccountDataCleaner(
     private val syncStateDao: SyncStateDao,
     private val outboxDao: OutboxDao,
     private val studyActivityDao: StudyActivityDao,
+    private val studyTimeDao: StudyTimeDao,
     private val outboxRepository: OutboxRepository,
     private val dashboardCacheRepository: DashboardCacheRepository,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
@@ -77,6 +80,7 @@ class AccountDataCleaner(
         wipe(AccountStore.PendingReviews, failures) { outboxDao.clearReviewSubmissions() }
         wipe(AccountStore.PendingLessonStarts, failures) { outboxDao.clearLessonStarts() }
         wipe(AccountStore.StudyActivity, failures) { studyActivityDao.clearAll() }
+        wipe(AccountStore.StudyTime, failures) { studyTimeDao.clearAll() }
         wipe(AccountStore.OutboxAuthBlock, failures) { outboxRepository.resetAuthBlock() }
         wipe(AccountStore.DashboardCache, failures) { dashboardCacheRepository.clear() }
         wipe(AccountStore.LastSessionSummary, failures) { lastSessionSummaryRepository.clearAll() }

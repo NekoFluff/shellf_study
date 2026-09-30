@@ -1,5 +1,7 @@
 package com.crazyfluff.shellfstudy.feature.settings
 
+import com.crazyfluff.shellfstudy.shared.data.DAILY_STUDY_MINUTES_GOAL_RANGE
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -80,6 +82,37 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun studyTimeGoalStepper_movesInFiveMinuteSteps() {
+        val actions = RecordingSettingsActions()
+        setContent(uiState = SettingsUiState(app = AppSettings(dailyStudyMinutesGoal = 30)), actions = actions)
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.STUDY_GOAL_VALUE)
+            .performScrollTo()
+            .assertTextEquals("30 min")
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.STUDY_GOAL_INCREASE).performScrollTo().performClick()
+        assertThat(actions.lastArgumentOf("onDailyStudyMinutesGoalChange")).isEqualTo(35)
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.STUDY_GOAL_DECREASE).performScrollTo().performClick()
+        assertThat(actions.lastArgumentOf("onDailyStudyMinutesGoalChange")).isEqualTo(25)
+    }
+
+    @Test
+    fun studyTimeGoalStepper_stopsAtTheEndsOfTheRange() {
+        setContent(
+            uiState = SettingsUiState(app = AppSettings(dailyStudyMinutesGoal = DAILY_STUDY_MINUTES_GOAL_RANGE.last))
+        )
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.STUDY_GOAL_INCREASE).performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
+    fun studyTimeGoalDecrease_disabledAtTheMinimum() {
+        setContent(
+            uiState = SettingsUiState(app = AppSettings(dailyStudyMinutesGoal = DAILY_STUDY_MINUTES_GOAL_RANGE.first))
+        )
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.STUDY_GOAL_DECREASE).performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
     fun decreaseButton_disabledAtMinimumGoal() {
         setContent(uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 1, themeMode = ThemeMode.SYSTEM)))
 
@@ -153,7 +186,7 @@ class SettingsScreenTest {
             actions = actions
         )
 
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.PITCH_ACCENT_TOGGLE).performClick()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.PITCH_ACCENT_TOGGLE).performScrollTo().performClick()
         assertThat(actions.lastArgumentOf("onShowPitchAccentChange")).isEqualTo(false)
     }
 
@@ -419,6 +452,7 @@ private class RecordingSettingsActions : SettingsActions {
     }
 
     override fun onDailyLessonGoalChange(goal: Int) = record("onDailyLessonGoalChange", goal)
+    override fun onDailyStudyMinutesGoalChange(minutes: Int) = record("onDailyStudyMinutesGoalChange", minutes)
     override fun onLessonBatchSizeChange(size: Int) = record("onLessonBatchSizeChange", size)
     override fun onThemeModeChange(mode: ThemeMode) = record("onThemeModeChange", mode)
     override fun onShowPitchAccentChange(enabled: Boolean) = record("onShowPitchAccentChange", enabled)
