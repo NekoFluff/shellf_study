@@ -504,8 +504,11 @@ class SettingsScreenTest {
     fun reviewOrderSubtitle_explainsTheSelectedOption() {
         setContent(uiState = SettingsUiState(app = AppSettings(reviewPriority = ReviewPriority.RANK_UP)))
 
-        composeTestRule.onNodeWithText("below Guru come first", substring = true).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("radicals and kanji below Guru come earlier in the queue", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
         composeTestRule.onNodeWithText("random order", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("never changes when an item is due", substring = true).assertDoesNotExist()
     }
 
     @Test

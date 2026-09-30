@@ -10,11 +10,14 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
  *  worth the most, mirroring [com.crazyfluff.shellfstudy.shared.feature.lesson.LessonPrioritizer]'s
  *  level-up logic on the review side.
  *
- *  Under [ReviewPriority.RANK_UP] this level's kanji that haven't reached Guru yet come first: they
- *  are the only items that can move the level-up bar (90% of a level's kanji at Guru+, per
- *  [LevelUpProgress]), so clearing them is the single highest-leverage thing a review session can do.
- *  Everything else — vocabulary, radicals, other levels' items, and this level's kanji that are
- *  already past Guru — keeps its relative due order. Already-passed kanji are dropped from the
+ *  Under [ReviewPriority.RANK_UP] this level's radicals and kanji that haven't reached Guru yet come
+ *  first. The kanji are what move the level-up bar (90% of a level's kanji at Guru+, per
+ *  [LevelUpProgress]). The radicals gate those kanji: a kanji only unlocks once its radicals reach
+ *  Guru. Together they're everything standing between the learner and the next level. Both share
+ *  one tier, keeping their relative due order.
+ *
+ *  Everything else — vocabulary, other levels' items, and this level's radicals and kanji already
+ *  past Guru — keeps its relative due order behind them. Already-passed items are dropped from the
  *  priority tier rather than merely deprioritized, so a session can't keep racing an item that has
  *  stopped gating anything.
  *
@@ -35,6 +38,9 @@ object ReviewPrioritizer {
      *  private `GURU_SRS_STAGE`, and shared with [LevelUpProgress]'s counting rule. */
     private val GURU_SRS_STAGE = SrsStage.GURU_1.raw
 
+    /** Kanji count toward the level-up bar, and radicals unlock the kanji. Vocabulary does neither. */
+    private val LEVEL_GATING_TYPES = setOf(SubjectType.RADICAL, SubjectType.KANJI)
+
     /**
      * The tier key [com.crazyfluff.shellfstudy.shared.quiz.QuizQueue.build] sorts the queue by —
      * lower is admitted first. Handed over as a function rather than a pre-sorted list so the queue
@@ -51,7 +57,7 @@ object ReviewPrioritizer {
      *  the setting inert. */
     private fun priorityOf(item: ReviewItem, currentLevel: Int?): Int {
         if (currentLevel == null) return DEFAULT_TIER
-        val gating = item.subjectType == SubjectType.KANJI &&
+        val gating = item.subjectType in LEVEL_GATING_TYPES &&
             item.level == currentLevel &&
             item.srsStage < GURU_SRS_STAGE
         return if (gating) LEVEL_UP_TIER else DEFAULT_TIER

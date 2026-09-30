@@ -25,24 +25,24 @@ class ReviewPrioritizerTest {
     )
 
     @Test
-    fun `this level's not-yet-Guru kanji tiers ahead of everything else`() {
+    fun `this level's not-yet-Guru radicals and kanji tier ahead of everything else`() {
         val select = ReviewPrioritizer.tierSelector(currentLevel = 3)
-        val earlyVocab = item(1, level = 3, srsStage = 1, subjectType = SubjectType.VOCABULARY)
-        val otherLevelKanji = item(2, level = 2, srsStage = 1, subjectType = SubjectType.KANJI)
-        val guruKanji = item(3, level = 3, srsStage = 5, subjectType = SubjectType.KANJI)
-        val gatingKanji = item(4, level = 3, srsStage = 3, subjectType = SubjectType.KANJI)
-        val gatingRadical = item(5, level = 3, srsStage = 1, subjectType = SubjectType.RADICAL)
-        val lateVocab = item(6, level = 3, srsStage = 1, subjectType = SubjectType.VOCABULARY)
+        val gatingKanji = item(1, level = 3, srsStage = 3, subjectType = SubjectType.KANJI)
+        val gatingRadical = item(2, level = 3, srsStage = 1, subjectType = SubjectType.RADICAL)
+        val earlyVocab = item(3, level = 3, srsStage = 1, subjectType = SubjectType.VOCABULARY)
+        val otherLevelKanji = item(4, level = 2, srsStage = 1, subjectType = SubjectType.KANJI)
+        val otherLevelRadical = item(5, level = 2, srsStage = 1, subjectType = SubjectType.RADICAL)
+        val guruKanji = item(6, level = 3, srsStage = 5, subjectType = SubjectType.KANJI)
+        val guruRadical = item(7, level = 3, srsStage = 5, subjectType = SubjectType.RADICAL)
 
-        // Only the Apprentice-level kanji of the current level is special: a Guru-level kanji no
-        // longer gates anything, an earlier level's kanji can't gate this level's progress, and
-        // radicals/vocabulary never count toward the 90%-of-kanji requirement at all.
+        // The kanji count toward the level-up bar and the radicals unlock them, so both are special
+        // while they're below Guru on the current level. Vocabulary never gates a level, and neither
+        // does anything already at Guru or from an earlier level.
         val priorityTier = select(gatingKanji)
-        assertTrue(priorityTier < select(earlyVocab))
-        assertTrue(priorityTier < select(otherLevelKanji))
-        assertTrue(priorityTier < select(guruKanji))
-        assertTrue(priorityTier < select(gatingRadical))
-        assertTrue(priorityTier < select(lateVocab))
+        assertEquals(priorityTier, select(gatingRadical))
+        listOf(earlyVocab, otherLevelKanji, otherLevelRadical, guruKanji, guruRadical).forEach {
+            assertTrue(priorityTier < select(it), "expected ${it.subjectType} ${it.assignmentId} after the gating tier")
+        }
     }
 
     @Test

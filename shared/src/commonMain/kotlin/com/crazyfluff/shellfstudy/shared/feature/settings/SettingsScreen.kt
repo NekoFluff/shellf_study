@@ -245,9 +245,11 @@ private fun DailyPlanCard(uiState: SettingsUiState, actions: SettingsActions) {
 }
 
 private fun reviewPriorityExplanation(priority: ReviewPriority): String = when (priority) {
-    ReviewPriority.DEFAULT -> "Due reviews come up in random order."
-    ReviewPriority.RANK_UP -> "This level's kanji below Guru come first, so you level up sooner."
-} + " It never changes when an item is due."
+    ReviewPriority.DEFAULT -> "Due reviews come up in random order. It never changes when an item is due."
+    ReviewPriority.RANK_UP ->
+        "This level's radicals and kanji below Guru come earlier in the queue when available, " +
+            "so you level up sooner."
+}
 
 /** How a lesson or review session is put together. */
 @Composable
