@@ -1,4 +1,5 @@
 package com.crazyfluff.shellfstudy.shared.feature.lesson
+import com.crazyfluff.shellfstudy.shared.designsystem.components.DropdownMenu
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.LocalOpenSubjectDetail
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import androidx.compose.foundation.background
@@ -40,7 +41,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip

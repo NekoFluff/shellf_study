@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -58,6 +57,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.koin.compose.viewmodel.koinViewModel
+import com.crazyfluff.shellfstudy.shared.designsystem.components.DropdownMenu
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.JANK_STATE_SCREEN
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.TimedComposition
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankState
