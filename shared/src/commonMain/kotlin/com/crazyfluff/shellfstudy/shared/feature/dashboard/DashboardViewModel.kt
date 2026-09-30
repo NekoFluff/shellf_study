@@ -554,13 +554,6 @@ class DashboardViewModel(
         }
     }
 
-    fun logOut() {
-        viewModelScope.launch {
-            logoutCoordinator.logout()
-            _dashboardData.update { it.copy(isLoggedOut = true) }
-        }
-    }
-
     fun abandonReviewSession() {
         viewModelScope.launch { reviewSessionController.abandon() }
     }

@@ -625,29 +625,6 @@ class DashboardViewModelTest {
         assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
     }
 
-    @Test
-    fun `logOut clears the stored token, cancels background sync, and marks state logged out`() = runTest(mainDispatcherRule.dispatcher) {
-        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
-        tokenRepository.saveToken("some-token")
-        val viewModel = createViewModel()
-        viewModel.onDashboardResumed()
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
-
-            viewModel.logOut()
-            var afterLogout = awaitItem()
-            while (!afterLogout.isLoggedOut) afterLogout = awaitItem()
-            assertThat(afterLogout.isLoggedOut).isTrue()
-            cancelAndIgnoreRemainingEvents()
-        }
-
-        tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
-        assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
-        assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
-    }
-
     private val sampleReviewSession = PersistedReviewSession(
         queue = listOf(PersistedQuestion(assignmentId = 1, questionType = "MEANING")),
         progress = listOf(

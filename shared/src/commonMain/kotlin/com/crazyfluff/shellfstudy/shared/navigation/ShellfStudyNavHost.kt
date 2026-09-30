@@ -125,7 +125,15 @@ fun ShellfStudyNavHost(
             ReportedDestination("settings") {
                 SettingsRoute(
                     onBack = { navController.popBackStackSafely() },
-                    onOpenLeaderboard = { navController.navigate(ShellfStudyDestination.Leaderboard) { launchSingleTop = true } }
+                    onOpenLeaderboard = { navController.navigate(ShellfStudyDestination.Leaderboard) { launchSingleTop = true } },
+                    // Settings sits above Dashboard, so popping through Dashboard clears both. Back
+                    // from sign-in then leaves the app instead of returning to a signed-out screen.
+                    onLoggedOut = {
+                        navController.navigate(ShellfStudyDestination.Auth) {
+                            popUpTo<ShellfStudyDestination.Dashboard> { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
         }

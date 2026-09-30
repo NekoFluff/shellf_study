@@ -17,7 +17,8 @@ import kotlinx.coroutines.Job
  * ViewModel so a screen test can substitute a recording stand-in.
  *
  * Route-level concerns stay parameters on `SettingsScreen` rather than members here: `onBack` and
- * `onOpenLeaderboard` are navigation, and switching notifications on needs a platform permission
+ * `onOpenLeaderboard` are navigation (leaving after a log out is too, and the route does it off
+ * `SettingsUiState.isLoggedOut`), and switching notifications on needs a platform permission
  * prompt, which the ViewModel cannot raise — so `SettingsRoute` keeps intercepting that one.
  */
 interface SettingsActions {
@@ -80,4 +81,8 @@ interface SettingsActions {
     fun onQuietHoursEndHourChange(hour: Int)
 
     fun onFullRefreshRequested()
+
+    /** Returns its [Job] for the same reason as [onDailyReminderHourChange]: a test asserts the
+     *  token is gone, which it can only observe after the logout coroutine finishes. */
+    fun onLogOutRequested(): Job
 }

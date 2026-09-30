@@ -17,7 +17,6 @@ import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardCallbacks
 fun dashboardCallbacks(
     onRefresh: () -> Unit = {},
     onStartReview: () -> Unit = {},
-    onLogOut: () -> Unit = {},
     onStartLesson: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenLeaderboard: () -> Unit = {},
@@ -34,7 +33,6 @@ fun dashboardCallbacks(
 ): DashboardCallbacks = DashboardCallbacks(
     onRefresh = onRefresh,
     onStartReview = onStartReview,
-    onLogOut = onLogOut,
     onStartLesson = onStartLesson,
     onOpenSettings = onOpenSettings,
     onOpenLeaderboard = onOpenLeaderboard,

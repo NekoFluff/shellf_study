@@ -11,7 +11,22 @@ import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationScheduler
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
+import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
+import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
+import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
+import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
+import com.crazyfluff.shellfstudy.shared.data.AccountDataCleaner
+import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
+import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
+import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
+import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
+import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.TokenRepository
+import com.crazyfluff.shellfstudy.shared.feature.settings.AccountSummary
+import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
+import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsViewModel
@@ -20,6 +35,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -39,6 +55,9 @@ class SettingsViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var notificationCoordinator: FakeNotificationCoordinator
     private lateinit var notificationScheduler: FakeNotificationScheduler
+    private lateinit var tokenRepository: TokenRepository
+    private lateinit var dashboardCacheRepository: DashboardCacheRepository
+    private lateinit var syncScheduler: FakeSyncScheduler
 
     /**
      * Real [SyncOrchestrator] backed by a local server rather than a fake — [SyncOrchestrator] isn't
@@ -49,14 +68,49 @@ class SettingsViewModelTest {
     private fun createViewModel(
         syncOrchestrator: SyncOrchestrator = buildTestRepositories("http://localhost/", defaultDispatcher = mainDispatcherRule.dispatcher).syncOrchestrator
     ): SettingsViewModel {
+        val scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob())
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
-            scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
+            scope = scope,
             produceFile = { tempFolder.newFile("test.preferences_pb") }
         )
         settingsRepository = SettingsRepository(dataStore)
         notificationCoordinator = FakeNotificationCoordinator()
         notificationScheduler = FakeNotificationScheduler()
-        return SettingsViewModel(settingsRepository, notificationCoordinator, notificationScheduler, syncOrchestrator)
+        tokenRepository = TokenRepository(dataStore, FakeTokenCipher())
+        dashboardCacheRepository = DashboardCacheRepository(dataStore)
+        syncScheduler = FakeSyncScheduler()
+        return SettingsViewModel(
+            settingsRepository,
+            notificationCoordinator,
+            notificationScheduler,
+            syncOrchestrator,
+            buildLogoutCoordinator(dataStore, scope),
+            dashboardCacheRepository
+        )
+    }
+
+    /** The real logout sequence over in-memory DAOs, wired the same way DashboardViewModelTest does it. */
+    private fun buildLogoutCoordinator(dataStore: DataStore<Preferences>, scope: CoroutineScope): LogoutCoordinator {
+        val json = Json { ignoreUnknownKeys = true }
+        val repositories = buildTestRepositories("http://localhost/", defaultDispatcher = mainDispatcherRule.dispatcher)
+        val sessionDao = FakeSessionDao()
+        return LogoutCoordinator(
+            tokenRepository = tokenRepository,
+            syncScheduler = syncScheduler,
+            notificationCoordinator = notificationCoordinator,
+            accountDataCleaner = AccountDataCleaner(
+                assignmentDao = repositories.assignmentDao,
+                reviewStatisticDao = repositories.reviewStatisticDao,
+                levelProgressionDao = FakeLevelProgressionDao(),
+                syncStateDao = repositories.syncStateDao,
+                outboxDao = repositories.outboxDao,
+                outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore),
+                dashboardCacheRepository = dashboardCacheRepository,
+                lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),
+                reviewSessionController = ReviewSessionController(scope, ReviewSessionRepository(sessionDao, dataStore, json)),
+                lessonSessionController = LessonSessionController(scope, LessonSessionRepository(sessionDao, dataStore, json))
+            )
+        )
     }
 
 
@@ -377,5 +431,43 @@ class SettingsViewModelTest {
             assertThat(finalState.fullRefreshError).isNotNull()
         }
         server.close()
+    }
+
+    @Test
+    fun `account comes from the cached dashboard summary`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().account).isNull()
+
+            dashboardCacheRepository.save(username = "koichi", level = 12, lessonCount = 0, reviewCount = 0, syncedAtMillis = 1L)
+
+            var state = awaitItem()
+            while (state.account == null) state = awaitItem()
+            assertThat(state.account).isEqualTo(AccountSummary(username = "koichi", level = 12))
+        }
+    }
+
+    @Test
+    fun `onLogOutRequested clears the token, stops background work, and marks state logged out`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+        tokenRepository.saveToken("some-token")
+        dashboardCacheRepository.save(username = "koichi", level = 12, lessonCount = 0, reviewCount = 0, syncedAtMillis = 1L)
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().isLoggedOut).isFalse()
+
+            viewModel.onLogOutRequested().join()
+
+            var state = awaitItem()
+            while (!state.isLoggedOut) state = awaitItem()
+            // The account data cleaner wipes the cached summary as part of the same logout.
+            assertThat(state.account).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        tokenRepository.tokenFlow.test { assertThat(awaitItem()).isNull() }
+        assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
+        assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
     }
 }

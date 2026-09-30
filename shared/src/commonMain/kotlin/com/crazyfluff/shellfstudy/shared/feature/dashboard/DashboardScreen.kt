@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -85,8 +84,6 @@ object DashboardScreenTestTags {
     const val ERROR_TEXT = "dashboard_error_text"
     const val LESSON_COUNT = "dashboard_lesson_count"
     const val REVIEW_COUNT = "dashboard_review_count"
-    const val LOG_OUT_BUTTON = "dashboard_log_out_button"
-    const val LOG_OUT_CONFIRM_BUTTON = "dashboard_log_out_confirm_button"
     const val RETRY_BUTTON = "dashboard_retry_button"
     const val SEARCH_BUTTON = "dashboard_search_button"
     const val OVERFLOW_MENU = "dashboard_overflow_menu"
@@ -111,7 +108,6 @@ object DashboardScreenTestTags {
 data class DashboardCallbacks(
     val onRefresh: () -> Unit,
     val onStartReview: () -> Unit,
-    val onLogOut: () -> Unit,
     val onStartLesson: () -> Unit,
     val onOpenSettings: () -> Unit,
     val onOpenLeaderboard: () -> Unit,
@@ -205,8 +201,7 @@ fun DashboardRoute(
             onOpenSettings = onOpenSettings,
             onOpenLeaderboard = onOpenLeaderboard,
             onOpenLastSessionSummary = onOpenLastSessionSummary,
-            onOpenStudyTime = onOpenStudyTime,
-            onLogOut = onLoggedOut
+            onOpenStudyTime = onOpenStudyTime
         ),
         uiState = uiState,
         searchViewModel = searchViewModel
@@ -264,8 +259,7 @@ private fun rememberDashboardCallbacks(
     onOpenSettings: () -> Unit,
     onOpenLeaderboard: () -> Unit,
     onOpenLastSessionSummary: () -> Unit,
-    onOpenStudyTime: () -> Unit,
-    onLogOut: () -> Unit
+    onOpenStudyTime: () -> Unit
 ): DashboardCallbacks = remember(
     viewModel,
     searchViewModel,
@@ -274,8 +268,7 @@ private fun rememberDashboardCallbacks(
     onOpenSettings,
     onOpenLeaderboard,
     onOpenLastSessionSummary,
-    onOpenStudyTime,
-    onLogOut
+    onOpenStudyTime
 ) {
     DashboardCallbacks(
         onRefresh = viewModel::refresh,
@@ -285,7 +278,6 @@ private fun rememberDashboardCallbacks(
         onOpenLeaderboard = onOpenLeaderboard,
         onOpenLastSessionSummary = onOpenLastSessionSummary,
         onOpenStudyTime = onOpenStudyTime,
-        onLogOut = viewModel::logOut,
         onAbandonReviewSession = viewModel::abandonReviewSession,
         onAbandonLessonSession = viewModel::abandonLessonSession,
         onSearchQueryChange = searchViewModel::onQueryChange,
@@ -306,7 +298,6 @@ fun DashboardScreen(
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var abandonConfirm by remember { mutableStateOf<AbandonConfirmKind?>(null) }
-    var logOutConfirm by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -315,8 +306,7 @@ fun DashboardScreen(
                     uiState = uiState,
                     callbacks = callbacks,
                     onSearch = { isSearchActive = true },
-                    onAbandon = { abandonConfirm = it },
-                    onLogOut = { logOutConfirm = true }
+                    onAbandon = { abandonConfirm = it }
                 )
             }
         ) { innerPadding ->
@@ -350,24 +340,13 @@ fun DashboardScreen(
         abandonConfirm?.let { kind ->
             AbandonSessionDialog(kind = kind, callbacks = callbacks, onDismiss = { abandonConfirm = null })
         }
-        if (logOutConfirm) {
-            ConfirmationDialog(
-                title = "Log out?",
-                text = "You'll need your WaniKani API token to sign back in. Your study time and streak " +
-                    "stay on this device and come back when you sign in with the same account.",
-                confirmLabel = "Log out",
-                onConfirm = { logOutConfirm = false; callbacks.onLogOut() },
-                onDismiss = { logOutConfirm = false },
-                confirmButtonTestTag = DashboardScreenTestTags.LOG_OUT_CONFIRM_BUTTON
-            )
-        }
     }
 }
 
 /**
- * The dashboard's header: search, and a menu of session and account actions. No literal wordmark
- * title on purpose — a minimal, icon-only action row keeps the header from competing with the welcome
- * message below it. CompactTopBar (not the stock TopAppBar) so the empty title doesn't reserve a fixed
+ * The dashboard's header: search, and a menu of session actions and shortcuts. Log out lives in
+ * Settings, with the rest of the account. No literal wordmark title on purpose — a minimal, icon-only
+ * action row keeps the header from competing with the welcome message below it. CompactTopBar (not the stock TopAppBar) so the empty title doesn't reserve a fixed
  * ~64dp band of dead space above that welcome message.
  */
 @Composable
@@ -375,8 +354,7 @@ private fun DashboardTopBar(
     uiState: DashboardUiState,
     callbacks: DashboardCallbacks,
     onSearch: () -> Unit,
-    onAbandon: (AbandonConfirmKind) -> Unit,
-    onLogOut: () -> Unit
+    onAbandon: (AbandonConfirmKind) -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     CompactTopBar(
@@ -432,19 +410,6 @@ private fun DashboardTopBar(
             leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
             onClick = { menuExpanded = false; callbacks.onOpenSettings() },
             modifier = Modifier.testTag(DashboardScreenTestTags.SETTINGS_BUTTON)
-        )
-        HorizontalDivider()
-        DropdownMenuItem(
-            text = { Text("Log out", color = MaterialTheme.colorScheme.error) },
-            leadingIcon = {
-                Icon(
-                    Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error
-                )
-            },
-            onClick = { menuExpanded = false; onLogOut() },
-            modifier = Modifier.testTag(DashboardScreenTestTags.LOG_OUT_BUTTON)
         )
                 }
             }

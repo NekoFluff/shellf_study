@@ -260,7 +260,7 @@ val notificationCoordinatorModule = module {
 val viewModelModule = module {
     viewModel { ThemeViewModel(get()) }
     viewModel { StudyTimeViewModel(get()) }
-    viewModel { SettingsViewModel(get(), get(), get(), get()) }
+    viewModel { SettingsViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { AuthViewModel(get(), get(), get(), get(), get()) }
     viewModel { SplashViewModel(get(), get(), get()) }
 

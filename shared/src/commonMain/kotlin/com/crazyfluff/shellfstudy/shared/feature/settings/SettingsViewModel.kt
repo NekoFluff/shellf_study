@@ -3,8 +3,9 @@ package com.crazyfluff.shellfstudy.shared.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
-import com.crazyfluff.shellfstudy.shared.data.DEFAULT_LESSON_BATCH_SIZE
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
+import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
+import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
@@ -16,17 +17,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val app: AppSettings = AppSettings(),
     val notifications: NotificationSettings = NotificationSettings(),
-    val fullRefresh: FullRefreshStatus = FullRefreshStatus.Idle
+    val fullRefresh: FullRefreshStatus = FullRefreshStatus.Idle,
+    /** Who's signed in, from the dashboard's last-known summary. Null before the first sync. */
+    val account: AccountSummary? = null,
+    /** Set once a log out from this screen has finished. The route then leaves for sign-in. */
+    val isLoggedOut: Boolean = false
 ) {
     val isFullRefreshing: Boolean get() = fullRefresh == FullRefreshStatus.InFlight
     val fullRefreshError: String? get() = (fullRefresh as? FullRefreshStatus.Failed)?.message
 }
+
+/** The signed-in account, as the Account group shows it. */
+data class AccountSummary(val username: String, val level: Int)
 
 /** The settings screen's "re-download everything" action. */
 sealed interface FullRefreshStatus {
@@ -39,15 +48,24 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val notificationCoordinator: NotificationCoordinator,
     private val notificationScheduler: NotificationScheduler,
-    private val syncOrchestrator: SyncOrchestrator
+    private val syncOrchestrator: SyncOrchestrator,
+    private val logoutCoordinator: LogoutCoordinator,
+    dashboardCacheRepository: DashboardCacheRepository
 ) : ViewModel(), SettingsActions {
 
     private val fullRefresh = MutableStateFlow<FullRefreshStatus>(FullRefreshStatus.Idle)
+    private val isLoggedOut = MutableStateFlow(false)
+
+    private val account = dashboardCacheRepository.cachedSummary.map { summary ->
+        summary?.let { AccountSummary(username = it.username, level = it.level) }
+    }
 
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.settings,
         settingsRepository.notificationSettings,
         fullRefresh,
+        account,
+        isLoggedOut,
         ::SettingsUiState
     ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
@@ -187,5 +205,15 @@ class SettingsViewModel(
                 is ApiResult.Error -> FullRefreshStatus.Failed(result.message)
             }
         }
+    }
+
+    /**
+     * Logs out through [LogoutCoordinator], the same sequence the dashboard runs when the token stops
+     * working. Returns the launched [kotlinx.coroutines.Job] so tests can `join()` it, like
+     * [onNotificationsEnabledChange].
+     */
+    override fun onLogOutRequested() = viewModelScope.launch {
+        logoutCoordinator.logout()
+        isLoggedOut.value = true
     }
 }
