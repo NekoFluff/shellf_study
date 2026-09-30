@@ -89,6 +89,11 @@ class SettingsViewModelTest {
         )
     }
 
+    /** Seeds the dashboard's cached summary, which is where Settings reads the account from. */
+    private suspend fun saveCachedAccount(username: String, level: Int) {
+        dashboardCacheRepository.save(username, level, lessonCount = 0, reviewCount = 0, syncedAtMillis = 1L)
+    }
+
     /** The real logout sequence over in-memory DAOs, wired the same way DashboardViewModelTest does it. */
     private fun buildLogoutCoordinator(dataStore: DataStore<Preferences>, scope: CoroutineScope): LogoutCoordinator {
         val json = Json { ignoreUnknownKeys = true }
@@ -104,11 +109,21 @@ class SettingsViewModelTest {
                 levelProgressionDao = FakeLevelProgressionDao(),
                 syncStateDao = repositories.syncStateDao,
                 outboxDao = repositories.outboxDao,
-                outboxRepository = OutboxRepository(repositories.outboxDao, repositories.outboxSyncScheduler, dataStore),
+                outboxRepository = OutboxRepository(
+                    repositories.outboxDao,
+                    repositories.outboxSyncScheduler,
+                    dataStore
+                ),
                 dashboardCacheRepository = dashboardCacheRepository,
                 lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),
-                reviewSessionController = ReviewSessionController(scope, ReviewSessionRepository(sessionDao, dataStore, json)),
-                lessonSessionController = LessonSessionController(scope, LessonSessionRepository(sessionDao, dataStore, json))
+                reviewSessionController = ReviewSessionController(
+                    scope,
+                    ReviewSessionRepository(sessionDao, dataStore, json)
+                ),
+                lessonSessionController = LessonSessionController(
+                    scope,
+                    LessonSessionRepository(sessionDao, dataStore, json)
+                )
             )
         )
     }
@@ -440,7 +455,7 @@ class SettingsViewModelTest {
         viewModel.uiState.test {
             assertThat(awaitItem().account).isNull()
 
-            dashboardCacheRepository.save(username = "koichi", level = 12, lessonCount = 0, reviewCount = 0, syncedAtMillis = 1L)
+            saveCachedAccount(username = "koichi", level = 12)
 
             var state = awaitItem()
             while (state.account == null) state = awaitItem()
@@ -452,7 +467,7 @@ class SettingsViewModelTest {
     fun `onLogOutRequested clears the token, stops background work, and marks state logged out`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
         tokenRepository.saveToken("some-token")
-        dashboardCacheRepository.save(username = "koichi", level = 12, lessonCount = 0, reviewCount = 0, syncedAtMillis = 1L)
+        saveCachedAccount(username = "koichi", level = 12)
 
         viewModel.uiState.test {
             assertThat(awaitItem().isLoggedOut).isFalse()

@@ -175,7 +175,11 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1),
-                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onOpenSettings = { openedSettings = true })
+                callbacks = dashboardCallbacks(
+                    onRefresh = {},
+                    onStartReview = {},
+                    onOpenSettings = { openedSettings = true }
+                )
             )
         }
 
@@ -192,7 +196,11 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, lessonCount = 5),
-                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onStartLesson = { startedLesson = true })
+                callbacks = dashboardCallbacks(
+                    onRefresh = {},
+                    onStartReview = {},
+                    onStartLesson = { startedLesson = true }
+                )
             )
         }
 
@@ -220,7 +228,11 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, lessonCount = 0),
-                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onStartLesson = { startedLesson = true })
+                callbacks = dashboardCallbacks(
+                    onRefresh = {},
+                    onStartReview = {},
+                    onStartLesson = { startedLesson = true }
+                )
             )
         }
 
@@ -251,7 +263,11 @@ class DashboardScreenTest {
                     fetchState = DashboardFetch.Idle, username = "x", level = 1,
                     lessonCount = 0, hasActiveLessonSession = true
                 ),
-                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onStartLesson = { startedLesson = true })
+                callbacks = dashboardCallbacks(
+                    onRefresh = {},
+                    onStartReview = {},
+                    onStartLesson = { startedLesson = true }
+                )
             )
         }
 
@@ -361,7 +377,11 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveReviewSession = true),
-                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onAbandonReviewSession = { abandoned = true })
+                callbacks = dashboardCallbacks(
+                    onRefresh = {},
+                    onStartReview = {},
+                    onAbandonReviewSession = { abandoned = true }
+                )
             )
         }
 
@@ -377,7 +397,11 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveReviewSession = true),
-                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onAbandonReviewSession = { abandoned = true })
+                callbacks = dashboardCallbacks(
+                    onRefresh = {},
+                    onStartReview = {},
+                    onAbandonReviewSession = { abandoned = true }
+                )
             )
         }
 
@@ -407,7 +431,11 @@ class DashboardScreenTest {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveLessonSession = true),
-                callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onAbandonLessonSession = { abandoned = true })
+                callbacks = dashboardCallbacks(
+                    onRefresh = {},
+                    onStartReview = {},
+                    onAbandonLessonSession = { abandoned = true }
+                )
             )
         }
 

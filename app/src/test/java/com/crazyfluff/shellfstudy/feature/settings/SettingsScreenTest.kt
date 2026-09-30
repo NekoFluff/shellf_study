@@ -358,9 +358,13 @@ class SettingsScreenTest {
         setContent(uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = false)))
 
         // Visible but disabled, so you can see what turning notifications on would offer.
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE).performScrollTo().assertIsNotEnabled()
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_TOGGLE).performScrollTo().assertIsNotEnabled()
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_TOGGLE).performScrollTo().assertIsNotEnabled()
+        listOf(
+            SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE,
+            SettingsScreenTestTags.DAILY_REMINDER_TOGGLE,
+            SettingsScreenTestTags.QUIET_HOURS_TOGGLE
+        ).forEach { tag ->
+            composeTestRule.onNodeWithTag(tag).performScrollTo().assertIsNotEnabled()
+        }
     }
 
     @Test
@@ -385,7 +389,11 @@ class SettingsScreenTest {
     fun dependentRows_areHiddenWhileNotificationsAreOff_evenIfTheirParentIsOn() {
         setContent(
             uiState = SettingsUiState(
-                notifications = NotificationSettings(notificationsEnabled = false, reviewsBacklogEnabled = true, dailyReminderEnabled = true)
+                notifications = NotificationSettings(
+                    notificationsEnabled = false,
+                    reviewsBacklogEnabled = true,
+                    dailyReminderEnabled = true
+                )
             )
         )
 
@@ -423,7 +431,13 @@ class SettingsScreenTest {
     fun dailyReminderTime_opensHourPickerAndInvokesCallbackWithPickedHour() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, dailyReminderEnabled = true, dailyReminderHour = 19)),
+            uiState = SettingsUiState(
+                notifications = NotificationSettings(
+                    notificationsEnabled = true,
+                    dailyReminderEnabled = true,
+                    dailyReminderHour = 19
+                )
+            ),
             actions = actions
         )
 
@@ -440,7 +454,9 @@ class SettingsScreenTest {
     fun hourPicker_cancelLeavesTheHourUnchanged() {
         val actions = RecordingSettingsActions()
         setContent(
-            uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, dailyReminderEnabled = true)),
+            uiState = SettingsUiState(
+                notifications = NotificationSettings(notificationsEnabled = true, dailyReminderEnabled = true)
+            ),
             actions = actions
         )
 

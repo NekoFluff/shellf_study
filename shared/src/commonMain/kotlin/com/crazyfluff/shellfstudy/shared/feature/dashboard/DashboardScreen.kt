@@ -346,8 +346,9 @@ fun DashboardScreen(
 /**
  * The dashboard's header: search, and a menu of session actions and shortcuts. Log out lives in
  * Settings, with the rest of the account. No literal wordmark title on purpose — a minimal, icon-only
- * action row keeps the header from competing with the welcome message below it. CompactTopBar (not the stock TopAppBar) so the empty title doesn't reserve a fixed
- * ~64dp band of dead space above that welcome message.
+ * action row keeps the header from competing with the welcome message below it. CompactTopBar (not
+ * the stock TopAppBar) so the empty title doesn't reserve a fixed ~64dp band of dead space above that
+ * welcome message.
  */
 @Composable
 private fun DashboardTopBar(

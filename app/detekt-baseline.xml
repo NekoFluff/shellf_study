@@ -41,10 +41,6 @@
     <ID>MaxLineLength:AuthViewModelTest.kt:AuthViewModelTest$fun</ID>
     <ID>MaxLineLength:AuthViewModelTest.kt:AuthViewModelTest$waniKaniRepository = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher).waniKaniRepository</ID>
     <ID>MaxLineLength:CompletionProjectionCardTest.kt:CompletionProjectionCardTest$projectedCompletionDate = Clock.System.todayIn(TimeZone.currentSystemDefault()).plus(520, DateTimeUnit.DAY)</ID>
-    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonLessonSession = { abandoned = true })</ID>
-    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onAbandonReviewSession = { abandoned = true })</ID>
-    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onOpenSettings = { openedSettings = true })</ID>
-    <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$callbacks = dashboardCallbacks(onRefresh = {}, onStartReview = {}, onLogOut = {}, onStartLesson = { startedLesson = true })</ID>
     <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$fetchState = DashboardFetch.Idle</ID>
     <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$fetchState = DashboardFetch.InFlight</ID>
     <ID>MaxLineLength:DashboardScreenTest.kt:DashboardScreenTest$uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1, hasActiveLessonSession = true)</ID>
@@ -60,7 +56,6 @@
     <ID>MaxLineLength:DashboardViewModelTest.kt:DashboardViewModelTest$lessonSessionController = LessonSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), lessonSessionRepository)</ID>
     <ID>MaxLineLength:DashboardViewModelTest.kt:DashboardViewModelTest$repositories = buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher)</ID>
     <ID>MaxLineLength:DashboardViewModelTest.kt:DashboardViewModelTest$reviewSessionController = ReviewSessionController(CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()), reviewSessionRepository)</ID>
-    <ID>MaxLineLength:FakeDaos.kt:FakeSubjectDao$.</ID>
     <ID>MaxLineLength:FakeDaos.kt:FakeSubjectDao$return subjects.map { map -&gt; map.values.filter { it.searchTarget.contains(unescaped, ignoreCase = true) }.take(200) }</ID>
     <ID>MaxLineLength:FakeNotificationCoordinator.kt:FakeNotificationCoordinator$/** Call-count spy stand-in for [NotificationCoordinator], used by ViewModel tests that only care whether the right lifecycle hook fired. */</ID>
     <ID>MaxLineLength:FakeSyncDaos.kt:FakeOutboxDao$lessonStarts.value = lessonStarts.value + (id to entity.copy(status = OutboxStatus.FAILED_TERMINAL.name, lastErrorMessage = message))</ID>
@@ -121,9 +116,6 @@
     <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$AssignmentFixture(id = 103, subjectId = 3, subjectType = "radical", srsStage = 1, availableAt = FIXTURE_INSTANT)</ID>
     <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$AssignmentFixture(id = 606, subjectId = 8001, subjectType = "vocabulary", srsStage = 3, availableAt = FIXTURE_INSTANT)</ID>
     <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$AssignmentFixture(id = 607, subjectId = 8002, subjectType = "vocabulary", srsStage = 3, availableAt = FIXTURE_INSTANT)</ID>
-    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((requeuedState.phase as ReviewUiState.Phase.Active).currentQuestionType).isEqualTo(QuestionType.MEANING)</ID>
-    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((settled.phase as ReviewUiState.Phase.Active).rankChange).isEqualTo(RankChange(SrsStage.APPRENTICE_1, SrsStage.APPRENTICE_2))</ID>
-    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((state.phase as ReviewUiState.Phase.Active).timing.sessionActiveElapsedMs).isEqualTo(fakeAccumulatedElapsedMs)</ID>
     <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((state.phase as ReviewUiState.Phase.Complete).sessionMissedItems.first().characters).isEqualTo("水")</ID>
     <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((state.phase as ReviewUiState.Phase.Complete).sessionMissedItems.map { it.subjectId }).containsExactly(440L)</ID>
     <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$assertThat((state.phase as ReviewUiState.Phase.Complete).sessionSlowestAnswers.map { it.item.assignmentId }).contains(101L)</ID>
@@ -133,12 +125,6 @@
     <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$request.method == "POST" &amp;&amp; path.startsWith("/reviews") -&gt; reviewResponse ?: jsonResponse(reviewResultJson())</ID>
     <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$reviewSessionRepository = ReviewSessionRepository(FakeSessionDao(), dataStore, Json { ignoreUnknownKeys = true })</ID>
     <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$val</ID>
-    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$val answer = if ((current.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu"</ID>
-    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$val answer = if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu"</ID>
-    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$viewModel.onAnswerInputChange((wrappedState.phase as ReviewUiState.Phase.Active).currentItem.meanings.first())</ID>
-    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$viewModel.onAnswerInputChange(if ((state.phase as ReviewUiState.Phase.Active).currentQuestionType == QuestionType.MEANING) "Water" else "mizu")</ID>
-    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$while ((correctState.phase as ReviewUiState.Phase.Active).feedback == null || (correctState.phase as ReviewUiState.Phase.Active).rankChange == null) correctState = awaitItem()</ID>
-    <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$while ((settled.phase as ReviewUiState.Phase.Active).feedback == null || (settled.phase as ReviewUiState.Phase.Active).rankChange == null) settled = awaitItem()</ID>
     <ID>MaxLineLength:ReviewViewModelTest.kt:ReviewViewModelTest$while ((state.phase is ReviewUiState.Phase.Loading) || (state.phase as? ReviewUiState.Phase.Error)?.message != null) state = awaitItem()</ID>
     <ID>MaxLineLength:SearchViewModelTest.kt:SearchViewModelTest$fun</ID>
     <ID>MaxLineLength:SearchViewModelTest.kt:SearchViewModelTest$private val repositories = buildTestRepositories("https://api.wanikani.com/v2/", defaultDispatcher = mainDispatcherRule.dispatcher)</ID>
@@ -154,12 +140,10 @@
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_DECREASE).performScrollTo().performClick()</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.BACKLOG_THRESHOLD_INCREASE).performScrollTo().performClick()</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.CLOSE_ENOUGH_ANSWERS_TOGGLE).performScrollTo().performClick()</ID>
-    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_HOUR_INCREASE).performScrollTo().performClick()</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.DAILY_REMINDER_TOGGLE).performScrollTo().assertIsDisplayed()</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_ERROR_TEXT).performScrollTo().assertIsDisplayed()</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.FULL_REFRESH_PROGRESS).performScrollTo().assertIsDisplayed()</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE).performScrollTo().performClick()</ID>
-    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.QUIET_HOURS_START_INCREASE).performScrollTo().performClick()</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.REQUIRE_TAP_TO_REVEAL_MEANING_ANSWER_TOGGLE).performScrollTo().performClick()</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.REQUIRE_TAP_TO_REVEAL_READING_ANSWER_TOGGLE).performScrollTo().performClick()</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$composeTestRule.onNodeWithTag(SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE).performScrollTo().assertIsDisplayed()</ID>
@@ -177,7 +161,6 @@
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showSubjectTypeLabel = false))</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, showTotalTimer = false))</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(app = AppSettings(dailyLessonGoal = 15, themeMode = ThemeMode.SYSTEM, useJapaneseKeyboard = false))</ID>
-    <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, dailyReminderEnabled = true, dailyReminderHour = 23))</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, quietHoursEnabled = true, quietHoursStartHour = 22, quietHoursEndHour = 7))</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 5))</ID>
     <ID>MaxLineLength:SettingsScreenTest.kt:SettingsScreenTest$uiState = SettingsUiState(notifications = NotificationSettings(notificationsEnabled = true, reviewsBacklogEnabled = true, backlogThreshold = 50))</ID>

@@ -37,6 +37,7 @@ import com.crazyfluff.shellfstudy.shared.data.DAILY_LESSON_GOAL_RANGE
 import com.crazyfluff.shellfstudy.shared.data.DAILY_STUDY_MINUTES_GOAL_RANGE
 import com.crazyfluff.shellfstudy.shared.data.DAILY_STUDY_MINUTES_GOAL_STEP
 import com.crazyfluff.shellfstudy.shared.data.LESSON_BATCH_SIZE_RANGE
+import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.designsystem.AppVersion
@@ -102,8 +103,10 @@ object SettingsScreenTestTags {
      *  instead of three strings that can only ever travel together. */
     val LESSON_GOAL_TAGS = StepperRowTestTags(LESSON_GOAL_DECREASE, LESSON_GOAL_INCREASE, LESSON_GOAL_VALUE)
     val STUDY_GOAL_TAGS = StepperRowTestTags(STUDY_GOAL_DECREASE, STUDY_GOAL_INCREASE, STUDY_GOAL_VALUE)
-    val LESSON_BATCH_SIZE_TAGS = StepperRowTestTags(LESSON_BATCH_SIZE_DECREASE, LESSON_BATCH_SIZE_INCREASE, LESSON_BATCH_SIZE_VALUE)
-    val BACKLOG_THRESHOLD_TAGS = StepperRowTestTags(BACKLOG_THRESHOLD_DECREASE, BACKLOG_THRESHOLD_INCREASE, BACKLOG_THRESHOLD_VALUE)
+    val LESSON_BATCH_SIZE_TAGS =
+        StepperRowTestTags(LESSON_BATCH_SIZE_DECREASE, LESSON_BATCH_SIZE_INCREASE, LESSON_BATCH_SIZE_VALUE)
+    val BACKLOG_THRESHOLD_TAGS =
+        StepperRowTestTags(BACKLOG_THRESHOLD_DECREASE, BACKLOG_THRESHOLD_INCREASE, BACKLOG_THRESHOLD_VALUE)
 }
 
 /** [StepperRow]'s three nodes: the two buttons and the value between them. */
@@ -417,11 +420,28 @@ private fun AppearanceGroup(uiState: SettingsUiState, actions: SettingsActions) 
     }
 }
 
+/** The backlog threshold moves in fives: a single review either way isn't a meaningful change. */
+private const val BACKLOG_THRESHOLD_STEP = 5
+
 /** Which hour setting the picker dialog is editing. Only one can be open at a time. */
 private enum class HourSetting(val title: String) {
     DAILY_REMINDER("Reminder time"),
     QUIET_START("Quiet hours start"),
-    QUIET_END("Quiet hours end")
+    QUIET_END("Quiet hours end");
+
+    fun currentHour(notifications: NotificationSettings): Int = when (this) {
+        DAILY_REMINDER -> notifications.dailyReminderHour
+        QUIET_START -> notifications.quietHoursStartHour
+        QUIET_END -> notifications.quietHoursEndHour
+    }
+
+    fun save(actions: SettingsActions, hour: Int) {
+        when (this) {
+            DAILY_REMINDER -> actions.onDailyReminderHourChange(hour)
+            QUIET_START -> actions.onQuietHoursStartHourChange(hour)
+            QUIET_END -> actions.onQuietHoursEndHourChange(hour)
+        }
+    }
 }
 
 /**
@@ -438,105 +458,125 @@ private fun NotificationsGroup(
     onNotificationsEnabledChange: (Boolean) -> Unit
 ) {
     val notifications = uiState.notifications
-    val enabled = notifications.notificationsEnabled
     val is24h = rememberIs24HourClock()
     var editing by remember { mutableStateOf<HourSetting?>(null) }
 
     SettingsGroup(title = "Notifications") {
         MainSwitchRow(
             title = "Allow notifications",
-            checked = enabled,
+            checked = notifications.notificationsEnabled,
             onCheckedChange = onNotificationsEnabledChange,
             testTag = SettingsScreenTestTags.NOTIFICATIONS_MASTER_TOGGLE
         )
-        SwitchRow(
-            title = "Reviews ready",
-            subtitle = "As soon as new reviews unlock",
-            checked = notifications.reviewsAvailableEnabled,
-            onCheckedChange = actions::onReviewsAvailableEnabledChange,
-            testTag = SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE,
-            enabled = enabled
-        )
-        SwitchRow(
-            title = "Backlog warning",
-            subtitle = "When reviews pile up · at most every 6 hours",
-            checked = notifications.reviewsBacklogEnabled,
-            onCheckedChange = actions::onReviewsBacklogEnabledChange,
-            testTag = SettingsScreenTestTags.REVIEWS_BACKLOG_TOGGLE,
-            enabled = enabled
-        )
-        if (enabled && notifications.reviewsBacklogEnabled) {
-            StepperRow(
-                title = "Warn above",
-                value = notifications.backlogThreshold,
-                onValueChange = actions::onBacklogThresholdChange,
-                testTags = SettingsScreenTestTags.BACKLOG_THRESHOLD_TAGS,
-                range = BACKLOG_THRESHOLD_RANGE,
-                step = 5,
-                indent = true
-            )
-        }
-        SwitchRow(
-            title = "Daily reminder",
-            subtitle = "Only if you haven't studied yet that day",
-            checked = notifications.dailyReminderEnabled,
-            onCheckedChange = actions::onDailyReminderEnabledChange,
-            testTag = SettingsScreenTestTags.DAILY_REMINDER_TOGGLE,
-            enabled = enabled
-        )
-        if (enabled && notifications.dailyReminderEnabled) {
-            NavRow(
-                title = "Time",
-                value = formatHour(notifications.dailyReminderHour, is24h),
-                onClick = { editing = HourSetting.DAILY_REMINDER },
-                testTag = SettingsScreenTestTags.DAILY_REMINDER_TIME_ROW,
-                indent = true
-            )
-        }
-        SwitchRow(
-            title = "Quiet hours",
-            subtitle = "Alerts wait until the window ends. The daily reminder is skipped",
-            checked = notifications.quietHoursEnabled,
-            onCheckedChange = actions::onQuietHoursEnabledChange,
-            testTag = SettingsScreenTestTags.QUIET_HOURS_TOGGLE,
-            enabled = enabled
-        )
-        if (enabled && notifications.quietHoursEnabled) {
-            NavRow(
-                title = "From",
-                value = formatHour(notifications.quietHoursStartHour, is24h),
-                onClick = { editing = HourSetting.QUIET_START },
-                testTag = SettingsScreenTestTags.QUIET_HOURS_START_ROW,
-                indent = true
-            )
-            NavRow(
-                title = "Until",
-                value = formatHour(notifications.quietHoursEndHour, is24h),
-                onClick = { editing = HourSetting.QUIET_END },
-                testTag = SettingsScreenTestTags.QUIET_HOURS_END_ROW,
-                indent = true
-            )
-        }
+        ReviewAlertRows(notifications, actions)
+        DailyReminderRows(notifications, actions, is24h, onEditHour = { editing = it })
+        QuietHoursRows(notifications, actions, is24h, onEditHour = { editing = it })
     }
 
     editing?.let { setting ->
         HourPickerDialog(
             title = setting.title,
-            selectedHour = when (setting) {
-                HourSetting.DAILY_REMINDER -> notifications.dailyReminderHour
-                HourSetting.QUIET_START -> notifications.quietHoursStartHour
-                HourSetting.QUIET_END -> notifications.quietHoursEndHour
-            },
+            selectedHour = setting.currentHour(notifications),
             is24h = is24h,
             onSelect = { hour ->
                 editing = null
-                when (setting) {
-                    HourSetting.DAILY_REMINDER -> actions.onDailyReminderHourChange(hour)
-                    HourSetting.QUIET_START -> actions.onQuietHoursStartHourChange(hour)
-                    HourSetting.QUIET_END -> actions.onQuietHoursEndHourChange(hour)
-                }
+                setting.save(actions, hour)
             },
             onDismiss = { editing = null }
+        )
+    }
+}
+
+/** "Reviews ready" and the backlog warning, with the warning's threshold under it. */
+@Composable
+private fun ReviewAlertRows(notifications: NotificationSettings, actions: SettingsActions) {
+    val enabled = notifications.notificationsEnabled
+    SwitchRow(
+        title = "Reviews ready",
+        subtitle = "As soon as new reviews unlock",
+        checked = notifications.reviewsAvailableEnabled,
+        onCheckedChange = actions::onReviewsAvailableEnabledChange,
+        testTag = SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE,
+        enabled = enabled
+    )
+    SwitchRow(
+        title = "Backlog warning",
+        subtitle = "When reviews pile up · at most every 6 hours",
+        checked = notifications.reviewsBacklogEnabled,
+        onCheckedChange = actions::onReviewsBacklogEnabledChange,
+        testTag = SettingsScreenTestTags.REVIEWS_BACKLOG_TOGGLE,
+        enabled = enabled
+    )
+    if (enabled && notifications.reviewsBacklogEnabled) {
+        StepperRow(
+            title = "Warn above",
+            value = notifications.backlogThreshold,
+            onValueChange = actions::onBacklogThresholdChange,
+            testTags = SettingsScreenTestTags.BACKLOG_THRESHOLD_TAGS,
+            range = BACKLOG_THRESHOLD_RANGE,
+            step = BACKLOG_THRESHOLD_STEP,
+            indent = true
+        )
+    }
+}
+
+@Composable
+private fun DailyReminderRows(
+    notifications: NotificationSettings,
+    actions: SettingsActions,
+    is24h: Boolean,
+    onEditHour: (HourSetting) -> Unit
+) {
+    val enabled = notifications.notificationsEnabled
+    SwitchRow(
+        title = "Daily reminder",
+        subtitle = "Only if you haven't studied yet that day",
+        checked = notifications.dailyReminderEnabled,
+        onCheckedChange = actions::onDailyReminderEnabledChange,
+        testTag = SettingsScreenTestTags.DAILY_REMINDER_TOGGLE,
+        enabled = enabled
+    )
+    if (enabled && notifications.dailyReminderEnabled) {
+        NavRow(
+            title = "Time",
+            value = formatHour(notifications.dailyReminderHour, is24h),
+            onClick = { onEditHour(HourSetting.DAILY_REMINDER) },
+            testTag = SettingsScreenTestTags.DAILY_REMINDER_TIME_ROW,
+            indent = true
+        )
+    }
+}
+
+@Composable
+private fun QuietHoursRows(
+    notifications: NotificationSettings,
+    actions: SettingsActions,
+    is24h: Boolean,
+    onEditHour: (HourSetting) -> Unit
+) {
+    val enabled = notifications.notificationsEnabled
+    SwitchRow(
+        title = "Quiet hours",
+        subtitle = "Alerts wait until the window ends. The daily reminder is skipped",
+        checked = notifications.quietHoursEnabled,
+        onCheckedChange = actions::onQuietHoursEnabledChange,
+        testTag = SettingsScreenTestTags.QUIET_HOURS_TOGGLE,
+        enabled = enabled
+    )
+    if (enabled && notifications.quietHoursEnabled) {
+        NavRow(
+            title = "From",
+            value = formatHour(notifications.quietHoursStartHour, is24h),
+            onClick = { onEditHour(HourSetting.QUIET_START) },
+            testTag = SettingsScreenTestTags.QUIET_HOURS_START_ROW,
+            indent = true
+        )
+        NavRow(
+            title = "Until",
+            value = formatHour(notifications.quietHoursEndHour, is24h),
+            onClick = { onEditHour(HourSetting.QUIET_END) },
+            testTag = SettingsScreenTestTags.QUIET_HOURS_END_ROW,
+            indent = true
         )
     }
 }
@@ -606,8 +646,16 @@ private data class ThirdPartyCredit(val source: String, val usedFor: String, val
 
 private val THIRD_PARTY_CREDITS = listOf(
     ThirdPartyCredit(source = "KanjiVG", usedFor = "Kanji stroke-order diagrams", license = "CC BY-SA 3.0"),
-    ThirdPartyCredit(source = "Noto Sans JP", usedFor = "Japanese text rendering", license = "SIL Open Font License 1.1"),
-    ThirdPartyCredit(source = "Kanjium", usedFor = "Pitch-accent dictionary (additions by Uros O.)", license = "CC BY-SA 4.0")
+    ThirdPartyCredit(
+        source = "Noto Sans JP",
+        usedFor = "Japanese text rendering",
+        license = "SIL Open Font License 1.1"
+    ),
+    ThirdPartyCredit(
+        source = "Kanjium",
+        usedFor = "Pitch-accent dictionary (additions by Uros O.)",
+        license = "CC BY-SA 4.0"
+    )
 )
 
 /** Attribution for the third-party data bundled with the app. The CC BY-SA licenses covering the
