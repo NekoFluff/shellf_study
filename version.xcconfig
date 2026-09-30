@@ -7,5 +7,5 @@
 // MARKETING_VERSION is the version people see ("1.13"). CURRENT_PROJECT_VERSION is the build
 // number: Android's versionCode and iOS's CFBundleVersion. It must go up on every release, since
 // both Play and App Store Connect reject an upload that reuses one.
-MARKETING_VERSION = 1.13
-CURRENT_PROJECT_VERSION = 14
+MARKETING_VERSION = 1.14
+CURRENT_PROJECT_VERSION = 15
