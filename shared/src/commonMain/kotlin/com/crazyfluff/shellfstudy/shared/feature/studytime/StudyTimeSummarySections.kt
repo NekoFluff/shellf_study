@@ -176,12 +176,12 @@ internal fun PeriodStatsCard(stats: StudyTimePeriodStats, window: StudyTimeWindo
         Row(modifier = Modifier.fillMaxWidth()) {
             StatTile(
                 "Items reviewed",
-                stats.reviewItems.toString(),
+                formatCount(stats.reviewItems.toLong()),
                 Modifier.weight(1f).testTag(StudyTimeTestTags.PERIOD_REVIEW_ITEMS)
             )
             StatTile(
                 "Lessons finished",
-                stats.lessonItems.toString(),
+                formatCount(stats.lessonItems.toLong()),
                 Modifier.weight(1f).testTag(StudyTimeTestTags.PERIOD_LESSON_ITEMS)
             )
         }

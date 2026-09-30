@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Timer
@@ -31,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.crazyfluff.shellfstudy.shared.data.studytime.LifetimeEstimate
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeReport
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeWindow
 import org.koin.compose.viewmodel.koinViewModel
@@ -85,18 +88,27 @@ fun StudyTimeScreen(
                     contentPadding = innerPadding
                 )
             } else {
-                StudyTimeEmptyState(goalMs = uiState.report.overview.goalMs, modifier = Modifier.padding(innerPadding))
+                StudyTimeEmptyState(
+                    goalMs = uiState.report.overview.goalMs,
+                    lifetime = uiState.report.lifetime,
+                    modifier = Modifier.padding(innerPadding)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun StudyTimeEmptyState(goalMs: Long, modifier: Modifier = Modifier) {
+private fun StudyTimeEmptyState(goalMs: Long, lifetime: LifetimeEstimate?, modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.fillMaxSize().padding(32.dp).testTag(StudyTimeTestTags.EMPTY_STATE),
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 32.dp)
+            .testTag(StudyTimeTestTags.EMPTY_STATE),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        // Centred on its own; with the history card under it, it reads top-down instead.
+        verticalArrangement = if (lifetime == null) Arrangement.Center else Arrangement.Top
     ) {
         Icon(
             imageVector = Icons.Filled.Timer,
@@ -121,6 +133,11 @@ private fun StudyTimeEmptyState(goalMs: Long, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+        // WaniKani's own history is there from day one, even before any time is recorded here.
+        if (lifetime != null) {
+            Spacer(modifier = Modifier.height(24.dp))
+            LifetimeCard(lifetime)
+        }
     }
 }
 
@@ -145,6 +162,9 @@ private fun StudyTimeContent(
         item(key = "pace") { PaceCard(report.overview.pace) }
         if (report.levels.isNotEmpty()) {
             item(key = "levels") { LevelsCard(report.levels, report.currentLevel) }
+        }
+        report.lifetime?.let { lifetime ->
+            item(key = "lifetime") { LifetimeCard(lifetime) }
         }
         if (!report.heatmap.isEmpty) {
             item(key = "heatmap") { HeatmapCard(report.heatmap) }

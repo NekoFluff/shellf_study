@@ -86,6 +86,7 @@ object DashboardScreenTestTags {
     const val LESSON_COUNT = "dashboard_lesson_count"
     const val REVIEW_COUNT = "dashboard_review_count"
     const val LOG_OUT_BUTTON = "dashboard_log_out_button"
+    const val LOG_OUT_CONFIRM_BUTTON = "dashboard_log_out_confirm_button"
     const val RETRY_BUTTON = "dashboard_retry_button"
     const val SEARCH_BUTTON = "dashboard_search_button"
     const val OVERFLOW_MENU = "dashboard_overflow_menu"
@@ -305,6 +306,7 @@ fun DashboardScreen(
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var abandonConfirm by remember { mutableStateOf<AbandonConfirmKind?>(null) }
+    var logOutConfirm by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -313,7 +315,8 @@ fun DashboardScreen(
                     uiState = uiState,
                     callbacks = callbacks,
                     onSearch = { isSearchActive = true },
-                    onAbandon = { abandonConfirm = it }
+                    onAbandon = { abandonConfirm = it },
+                    onLogOut = { logOutConfirm = true }
                 )
             }
         ) { innerPadding ->
@@ -347,6 +350,17 @@ fun DashboardScreen(
         abandonConfirm?.let { kind ->
             AbandonSessionDialog(kind = kind, callbacks = callbacks, onDismiss = { abandonConfirm = null })
         }
+        if (logOutConfirm) {
+            ConfirmationDialog(
+                title = "Log out?",
+                text = "You'll need your WaniKani API token to sign back in. Your study time and streak " +
+                    "stay on this device and come back when you sign in with the same account.",
+                confirmLabel = "Log out",
+                onConfirm = { logOutConfirm = false; callbacks.onLogOut() },
+                onDismiss = { logOutConfirm = false },
+                confirmButtonTestTag = DashboardScreenTestTags.LOG_OUT_CONFIRM_BUTTON
+            )
+        }
     }
 }
 
@@ -361,7 +375,8 @@ private fun DashboardTopBar(
     uiState: DashboardUiState,
     callbacks: DashboardCallbacks,
     onSearch: () -> Unit,
-    onAbandon: (AbandonConfirmKind) -> Unit
+    onAbandon: (AbandonConfirmKind) -> Unit,
+    onLogOut: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     CompactTopBar(
@@ -428,7 +443,7 @@ private fun DashboardTopBar(
                     tint = MaterialTheme.colorScheme.error
                 )
             },
-            onClick = { menuExpanded = false; callbacks.onLogOut() },
+            onClick = { menuExpanded = false; onLogOut() },
             modifier = Modifier.testTag(DashboardScreenTestTags.LOG_OUT_BUTTON)
         )
                 }

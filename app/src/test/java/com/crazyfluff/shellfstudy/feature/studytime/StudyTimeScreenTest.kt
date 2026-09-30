@@ -1,9 +1,12 @@
 package com.crazyfluff.shellfstudy.feature.studytime
 
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performScrollTo
+import com.crazyfluff.shellfstudy.shared.data.studytime.LifetimeEstimate
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
-import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -25,10 +28,13 @@ import kotlinx.datetime.TimeZone
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import kotlin.time.Instant
 
 /** Driven purely by state under Robolectric; the SDK is pinned suite-wide in robolectric.properties. */
+// A phone-sized window, so the level chart lays out its columns as it would on a phone.
 @RunWith(AndroidJUnit4::class)
+@Config(qualifiers = "w411dp-h891dp")
 class StudyTimeScreenTest {
 
     @get:Rule
@@ -42,7 +48,8 @@ class StudyTimeScreenTest {
     private fun loaded(
         segments: List<StudySegment>,
         window: StudyTimeWindow = StudyTimeWindow.WEEK,
-        selected: Int? = null
+        selected: Int? = null,
+        lifetime: LifetimeEstimate? = null
     ) =
         StudyTimeUiState.Loaded(
             report = StudyTimeAggregator.report(
@@ -52,9 +59,17 @@ class StudyTimeScreenTest {
                 window = window,
                 goalMs = 30 * 60_000L,
                 currentLevel = 8
-            ),
+            ).copy(lifetime = lifetime),
             selectedBarIndex = selected
         )
+
+    private val history = LifetimeEstimate(
+        twoQuestionReviews = 9_840,
+        oneQuestionReviews = 2_460,
+        lessons = 1_812,
+        reviewMsPerItem = 20_000L,
+        lessonMsPerItem = 120_000L
+    )
 
     private val someStudy = listOf(
         segment("2026-09-24T19:00:00Z", 20, StudyKind.REVIEW, level = 8, items = 120),
@@ -79,7 +94,7 @@ class StudyTimeScreenTest {
     }
 
     private fun scrollTo(tag: String) {
-        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(tag))
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasTestTag(tag))
     }
 
     @Test
@@ -112,12 +127,35 @@ class StudyTimeScreenTest {
         composeTestRule.onNodeWithTag(StudyTimeTestTags.PACE_REVIEW).assertTextContains("10.0s")
         // 15 minutes over 5 lessons.
         composeTestRule.onNodeWithTag(StudyTimeTestTags.PACE_LESSON).assertTextContains("3m")
-        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Level 8 so far: 35m over 1 day"))
-        composeTestRule.onNodeWithTag(StudyTimeTestTags.levelRow(8)).assertExists()
-        composeTestRule.onNodeWithText("Level 8 so far: 35m over 1 day").assertIsDisplayed()
+        scrollTo(StudyTimeTestTags.LEVELS_TOTAL)
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.LEVEL_CHART)
+            .assertContentDescriptionEquals("Level 7: 25m, Level 8: 35m")
+        // Level 8's 35m plus level 7's 25m.
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.LEVELS_TOTAL).assertTextEquals("Total recorded time: 1h")
         scrollTo(StudyTimeTestTags.HEATMAP_CAPTION)
         composeTestRule.onNodeWithTag(StudyTimeTestTags.HEATMAP_CAPTION)
             .assertTextEquals("You study most in the evenings, and more on weekends.")
+    }
+
+    @Test
+    fun showsTheAllTimeEstimateWithReviewsSplitByQuestionCount() {
+        setContent(loaded(someStudy, lifetime = history))
+
+        scrollTo(StudyTimeTestTags.LIFETIME_TOTAL)
+        // 9,840 × 20s + 2,460 × 10s + 1,812 × 2m.
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.LIFETIME_TOTAL).assertTextEquals("≈ 121h 54m")
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.LIFETIME_REVIEWS)
+            .assertTextContains("9,840 kanji & vocab × 20.0s")
+            .assertTextContains("2,460 radical & kana × 10.0s")
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.LIFETIME_LESSONS).assertTextContains("1,812 lessons × 2m")
+    }
+
+    @Test
+    fun showsTheAllTimeEstimateEvenBeforeAnyTimeIsRecorded() {
+        setContent(loaded(emptyList(), lifetime = history))
+
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.EMPTY_STATE).assertExists()
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.LIFETIME_TOTAL).performScrollTo().assertIsDisplayed()
     }
 
     @Test

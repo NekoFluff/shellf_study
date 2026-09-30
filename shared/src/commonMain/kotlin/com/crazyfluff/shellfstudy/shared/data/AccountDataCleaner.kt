@@ -5,8 +5,6 @@ import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
-import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDao
-import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeDao
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
 import kotlinx.coroutines.CancellationException
@@ -23,8 +21,6 @@ enum class AccountStore {
     SyncState,
     PendingReviews,
     PendingLessonStarts,
-    StudyActivity,
-    StudyTime,
     OutboxAuthBlock,
     DashboardCache,
     LastSessionSummary,
@@ -50,7 +46,9 @@ sealed interface AccountCleanupOutcome {
  * clobbered by data left behind from whoever was logged in before. Deliberately leaves untouched
  * anything that isn't account-scoped: [FriendRepository]/friend stats (hand-added external
  * tokens meant to survive an account switch), subjects/SRS systems (shared WaniKani content,
- * identical for every account), and [SettingsRepository] (device/UI prefs).
+ * identical for every account), [SettingsRepository] (device/UI prefs), and the study-day and
+ * study-time history. That history can't be re-fetched, so it outlives logout and is cleared only
+ * when a different account signs in; see [LocalHistoryGuard].
  *
  * Each step is independent — one store failing to clear must not block the rest, and must not leave
  * [LogoutCoordinator.logout] in a worse partial state than before this existed. What each failure
@@ -62,8 +60,6 @@ class AccountDataCleaner(
     private val levelProgressionDao: LevelProgressionDao,
     private val syncStateDao: SyncStateDao,
     private val outboxDao: OutboxDao,
-    private val studyActivityDao: StudyActivityDao,
-    private val studyTimeDao: StudyTimeDao,
     private val outboxRepository: OutboxRepository,
     private val dashboardCacheRepository: DashboardCacheRepository,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
@@ -79,8 +75,6 @@ class AccountDataCleaner(
         wipe(AccountStore.SyncState, failures) { syncStateDao.clearAll() }
         wipe(AccountStore.PendingReviews, failures) { outboxDao.clearReviewSubmissions() }
         wipe(AccountStore.PendingLessonStarts, failures) { outboxDao.clearLessonStarts() }
-        wipe(AccountStore.StudyActivity, failures) { studyActivityDao.clearAll() }
-        wipe(AccountStore.StudyTime, failures) { studyTimeDao.clearAll() }
         wipe(AccountStore.OutboxAuthBlock, failures) { outboxRepository.resetAuthBlock() }
         wipe(AccountStore.DashboardCache, failures) { dashboardCacheRepository.clear() }
         wipe(AccountStore.LastSessionSummary, failures) { lastSessionSummaryRepository.clearAll() }

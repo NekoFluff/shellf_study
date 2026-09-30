@@ -12,8 +12,6 @@ import com.crazyfluff.shellfstudy.fakes.FakeOutboxDao
 import com.crazyfluff.shellfstudy.fakes.FakeOutboxSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeSrsSystemDao
-import com.crazyfluff.shellfstudy.fakes.FakeStudyActivityDao
-import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
 import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSyncStateDao
@@ -64,7 +62,6 @@ class LogoutCoordinatorTest {
     private lateinit var assignmentDao: FakeAssignmentDao
     private lateinit var syncStateDao: FakeSyncStateDao
     private lateinit var outboxDao: FakeOutboxDao
-    private lateinit var studyActivityDao: FakeStudyActivityDao
     private lateinit var outboxRepository: OutboxRepository
     private lateinit var reviewSessionRepository: ReviewSessionRepository
     private lateinit var lessonSessionRepository: LessonSessionRepository
@@ -90,7 +87,6 @@ class LogoutCoordinatorTest {
         assignmentDao = FakeAssignmentDao()
         syncStateDao = FakeSyncStateDao()
         outboxDao = FakeOutboxDao()
-        studyActivityDao = FakeStudyActivityDao()
         outboxRepository = OutboxRepository(outboxDao, FakeOutboxSyncScheduler(), dataStore)
         reviewSessionRepository = ReviewSessionRepository(FakeSessionDao(), dataStore, json)
         lessonSessionRepository = LessonSessionRepository(FakeSessionDao(), dataStore, json)
@@ -108,8 +104,6 @@ class LogoutCoordinatorTest {
             levelProgressionDao = FakeLevelProgressionDao(),
             syncStateDao = syncStateDao,
             outboxDao = outboxDao,
-            studyActivityDao = studyActivityDao,
-            studyTimeDao = FakeStudyTimeDao(),
             outboxRepository = outboxRepository,
             dashboardCacheRepository = DashboardCacheRepository(dataStore),
             lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),

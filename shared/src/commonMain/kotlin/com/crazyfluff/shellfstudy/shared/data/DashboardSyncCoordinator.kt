@@ -13,7 +13,8 @@ import kotlinx.coroutines.flow.Flow
 class DashboardSyncCoordinator(
     private val waniKaniRepository: WaniKaniRepository,
     private val syncOrchestrator: SyncOrchestrator,
-    private val dashboardCacheRepository: DashboardCacheRepository
+    private val dashboardCacheRepository: DashboardCacheRepository,
+    private val localHistoryGuard: LocalHistoryGuard
 ) {
     val cachedSummary: Flow<CachedDashboardSummary?> = dashboardCacheRepository.cachedSummary
 
@@ -33,7 +34,11 @@ class DashboardSyncCoordinator(
         coroutineScope {
             val userDeferred = async { waniKaniRepository.fetchUser() }
             val summaryDeferred = async { waniKaniRepository.fetchDashboardSummary() }
-            userDeferred.await() to summaryDeferred.await()
+            val user = userDeferred.await()
+            // The dashboard fetches /user straight after every login and on every load, before a
+            // session can start, so this is where local history gets matched to the account.
+            if (user is ApiResult.Success) localHistoryGuard.claimFor(user.data.id)
+            user to summaryDeferred.await()
         }
 
     suspend fun cacheSummary(user: WaniKaniUser, summary: DashboardSummary, syncedAtMillis: Long) {

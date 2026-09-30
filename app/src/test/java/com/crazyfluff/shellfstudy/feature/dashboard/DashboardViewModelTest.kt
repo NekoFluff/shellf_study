@@ -33,6 +33,7 @@ import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlin.time.Clock
 import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
+import com.crazyfluff.shellfstudy.shared.data.LocalHistoryGuard
 import com.crazyfluff.shellfstudy.fakes.buildTestStudyTimeRepository
 import com.crazyfluff.shellfstudy.fakes.emptyCollectionJson
 import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
@@ -162,8 +163,6 @@ class DashboardViewModelTest {
             levelProgressionDao = FakeLevelProgressionDao(),
             syncStateDao = repositories.syncStateDao,
             outboxDao = repositories.outboxDao,
-            studyActivityDao = repositories.studyActivityDao,
-            studyTimeDao = studyTimeDao,
             outboxRepository = outboxRepository,
             dashboardCacheRepository = dashboardCacheRepository,
             lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),
@@ -179,7 +178,8 @@ class DashboardViewModelTest {
         val dashboardSyncCoordinator = DashboardSyncCoordinator(
             waniKaniRepository = repositories.waniKaniRepository,
             syncOrchestrator = repositories.syncOrchestrator,
-            dashboardCacheRepository = dashboardCacheRepository
+            dashboardCacheRepository = dashboardCacheRepository,
+            localHistoryGuard = LocalHistoryGuard(dataStore, repositories.studyActivityDao, studyTimeDao)
         )
         val factory = viewModelFactory {
             initializer {

@@ -7,6 +7,8 @@ import kotlin.math.ceil
 import kotlinx.serialization.Serializable
 
 data class WaniKaniUser(
+    /** WaniKani's stable user id — unlike [username], it never changes. */
+    val id: String,
     val username: String,
     val level: Int
 )

@@ -103,8 +103,6 @@ class AccountDataCleanerTest {
         levelProgressionDao = levelProgressionDao,
         syncStateDao = syncStateDao,
         outboxDao = outboxDao,
-        studyActivityDao = studyActivityDao,
-        studyTimeDao = studyTimeDao,
         outboxRepository = outboxRepository,
         dashboardCacheRepository = dashboardCacheRepository,
         lastSessionSummaryRepository = lastSessionSummaryRepository,
@@ -162,7 +160,7 @@ class AccountDataCleanerTest {
     }
 
     @Test
-    fun `clearAll wipes every account-scoped store`() = runTest {
+    fun `clearAll wipes every account-scoped store but keeps the history WaniKani can't give back`() = runTest {
         setUp()
         seedEverything()
 
@@ -174,8 +172,9 @@ class AccountDataCleanerTest {
         assertThat(syncStateDao.get("assignments")).isNull()
         assertThat(outboxDao.allReviewSubmissions()).isEmpty()
         assertThat(outboxDao.allLessonStarts()).isEmpty()
-        studyActivityDao.observeActiveDays().test { assertThat(awaitItem()).isEmpty() }
-        assertThat(studyTimeDao.all).isEmpty()
+        // Study days and study time outlive logout; LocalHistoryGuard clears them only for another account.
+        studyActivityDao.observeActiveDays().test { assertThat(awaitItem()).containsExactly("2026-08-01") }
+        assertThat(studyTimeDao.all).hasSize(1)
         outboxRepository.blockedOnAuth.test { assertThat(awaitItem()).isFalse() }
         dashboardCacheRepository.cachedSummary.test { assertThat(awaitItem()).isNull() }
         assertThat(lastSessionSummaryRepository.loadReview()).isNull()
@@ -197,7 +196,6 @@ class AccountDataCleanerTest {
         assertThat(syncStateDao.get("assignments")).isNull()
         assertThat(outboxDao.allReviewSubmissions()).isEmpty()
         assertThat(outboxDao.allLessonStarts()).isEmpty()
-        studyActivityDao.observeActiveDays().test { assertThat(awaitItem()).isEmpty() }
         assertThat(lastSessionSummaryRepository.loadReview()).isNull()
         assertThat(reviewSessionRepository.load()).isNull()
         assertThat(lessonSessionRepository.load()).isNull()

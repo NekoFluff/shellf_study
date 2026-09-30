@@ -3,6 +3,8 @@ package com.crazyfluff.shellfstudy.shared.data.studytime
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.dailyRolloverTicks
+import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
+import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
 import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeDao
 import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeSegmentEntity
 import kotlinx.coroutines.CoroutineDispatcher
@@ -28,6 +30,8 @@ class StudyTimeRepository(
     private val studyTimeDao: StudyTimeDao,
     private val settingsRepository: SettingsRepository,
     private val dashboardCacheRepository: DashboardCacheRepository,
+    private val reviewStatisticDao: ReviewStatisticDao,
+    private val assignmentDao: AssignmentDao,
     private val applicationScope: CoroutineScope,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val clock: Clock = Clock.System,
@@ -77,7 +81,22 @@ class StudyTimeRepository(
         ) { segments, goalMs, level, selectedWindow, _ ->
             val zone = TimeZone.currentSystemDefault()
             StudyTimeAggregator.report(segments, todayIn(zone), zone, selectedWindow, goalMs, level)
+        }.combine(wanikaniHistory()) { report, (reviews, lessons) ->
+            report.copy(
+                lifetime = LifetimeEstimate.from(
+                    twoQuestionReviews = reviews.twoQuestion ?: 0L,
+                    oneQuestionReviews = reviews.oneQuestion ?: 0L,
+                    lessons = lessons,
+                    pace = report.overview.pace
+                )
+            )
         }.flowOn(defaultDispatcher)
+
+    /** What WaniKani itself counts, from the synced cache: finished reviews and lessons started. */
+    private fun wanikaniHistory() = combine(
+        reviewStatisticDao.observeCompletedReviewCounts(),
+        assignmentDao.observeItemsSeenCount()
+    ) { reviews, lessons -> reviews to lessons }
 
     private fun segments(): Flow<List<StudySegment>> =
         studyTimeDao.observeAll().map { rows -> rows.mapNotNull { it.toSegment() } }

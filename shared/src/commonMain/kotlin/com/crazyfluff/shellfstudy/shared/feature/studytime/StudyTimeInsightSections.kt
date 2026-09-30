@@ -1,19 +1,23 @@
 package com.crazyfluff.shellfstudy.shared.feature.studytime
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.studytime.LevelStudyTime
+import com.crazyfluff.shellfstudy.shared.data.studytime.LifetimeEstimate
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyHeatmap
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyPace
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeAggregator
@@ -74,13 +78,69 @@ internal fun paceTrend(current: Long?, previous: Long?): String? {
 @Composable
 internal fun LevelsCard(levels: List<LevelStudyTime>, currentLevel: Int?) {
     SectionCard(title = "Time per level", subtitle = "Since tracking began") {
-        LevelStudyTimeList(levels = levels, currentLevel = currentLevel)
-        levels.firstOrNull { it.level == currentLevel }?.let { current ->
-            Spacer(modifier = Modifier.height(12.dp))
+        LevelStudyTimeChart(levels = levels, currentLevel = currentLevel)
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Total recorded time: ${formatStudyDuration(levels.sumOf { it.split.totalMs })}",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.testTag(StudyTimeTestTags.LEVELS_TOTAL)
+        )
+    }
+}
+
+@Composable
+internal fun LifetimeCard(lifetime: LifetimeEstimate) {
+    SectionCard(title = "All-time estimate", subtitle = "Your whole WaniKani history") {
+        Text(
+            text = "≈ ${formatStudyDuration(lifetime.totalMs)}",
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.testTag(StudyTimeTestTags.LIFETIME_TOTAL)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        LifetimeRow(
+            label = "Reviews",
+            color = reviewTimeColor(),
+            ms = lifetime.reviewMs,
+            details = with(lifetime) {
+                listOf(
+                    "${formatCount(twoQuestionReviews)} kanji & vocab × ${formatPace(reviewMsPerItem)}",
+                    "${formatCount(oneQuestionReviews)} radical & kana × ${formatPace(oneQuestionReviewMs)}"
+                )
+            },
+            modifier = Modifier.testTag(StudyTimeTestTags.LIFETIME_REVIEWS)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        LifetimeRow(
+            label = "Lessons",
+            color = lessonTimeColor(),
+            ms = lifetime.lessonMs,
+            details = listOf(
+                "${formatCount(lifetime.lessons.toLong())} lessons × ${formatPace(lifetime.lessonMsPerItem)}"
+            ),
+            modifier = Modifier.testTag(StudyTimeTestTags.LIFETIME_LESSONS)
+        )
+    }
+}
+
+@Composable
+private fun LifetimeRow(
+    label: String,
+    color: Color,
+    ms: Long,
+    details: List<String>,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.semantics(mergeDescendants = true) {}) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.weight(1f)) { ChartLegendItem(color, label) }
+            Text(text = "≈ ${formatStudyDuration(ms)}", style = MaterialTheme.typography.titleMedium)
+        }
+        details.forEach { line ->
             Text(
-                text = "Level ${current.level} so far: ${formatStudyDuration(current.split.totalMs)} over " +
-                    "${current.activeDays} ${if (current.activeDays == 1) "day" else "days"}",
-                style = MaterialTheme.typography.bodyMedium
+                text = line,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp)
             )
         }
     }

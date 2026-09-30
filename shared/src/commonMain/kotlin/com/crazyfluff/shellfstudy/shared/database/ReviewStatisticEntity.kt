@@ -37,6 +37,14 @@ data class ReviewStatisticEntity(
  */
 data class ReviewAccuracyTotals(val correct: Long?, val attempts: Long?)
 
+/**
+ * Finished reviews over the whole account, split by how many questions each one asks. A finished
+ * review always has exactly one correct meaning answer, so `meaningCorrect` counts them. Kanji and
+ * vocabulary ask meaning and reading; radicals and kana-only vocabulary ask meaning alone. Both are
+ * null for an empty table, as with [ReviewAccuracyTotals].
+ */
+data class CompletedReviewCounts(val twoQuestion: Long?, val oneQuestion: Long?)
+
 @Dao
 interface ReviewStatisticDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -58,6 +66,13 @@ interface ReviewStatisticDao {
             "FROM review_statistics"
     )
     fun observeAccuracyTotals(): Flow<ReviewAccuracyTotals>
+
+    @Query(
+        "SELECT SUM(CASE WHEN subjectType IN ('kanji', 'vocabulary') THEN meaningCorrect ELSE 0 END) AS twoQuestion, " +
+            "SUM(CASE WHEN subjectType IN ('kanji', 'vocabulary') THEN 0 ELSE meaningCorrect END) AS oneQuestion " +
+            "FROM review_statistics"
+    )
+    fun observeCompletedReviewCounts(): Flow<CompletedReviewCounts>
 
     /** The subject detail view's accuracy/streak/last-reviewed source. */
     @Query("SELECT * FROM review_statistics WHERE subjectId = :subjectId LIMIT 1")

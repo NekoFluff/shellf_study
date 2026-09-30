@@ -147,5 +147,7 @@ data class StudyTimeReport(
     /** Highest level first. */
     val levels: List<LevelStudyTime>,
     val currentLevel: Int?,
-    val heatmap: StudyHeatmap
+    val heatmap: StudyHeatmap,
+    /** The whole WaniKani history priced at the learner's pace; null before there is any. */
+    val lifetime: LifetimeEstimate? = null
 )

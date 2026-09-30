@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.fakes
 
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
+import com.crazyfluff.shellfstudy.shared.database.CompletedReviewCounts
 import com.crazyfluff.shellfstudy.shared.database.ReviewAccuracyTotals
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
@@ -54,6 +55,18 @@ class FakeReviewStatisticDao(private val writeLog: SyncWriteLog? = null) : Revie
 
     /** Test-only: every stored row. */
     fun all(): List<ReviewStatisticEntity> = statistics.value.values.toList()
+
+    override fun observeCompletedReviewCounts(): Flow<CompletedReviewCounts> = statistics.map { map ->
+        if (map.isEmpty()) {
+            CompletedReviewCounts(twoQuestion = null, oneQuestion = null)
+        } else {
+            val (two, one) = map.values.partition { it.subjectType == "kanji" || it.subjectType == "vocabulary" }
+            CompletedReviewCounts(
+                twoQuestion = two.sumOf { it.meaningCorrect.toLong() },
+                oneQuestion = one.sumOf { it.meaningCorrect.toLong() }
+            )
+        }
+    }
 
     override fun observeAccuracyTotals(): Flow<ReviewAccuracyTotals> = statistics.map { map ->
         if (map.isEmpty()) {

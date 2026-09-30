@@ -11,6 +11,7 @@ import com.crazyfluff.shellfstudy.shared.data.FriendRepository
 import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
+import com.crazyfluff.shellfstudy.shared.data.LocalHistoryGuard
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
@@ -129,6 +130,8 @@ val repositoryModule = module {
             studyTimeDao = get(),
             settingsRepository = get(),
             dashboardCacheRepository = get(),
+            reviewStatisticDao = get(),
+            assignmentDao = get(),
             applicationScope = get(APPLICATION_SCOPE)
         )
     }
@@ -139,8 +142,6 @@ val repositoryModule = module {
             levelProgressionDao = get(),
             syncStateDao = get(),
             outboxDao = get(),
-            studyActivityDao = get(),
-            studyTimeDao = get(),
             outboxRepository = get(),
             dashboardCacheRepository = get(),
             lastSessionSummaryRepository = get(),
@@ -156,7 +157,15 @@ val repositoryModule = module {
             accountDataCleaner = get()
         )
     }
-    single { DashboardSyncCoordinator(waniKaniRepository = get(), syncOrchestrator = get(), dashboardCacheRepository = get()) }
+    single { LocalHistoryGuard(dataStore = get(), studyActivityDao = get(), studyTimeDao = get()) }
+    single {
+        DashboardSyncCoordinator(
+            waniKaniRepository = get(),
+            syncOrchestrator = get(),
+            dashboardCacheRepository = get(),
+            localHistoryGuard = get()
+        )
+    }
     // Sessions persist to their own Room database rather than the shared preferences DataStore. The
     // DataStore is still passed as `legacyDataStore` so a session written before that move is drained
     // into Room on first read — see RoomSessionStore.

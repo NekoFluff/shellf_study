@@ -15,6 +15,7 @@ class WaniKaniRepository(
     suspend fun fetchUser(): ApiResult<WaniKaniUser> = safeApiCall {
         val response = api.getUser()
         WaniKaniUser(
+            id = response.data.id,
             username = response.data.username,
             level = response.data.level
         )

@@ -24,12 +24,16 @@ fun buildTestStudyTimeRepository(
     applicationScope: CoroutineScope,
     defaultDispatcher: CoroutineDispatcher,
     settingsRepository: SettingsRepository = SettingsRepository(dataStore),
+    reviewStatisticDao: FakeReviewStatisticDao = FakeReviewStatisticDao(),
+    assignmentDao: FakeAssignmentDao = FakeAssignmentDao(),
     clock: Clock = Clock.System,
     minSegmentMs: Long = 0L
 ) = StudyTimeRepository(
     studyTimeDao = dao,
     settingsRepository = settingsRepository,
     dashboardCacheRepository = DashboardCacheRepository(dataStore),
+    reviewStatisticDao = reviewStatisticDao,
+    assignmentDao = assignmentDao,
     applicationScope = applicationScope,
     defaultDispatcher = defaultDispatcher,
     clock = clock,

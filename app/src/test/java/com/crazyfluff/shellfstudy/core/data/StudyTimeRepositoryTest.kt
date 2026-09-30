@@ -5,6 +5,10 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
+import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
+import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
+import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
+import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
 import com.crazyfluff.shellfstudy.fakes.buildTestStudyTimeRepository
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
@@ -130,6 +134,55 @@ class StudyTimeRepositoryTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `report prices the whole WaniKani history, radicals and kana-only words at half`() = runTest {
+        dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { tempFolder.newFile("lifetime.preferences_pb") }
+        )
+        val reviewStatisticDao = FakeReviewStatisticDao().apply {
+            upsertAll(
+                listOf(
+                    statistic(id = 1, type = "kanji", meaningCorrect = 30),
+                    statistic(id = 2, type = "vocabulary", meaningCorrect = 20),
+                    statistic(id = 3, type = "radical", meaningCorrect = 10),
+                    statistic(id = 4, type = "kana_vocabulary", meaningCorrect = 6)
+                )
+            )
+        }
+        val assignmentDao = FakeAssignmentDao().apply {
+            upsertAll(
+                (1L..4L).map {
+                    AssignmentEntity(id = it, subjectId = it, subjectType = "kanji", srsStage = 5,
+                        createdAt = "2026-01-01T00:00:00Z", startedAt = "2026-01-02T00:00:00Z", hidden = false)
+                }
+            )
+        }
+        val repository = buildTestStudyTimeRepository(
+            dao, dataStore, backgroundScope, StandardTestDispatcher(testScheduler),
+            reviewStatisticDao = reviewStatisticDao,
+            assignmentDao = assignmentDao,
+            clock = fixedClock
+        )
+
+        repository.observeReport(flowOf(StudyTimeWindow.WEEK)).test {
+            val lifetime = awaitItem().lifetime!!
+            assertThat(lifetime.twoQuestionReviews).isEqualTo(50)
+            assertThat(lifetime.oneQuestionReviews).isEqualTo(16)
+            assertThat(lifetime.lessons).isEqualTo(4)
+            // No recorded pace yet, so the defaults: 20s per two-question review, half that for one.
+            assertThat(lifetime.reviewMs).isEqualTo(50 * 20_000L + 16 * 10_000L)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private fun statistic(id: Long, type: String, meaningCorrect: Int) = ReviewStatisticEntity(
+        id = id, subjectId = id, subjectType = type,
+        meaningCorrect = meaningCorrect, meaningIncorrect = 3, meaningMaxStreak = 1, meaningCurrentStreak = 1,
+        readingCorrect = meaningCorrect, readingIncorrect = 2, readingMaxStreak = 1, readingCurrentStreak = 1,
+        percentageCorrect = 90, hidden = false
+    )
 
     private companion object {
         const val MINUTE = 60_000L

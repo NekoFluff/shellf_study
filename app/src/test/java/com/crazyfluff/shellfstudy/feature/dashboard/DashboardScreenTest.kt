@@ -169,7 +169,28 @@ class DashboardScreenTest {
 
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.LOG_OUT_BUTTON).performClick()
+        // The menu item only asks; logging out waits for the confirmation.
+        assert(!loggedOut)
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.LOG_OUT_CONFIRM_BUTTON).performClick()
         assert(loggedOut)
+    }
+
+    @Test
+    fun cancellingTheLogOutConfirmation_staysLoggedIn() {
+        var loggedOut = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(fetchState = DashboardFetch.Idle, username = "x", level = 1),
+                callbacks = dashboardCallbacks(onLogOut = { loggedOut = true })
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.LOG_OUT_BUTTON).performClick()
+        composeTestRule.onNodeWithText("Cancel").performClick()
+
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.LOG_OUT_CONFIRM_BUTTON).assertCountEquals(0)
+        assert(!loggedOut)
     }
 
     @Test
