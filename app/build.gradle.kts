@@ -10,6 +10,24 @@ plugins {
     alias(libs.plugins.firebase.crashlytics)
 }
 
+/**
+ * The app version, from version.xcconfig at the repo root, so Android and iOS ship the same one.
+ * It's an xcconfig because Xcode can read nothing else as build settings, and its `KEY = value`
+ * lines are trivial to parse here. Read through `providers` so the configuration cache notices
+ * when the file changes.
+ */
+val appVersion: Map<String, String> = providers
+    .fileContents(rootProject.layout.projectDirectory.file("version.xcconfig"))
+    .asText
+    .get()
+    .lineSequence()
+    .map { it.trim() }
+    .filter { it.isNotEmpty() && !it.startsWith("//") }
+    .associate { line ->
+        val (key, value) = line.split("=", limit = 2).map { it.trim() }
+        key to value
+    }
+
 android {
     namespace = "com.crazyfluff.shellfstudy"
     compileSdk {
@@ -20,8 +38,8 @@ android {
         applicationId = "com.crazyfluff.shellfstudy"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
-        versionCode = 14
-        versionName = "1.13"
+        versionCode = appVersion.getValue("CURRENT_PROJECT_VERSION").toInt()
+        versionName = appVersion.getValue("MARKETING_VERSION")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -17,15 +17,18 @@ that can change.
 
 ## 1. Work out the version
 
-Read the current `versionCode` / `versionName` from `defaultConfig` in `app/build.gradle.kts`.
+Read the current version from [`version.xcconfig`](../../version.xcconfig) at the repo root. It's the
+single source for both platforms: `MARKETING_VERSION` is Android's `versionName` and iOS's
+`CFBundleShortVersionString`, and `CURRENT_PROJECT_VERSION` is Android's `versionCode` and iOS's
+`CFBundleVersion`. `app/build.gradle.kts` reads it, so don't edit versions there.
 
-- **An explicit version was given**: use that as the new `versionName`, and set `versionCode` to
+- **An explicit version was given**: use that as the new `MARKETING_VERSION`, and set `CURRENT_PROJECT_VERSION` to
   current + 1.
-- **No version given**: bump the patch component of `versionName` (e.g. `1.3` → `1.4`) and
-  increment `versionCode` by 1. Always bump — don't re-upload the same version number unless
+- **No version given**: bump the patch component of `MARKETING_VERSION` (e.g. `1.3` → `1.4`)
+  and increment `CURRENT_PROJECT_VERSION` by 1. Always bump — don't re-upload the same version number unless
   explicitly asked to (e.g. "re-upload the same build" or "try that release again").
 
-Edit the two lines in `defaultConfig` together so they never drift out of sync.
+Edit the two lines in `version.xcconfig` together so they never drift out of sync.
 
 ## 2. Write the release notes
 
@@ -58,12 +61,12 @@ If the build or upload fails, stop there and report the error. Don't touch git.
 Once the upload succeeds, always commit and push the version change — no need to ask first:
 
 ```bash
-git add app/build.gradle.kts
-git commit -m "Bump version to <versionName>"
+git add version.xcconfig
+git commit -m "Bump version to <MARKETING_VERSION>"
 git push
 ```
 
-Stage only `app/build.gradle.kts`, not `git add -A` — this commit should be exactly the version
+Stage only `version.xcconfig`, not `git add -A` — this commit should be exactly the version
 bump, nothing else that happens to be sitting in the working tree.
 
 ## Notes on judgment calls

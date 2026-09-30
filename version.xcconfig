@@ -1,0 +1,11 @@
+// The app version, for both platforms. This is the only place it's written down.
+//
+// Xcode reads this file as the iosApp target's base configuration, and Info.plist takes
+// CFBundleShortVersionString / CFBundleVersion from these two settings. Gradle
+// (app/build.gradle.kts) parses the same two lines into versionName / versionCode.
+//
+// MARKETING_VERSION is the version people see ("1.13"). CURRENT_PROJECT_VERSION is the build
+// number: Android's versionCode and iOS's CFBundleVersion. It must go up on every release, since
+// both Play and App Store Connect reject an upload that reuses one.
+MARKETING_VERSION = 1.13
+CURRENT_PROJECT_VERSION = 14
