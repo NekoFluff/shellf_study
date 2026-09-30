@@ -74,6 +74,10 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import com.crazyfluff.shellfstudy.shared.util.formatRelativeTime
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserColor
+import com.crazyfluff.shellfstudy.shared.designsystem.friends.FriendDetailsSubject
+import com.crazyfluff.shellfstudy.shared.designsystem.friends.FriendDetailsSheet
+import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 
 object DashboardScreenTestTags {
     const val LOADING_INDICATOR = "dashboard_loading_indicator"
@@ -110,7 +114,6 @@ data class DashboardCallbacks(
     val onStartReview: () -> Unit,
     val onStartLesson: () -> Unit,
     val onOpenSettings: () -> Unit,
-    val onOpenLeaderboard: () -> Unit,
     val onOpenLastSessionSummary: () -> Unit,
     val onOpenStudyTime: () -> Unit,
     val onAbandonReviewSession: () -> Unit,
@@ -128,7 +131,6 @@ fun DashboardRoute(
     onStartReview: () -> Unit,
     onStartLesson: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenLeaderboard: () -> Unit,
     onOpenLastSessionSummary: () -> Unit,
     onOpenStudyTime: () -> Unit,
     onLoggedOut: () -> Unit,
@@ -199,7 +201,6 @@ fun DashboardRoute(
             onStartReview = onStartReview,
             onStartLesson = onStartLesson,
             onOpenSettings = onOpenSettings,
-            onOpenLeaderboard = onOpenLeaderboard,
             onOpenLastSessionSummary = onOpenLastSessionSummary,
             onOpenStudyTime = onOpenStudyTime
         ),
@@ -257,7 +258,6 @@ private fun rememberDashboardCallbacks(
     onStartReview: () -> Unit,
     onStartLesson: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenLeaderboard: () -> Unit,
     onOpenLastSessionSummary: () -> Unit,
     onOpenStudyTime: () -> Unit
 ): DashboardCallbacks = remember(
@@ -266,7 +266,6 @@ private fun rememberDashboardCallbacks(
     onStartReview,
     onStartLesson,
     onOpenSettings,
-    onOpenLeaderboard,
     onOpenLastSessionSummary,
     onOpenStudyTime
 ) {
@@ -275,7 +274,6 @@ private fun rememberDashboardCallbacks(
         onStartReview = onStartReview,
         onStartLesson = onStartLesson,
         onOpenSettings = onOpenSettings,
-        onOpenLeaderboard = onOpenLeaderboard,
         onOpenLastSessionSummary = onOpenLastSessionSummary,
         onOpenStudyTime = onOpenStudyTime,
         onAbandonReviewSession = viewModel::abandonReviewSession,
@@ -298,6 +296,7 @@ fun DashboardScreen(
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var abandonConfirm by remember { mutableStateOf<AbandonConfirmKind?>(null) }
+    var openLeaderboardEntry by remember { mutableStateOf<FriendStats?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -325,7 +324,7 @@ fun DashboardScreen(
                     // Each card is one keyed item, so offscreen cards are never composed or measured.
                     contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp)
                 ) {
-                    dashboardItems(uiState, callbacks)
+                    dashboardItems(uiState, callbacks, onLeaderboardEntryClick = { openLeaderboardEntry = it })
                 }
             }
         }
@@ -339,6 +338,14 @@ fun DashboardScreen(
         )
         abandonConfirm?.let { kind ->
             AbandonSessionDialog(kind = kind, callbacks = callbacks, onDismiss = { abandonConfirm = null })
+        }
+        // Read-only here: renaming and removing friends is the Friends page's job.
+        openLeaderboardEntry?.let { entry ->
+            FriendDetailsSheet(
+                subject = FriendDetailsSubject(entry.nickname, leaderboardUserColor(entry.rosterIndex), entry),
+                window = uiState.selectedWindow,
+                onDismiss = { openLeaderboardEntry = null }
+            )
         }
     }
 }
@@ -419,7 +426,11 @@ private fun DashboardTopBar(
 }
 
 /** What the dashboard lists: a placeholder, an error, or every card, each one keyed item. */
-private fun LazyListScope.dashboardItems(uiState: DashboardUiState, callbacks: DashboardCallbacks) {
+private fun LazyListScope.dashboardItems(
+    uiState: DashboardUiState,
+    callbacks: DashboardCallbacks,
+    onLeaderboardEntryClick: (FriendStats) -> Unit
+) {
     when (val contentState = uiState.contentState) {
         // Nothing cached yet to show while the very first fetch is in flight — the
         // only case that still blocks on a full-screen placeholder.
@@ -551,7 +562,7 @@ private fun LazyListScope.dashboardItems(uiState: DashboardUiState, callbacks: D
                             isLoading = uiState.leaderboardLoading,
                             onMetricChange = callbacks.onLeaderboardMetricChange,
                             onWindowChange = callbacks.onLeaderboardWindowChange,
-                            onSeeAll = callbacks.onOpenLeaderboard,
+                            onEntryClick = onLeaderboardEntryClick,
                             selectedMetric = uiState.selectedMetric,
                             selectedWindow = uiState.selectedWindow,
                             modifier = Modifier.fillMaxWidth()

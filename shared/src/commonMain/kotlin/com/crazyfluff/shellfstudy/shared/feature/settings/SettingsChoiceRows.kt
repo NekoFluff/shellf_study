@@ -4,10 +4,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MultiChoiceSegmentedButtonRow
 import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonColors
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
@@ -16,20 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
-
-/** On e-ink the stock selected-segment fill is a pale lavender that reads as unselected. There the
- *  selected segment is solid ink instead. */
-@Composable
-private fun segmentedButtonColors(): SegmentedButtonColors =
-    if (LocalEinkTheme.current) {
-        SegmentedButtonDefaults.colors(
-            activeContainerColor = MaterialTheme.colorScheme.onSurface,
-            activeContentColor = MaterialTheme.colorScheme.surface
-        )
-    } else {
-        SegmentedButtonDefaults.colors()
-    }
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.segmentedButtonColors
 
 /** One option of a [SingleChoiceRow]. */
 internal data class ChoiceOption<T>(val value: T, val label: String, val testTag: String)

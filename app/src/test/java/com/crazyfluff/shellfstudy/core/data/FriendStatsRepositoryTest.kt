@@ -27,6 +27,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import com.crazyfluff.shellfstudy.shared.data.model.SrsCounts
 
 /**
  * Covers the roster index every leaderboard surface derives a user's color from. Its whole point is
@@ -161,6 +162,24 @@ class FriendStatsRepositoryTest {
             // A real 0% beats no data at all: sorting by accuracy must not reward never having
             // answered a review.
             assertThat(ranked).containsExactly("Some", "None").inOrder()
+        }
+
+    @Test
+    fun `a friend's SRS breakdown and fetch time reach their stats, and yours come from the local mirror`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val mei = friendRepository.addFriendOrFail("Mei", "token-mei")
+            friendStatsDao.upsert(entity(mei.id).copy(srsGuru = 12, srsBurned = 3, fetchedAtMillis = 1_234L))
+
+            val entries = repository.observeLeaderboard().first()!!.entries
+            val friend = entries.first { !it.isCurrentUser }
+            val self = entries.first { it.isCurrentUser }
+
+            assertThat(friend.srsCounts).isEqualTo(SrsCounts(guru = 12, burned = 3))
+            assertThat(friend.fetchedAtMillis).isEqualTo(1_234L)
+            // Your counts come from the local mirror, empty in this test; your figures are always
+            // live, so there's no fetch time.
+            assertThat(self.srsCounts).isEqualTo(SrsCounts())
+            assertThat(self.fetchedAtMillis).isNull()
         }
 
     private fun entity(

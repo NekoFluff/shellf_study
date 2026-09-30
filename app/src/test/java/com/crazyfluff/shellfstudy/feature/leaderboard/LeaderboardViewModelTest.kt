@@ -119,4 +119,21 @@ class LeaderboardViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    @Test
+    fun `a friend with no cached stats has no entry in the stats map, and you're never in it`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val entry = friendRepository.addFriendOrFail("Mei", "some-token")
+            val viewModel = createViewModel()
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.friends.none { it.id == entry.id }) state = awaitItem()
+
+                assertThat(state.friends.map { it.id }).containsExactly(entry.id)
+                assertThat(state.statsByFriendId).doesNotContainKey(entry.id)
+                assertThat(state.statsByFriendId.values.none { it.isCurrentUser }).isTrue()
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

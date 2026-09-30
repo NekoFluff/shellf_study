@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
+import com.crazyfluff.shellfstudy.shared.data.model.SrsCounts
 
 private val DAY = 1.days
 
@@ -160,5 +161,31 @@ internal fun buildStatsCore(
         ),
         learnedBuckets = learnedBuckets,
         burnedBuckets = burnedBuckets
+    )
+}
+
+private const val LAST_APPRENTICE_STAGE = 4
+private const val LAST_GURU_STAGE = 6
+private const val MASTER_STAGE = 7
+private const val ENLIGHTENED_STAGE = 8
+private const val BURNED_STAGE = 9
+
+/** [countSrsStagesFromTotals] for one stage per item: a friend's fetched assignments. */
+internal fun countSrsStages(stages: List<Int>): SrsCounts =
+    countSrsStagesFromTotals(stages.groupingBy { it }.eachCount())
+
+/**
+ * Buckets per-stage item counts the way WaniKani's dashboard does: Apprentice 1–4, Guru 5–6,
+ * Master 7, Enlightened 8, Burned 9. Stage 0 (unlocked, not started) belongs to none of them.
+ * Takes totals so the user's own counts can come straight from a GROUP BY on the local mirror.
+ */
+internal fun countSrsStagesFromTotals(countByStage: Map<Int, Int>): SrsCounts {
+    fun sum(stages: IntRange) = stages.sumOf { countByStage[it] ?: 0 }
+    return SrsCounts(
+        apprentice = sum(1..LAST_APPRENTICE_STAGE),
+        guru = sum((LAST_APPRENTICE_STAGE + 1)..LAST_GURU_STAGE),
+        master = sum(MASTER_STAGE..MASTER_STAGE),
+        enlightened = sum(ENLIGHTENED_STAGE..ENLIGHTENED_STAGE),
+        burned = sum(BURNED_STAGE..BURNED_STAGE)
     )
 }

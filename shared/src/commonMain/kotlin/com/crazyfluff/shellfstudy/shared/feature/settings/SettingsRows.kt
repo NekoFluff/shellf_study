@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.einkBorder
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.emphasisContainerColor
 
 /** A switch row. The whole row is the touch target, and [testTag] goes on the row, which carries
  *  the switch's toggle semantics. */

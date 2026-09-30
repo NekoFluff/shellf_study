@@ -89,7 +89,6 @@ fun ShellfStudyNavHost(
                     onStartReview = { navController.navigate(ShellfStudyDestination.Review) { launchSingleTop = true } },
                     onStartLesson = { navController.navigate(ShellfStudyDestination.Lesson) { launchSingleTop = true } },
                     onOpenSettings = { navController.navigate(ShellfStudyDestination.Settings) { launchSingleTop = true } },
-                    onOpenLeaderboard = { navController.navigate(ShellfStudyDestination.Leaderboard) { launchSingleTop = true } },
                     onOpenLastSessionSummary = { navController.navigate(ShellfStudyDestination.LastSessionSummary) { launchSingleTop = true } },
                     onOpenStudyTime = {
                         navController.navigate(ShellfStudyDestination.StudyTime) { launchSingleTop = true }

@@ -166,6 +166,25 @@ class FriendStatsRefreshTest {
             assertThat(requestedPaths.none { "burned=" in it }).isTrue()
         }
 
+    @Test
+    fun `the SRS breakdown comes from the same started-assignments walk`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            assignmentsJson = """
+                {"object":"collection","url":"https://api.wanikani.com/v2/assignments","pages":{"next_url":null},"data":[
+                  ${assignmentJson(1, burnedAt = "2024-01-01T00:00:00.000000Z")},
+                  ${assignmentJson(2, burnedAt = null)},
+                  ${assignmentJson(3, burnedAt = null)}
+                ]}
+            """.trimIndent()
+
+            repository.refreshFriend(entry)
+
+            // Stages 9, 5, 5: one burned, two Guru.
+            val stored = friendStatsDao.getById(FRIEND_ID)!!
+            val groups = with(stored) { listOf(srsApprentice, srsGuru, srsMaster, srsEnlightened, srsBurned) }
+            assertThat(groups).containsExactly(0, 2, 0, 0, 1).inOrder()
+        }
+
     private fun assignmentJson(id: Long, burnedAt: String?) = """
         {"id":$id,"object":"assignment","url":"https://api.wanikani.com/v2/assignments/$id","data_updated_at":"2024-01-01T00:00:00.000000Z",
          "data":{"created_at":"2023-01-01T00:00:00.000000Z","subject_id":$id,"subject_type":"kanji","srs_stage":${if (burnedAt != null) 9 else 5},

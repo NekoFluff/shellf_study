@@ -35,6 +35,7 @@ import kotlinx.serialization.json.Json
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
+import com.crazyfluff.shellfstudy.shared.data.model.SrsCounts
 
 private val FRIEND_STATS_TTL = 30.minutes
 
@@ -79,6 +80,10 @@ class FriendStatsRepository(
         dailyRolloverTicks()
     ) { burnedTs, startedTs, accuracyTotals, progressions, _ ->
         buildSelfStats(burnedTs, startedTs, accuracyTotals, progressions)
+    }.combine(selfAssignmentDao.observeSrsStageAndTypeCounts()) { stats, stageCounts ->
+        // The same started, non-hidden items the dashboard's item spread counts.
+        val byStage = stageCounts.groupBy { it.srsStage }.mapValues { (_, rows) -> rows.sumOf { it.count } }
+        stats.copy(srsCounts = countSrsStagesFromTotals(byStage))
     }.flowOn(defaultDispatcher)
 
     fun observeLeaderboard(
@@ -225,6 +230,9 @@ class FriendStatsRepository(
         )
 
         val timelineJson = json.encodeToString(ListSerializer(TimelinePointJson.serializer()), core.timeline)
+        // Hidden items are left out, as they are from the user's own counts (the local query
+        // filters `hidden = 0`), so the two can be compared.
+        val srs = countSrsStages(startedItems.filterNot { it.data.hidden }.map { it.data.srsStage })
 
         FriendStatsEntity(
             friendId = friendId,
@@ -246,7 +254,12 @@ class FriendStatsRepository(
             burnedYear = core.burned.year,
             burnedAllTime = core.burned.allTime,
             learnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.learnedBuckets),
-            burnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.burnedBuckets)
+            burnedBucketsJson = json.encodeToString(ActivityBuckets.serializer(), core.burnedBuckets),
+            srsApprentice = srs.apprentice,
+            srsGuru = srs.guru,
+            srsMaster = srs.master,
+            srsEnlightened = srs.enlightened,
+            srsBurned = srs.burned
         )
     }
 
@@ -333,7 +346,15 @@ class FriendStatsRepository(
                 allTime = burnedAllTime
             ),
             learnedBuckets = learnedBuckets,
-            burnedBuckets = burnedBuckets
+            burnedBuckets = burnedBuckets,
+            srsCounts = SrsCounts(
+                apprentice = srsApprentice,
+                guru = srsGuru,
+                master = srsMaster,
+                enlightened = srsEnlightened,
+                burned = srsBurned
+            ),
+            fetchedAtMillis = fetchedAtMillis
         )
     }
 

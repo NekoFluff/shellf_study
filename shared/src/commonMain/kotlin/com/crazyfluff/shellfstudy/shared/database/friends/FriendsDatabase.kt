@@ -47,7 +47,13 @@ data class FriendStatsEntity(
     val burnedAllTime: Int = 0,
     // Per-day activity buckets serialised as JSON (ActivityBuckets)
     val learnedBucketsJson: String = "{}",
-    val burnedBucketsJson: String = "{}"
+    val burnedBucketsJson: String = "{}",
+    // Started items per SRS group (see SrsCounts)
+    val srsApprentice: Int = 0,
+    val srsGuru: Int = 0,
+    val srsMaster: Int = 0,
+    val srsEnlightened: Int = 0,
+    val srsBurned: Int = 0
 )
 
 @Dao
@@ -65,7 +71,9 @@ interface FriendStatsDao {
     suspend fun deleteById(id: String)
 }
 
-@Database(entities = [FriendStatsEntity::class], version = 4, exportSchema = true)
+// Version 5 added the srs* columns. This database is only a cache of friends' figures (the roster
+// itself is in DataStore), so the destructive fallback below is fine: stats refill on next refresh.
+@Database(entities = [FriendStatsEntity::class], version = 5, exportSchema = true)
 @ConstructedBy(FriendsDatabaseConstructor::class)
 abstract class FriendsDatabase : RoomDatabase() {
     abstract fun friendStatsDao(): FriendStatsDao

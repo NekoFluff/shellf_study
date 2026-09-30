@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.feature.dashboard
 
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.assertTextEquals
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyPace
@@ -26,6 +27,14 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.LeaderboardCardTestTags
+import com.crazyfluff.shellfstudy.shared.designsystem.friends.FriendDetailsTestTags
+import com.crazyfluff.shellfstudy.shared.data.model.SrsCounts
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
+import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
+import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
+import com.crazyfluff.shellfstudy.shared.data.model.ActivityStats
 
 /**
  * Runs under Robolectric (JVM) — this screen is driven purely by state, no device features needed.
@@ -553,5 +562,72 @@ class DashboardScreenTest {
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.ABANDON_REVIEW_MENU_ITEM).assertIsDisplayed()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.ABANDON_LESSON_MENU_ITEM).assertIsDisplayed()
+    }
+
+    private fun leaderboardPerson(nickname: String, isSelf: Boolean, rosterIndex: Int) = FriendStats(
+        friendEntryId = if (isSelf) "" else nickname.lowercase(),
+        nickname = nickname,
+        username = if (isSelf) "" else nickname.lowercase() + "_wk",
+        level = 9,
+        reviewAccuracy = 0.8f,
+        avgDaysPerLevel = null,
+        daysSinceStart = null,
+        levelTimeline = emptyList(),
+        isCurrentUser = isSelf,
+        rosterIndex = rosterIndex,
+        learned = ActivityStats(week = if (isSelf) 10 else 20),
+        srsCounts = SrsCounts(guru = if (isSelf) 3 else 5),
+        fetchedAtMillis = if (isSelf) null else System.currentTimeMillis()
+    )
+
+    private fun setLeaderboardContent() {
+        val board = Leaderboard(
+            entries = listOf(
+                leaderboardPerson("Mei", isSelf = false, rosterIndex = 1),
+                leaderboardPerson("You", isSelf = true, rosterIndex = 0)
+            ),
+            metric = LeaderboardMetric.LEARNED,
+            window = LeaderboardWindow.WEEK
+        )
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(
+                    fetchState = DashboardFetch.Idle,
+                    username = "x",
+                    level = 9,
+                    leaderboard = board
+                ),
+                callbacks = dashboardCallbacks()
+            )
+        }
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(LeaderboardCardTestTags.CARD))
+    }
+
+    @Test
+    fun leaderboardRow_opensTheFriendsDetailsReadOnly() {
+        setLeaderboardContent()
+
+        composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.ROW)[0].performClick()
+
+        composeTestRule.onNodeWithTag(FriendDetailsTestTags.SHEET).assertIsDisplayed()
+        // No level timeline in this fixture, so no "for N days".
+        composeTestRule.onNodeWithText("Level 9").assertIsDisplayed()
+        composeTestRule.onNodeWithText("mei_wk", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(FriendDetailsTestTags.SRS_ROW).performScrollTo().assertIsDisplayed()
+        // Renaming and removing belong to the Friends page.
+        composeTestRule.onNodeWithTag(FriendDetailsTestTags.RENAME_BUTTON).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(FriendDetailsTestTags.REMOVE_BUTTON).assertDoesNotExist()
+    }
+
+    @Test
+    fun yourOwnLeaderboardRow_showsYourSrsBreakdown_withoutAFetchTime() {
+        setLeaderboardContent()
+
+        composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.ROW)[1].performClick()
+
+        composeTestRule.onNodeWithTag(FriendDetailsTestTags.SHEET).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(FriendDetailsTestTags.SRS_ROW).performScrollTo().assertIsDisplayed()
+        // Your figures are always live, so there's no "Updated …" (and no username) line.
+        composeTestRule.onNodeWithTag(FriendDetailsTestTags.UPDATED).assertDoesNotExist()
     }
 }

@@ -41,9 +41,12 @@ import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.designsystem.AppVersion
+import com.crazyfluff.shellfstudy.shared.designsystem.components.ListGroup
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.rememberAppVersion
 import com.crazyfluff.shellfstudy.shared.designsystem.rememberPermissionRequest
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.einkBorder
+import com.crazyfluff.shellfstudy.shared.designsystem.theme.emphasisContainerColor
 import com.crazyfluff.shellfstudy.shared.designsystem.time.formatHour
 import com.crazyfluff.shellfstudy.shared.designsystem.time.rememberIs24HourClock
 import org.koin.compose.viewmodel.koinViewModel
@@ -254,7 +257,7 @@ private fun reviewPriorityExplanation(priority: ReviewPriority): String = when (
 /** How a lesson or review session is put together. */
 @Composable
 private fun StudySessionsGroup(uiState: SettingsUiState, actions: SettingsActions) {
-    SettingsGroup(title = "Study sessions") {
+    ListGroup(title = "Study sessions") {
         val batchSize = uiState.app.lessonBatchSize
         StepperRow(
             title = "Lesson batch size",
@@ -279,7 +282,7 @@ private fun StudySessionsGroup(uiState: SettingsUiState, actions: SettingsAction
 /** How answers are typed and graded. */
 @Composable
 private fun AnsweringGroup(uiState: SettingsUiState, actions: SettingsActions) {
-    SettingsGroup(title = "Answering") {
+    ListGroup(title = "Answering") {
         SwitchRow(
             title = "Use my Japanese keyboard",
             subtitle = "For readings, instead of the built-in romaji → kana converter",
@@ -318,7 +321,7 @@ private fun AnsweringGroup(uiState: SettingsUiState, actions: SettingsActions) {
 /** What the lesson-quiz and review screens show. */
 @Composable
 private fun QuizScreenGroup(uiState: SettingsUiState, actions: SettingsActions) {
-    SettingsGroup(title = "Quiz screen") {
+    ListGroup(title = "Quiz screen") {
         SwitchRow(
             title = "Show item type",
             subtitle = "Radical, Kanji or Vocabulary under the word",
@@ -356,7 +359,7 @@ private fun QuizScreenGroup(uiState: SettingsUiState, actions: SettingsActions) 
 
 @Composable
 private fun AudioGroup(uiState: SettingsUiState, actions: SettingsActions) {
-    SettingsGroup(title = "Audio") {
+    ListGroup(title = "Audio") {
         SwitchRow(
             title = "Auto-play pronunciation",
             subtitle = "When a reading answer is revealed",
@@ -377,7 +380,7 @@ private fun AudioGroup(uiState: SettingsUiState, actions: SettingsActions) {
 /** What the subject detail pages and lesson pages include. */
 @Composable
 private fun SubjectPagesGroup(uiState: SettingsUiState, actions: SettingsActions) {
-    SettingsGroup(title = "Subject pages") {
+    ListGroup(title = "Subject pages") {
         SwitchRow(
             title = "Pitch-accent markers",
             subtitle = "On vocabulary readings",
@@ -411,7 +414,7 @@ private val THEME_OPTIONS = listOf(
 
 @Composable
 private fun AppearanceGroup(uiState: SettingsUiState, actions: SettingsActions) {
-    SettingsGroup(title = "Appearance") {
+    ListGroup(title = "Appearance") {
         SingleChoiceRow(
             title = "Theme",
             subtitle = if (uiState.app.themeMode == ThemeMode.EINK) "Grayscale, high contrast, no shadows" else null,
@@ -463,7 +466,7 @@ private fun NotificationsGroup(
     val is24h = rememberIs24HourClock()
     var editing by remember { mutableStateOf<HourSetting?>(null) }
 
-    SettingsGroup(title = "Notifications") {
+    ListGroup(title = "Notifications") {
         MainSwitchRow(
             title = "Allow notifications",
             checked = notifications.notificationsEnabled,
@@ -585,10 +588,10 @@ private fun QuietHoursRows(
 
 @Composable
 private fun FriendsGroup(onOpenLeaderboard: () -> Unit) {
-    SettingsGroup(title = "Friends") {
+    ListGroup(title = "Friends") {
         NavRow(
-            title = "Friends & leaderboard",
-            subtitle = "Compare progress using friends' read-only tokens",
+            title = "Friends",
+            subtitle = "Add friends and see their progress",
             onClick = onOpenLeaderboard,
             testTag = SettingsScreenTestTags.FRIENDS_ROW
         )
@@ -598,7 +601,7 @@ private fun FriendsGroup(onOpenLeaderboard: () -> Unit) {
 @Composable
 private fun DataGroup(uiState: SettingsUiState, actions: SettingsActions) {
     var showFullRefreshConfirm by remember { mutableStateOf(false) }
-    SettingsGroup(title = "Data") {
+    ListGroup(title = "Data") {
         NavRow(
             title = "Re-download all data",
             subtitle = "Fixes content that looks wrong or missing",
@@ -664,7 +667,7 @@ private val THIRD_PARTY_CREDITS = listOf(
  *  KanjiVG and Kanjium data require it, which is why it stays on the page instead of behind a tap. */
 @Composable
 private fun CreditsGroup() {
-    SettingsGroup(title = "Open source & data credits") {
+    ListGroup(title = "Open source & data credits") {
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -688,7 +691,7 @@ private fun CreditsGroup() {
 @Composable
 private fun AccountGroup(uiState: SettingsUiState, actions: SettingsActions) {
     var showLogOutConfirm by remember { mutableStateOf(false) }
-    SettingsGroup(title = "Account") {
+    ListGroup(title = "Account") {
         val account = uiState.account
         if (account != null) {
             InfoRow(

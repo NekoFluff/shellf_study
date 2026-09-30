@@ -5,6 +5,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -57,50 +58,61 @@ class LeaderboardCardTest {
         window = LeaderboardWindow.WEEK
     )
 
-    private fun setContent(leaderboard: Leaderboard, onSeeAll: () -> Unit = {}) {
+    private fun setContent(leaderboard: Leaderboard, onEntryClick: (FriendStats) -> Unit = {}) {
         composeTestRule.setContent {
             LeaderboardCard(
                 leaderboard = leaderboard,
                 isLoading = false,
                 onMetricChange = {},
                 onWindowChange = {},
-                onSeeAll = onSeeAll
+                onEntryClick = onEntryClick
             )
         }
     }
 
     @Test
-    fun `shows five rows and no See all when there are exactly five people`() {
+    fun `shows five rows and no Show all when there are exactly five people`() {
         setContent(leaderboardOf(5))
 
         composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.ROW).assertCountEquals(5)
-        composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.SEE_ALL).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.SHOW_ALL).assertCountEquals(0)
     }
 
     @Test
-    fun `shows five rows and See all when there are more than five people`() {
+    fun `shows five rows and Show all when there are more than five people`() {
         setContent(leaderboardOf(7))
 
         composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.ROW).assertCountEquals(5)
-        composeTestRule.onNodeWithTag(LeaderboardCardTestTags.SEE_ALL).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(LeaderboardCardTestTags.SHOW_ALL).assertIsDisplayed()
     }
 
     @Test
-    fun `shows every row and no See all when there are fewer than five people`() {
+    fun `shows every row and no Show all when there are fewer than five people`() {
         setContent(leaderboardOf(2))
 
         composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.ROW).assertCountEquals(2)
-        composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.SEE_ALL).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.SHOW_ALL).assertCountEquals(0)
     }
 
     @Test
-    fun `See all opens the full leaderboard`() {
-        var opened = false
-        setContent(leaderboardOf(6), onSeeAll = { opened = true })
+    fun `Show all expands the card in place, and Show less collapses it again`() {
+        setContent(leaderboardOf(7))
 
-        composeTestRule.onNodeWithTag(LeaderboardCardTestTags.SEE_ALL).performClick()
+        composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.ROW).assertCountEquals(5)
+        composeTestRule.onNodeWithTag(LeaderboardCardTestTags.SHOW_ALL).assertTextEquals("Show all").performClick()
+        composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.ROW).assertCountEquals(7)
+        composeTestRule.onNodeWithTag(LeaderboardCardTestTags.SHOW_ALL).assertTextEquals("Show less").performClick()
+        composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.ROW).assertCountEquals(5)
+    }
 
-        assertThat(opened).isTrue()
+    @Test
+    fun `tapping a row hands that person to the caller`() {
+        var tapped: FriendStats? = null
+        setContent(leaderboardOf(3), onEntryClick = { tapped = it })
+
+        composeTestRule.onAllNodesWithTag(LeaderboardCardTestTags.ROW)[1].performClick()
+
+        assertThat(tapped?.nickname).isEqualTo("User 2")
     }
 
     /** Slots deliberately do not follow the list order here — the card must color by roster index. */

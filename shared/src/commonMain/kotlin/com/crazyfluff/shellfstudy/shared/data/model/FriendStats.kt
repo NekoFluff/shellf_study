@@ -65,6 +65,16 @@ const val SELF_ROSTER_INDEX = 0
  */
 fun friendRosterIndex(friendIndex: Int): Int = friendIndex + 1
 
+/** How many of someone's started items sit in each SRS group, as WaniKani's dashboard groups them. */
+@Immutable
+data class SrsCounts(
+    val apprentice: Int = 0,
+    val guru: Int = 0,
+    val master: Int = 0,
+    val enlightened: Int = 0,
+    val burned: Int = 0
+)
+
 @Immutable
 data class FriendStats(
     val friendEntryId: String,
@@ -81,8 +91,27 @@ data class FriendStats(
     val learned: ActivityStats = ActivityStats(),
     val burned: ActivityStats = ActivityStats(),
     val learnedBuckets: ActivityBuckets = ActivityBuckets(),
-    val burnedBuckets: ActivityBuckets = ActivityBuckets()
-)
+    val burnedBuckets: ActivityBuckets = ActivityBuckets(),
+    /** Started items per SRS group: counted from a friend's fetched assignments, or from the local
+     *  mirror for the current user. Null only when unknown. Zeros are a real "none in this group",
+     *  so they must not stand in for it. */
+    val srsCounts: SrsCounts? = null,
+    /** When a friend's figures were fetched, for "Updated 5 min ago". Null for the current user,
+     *  whose figures are always live. */
+    val fetchedAtMillis: Long? = null
+) {
+    /**
+     * Days on the current level, as of [daysSinceStart]'s reading: the time since the last level-up
+     * in [levelTimeline] that reached [level]. Null when the timeline doesn't know when this level
+     * started (no progressions, or the level isn't in it).
+     */
+    val daysOnCurrentLevel: Int?
+        get() {
+            val now = daysSinceStart ?: return null
+            val levelStart = levelTimeline.lastOrNull { it.level == level } ?: return null
+            return (now - levelStart.daysSinceStart).coerceAtLeast(0)
+        }
+}
 
 @Immutable
 data class Leaderboard(

@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.feature.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,12 +21,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,14 +44,14 @@ import com.crazyfluff.shellfstudy.shared.designsystem.components.PillSelector
 
 private val metrics = listOf(LeaderboardMetric.LEARNED, LeaderboardMetric.BURNED, LeaderboardMetric.LEVEL)
 
-/** How many participants the dashboard card shows before deferring to the full leaderboard screen.
- *  Matches the palette's slot count, so the visible rows never repeat a color. */
+/** How many participants the card shows until "Show all" expands it. Matches the palette's slot
+ *  count, so the collapsed rows never repeat a color. */
 private const val MAX_VISIBLE_ENTRIES = 5
 
 object LeaderboardCardTestTags {
     const val CARD = "leaderboard_card"
     const val ROW = "leaderboard_row"
-    const val SEE_ALL = "leaderboard_see_all"
+    const val SHOW_ALL = "leaderboard_show_all"
 }
 
 /** Stable label lookup — see [PillSelector]'s note on why this is not a lambda literal. */
@@ -59,7 +63,7 @@ fun LeaderboardCard(
     isLoading: Boolean,
     onMetricChange: (LeaderboardMetric) -> Unit,
     onWindowChange: (LeaderboardWindow) -> Unit,
-    onSeeAll: () -> Unit,
+    onEntryClick: (FriendStats) -> Unit,
     selectedMetric: LeaderboardMetric = leaderboard.metric,
     selectedWindow: LeaderboardWindow = leaderboard.window,
     modifier: Modifier = Modifier
@@ -111,14 +115,17 @@ fun LeaderboardCard(
                     .padding(bottom = 4.dp)
             )
 
-            val displayEntries = leaderboard.entries.take(MAX_VISIBLE_ENTRIES)
+            // Expanded in place rather than opening another screen, so the rankings live only here.
+            var expanded by rememberSaveable { mutableStateOf(false) }
+            val displayEntries = if (expanded) leaderboard.entries else leaderboard.entries.take(MAX_VISIBLE_ENTRIES)
             displayEntries.forEachIndexed { index, entry ->
                 if (index > 0) HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 LeaderboardRow(
                     entry = entry,
                     rank = index + 1,
                     metric = selectedMetric,
-                    window = selectedWindow
+                    window = selectedWindow,
+                    onClick = { onEntryClick(entry) }
                 )
             }
 
@@ -128,9 +135,9 @@ fun LeaderboardCard(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(
-                        onClick = onSeeAll,
-                        modifier = Modifier.testTag(LeaderboardCardTestTags.SEE_ALL)
-                    ) { Text("See all") }
+                        onClick = { expanded = !expanded },
+                        modifier = Modifier.testTag(LeaderboardCardTestTags.SHOW_ALL)
+                    ) { Text(if (expanded) "Show less" else "Show all") }
                 }
             } else {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -145,6 +152,7 @@ private fun LeaderboardRow(
     rank: Int,
     metric: LeaderboardMetric,
     window: LeaderboardWindow,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val color = leaderboardUserColor(entry.rosterIndex)
@@ -157,6 +165,7 @@ private fun LeaderboardRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick)
             .testTag(LeaderboardCardTestTags.ROW)
             .background(background)
             .padding(horizontal = 16.dp, vertical = 10.dp),

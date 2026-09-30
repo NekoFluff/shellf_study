@@ -1,77 +1,61 @@
 package com.crazyfluff.shellfstudy.shared.feature.leaderboard
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.crazyfluff.shellfstudy.shared.data.model.FriendEntry
-import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
+import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.friendRosterIndex
-import com.crazyfluff.shellfstudy.shared.designsystem.components.AppTextInputDialog
+import com.crazyfluff.shellfstudy.shared.designsystem.components.ListGroup
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
-import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberPushUpTextFieldState
+import com.crazyfluff.shellfstudy.shared.designsystem.friends.FriendDetailsSheet
+import com.crazyfluff.shellfstudy.shared.designsystem.friends.FriendDetailsSubject
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserColor
 import org.koin.compose.viewmodel.koinViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LeaderboardRoute(
     onBack: () -> Unit,
     viewModel: LeaderboardViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    LeaderboardScreen(
-        uiState = uiState,
-        actions = viewModel,
-        onBack = onBack
-    )
+    LeaderboardScreen(uiState = uiState, actions = viewModel, onBack = onBack)
 }
 
+/** The friend a panel or dialog is open for: the roster entry plus what the list showed for it. */
+private data class OpenFriend(val entry: FriendEntry, val subject: FriendDetailsSubject)
+
+/**
+ * Friends: adding them, and renaming or removing them. Rankings are the dashboard card's job, so
+ * this page is the roster in the order friends were added, with each friend's details a tap away.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LeaderboardScreen(
@@ -81,8 +65,9 @@ fun LeaderboardScreen(
     modifier: Modifier = Modifier
 ) {
     var showAddFriendDialog by remember { mutableStateOf(false) }
-    var friendToDelete by remember { mutableStateOf<FriendEntry?>(null) }
-    var friendToEdit by remember { mutableStateOf<FriendEntry?>(null) }
+    var openFriend by remember { mutableStateOf<OpenFriend?>(null) }
+    var friendToRemove by remember { mutableStateOf<FriendEntry?>(null) }
+    var friendToRename by remember { mutableStateOf<FriendEntry?>(null) }
 
     LaunchedEffect(uiState.addFriendForm.success) {
         if (uiState.addFriendForm.success) showAddFriendDialog = false
@@ -97,13 +82,16 @@ fun LeaderboardScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { showAddFriendDialog = true },
+                        modifier = Modifier.testTag(LeaderboardScreenTestTags.ADD_FRIEND_BUTTON)
+                    ) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = "Add a friend")
+                    }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddFriendDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add friend")
-            }
         }
     ) { paddingValues ->
         PullToRefreshBox(
@@ -111,285 +99,136 @@ fun LeaderboardScreen(
             onRefresh = actions::onRefresh,
             modifier = Modifier.padding(paddingValues)
         ) {
-            if (uiState.friends.isEmpty()) {
-                EmptyFriendsState(
-                    onAddFriend = { showAddFriendDialog = true },
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                val statsByFriendId = remember(uiState.leaderboard) {
-                    uiState.leaderboard?.entries?.associateBy { it.friendEntryId }
-                }
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp
-                    )
-                ) {
-                    item {
-                        Text(
-                            text = "${uiState.friends.size} ${if (uiState.friends.size == 1) "friend" else "friends"}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
-                        )
-                    }
-                    if (uiState.refreshErrorMessage != null) {
-                        item {
-                            Text(
-                                text = uiState.refreshErrorMessage,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                    itemsIndexed(uiState.friends, key = { _, friend -> friend.id }) { index, friend ->
-                        val stats = statsByFriendId?.get(friend.id)
-                        // Prefer the roster index the repository assigned to this friend's stats, so
-                        // this list and the dashboard's rows resolve through the same value; a friend
-                        // whose stats aren't cached yet has no entry there and falls back to the same
-                        // roster rule applied to this list, which is the list the repository indexed.
-                        val rosterIndex = stats?.rosterIndex ?: friendRosterIndex(index)
-                        FriendCard(
-                            friend = friend,
-                            stats = stats,
-                            avatarColor = leaderboardUserColor(rosterIndex),
-                            onEdit = { friendToEdit = friend },
-                            onDelete = { friendToDelete = friend },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                        )
-                    }
-                }
-            }
+            // Always the list, even with no friends (then it's just the "Add a friend" row). A
+            // separate empty page flashed on every open: the roster is read asynchronously, so
+            // the first frame always saw an empty list.
+            FriendsContent(
+                uiState = uiState,
+                onOpenFriend = { entry, color ->
+                    val subject = FriendDetailsSubject(entry.nickname, color, uiState.statsByFriendId[entry.id])
+                    openFriend = OpenFriend(entry, subject)
+                },
+                onAddFriend = { showAddFriendDialog = true }
+            )
         }
     }
 
+    FriendDialogs(
+        uiState = uiState,
+        actions = actions,
+        showAddFriendDialog = showAddFriendDialog,
+        onDismissAdd = { showAddFriendDialog = false },
+        openFriend = openFriend,
+        onCloseFriend = { openFriend = null },
+        friendToRemove = friendToRemove,
+        onRemoveChange = { friendToRemove = it },
+        friendToRename = friendToRename,
+        onRenameChange = { friendToRename = it }
+    )
+}
+
+/** Everything the page opens over itself: the add dialog, a friend's panel, and the rename and
+ *  remove dialogs the panel leads to. */
+@Suppress("LongParameterList")
+@Composable
+private fun FriendDialogs(
+    uiState: LeaderboardUiState,
+    actions: LeaderboardActions,
+    showAddFriendDialog: Boolean,
+    onDismissAdd: () -> Unit,
+    openFriend: OpenFriend?,
+    onCloseFriend: () -> Unit,
+    friendToRemove: FriendEntry?,
+    onRemoveChange: (FriendEntry?) -> Unit,
+    friendToRename: FriendEntry?,
+    onRenameChange: (FriendEntry?) -> Unit
+) {
     if (showAddFriendDialog) {
-        AddFriendDialog(
-            form = uiState.addFriendForm,
-            actions = actions,
-            onDismiss = { showAddFriendDialog = false }
+        AddFriendDialog(form = uiState.addFriendForm, actions = actions, onDismiss = onDismissAdd)
+    }
+    openFriend?.let { open ->
+        FriendDetailsSheet(
+            subject = open.subject,
+            window = LeaderboardWindow.WEEK,
+            onDismiss = onCloseFriend,
+            onRename = { onCloseFriend(); onRenameChange(open.entry) },
+            onRemove = { onCloseFriend(); onRemoveChange(open.entry) }
         )
     }
-
-    val entry = friendToDelete
-    if (entry != null) {
+    friendToRemove?.let { entry ->
         ConfirmationDialog(
             title = "Remove ${entry.nickname}?",
-            text = "Their stats will be removed from your leaderboard.",
+            text = "They'll disappear from your leaderboard. You can add them again with their token.",
             confirmLabel = "Remove",
-            onConfirm = { actions.onRemoveFriend(entry.id); friendToDelete = null },
-            onDismiss = { friendToDelete = null }
+            onConfirm = {
+                actions.onRemoveFriend(entry.id)
+                onRemoveChange(null)
+            },
+            onDismiss = { onRemoveChange(null) },
+            confirmButtonTestTag = LeaderboardScreenTestTags.REMOVE_CONFIRM
         )
     }
-
-    val editing = friendToEdit
-    if (editing != null) {
+    friendToRename?.let { entry ->
         EditNicknameDialog(
-            initialNickname = editing.nickname,
-            onConfirm = { actions.onEditNickname(editing.id, it); friendToEdit = null },
-            onDismiss = { friendToEdit = null }
+            initialNickname = entry.nickname,
+            onConfirm = { nickname ->
+                actions.onEditNickname(entry.id, nickname)
+                onRenameChange(null)
+            },
+            onDismiss = { onRenameChange(null) }
         )
     }
 }
 
 @Composable
-private fun EmptyFriendsState(
-    onAddFriend: () -> Unit,
-    modifier: Modifier = Modifier
+private fun FriendsContent(
+    uiState: LeaderboardUiState,
+    onOpenFriend: (FriendEntry, Color) -> Unit,
+    onAddFriend: () -> Unit
 ) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Group,
-                    contentDescription = null,
-                    modifier = Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                )
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        uiState.refreshErrorMessage?.let { message -> item(key = "error") { ErrorBanner(message) } }
+        item(key = "friends") {
+            ListGroup(title = "Friends") {
+                uiState.friends.forEachIndexed { index, friend ->
+                    // Roster order is the colour order, the same one the dashboard card uses.
+                    val color = leaderboardUserColor(friendRosterIndex(index))
+                    FriendRow(friend.id, friend.nickname, uiState.statsByFriendId[friend.id], color) {
+                        onOpenFriend(friend, color)
+                    }
+                }
+                AddFriendRow(onClick = onAddFriend)
             }
-            Spacer(Modifier.height(20.dp))
-            Text(
-                text = "No friends yet",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Add a friend using their WaniKani read-only API token to compare progress on the leaderboard.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-            Spacer(Modifier.height(24.dp))
-            FilledTonalButton(onClick = onAddFriend) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Add a friend")
-            }
+        }
+        if (uiState.isRosterLoaded) {
+            item(key = "footer") { FriendsFooter(friendCount = uiState.friends.size) }
         }
     }
 }
 
 @Composable
-private fun FriendCard(
-    friend: FriendEntry,
-    stats: FriendStats?,
-    avatarColor: Color,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(modifier = modifier) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(avatarColor),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = (friend.nickname.firstOrNull() ?: '?').uppercaseChar().toString(),
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = friend.nickname,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
-                )
-                if (stats != null) {
-                    Text(
-                        text = "${stats.username} · Level ${stats.level}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
-            }
-            IconButton(onClick = onEdit) {
-                Icon(
-                    Icons.Default.Edit,
-                    contentDescription = "Edit ${friend.nickname}",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Remove ${friend.nickname}",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AddFriendDialog(
-    form: AddFriendFormState,
-    actions: LeaderboardActions,
-    onDismiss: () -> Unit
-) {
-    AppTextInputDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add a friend") },
-        text = {
-            Column {
-                Text(
-                    text = "Enter a nickname and their WaniKani read-only API token.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                // Neither value is ever reset from outside while this dialog is open — it's torn
-                // down and rebuilt fresh on next open — so a one-time initial value is enough.
-                val nicknameFieldState = rememberPushUpTextFieldState(form.nickname, actions::onAddFriendNicknameChange)
-                OutlinedTextField(
-                    state = nicknameFieldState,
-                    label = { Text("Nickname") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                val tokenFieldState = rememberPushUpTextFieldState(form.token, actions::onAddFriendTokenChange)
-                OutlinedTextField(
-                    state = tokenFieldState,
-                    label = { Text("API token") },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = form.error != null
-                )
-                form.error?.let { error ->
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                }
-            }
+private fun FriendsFooter(friendCount: Int) {
+    Text(
+        text = if (friendCount == 0) {
+            TOKEN_HELP
+        } else {
+            "${friendCount.friendsLabel()} · pull down to refresh everyone's stats"
         },
-        confirmButton = {
-            TextButton(onClick = actions::onAddFriendConfirm, enabled = !form.isValidating) {
-                if (form.isValidating) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                } else {
-                    Text("Validate & Add")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
     )
 }
 
-@Composable
-private fun EditNicknameDialog(
-    initialNickname: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    // Only read at Save time (never pushed up on every keystroke), and TextFieldState.text is
-    // itself Compose-observable, so the enabled check below can read it directly with no
-    // mirrored state or effect needed.
-    val nicknameFieldState = rememberTextFieldState(initialNickname)
-    AppTextInputDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit nickname") },
-        text = {
-            OutlinedTextField(
-                state = nicknameFieldState,
-                label = { Text("Nickname") },
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(nicknameFieldState.text.toString()) },
-                enabled = nicknameFieldState.text.isNotBlank()
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}
+private fun Int.friendsLabel(): String = "$this ${if (this == 1) "friend" else "friends"}"
+
+/** Shown under the list until the first friend is added: how to get the token the add dialog asks for. */
+private const val TOKEN_HELP =
+    "Friends appear on your dashboard's leaderboard. To add one, ask them to open " +
+        "wanikani.com/settings/personal_access_tokens, generate a token with no boxes ticked (that " +
+        "makes it read-only), and send it to you. It's stored encrypted on this device."
