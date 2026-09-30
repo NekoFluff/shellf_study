@@ -198,7 +198,7 @@ fun StudyHeatmapGrid(heatmap: StudyHeatmap, modifier: Modifier = Modifier) {
     val rowHeight = 14.dp
     val maxMs = heatmap.maxMs.coerceAtLeast(1L)
 
-    Column(modifier = modifier.testTag(StudyTimeTestTags.HEATMAP)) {
+    Column(modifier = modifier) {
         Row {
             Column(modifier = Modifier.width(28.dp)) {
                 DayOfWeek.entries.forEach { day ->

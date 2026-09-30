@@ -104,7 +104,6 @@ data class StudyHeatmap(val cellsMs: List<Long>) {
 
     companion object {
         const val HOURS = 24
-        val EMPTY = StudyHeatmap(List(7 * HOURS) { 0L })
 
         fun index(dayOfWeek: DayOfWeek, hour: Int) = (dayOfWeek.isoDayNumber - 1) * HOURS + hour
     }

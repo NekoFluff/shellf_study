@@ -1,10 +1,12 @@
 package com.crazyfluff.shellfstudy.core.data
 
 import app.cash.turbine.test
+import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDayEntity
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
+import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockWebServer
@@ -35,10 +37,8 @@ class StatsRepositoryTest {
     }
 
     @Test
-    fun `syncLevelProgressions caches rows, observeDaysOnCurrentLevel computes days since the in-progress level started`() = runTest {
-        server.enqueue(jsonResponse(levelProgressionsJson(startedAt = "2026-01-01T00:00:00.000000Z")))
-
-        repository.syncLevelProgressions(force = true)
+    fun `synced level progressions are cached, observeDaysOnCurrentLevel computes days since the in-progress level started`() = runTest {
+        syncServing("/level_progressions", levelProgressionsJson(startedAt = "2026-01-01T00:00:00.000000Z"))
 
         repository.observeDaysOnCurrentLevel().test {
             assertThat(awaitItem()).isNotNull()
@@ -47,9 +47,7 @@ class StatsRepositoryTest {
 
     @Test
     fun `observeDaysOnCurrentLevel returns null when every level has been passed`() = runTest {
-        server.enqueue(jsonResponse(ALL_LEVELS_PASSED_JSON))
-
-        repository.syncLevelProgressions(force = true)
+        syncServing("/level_progressions", ALL_LEVELS_PASSED_JSON)
 
         repository.observeDaysOnCurrentLevel().test {
             assertThat(awaitItem()).isNull()
@@ -59,9 +57,7 @@ class StatsRepositoryTest {
     @Test
     fun `observeCurrentLevel skips an abandoned level reset even if it is the highest level number`() = runTest {
         val realLevelStartedAt = (Clock.System.now() - 19.days).toString()
-        server.enqueue(jsonResponse(abandonedResetJson(realLevelStartedAt)))
-
-        repository.syncLevelProgressions(force = true)
+        syncServing("/level_progressions", abandonedResetJson(realLevelStartedAt))
 
         repository.observeCurrentLevel().test {
             assertThat(awaitItem()).isEqualTo(3)
@@ -71,9 +67,7 @@ class StatsRepositoryTest {
     @Test
     fun `observeDaysOnCurrentLevel computes from the real in-progress level, not an abandoned reset`() = runTest {
         val realLevelStartedAt = (Clock.System.now() - 19.days).toString()
-        server.enqueue(jsonResponse(abandonedResetJson(realLevelStartedAt)))
-
-        repository.syncLevelProgressions(force = true)
+        syncServing("/level_progressions", abandonedResetJson(realLevelStartedAt))
 
         repository.observeDaysOnCurrentLevel().test {
             // Level 3's startedAt is 19 days ago; the abandoned level 15 row's startedAt is years
@@ -84,9 +78,7 @@ class StatsRepositoryTest {
 
     @Test
     fun `observeCurrentLevel is the highest not-yet-passed level`() = runTest {
-        server.enqueue(jsonResponse(levelProgressionsJson(startedAt = "2026-01-01T00:00:00.000000Z")))
-
-        repository.syncLevelProgressions(force = true)
+        syncServing("/level_progressions", levelProgressionsJson(startedAt = "2026-01-01T00:00:00.000000Z"))
 
         repository.observeCurrentLevel().test {
             assertThat(awaitItem()).isEqualTo(12)
@@ -95,9 +87,7 @@ class StatsRepositoryTest {
 
     @Test
     fun `observeCurrentLevel is null once every level has been passed`() = runTest {
-        server.enqueue(jsonResponse(ALL_LEVELS_PASSED_JSON))
-
-        repository.syncLevelProgressions(force = true)
+        syncServing("/level_progressions", ALL_LEVELS_PASSED_JSON)
 
         repository.observeCurrentLevel().test {
             assertThat(awaitItem()).isNull()
@@ -143,10 +133,11 @@ class StatsRepositoryTest {
     }
 
     @Test
-    fun `syncReviewStatistics persists lastReviewedAt from the envelope's data_updated_at`() = runTest {
-        server.enqueue(jsonResponse(reviewStatisticsJson(subjectId = 440, dataUpdatedAt = "2026-01-15T03:00:00.000000Z")))
-
-        repository.syncReviewStatistics(force = true)
+    fun `synced review statistics persist lastReviewedAt from the envelope's data_updated_at`() = runTest {
+        syncServing(
+            "/review_statistics",
+            reviewStatisticsJson(subjectId = 440, dataUpdatedAt = "2026-01-15T03:00:00.000000Z")
+        )
 
         repository.observeReviewStatistic(440).test {
             assertThat(awaitItem()?.lastReviewedAt).isEqualTo(Instant.parse("2026-01-15T03:00:00.000000Z"))
@@ -162,33 +153,39 @@ class StatsRepositoryTest {
 
     @Test
     fun `observeReviewStatistic maps correct, incorrect, and streak fields per question type`() = runTest {
-        server.enqueue(
-            jsonResponse(
-                reviewStatisticsJson(
-                    subjectId = 440,
-                    dataUpdatedAt = "2026-01-15T03:00:00.000000Z",
-                    meaningCorrect = 22,
-                    meaningIncorrect = 2,
-                    meaningCurrentStreak = 6,
-                    meaningMaxStreak = 9,
-                    readingCorrect = 19,
-                    readingIncorrect = 3,
-                    readingCurrentStreak = 4,
-                    readingMaxStreak = 14
-                )
+        syncServing(
+            "/review_statistics",
+            reviewStatisticsJson(
+                subjectId = 440,
+                dataUpdatedAt = "2026-01-15T03:00:00.000000Z",
+                meaningCorrect = 22,
+                meaningIncorrect = 2,
+                meaningCurrentStreak = 6,
+                meaningMaxStreak = 9,
+                readingCorrect = 19,
+                readingIncorrect = 3,
+                readingCurrentStreak = 4,
+                readingMaxStreak = 14
             )
         )
 
-        repository.syncReviewStatistics(force = true)
-
         repository.observeReviewStatistic(440).test {
             val stats = awaitItem()
-            assertThat(stats?.meaningAccuracyPercent).isEqualTo(91)
-            assertThat(stats?.readingAccuracyPercent).isEqualTo(86)
+            assertThat(stats?.meaningStats?.accuracyPercent).isEqualTo(91)
+            assertThat(stats?.readingStats?.accuracyPercent).isEqualTo(86)
             assertThat(stats?.meaningCurrentStreak).isEqualTo(6)
             assertThat(stats?.readingMaxStreak).isEqualTo(14)
             assertThat(stats?.hasBeenReviewed).isTrue()
         }
+    }
+
+    /** Runs a full sync the way production does — the orchestrator fetches, then writes — with
+     *  [body] served for [path] and every other resource an empty collection. */
+    private suspend fun syncServing(path: String, body: String) {
+        server.dispatcher = waniKaniCollectionDispatcher { request ->
+            if (request.target.orEmpty().startsWith(path)) jsonResponse(body) else null
+        }
+        assertThat(repositories.syncOrchestrator.syncAll(force = true)).isEqualTo(ApiResult.Success(Unit))
     }
 
     private fun reviewStatisticsJson(

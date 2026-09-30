@@ -71,8 +71,6 @@ data class QuizQuestionTestTags(
     val totalTimerText: String,
     val characters: String,
     val subjectTypeLabel: String,
-    val rankChangeText: String,
-    val questionLabel: String,
     val answerField: String,
     val typeMismatchText: String,
     val dontKnowButton: String,
@@ -81,16 +79,13 @@ data class QuizQuestionTestTags(
     val feedbackText: String,
     val answerDetailText: String,
     val revealButton: String,
-    val continueButton: String,
-    /** The optional "Batch 2 of 4"-style label in the progress row. */
-    val sessionContextLabel: String
+    val continueButton: String
 ) {
     /** [QuizAnswerField]'s sub-bundle, so the field takes one parameter rather than two loose tags. */
     val answerFieldTags: QuizAnswerFieldTestTags
         get() = QuizAnswerFieldTestTags(
             answerField = answerField,
-            typeMismatchText = typeMismatchText,
-            questionLabel = questionLabel
+            typeMismatchText = typeMismatchText
         )
 }
 
@@ -189,8 +184,7 @@ private fun <T : QuizDisplayItem> QuizProgressHeader(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(testTags.sessionContextLabel)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -345,7 +339,7 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
             val rankChange = question.grade?.rankChange
             if (rankChange != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                RankChangeChip(rankChange, modifier = Modifier.testTag(testTags.rankChangeText))
+                RankChangeChip(rankChange)
             }
         }
     }

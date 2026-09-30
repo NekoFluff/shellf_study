@@ -113,9 +113,6 @@ class QuizQueue<T> {
      *  used to undo a correct answer, which (unlike an incorrect one) isn't put back via [requeue]. */
     fun pushFront(question: PendingQuestion<T>) = inFlight.addFirst(question)
 
-    fun noneMatches(predicate: (PendingQuestion<T>) -> Boolean): Boolean =
-        inFlight.none(predicate) && reserve.none(predicate)
-
     fun moveMatchingToFront(predicate: (PendingQuestion<T>) -> Boolean) {
         val index = inFlight.indexOfLast(predicate)
         if (index >= 0) inFlight.addFirst(inFlight.removeAt(index))

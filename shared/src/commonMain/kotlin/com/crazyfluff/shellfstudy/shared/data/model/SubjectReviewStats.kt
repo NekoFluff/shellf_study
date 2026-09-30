@@ -20,9 +20,6 @@ data class SubjectReviewStats(
     val hasBeenReviewed: Boolean
         get() = meaningCorrect + meaningIncorrect + readingCorrect + readingIncorrect > 0
 
-    val meaningAccuracyPercent: Int? get() = accuracyPercent(meaningCorrect, meaningIncorrect)
-    val readingAccuracyPercent: Int? get() = accuracyPercent(readingCorrect, readingIncorrect)
-
     /** Meaning's figures as one value, or null when meaning has never been reviewed. The five are
      *  only ever meaningful together — they come from the same row — so the stats card takes this
      *  rather than five separately-nullable ints it would have to re-check as a group. */

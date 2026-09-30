@@ -59,8 +59,7 @@ fun StudyTimeCard(
                 StudyGoalRing(
                     fraction = overview.goalFraction,
                     centerText = formatStudyDuration(overview.today.totalMs),
-                    subText = "of ${formatStudyDuration(overview.goalMs)}",
-                    modifier = Modifier.testTag(StudyTimeTestTags.DASHBOARD_RING)
+                    subText = "of ${formatStudyDuration(overview.goalMs)}"
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 TodaySummary(overview = overview, modifier = Modifier.weight(1f))
@@ -107,7 +106,7 @@ fun StudyTimeCard(
 
 @Composable
 private fun TodaySummary(overview: StudyTimeOverview, modifier: Modifier = Modifier) {
-    Column(modifier = modifier.testTag(StudyTimeTestTags.DASHBOARD_TODAY)) {
+    Column(modifier = modifier) {
         if (overview.hasAnyData) {
             ChartLegendItem(reviewTimeColor(), "Reviews ${formatStudyDuration(overview.today.reviewMs)}")
             ChartLegendItem(lessonTimeColor(), "Lessons ${formatStudyDuration(overview.today.lessonMs)}")

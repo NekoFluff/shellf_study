@@ -259,7 +259,7 @@ class StudyTimeAggregatorTest {
 
         assertEquals(PartOfDay.MORNING, heatmap.peakPartOfDay)
         assertEquals(true, heatmap.prefersWeekends)
-        assertNull(StudyHeatmap.EMPTY.peakPartOfDay)
+        assertNull(StudyHeatmap(List(7 * StudyHeatmap.HOURS) { 0L }).peakPartOfDay)
     }
 
     // --- goal streak ---

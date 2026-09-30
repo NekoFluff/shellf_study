@@ -53,30 +53,23 @@ object ReviewScreenTestTags {
     const val NO_REVIEWS_DONE_BUTTON = "review_no_reviews_done_button"
     const val CHARACTERS = "review_characters"
     const val PROGRESS_COUNT = "review_progress_count"
-    const val QUESTION_LABEL = "review_question_label"
     const val ANSWER_FIELD = "review_answer_field"
     const val SUBMIT_BUTTON = "review_submit_button"
     const val DONT_KNOW_BUTTON = "review_dont_know_button"
     const val FEEDBACK_TEXT = "review_feedback_text"
     const val ANSWER_DETAIL_TEXT = "review_answer_detail_text"
     const val REVEAL_BUTTON = "review_reveal_button"
-    const val RANK_CHANGE_TEXT = "review_rank_change_text"
     const val CONTINUE_BUTTON = "review_continue_button"
     const val UNDO_BUTTON = "review_undo_button"
     const val SESSION_COMPLETE = "review_session_complete"
     const val SESSION_OVERVIEW_CARD = "review_session_overview_card"
-    const val ITEMS_REVIEWED_TEXT = "review_items_reviewed_text"
-    const val CORRECT_FIRST_TRY_TEXT = "review_correct_first_try_text"
     const val SESSION_TIMING_CARD = "review_session_timing_card"
-    const val SESSION_TOTAL_TIME_TEXT = "review_session_total_time_text"
-    const val SESSION_AVERAGE_TIME_TEXT = "review_session_average_time_text"
     const val SESSION_SLOWEST_CARD = "review_session_slowest_card"
     const val SESSION_MISSED_CARD = "review_session_missed_card"
     const val DONE_BUTTON = "review_done_button"
     const val BACK_BUTTON = "review_back_button"
     const val SEARCH_BUTTON = "review_search_button"
     const val OVERFLOW_MENU = "review_overflow_menu"
-    const val WRAP_UP_MENU_ITEM = "review_wrap_up_menu_item"
     const val ABANDON_MENU_ITEM = "review_abandon_menu_item"
     const val ABANDON_CONFIRM_BUTTON = "review_abandon_confirm_button"
     const val DETAILS_TOGGLE = "review_details_toggle"
@@ -84,9 +77,6 @@ object ReviewScreenTestTags {
     const val SUBJECT_TYPE_LABEL = "review_subject_type_label"
     const val TOTAL_TIMER_TEXT = "review_total_timer_text"
     const val QUESTION_TIMER_TEXT = "review_question_timer_text"
-    /** Unused by Review's own UI (a review queue *is* the session), but required by the shared
-     *  [com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizQuestionTestTags]. */
-    const val SESSION_CONTEXT_LABEL = "review_session_context_label"
 }
 
 /**
@@ -189,8 +179,7 @@ fun ReviewScreen(
                 text = { Text("Wrap up") },
                 leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
                 enabled = activePhase?.isWrappingUp != true,
-                onClick = { closeMenu(); actions.wrapUp() },
-                modifier = Modifier.testTag(ReviewScreenTestTags.WRAP_UP_MENU_ITEM)
+                onClick = { closeMenu(); actions.wrapUp() }
             )
             HorizontalDivider()
         },
@@ -278,11 +267,7 @@ private fun ColumnScope.ReviewPhaseContent(
             testTags = SessionCompleteTestTags(
                 root = ReviewScreenTestTags.SESSION_COMPLETE,
                 overviewCard = ReviewScreenTestTags.SESSION_OVERVIEW_CARD,
-                itemsText = ReviewScreenTestTags.ITEMS_REVIEWED_TEXT,
-                correctFirstTryText = ReviewScreenTestTags.CORRECT_FIRST_TRY_TEXT,
                 timingCard = ReviewScreenTestTags.SESSION_TIMING_CARD,
-                totalTimeText = ReviewScreenTestTags.SESSION_TOTAL_TIME_TEXT,
-                averageTimeText = ReviewScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
                 slowestCard = ReviewScreenTestTags.SESSION_SLOWEST_CARD,
                 missedCard = ReviewScreenTestTags.SESSION_MISSED_CARD,
                 doneButton = ReviewScreenTestTags.DONE_BUTTON
@@ -322,8 +307,6 @@ private fun ColumnScope.ReviewActivePhase(
             totalTimerText = ReviewScreenTestTags.TOTAL_TIMER_TEXT,
             characters = ReviewScreenTestTags.CHARACTERS,
             subjectTypeLabel = ReviewScreenTestTags.SUBJECT_TYPE_LABEL,
-            rankChangeText = ReviewScreenTestTags.RANK_CHANGE_TEXT,
-            questionLabel = ReviewScreenTestTags.QUESTION_LABEL,
             answerField = ReviewScreenTestTags.ANSWER_FIELD,
             typeMismatchText = ReviewScreenTestTags.TYPE_MISMATCH_TEXT,
             dontKnowButton = ReviewScreenTestTags.DONT_KNOW_BUTTON,
@@ -332,9 +315,7 @@ private fun ColumnScope.ReviewActivePhase(
             feedbackText = ReviewScreenTestTags.FEEDBACK_TEXT,
             answerDetailText = ReviewScreenTestTags.ANSWER_DETAIL_TEXT,
             revealButton = ReviewScreenTestTags.REVEAL_BUTTON,
-            continueButton = ReviewScreenTestTags.CONTINUE_BUTTON,
-            // Review has no session context to name — its queue is the whole session.
-            sessionContextLabel = ReviewScreenTestTags.SESSION_CONTEXT_LABEL
+            continueButton = ReviewScreenTestTags.CONTINUE_BUTTON
         )
     )
 }

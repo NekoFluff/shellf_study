@@ -139,10 +139,6 @@ class SubjectRepository(
             write = { srsSystemDao.upsertAll(it) }
         )
 
-    suspend fun syncSrsSystems(force: Boolean = false): ApiResult<Unit> = safeApiCall {
-        fetchSrsSystems(force)?.let { completeResourceSync(syncStateDao, SyncResources.SRS_SYSTEMS, it) }
-    }
-
     fun observeSearch(query: String): Flow<List<SubjectSummary>> =
         subjectDao.observeSearch(escapeLikeWildcards(query.lowercase())).map { entities -> entities.map { it.toSubjectSummary() } }
 

@@ -42,12 +42,6 @@ data class QuizSession<T : QuizDisplayItem>(
     val completedQuestionCount: Int
         get() = progress.values.sumOf { (if (it.meaningDone) 1 else 0) + (if (it.readingDone) 1 else 0) }
 
-    /** Whether [item] has been answered correctly on every question type it has. */
-    fun isItemDone(item: T): Boolean {
-        val itemProgress = progress[item.assignmentId] ?: return false
-        return questionTypesFor(item.subjectType).all(itemProgress::isDone)
-    }
-
     /**
      * A fresh set of questions over [items], keeping [progress] and [answered] — a lesson quizzes each
      * batch as its own pass, but summarizes the whole session. See [QuizQueue.build] for [shuffle],

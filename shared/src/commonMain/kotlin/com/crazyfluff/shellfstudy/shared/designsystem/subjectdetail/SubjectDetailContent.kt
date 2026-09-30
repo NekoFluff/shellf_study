@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.HorizontalDivider
@@ -26,7 +27,6 @@ import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SectionTitle
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderSection
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
-import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
 import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRow
 import com.crazyfluff.shellfstudy.shared.designsystem.text.LocalShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
@@ -64,8 +64,6 @@ fun QuestionType.toDetailQuestionType(): DetailQuestionType = when (this) {
 val SubjectDetailHandleHeight = 56.dp
 
 object SubjectDetailTestTags {
-    const val SHEET_ROOT = "subject_detail_sheet_root"
-    const val CONTENT_ROOT = "subject_detail_content_root"
     const val PEEK_HANDLE = "subject_detail_peek_handle"
     const val AUXILIARY_MEANINGS_TEXT = "subject_detail_auxiliary_meanings_text"
 
@@ -74,8 +72,6 @@ object SubjectDetailTestTags {
     const val MEANING_ANSWER = "subject_detail_meaning_answer"
     const val READING_ANSWER = "subject_detail_reading_answer"
 
-    /** Shown when the sheet's subject has no cached row — see `SubjectDetailLoadState.NotFound`. */
-    const val NOT_LOADED = "subject_detail_not_loaded"
 }
 
 /**
@@ -125,8 +121,7 @@ fun SubjectDetailContent(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .verticalScroll(scrollState)
-            .testTag(SubjectDetailTestTags.CONTENT_ROOT),
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // The reading is part of the word's identity cluster — it stays right under the meaning
@@ -266,7 +261,7 @@ private fun SubjectContextSentencesSection(
         SectionTitle("Context sentences")
         // 20dp between example sentences (vs. 2dp between a sentence's own JP/EN pair) so
         // each example reads as its own distinct card of information while scanning.
-        AkebiSelectableContainer {
+        SelectionContainer {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 detail.contextSentences.forEach { sentence ->
                     ContextSentenceRow(sentence, onShare = shareText, hideTranslation = hideTranslations)

@@ -143,7 +143,6 @@ fun SubjectDetailSheet(
             .fillMaxSize()
             .alpha(if (active) 1f else 0f)
             .then(if (active) Modifier else Modifier.clearAndSetSemantics {})
-            .testTag(SubjectDetailTestTags.SHEET_ROOT)
     ) {
         // Gated on `active` too, not just `isOpenIsh`: a stale `expanded` flag left over from a
         // finished session must not leave this scrim/body hit-testable underneath other screens
@@ -293,8 +292,7 @@ private fun ColumnScope.SubjectDetailBody(
                 Text(
                     text = "Not loaded yet",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(SubjectDetailTestTags.NOT_LOADED)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

@@ -44,8 +44,7 @@ import kotlinx.coroutines.flow.drop
  */
 data class QuizAnswerFieldTestTags(
     val answerField: String,
-    val typeMismatchText: String,
-    val questionLabel: String
+    val typeMismatchText: String
 )
 
 /** The answer input shared by review sessions and lesson quizzes — a WaniKani-romaji-aware text
@@ -122,8 +121,7 @@ fun QuizAnswerField(
             Text(
                 text = questionType.label.uppercase(),
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.testTag(testTags.questionLabel)
+                fontWeight = FontWeight.Bold
             )
         },
         // Only reading questions ever contain kana (typed via a Japanese IME, or live-converted

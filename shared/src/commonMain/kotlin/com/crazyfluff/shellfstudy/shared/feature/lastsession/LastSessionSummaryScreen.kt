@@ -32,11 +32,7 @@ object LastSessionSummaryScreenTestTags {
     const val EMPTY_TEXT = "last_session_summary_empty_text"
     const val SESSION_COMPLETE = "last_session_summary_session_complete"
     const val SESSION_OVERVIEW_CARD = "last_session_summary_overview_card"
-    const val ITEMS_TEXT = "last_session_summary_items_text"
-    const val CORRECT_FIRST_TRY_TEXT = "last_session_summary_correct_first_try_text"
     const val SESSION_TIMING_CARD = "last_session_summary_timing_card"
-    const val SESSION_TOTAL_TIME_TEXT = "last_session_summary_total_time_text"
-    const val SESSION_AVERAGE_TIME_TEXT = "last_session_summary_average_time_text"
     const val SESSION_SLOWEST_CARD = "last_session_summary_slowest_card"
     const val SESSION_MISSED_CARD = "last_session_summary_missed_card"
     const val DONE_BUTTON = "last_session_summary_done_button"
@@ -105,11 +101,7 @@ fun LastSessionSummaryScreen(
                         testTags = SessionCompleteTestTags(
                             root = LastSessionSummaryScreenTestTags.SESSION_COMPLETE,
                             overviewCard = LastSessionSummaryScreenTestTags.SESSION_OVERVIEW_CARD,
-                            itemsText = LastSessionSummaryScreenTestTags.ITEMS_TEXT,
-                            correctFirstTryText = LastSessionSummaryScreenTestTags.CORRECT_FIRST_TRY_TEXT,
                             timingCard = LastSessionSummaryScreenTestTags.SESSION_TIMING_CARD,
-                            totalTimeText = LastSessionSummaryScreenTestTags.SESSION_TOTAL_TIME_TEXT,
-                            averageTimeText = LastSessionSummaryScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
                             slowestCard = LastSessionSummaryScreenTestTags.SESSION_SLOWEST_CARD,
                             missedCard = LastSessionSummaryScreenTestTags.SESSION_MISSED_CARD,
                             doneButton = LastSessionSummaryScreenTestTags.DONE_BUTTON

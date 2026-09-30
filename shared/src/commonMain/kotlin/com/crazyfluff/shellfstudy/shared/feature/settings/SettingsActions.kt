@@ -67,7 +67,7 @@ interface SettingsActions {
     fun onDailyReminderEnabledChange(enabled: Boolean)
 
     /**
-     * The one action here that returns its [Job]. The write it performs is real-IO-backed, so a test
+     * Returns its [Job] (as does [onLogOutRequested]). The write it performs is real-IO-backed, so a test
      * that asserts both the persisted hour *and* the follow-up reschedule cannot observe them
      * deterministically without awaiting this coroutine — see the note above those tests in
      * `SettingsViewModelTest`. Production callers ignore the result.

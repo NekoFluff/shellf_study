@@ -17,10 +17,9 @@ actual fun rememberShareText(): (String) -> Unit {
     }
 }
 
-/** Launches Akebi directly via the exact ACTION_PROCESS_TEXT intent it already registers
- *  for (the same one behind [AkebiSelectableContainer]'s long-press "Look up in Akebi"
- *  menu item) — no chooser, no text-selection gesture needed. Falls back to Akebi's Play
- *  Store listing if it isn't installed. */
+/** Launches Akebi directly via the ACTION_PROCESS_TEXT intent it registers for — no chooser,
+ *  no text-selection gesture needed. Falls back to Akebi's Play Store listing if it isn't
+ *  installed. */
 private fun openInAkebiOrPlayStore(context: Context, text: String) {
     val intent = buildAkebiProcessTextIntent(text)
     if (intent.resolveActivity(context.packageManager) != null) {

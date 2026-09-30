@@ -26,11 +26,11 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.crazyfluff.shellfstudy.shared.designsystem.text.AkebiSelectableContainer
 import com.crazyfluff.shellfstudy.shared.designsystem.text.ContextSentenceRow
 import com.crazyfluff.shellfstudy.shared.designsystem.text.JapaneseText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.LocalShareText
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberShareText
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -131,7 +131,6 @@ object LessonScreenTestTags {
     const val SELECT_NONE_CHIP = "lesson_select_none_chip"
     const val STEPPER_DECREMENT = "lesson_stepper_decrement"
     const val STEPPER_INCREMENT = "lesson_stepper_increment"
-    const val STEPPER_SLIDER = "lesson_stepper_slider"
     const val CUSTOMIZE_TOGGLE = "lesson_customize_toggle"
     const val START_SELECTED_BUTTON = "lesson_start_selected_button"
     fun lessonCheckboxTag(assignmentId: Long) = "lesson_checkbox_$assignmentId"
@@ -154,17 +153,11 @@ object LessonScreenTestTags {
     const val ANSWER_DETAIL_TEXT = "lesson_answer_detail_text"
     const val REVEAL_BUTTON = "lesson_reveal_button"
     const val QUIZ_SUBJECT_TYPE_LABEL = "lesson_quiz_subject_type_label"
-    const val QUESTION_LABEL = "lesson_question_label"
     const val UNDO_BUTTON = "lesson_undo_button"
-    const val RANK_CHANGE_TEXT = "lesson_rank_change_text"
     const val CONTINUE_BUTTON = "lesson_continue_button"
     const val SESSION_COMPLETE = "lesson_session_complete"
     const val SESSION_OVERVIEW_CARD = "lesson_session_overview_card"
-    const val ITEMS_LEARNED_TEXT = "lesson_items_learned_text"
-    const val CORRECT_FIRST_TRY_TEXT = "lesson_correct_first_try_text"
     const val SESSION_TIMING_CARD = "lesson_session_timing_card"
-    const val SESSION_TOTAL_TIME_TEXT = "lesson_session_total_time_text"
-    const val SESSION_AVERAGE_TIME_TEXT = "lesson_session_average_time_text"
     const val SESSION_SLOWEST_CARD = "lesson_session_slowest_card"
     const val SESSION_MISSED_CARD = "lesson_session_missed_card"
     const val DONE_BUTTON = "lesson_done_button"
@@ -173,11 +166,9 @@ object LessonScreenTestTags {
     const val ABANDON_MENU_ITEM = "lesson_abandon_menu_item"
     const val ABANDON_CONFIRM_BUTTON = "lesson_abandon_confirm_button"
     const val STUDY_BATCH_LABEL = "lesson_study_batch_label"
-    const val QUIZ_SESSION_CONTEXT_LABEL = "lesson_quiz_session_context_label"
     fun typeSelectorChipTag(type: SubjectType) = "lesson_type_selector_${type.name.lowercase()}"
     const val SORT_DROPDOWN = "lesson_sort_dropdown"
     fun sortOptionTag(sort: LessonSort) = "lesson_sort_option_${sort.name.lowercase()}"
-    const val BATCH_COMPLETE = "lesson_batch_complete"
     const val BATCH_COMPLETE_HEADLINE = "lesson_batch_complete_headline"
     const val BATCH_COMPLETE_SUMMARY_TEXT = "lesson_batch_complete_summary_text"
     const val BATCH_COMPLETE_MISSED_TEXT = "lesson_batch_complete_missed_text"
@@ -357,11 +348,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonPhaseContent(
             testTags = SessionCompleteTestTags(
                 root = LessonScreenTestTags.SESSION_COMPLETE,
                 overviewCard = LessonScreenTestTags.SESSION_OVERVIEW_CARD,
-                itemsText = LessonScreenTestTags.ITEMS_LEARNED_TEXT,
-                correctFirstTryText = LessonScreenTestTags.CORRECT_FIRST_TRY_TEXT,
                 timingCard = LessonScreenTestTags.SESSION_TIMING_CARD,
-                totalTimeText = LessonScreenTestTags.SESSION_TOTAL_TIME_TEXT,
-                averageTimeText = LessonScreenTestTags.SESSION_AVERAGE_TIME_TEXT,
                 slowestCard = LessonScreenTestTags.SESSION_SLOWEST_CARD,
                 missedCard = LessonScreenTestTags.SESSION_MISSED_CARD,
                 doneButton = LessonScreenTestTags.DONE_BUTTON
@@ -432,8 +419,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
             totalTimerText = LessonScreenTestTags.TOTAL_TIMER_TEXT,
             characters = LessonScreenTestTags.QUIZ_CHARACTERS,
             subjectTypeLabel = LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL,
-            rankChangeText = LessonScreenTestTags.RANK_CHANGE_TEXT,
-            questionLabel = LessonScreenTestTags.QUESTION_LABEL,
             answerField = LessonScreenTestTags.ANSWER_FIELD,
             typeMismatchText = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
             dontKnowButton = LessonScreenTestTags.DONT_KNOW_BUTTON,
@@ -442,8 +427,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
             feedbackText = LessonScreenTestTags.FEEDBACK_TEXT,
             answerDetailText = LessonScreenTestTags.ANSWER_DETAIL_TEXT,
             revealButton = LessonScreenTestTags.REVEAL_BUTTON,
-            continueButton = LessonScreenTestTags.CONTINUE_BUTTON,
-            sessionContextLabel = LessonScreenTestTags.QUIZ_SESSION_CONTEXT_LABEL
+            continueButton = LessonScreenTestTags.CONTINUE_BUTTON
         )
     )
 }
@@ -634,8 +618,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonBatchCompleteCo
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
-            .testTag(LessonScreenTestTags.BATCH_COMPLETE),
+            .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
@@ -822,7 +805,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonSelectionConten
                     onValueChange = { actions.selectFirst(it.roundToInt()) },
                     valueRange = 0f..total.toFloat(),
                     steps = (total - 1).coerceAtLeast(0),
-                    modifier = Modifier.weight(1f).testTag(LessonScreenTestTags.STEPPER_SLIDER)
+                    modifier = Modifier.weight(1f)
                 )
                 IconButton(
                     onClick = { actions.selectFirst(selectedCount + 1) },
@@ -1026,7 +1009,7 @@ private fun LessonContextSentencesSection(sentences: List<ContextSentence>) {
     val shareText = LocalShareText.current ?: platformShareText
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionTitle("Context sentences")
-        AkebiSelectableContainer {
+        SelectionContainer {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 sentences.forEach { sentence ->
                     ContextSentenceRow(sentence, onShare = shareText, hideTranslation = hideTranslations)

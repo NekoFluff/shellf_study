@@ -187,7 +187,6 @@
     <ID>MaxLineLength:SettingsViewModelTest.kt:SettingsViewModelTest$val viewModel = createViewModel(buildTestRepositories(server.url("/").toString(), defaultDispatcher = mainDispatcherRule.dispatcher).syncOrchestrator)</ID>
     <ID>MaxLineLength:SplashViewModelTest.kt:SplashViewModelTest$fun</ID>
     <ID>MaxLineLength:StatsRepositoryTest.kt:StatsRepositoryTest$fun</ID>
-    <ID>MaxLineLength:StatsRepositoryTest.kt:StatsRepositoryTest$server.enqueue(jsonResponse(reviewStatisticsJson(subjectId = 440, dataUpdatedAt = "2026-01-15T03:00:00.000000Z")))</ID>
     <ID>MaxLineLength:SubjectDetailContentTest.kt:SubjectDetailContentTest$CompositionLocalProvider</ID>
     <ID>MaxLineLength:SubjectDetailContentTest.kt:SubjectDetailContentTest$pitchAccents = PitchAccentUiState.Available(listOf(PitchAccent(reading = "ミズ", partOfSpeech = null, pitchNumber = 0)))</ID>
     <ID>MaxLineLength:SubjectDetailContentTest.kt:SubjectDetailContentTest$val answerBottom = composeTestRule.onNodeWithTag(SubjectDetailTestTags.READING_ANSWER).getUnclippedBoundsInRoot().bottom</ID>

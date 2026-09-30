@@ -107,8 +107,7 @@ internal fun HistoryCard(
             options = StudyTimeWindow.entries,
             selected = window,
             onSelect = onWindowSelect,
-            label = windowLabel,
-            modifier = Modifier.testTag(StudyTimeTestTags.windowPill(window.name))
+            label = windowLabel
         )
         Spacer(modifier = Modifier.height(12.dp))
         val selected = selectedBarIndex?.let { report.buckets.getOrNull(it) }
@@ -169,7 +168,7 @@ internal fun PeriodStatsCard(stats: StudyTimePeriodStats, window: StudyTimeWindo
             StatTile(
                 "Daily average",
                 formatStudyDuration(stats.dailyAverageMs),
-                Modifier.weight(1f).testTag(StudyTimeTestTags.PERIOD_AVERAGE)
+                Modifier.weight(1f)
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
@@ -192,8 +191,7 @@ internal fun PeriodStatsCard(stats: StudyTimePeriodStats, window: StudyTimeWindo
             Text(
                 text = "$arrow $percent% ${if (change >= 0) "more" else "less"} than ${window.previousPeriodLabel()}",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag(StudyTimeTestTags.PERIOD_CHANGE)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

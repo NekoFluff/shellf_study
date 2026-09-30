@@ -2,7 +2,6 @@ package com.crazyfluff.shellfstudy.shared.quiz
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -182,13 +181,6 @@ class QuizQueueTest {
     }
 
     @Test
-    fun noneMatches_returnsTrueWhenNoEntryMatchesPredicate() {
-        val queue = QuizQueue<String>()
-        queue.build(listOf("A"), typesFor = { listOf(QuestionType.MEANING) }, shuffle = false)
-        assertTrue(queue.noneMatches { it.item == "Z" })
-    }
-
-    @Test
     fun build_withPriority_admitsLowestTierItemsFirst() {
         val queue = QuizQueue<String>()
         // "A" and "B" are tier 0, "C" and "D" tier 1 — but they sit in the *reverse* order here, so
@@ -280,13 +272,6 @@ class QuizQueueTest {
         )
         assertEquals(listOf("C", "D"), queue.toList().map { it.item })
         assertEquals(listOf("A", "B"), queue.reserveList().map { it.item })
-    }
-
-    @Test
-    fun noneMatches_returnsFalseWhenAnEntryMatchesPredicate() {
-        val queue = QuizQueue<String>()
-        queue.build(listOf("A"), typesFor = { listOf(QuestionType.MEANING) }, shuffle = false)
-        assertFalse(queue.noneMatches { it.item == "A" })
     }
 
     @Test

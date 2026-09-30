@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.map
 /** In-memory stand-in for [SubjectDao] used by repository/ViewModel unit tests. */
 class FakeSubjectDao(private val writeLog: SyncWriteLog? = null) : SubjectDao {
     private val subjects = MutableStateFlow<Map<Long, SubjectEntity>>(emptyMap())
-    private val unlockedIds = MutableStateFlow<Set<Long>>(emptySet())
 
     override suspend fun upsertAll(subjects: List<SubjectEntity>) {
         writeLog?.record("subjects", subjects.size)
@@ -53,10 +52,6 @@ class FakeSubjectDao(private val writeLog: SyncWriteLog? = null) : SubjectDao {
     override fun observeTotalCountsByType(): Flow<List<SubjectTypeCount>> = subjects.map { map ->
         map.values.groupingBy { it.subjectType }.eachCount().map { (type, count) -> SubjectTypeCount(type, count) }
     }
-
-    override suspend fun getUnlockedVocabularyCharacters(): List<String> = subjects.value.values
-        .filter { (it.subjectType == "vocabulary" || it.subjectType == "kana_vocabulary") && it.id in unlockedIds.value }
-        .mapNotNull { it.characters }
 
     /** Test-only helper so [FakeAssignmentDao] can enumerate every (non-hidden) subject at a level
      *  for its subject-driven, left-join-style level progress/level-up queries — mirroring the real

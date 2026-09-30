@@ -38,10 +38,6 @@ class StatsRepository(
     private val syncStateDao: SyncStateDao,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
-    suspend fun syncReviewStatistics(force: Boolean = false): ApiResult<Unit> = safeApiCall {
-        fetchReviewStatistics(force)?.let { completeResourceSync(syncStateDao, SyncResources.REVIEW_STATISTICS, it) }
-    }
-
     /** Fetches review statistics without writing them — see [AssignmentRepository.fetchAssignments]
      *  for why fetch and write are split. Null when they are fresh enough to skip. */
     internal suspend fun fetchReviewStatistics(force: Boolean = false): ResourceSync<List<ReviewStatisticEntity>>? =
@@ -95,11 +91,6 @@ class StatsRepository(
                 )
             }
         }
-
-    /** level_progressions has no documented updated_after filter — always a full (small) refetch. */
-    suspend fun syncLevelProgressions(force: Boolean = false): ApiResult<Unit> = safeApiCall {
-        fetchLevelProgressions(force)?.let { completeResourceSync(syncStateDao, SyncResources.LEVEL_PROGRESSIONS, it) }
-    }
 
     /** Fetches level progressions without writing them — see [AssignmentRepository.fetchAssignments].
      *  No cursor: the API documents no `updated_after` filter for this resource, so every pass is a

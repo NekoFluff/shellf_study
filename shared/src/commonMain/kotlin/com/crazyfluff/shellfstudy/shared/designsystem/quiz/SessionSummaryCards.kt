@@ -49,11 +49,11 @@ fun SessionOverviewCard(
     itemsLabel: String,
     itemsCount: Int,
     correctFirstTry: Int,
-    testTags: SessionOverviewCardTestTags,
+    cardTestTag: String,
     modifier: Modifier = Modifier
 ) {
     val accuracyPercent = if (itemsCount == 0) 0 else correctFirstTry * 100 / itemsCount
-    Card(modifier = modifier.testTag(testTags.card)) {
+    Card(modifier = modifier.testTag(cardTestTag)) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(64.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(
@@ -69,14 +69,12 @@ fun SessionOverviewCard(
             Column {
                 Text(
                     text = "$itemsLabel: $itemsCount",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.testTag(testTags.itemsText)
+                    style = MaterialTheme.typography.bodyLarge
                 )
                 Text(
                     text = "Correct on first try: $correctFirstTry of $itemsCount ($accuracyPercent%)",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(testTags.correctFirstTryText)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -88,24 +86,22 @@ fun SessionTimingCard(
     totalElapsedMs: Long,
     averageTimePerItemMs: Long,
     averageLabel: String,
-    testTags: SessionTimingCardTestTags,
+    cardTestTag: String,
     modifier: Modifier = Modifier
 ) {
-    Card(modifier = modifier.testTag(testTags.card)) {
+    Card(modifier = modifier.testTag(cardTestTag)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Timing", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Total time: ${formatDuration(totalElapsedMs)}",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.testTag(testTags.totalTime)
+                style = MaterialTheme.typography.bodyLarge
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "$averageLabel: ${formatDuration(averageTimePerItemMs)}",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag(testTags.averageTime)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -190,49 +186,14 @@ fun SessionMissedItemsCard(
 
 /** Test tags for [SessionCompleteContent] — one bundle per feature (Lesson/Review), each following
  *  the same 1:1 naming scheme their screen's own test-tag object already used. */
-/** [SessionOverviewCard]'s own test tags — three nodes that can only ever travel together. */
-data class SessionOverviewCardTestTags(
-    val card: String,
-    val itemsText: String,
-    val correctFirstTryText: String
-)
-
-/** [SessionTimingCard]'s own test tags. */
-data class SessionTimingCardTestTags(
-    val card: String,
-    val totalTime: String,
-    val averageTime: String
-)
-
-
 data class SessionCompleteTestTags(
     val root: String,
     val overviewCard: String,
-    val itemsText: String,
-    val correctFirstTryText: String,
     val timingCard: String,
-    val totalTimeText: String,
-    val averageTimeText: String,
     val slowestCard: String,
     val missedCard: String,
     val doneButton: String
-) {
-    /** [SessionOverviewCard]'s sub-bundle, so the card takes one value instead of three loose tags. */
-    val overviewCardTags: SessionOverviewCardTestTags
-        get() = SessionOverviewCardTestTags(
-            card = overviewCard,
-            itemsText = itemsText,
-            correctFirstTryText = correctFirstTryText
-        )
-
-    /** [SessionTimingCard]'s sub-bundle. */
-    val timingCardTags: SessionTimingCardTestTags
-        get() = SessionTimingCardTestTags(
-            card = timingCard,
-            totalTime = totalTimeText,
-            averageTime = averageTimeText
-        )
-}
+)
 
 /**
  * The session figures [SessionCompleteContent] renders, plus which kind of session produced them.
@@ -325,7 +286,7 @@ fun SessionCompleteContent(
                 itemsLabel = summary.itemsLabel,
                 itemsCount = summary.itemsCount,
                 correctFirstTry = summary.correctFirstTry,
-                testTags = testTags.overviewCardTags,
+                cardTestTag = testTags.overviewCard,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -333,7 +294,7 @@ fun SessionCompleteContent(
                 totalElapsedMs = summary.totalElapsedMs,
                 averageTimePerItemMs = summary.averageTimePerItemMs,
                 averageLabel = summary.averageLabel,
-                testTags = testTags.timingCardTags,
+                cardTestTag = testTags.timingCard,
                 modifier = Modifier.fillMaxWidth()
             )
             if (summary.slowestAnswers.isNotEmpty()) {

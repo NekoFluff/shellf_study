@@ -80,8 +80,6 @@ object SearchOverlayTestTags {
     const val EMPTY_STATE = "search_empty_state"
     const val NO_RESULTS = "search_no_results"
     const val RESULT_ROW_PREFIX = "search_result_"
-    const val SYNCING_STATE = "search_syncing_state"
-    const val MORE_RESULTS_FOOTER = "search_more_results_footer"
 }
 
 /**
@@ -252,7 +250,7 @@ fun SubjectSearchOverlay(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier.padding(vertical = 48.dp)
                             ) {
-                                CircularProgressIndicator(modifier = Modifier.testTag(SearchOverlayTestTags.SYNCING_STATE))
+                                CircularProgressIndicator()
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     text = "Still syncing your subject library…",
@@ -307,7 +305,6 @@ fun SubjectSearchOverlay(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(12.dp)
-                                            .testTag(SearchOverlayTestTags.MORE_RESULTS_FOOTER)
                                     )
                                 }
                             }

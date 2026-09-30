@@ -63,7 +63,6 @@ class QuizSessionTest {
             .grade(isCorrect = true, elapsedMs = 1)
 
         assertTrue(done.lastGraded!!.completedItem)
-        assertTrue(done.isItemDone(kanji(1)))
         assertTrue(done.isEmpty)
     }
 

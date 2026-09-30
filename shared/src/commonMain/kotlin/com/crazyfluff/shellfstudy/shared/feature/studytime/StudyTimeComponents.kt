@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.shared.designsystem.components.SegmentedBar
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
 import kotlinx.datetime.DayOfWeek
@@ -83,9 +82,6 @@ fun formatPace(ms: Long): String {
     }
 }
 
-/** For [SegmentedBar]'s Int proportions, which milliseconds would overflow on long totals. */
-internal fun Long.toWholeSeconds(): Int = milliseconds.inWholeSeconds.toInt()
-
 /** "12,345" — commonMain has no locale number formatting. */
 internal fun formatCount(count: Long): String =
     count.toString().reversed().chunked(DIGITS_PER_GROUP).joinToString(",").reversed()
@@ -136,24 +132,18 @@ fun StudyGoalRing(
 
 object StudyTimeTestTags {
     const val DASHBOARD_CARD = "study_time_dashboard_card"
-    const val DASHBOARD_TODAY = "study_time_dashboard_today"
     const val DASHBOARD_LEVEL_TIME = "study_time_dashboard_level_time"
-    const val DASHBOARD_RING = "study_time_dashboard_ring"
     const val DASHBOARD_ESTIMATE = "study_time_dashboard_estimate"
-    const val SCREEN = "study_time_screen"
     const val EMPTY_STATE = "study_time_empty_state"
     const val TODAY_TOTAL = "study_time_today_total"
     const val GOAL_STREAK = "study_time_goal_streak"
     const val BAR_CHART = "study_time_bar_chart"
     const val SELECTED_BAR = "study_time_selected_bar"
     const val PERIOD_TOTAL = "study_time_period_total"
-    const val PERIOD_AVERAGE = "study_time_period_average"
     const val PERIOD_REVIEW_ITEMS = "study_time_period_review_items"
     const val PERIOD_LESSON_ITEMS = "study_time_period_lesson_items"
-    const val PERIOD_CHANGE = "study_time_period_change"
     const val PACE_REVIEW = "study_time_pace_review"
     const val PACE_LESSON = "study_time_pace_lesson"
-    const val HEATMAP = "study_time_heatmap"
     const val LEVELS_TOTAL = "study_time_levels_total"
     const val LEVEL_CHART = "study_time_level_chart"
     const val HEATMAP_CAPTION = "study_time_heatmap_caption"
@@ -162,5 +152,4 @@ object StudyTimeTestTags {
     const val LIFETIME_LESSONS = "study_time_lifetime_lessons"
     const val BACK_BUTTON = "study_time_back_button"
 
-    fun windowPill(name: String) = "study_time_window_$name"
 }

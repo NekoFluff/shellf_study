@@ -454,7 +454,7 @@ class SubjectDetailViewModelTest {
             viewModel.open(1)
             val loaded = awaitSettled(1)
 
-            assertThat(loaded.reviewStats?.meaningAccuracyPercent).isEqualTo(90)
+            assertThat(loaded.reviewStats?.meaningStats?.accuracyPercent).isEqualTo(90)
             assertThat(loaded.reviewStats?.hasBeenReviewed).isTrue()
         }
     }

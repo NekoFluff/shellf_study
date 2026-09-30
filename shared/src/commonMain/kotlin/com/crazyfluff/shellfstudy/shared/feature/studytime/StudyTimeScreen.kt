@@ -59,7 +59,7 @@ fun StudyTimeScreen(
     modifier: Modifier = Modifier
 ) {
     Scaffold(
-        modifier = modifier.testTag(StudyTimeTestTags.SCREEN),
+        modifier = modifier,
         topBar = {
             TopAppBar(
                 title = { Text("Study time") },
