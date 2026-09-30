@@ -47,13 +47,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
-import com.crazyfluff.shellfstudy.shared.designsystem.time.formatHour
 import com.crazyfluff.shellfstudy.shared.designsystem.time.formatHourShort
 import kotlinx.coroutines.delay
 
@@ -449,7 +446,7 @@ internal fun MultiChoiceRow(
  * that could take twelve taps to cross the day.
  *
  * On a 12-hour clock the grid splits into AM and PM halves, so each cell only needs the bare
- * number. Every cell carries the full label ("8:00 PM") for screen readers.
+ * number.
  */
 @Composable
 internal fun HourPickerDialog(
@@ -511,14 +508,12 @@ private fun HourGrid(hours: IntRange, selectedHour: Int, is24h: Boolean, onSelec
 
 @Composable
 private fun HourCell(hour: Int, selected: Boolean, is24h: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    val fullLabel = formatHour(hour, is24h)
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .height(40.dp)
             .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, CircleShape)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .semantics { contentDescription = fullLabel }
             .testTag(SettingsScreenTestTags.hourOptionTag(hour))
     ) {
         Text(
