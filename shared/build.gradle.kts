@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -43,14 +44,17 @@ kotlin {
         experimentalProperties["android.experimental.kmp.enableAndroidResources"] = true
     }
 
-    val iosTargets = listOf(
-        iosArm64(),
-        iosSimulatorArm64(),
-    )
-    iosTargets.forEach { target ->
-        target.binaries.framework {
-            baseName = "Shared"
-        }
+    // The device framework is built in both flavours: debug for running on a phone, release for
+    // archiving to TestFlight / the App Store. The simulator one is debug only. Nothing archives
+    // for the simulator, and its release link was the second of the build's two most
+    // memory-hungry steps (see kotlin.native.disableCompilerDaemon in gradle.properties).
+    // The one thing this rules out is running the Release configuration on a simulator; use a
+    // device for that.
+    iosArm64().binaries.framework {
+        baseName = "Shared"
+    }
+    iosSimulatorArm64().binaries.framework(buildTypes = listOf(NativeBuildType.DEBUG)) {
+        baseName = "Shared"
     }
 
     sourceSets {
