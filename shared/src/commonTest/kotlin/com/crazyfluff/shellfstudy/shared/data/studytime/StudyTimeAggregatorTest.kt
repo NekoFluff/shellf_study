@@ -169,6 +169,9 @@ class StudyTimeAggregatorTest {
         assertEquals(15_000L, pace.previousReviewMsPerItem)
         assertEquals(120_000L, pace.lessonMsPerItem)
         assertNull(pace.previousLessonMsPerItem)
+        // Every recorded review: 30 minutes over 140 items.
+        assertEquals(30 * MINUTE / 140, pace.allTimeReviewMsPerItem)
+        assertEquals(120_000L, pace.allTimeLessonMsPerItem)
     }
 
     @Test

@@ -11,12 +11,28 @@ class LifetimeEstimateTest {
             twoQuestionReviews = 100,
             oneQuestionReviews = 40,
             lessons = 10,
-            pace = StudyPace(reviewMsPerItem = 12_000L, lessonMsPerItem = 90_000L)
+            pace = StudyPace(allTimeReviewMsPerItem = 12_000L, allTimeLessonMsPerItem = 90_000L)
         )!!
 
         assertEquals(100 * 12_000L + 40 * 6_000L, estimate.reviewMs)
         assertEquals(10 * 90_000L, estimate.lessonMs)
         assertEquals(estimate.reviewMs + estimate.lessonMs, estimate.totalMs)
+    }
+
+    @Test
+    fun usesTheAllTimeAverageNotTheRecentPace() {
+        val estimate = LifetimeEstimate.from(
+            twoQuestionReviews = 1,
+            oneQuestionReviews = 0,
+            lessons = 1,
+            pace = StudyPace(
+                reviewMsPerItem = 5_000L, lessonMsPerItem = 60_000L,
+                allTimeReviewMsPerItem = 15_000L, allTimeLessonMsPerItem = 100_000L
+            )
+        )!!
+
+        assertEquals(15_000L, estimate.reviewMsPerItem)
+        assertEquals(100_000L, estimate.lessonMsPerItem)
     }
 
     @Test

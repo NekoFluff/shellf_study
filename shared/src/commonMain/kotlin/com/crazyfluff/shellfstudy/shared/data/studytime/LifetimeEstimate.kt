@@ -2,7 +2,9 @@ package com.crazyfluff.shellfstudy.shared.data.studytime
 
 /**
  * Roughly how long the whole WaniKani history took, from the counts WaniKani keeps (finished reviews,
- * lessons started) priced at the learner's recent pace, or the defaults where there isn't one yet.
+ * lessons started) priced at the learner's average over every recorded session, or the defaults
+ * before anything is recorded. Not the recent 14-day pace: a whole history shouldn't swing with
+ * one fast or slow fortnight, or forget everything after a break.
  *
  * A review item's pace covers both of its questions, since kanji and vocabulary ask meaning and
  * reading. Radicals and kana-only vocabulary ask one, so they're priced at half.
@@ -30,8 +32,8 @@ data class LifetimeEstimate(
                 twoQuestionReviews = twoQuestionReviews,
                 oneQuestionReviews = oneQuestionReviews,
                 lessons = lessons,
-                reviewMsPerItem = pace.reviewMsPerItem ?: StudyTimeAggregator.DEFAULT_REVIEW_MS_PER_ITEM,
-                lessonMsPerItem = pace.lessonMsPerItem ?: StudyTimeAggregator.DEFAULT_LESSON_MS_PER_ITEM
+                reviewMsPerItem = pace.allTimeReviewMsPerItem ?: StudyTimeAggregator.DEFAULT_REVIEW_MS_PER_ITEM,
+                lessonMsPerItem = pace.allTimeLessonMsPerItem ?: StudyTimeAggregator.DEFAULT_LESSON_MS_PER_ITEM
             )
         }
     }

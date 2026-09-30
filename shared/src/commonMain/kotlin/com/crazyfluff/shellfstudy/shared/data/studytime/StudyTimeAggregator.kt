@@ -130,7 +130,8 @@ object StudyTimeAggregator {
     }
 
     /**
-     * Time per completed item over the last [PACE_SPAN_DAYS] against the span before. Lesson time
+     * Time per completed item over the last [PACE_SPAN_DAYS] against the span before, plus over
+     * everything recorded (what the all-time estimate prices a history with). Lesson time
      * includes reading the explanations, not just the quiz, so it answers "what does a lesson really
      * cost me". Segments count toward the span they started in; pace needs the item counts, which
      * belong to the whole segment.
@@ -139,17 +140,20 @@ object StudyTimeAggregator {
         val recentStart = today.minus(PACE_SPAN_DAYS - 1, DateTimeUnit.DAY)
         val previousStart = recentStart.minus(PACE_SPAN_DAYS, DateTimeUnit.DAY)
         val byStartDate = segments.groupBy { Instant.fromEpochMilliseconds(it.startedAtMs).toLocalDateTime(zone).date }
-        fun msPerItem(kind: StudyKind, from: LocalDate, until: LocalDate): Long? {
-            val matching = byStartDate.filterKeys { it in from..until }.values.flatten().filter { it.kind == kind }
+        fun msPerItem(matching: List<StudySegment>): Long? {
             val items = matching.sumOf { it.itemsCompleted }
             return if (items <= 0) null else matching.sumOf { it.durationMs } / items
         }
+        fun msPerItem(kind: StudyKind, from: LocalDate, until: LocalDate): Long? =
+            msPerItem(byStartDate.filterKeys { it in from..until }.values.flatten().filter { it.kind == kind })
         val previousEnd = recentStart.minus(1, DateTimeUnit.DAY)
         return StudyPace(
             reviewMsPerItem = msPerItem(StudyKind.REVIEW, recentStart, today),
             lessonMsPerItem = msPerItem(StudyKind.LESSON, recentStart, today),
             previousReviewMsPerItem = msPerItem(StudyKind.REVIEW, previousStart, previousEnd),
-            previousLessonMsPerItem = msPerItem(StudyKind.LESSON, previousStart, previousEnd)
+            previousLessonMsPerItem = msPerItem(StudyKind.LESSON, previousStart, previousEnd),
+            allTimeReviewMsPerItem = msPerItem(segments.filter { it.kind == StudyKind.REVIEW }),
+            allTimeLessonMsPerItem = msPerItem(segments.filter { it.kind == StudyKind.LESSON })
         )
     }
 

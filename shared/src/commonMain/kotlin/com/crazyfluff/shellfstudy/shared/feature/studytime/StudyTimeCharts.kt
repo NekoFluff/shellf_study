@@ -291,9 +291,10 @@ fun LevelStudyTimeChart(
     val scroll = rememberScrollState()
     // Newest levels are what the learner cares about, so a scrolling chart starts at its right end.
     LaunchedEffect(scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
-    // The values are drawn, not composed as Text, so they're described here for screen readers.
+    // The values are drawn, not composed as Text, so they're described here for screen readers, in
+    // the same short form the bars show.
     val description = remember(levels) {
-        levels.sortedBy { it.level }.joinToString { "Level ${it.level}: ${formatStudyDuration(it.split.totalMs)}" }
+        levels.sortedBy { it.level }.joinToString { "Level ${it.level}: ${formatCompactDuration(it.split.totalMs)}" }
     }
 
     BoxWithConstraints(

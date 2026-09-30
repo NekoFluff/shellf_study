@@ -59,12 +59,16 @@ data class StudyTimePeriodStats(
         get() = if (previousTotalMs <= 0L) null else (total.totalMs - previousTotalMs).toDouble() / previousTotalMs
 }
 
-/** Milliseconds of study per completed item, recent vs the span before it. Null means no data. */
+/** Milliseconds of study per completed item: recent, the span before it, and over everything
+ *  recorded. Null means no data. */
 data class StudyPace(
     val reviewMsPerItem: Long? = null,
     val lessonMsPerItem: Long? = null,
     val previousReviewMsPerItem: Long? = null,
-    val previousLessonMsPerItem: Long? = null
+    val previousLessonMsPerItem: Long? = null,
+    /** Over every recorded session: steadier than the recent figures, for pricing a whole history. */
+    val allTimeReviewMsPerItem: Long? = null,
+    val allTimeLessonMsPerItem: Long? = null
 )
 
 data class LevelStudyTime(val level: Int, val split: StudyTimeSplit, val activeDays: Int)
