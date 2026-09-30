@@ -82,7 +82,9 @@ data class DashboardUiState(
     val selectedForecastColorMode: ReviewForecastColorMode = ReviewForecastColorMode.SUBJECT_TYPE,
     val hasLastSessionSummary: Boolean = false,
     /** Null until the study-time log has been read once. */
-    val studyTime: StudyTimeOverview? = null
+    val studyTime: StudyTimeOverview? = null,
+    /** Consecutive days with a review in the app, today counting once there's been one. */
+    val studyStreakDays: Int = 0
 ) {
     /** The last fetch failed but cached content is still on screen — see [DashboardFetch.Stale]. */
     val isShowingCachedData: Boolean
@@ -177,7 +179,8 @@ private data class LevelDependentState(
 private data class SecondaryCardsState(
     val hasLastSessionSummary: Boolean,
     val reviewForecast: ReviewForecast,
-    val studyTime: StudyTimeOverview
+    val studyTime: StudyTimeOverview,
+    val studyStreakDays: Int
 )
 
 private data class LocalDueCounts(val reviewCount: Int, val lessonCount: Int)
@@ -297,9 +300,10 @@ class DashboardViewModel(
     private val secondaryCardsState: Flow<SecondaryCardsState> = combine(
         lastSessionSummaryRepository.exists,
         reviewForecastFlow,
-        studyTimeRepository.observeOverview().distinctUntilChanged()
-    ) { hasLastSessionSummary, reviewForecast, studyTime ->
-        SecondaryCardsState(hasLastSessionSummary, reviewForecast, studyTime)
+        studyTimeRepository.observeOverview().distinctUntilChanged(),
+        statsRepository.observeStudyStreak().map { it.currentStreakDays }.distinctUntilChanged()
+    ) { hasLastSessionSummary, reviewForecast, studyTime, studyStreakDays ->
+        SecondaryCardsState(hasLastSessionSummary, reviewForecast, studyTime, studyStreakDays)
     }
 
     val uiState: StateFlow<DashboardUiState> = combine(
@@ -347,7 +351,8 @@ class DashboardViewModel(
             leaderboardLoading = leaderboardLoading,
             hasLastSessionSummary = secondary.hasLastSessionSummary,
             reviewForecast = secondary.reviewForecast,
-            studyTime = secondary.studyTime
+            studyTime = secondary.studyTime,
+            studyStreakDays = secondary.studyStreakDays
         )
     }
         // Room's invalidation is table-level, so every write anywhere in the assignments, subjects,

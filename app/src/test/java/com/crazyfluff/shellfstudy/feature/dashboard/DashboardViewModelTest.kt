@@ -889,6 +889,37 @@ class DashboardViewModelTest {
     }
 
 
+    @Test
+    fun `studyStreakDays counts a day with a review toward the streak`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        repositories.statsRepository.markStudyActivityToday()
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.studyStreakDays == 0) state = awaitItem()
+
+            assertThat(state.studyStreakDays).isEqualTo(1)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `studyStreakDays is zero without any review days`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.studyTime == null) state = awaitItem()
+
+            assertThat(state.studyStreakDays).isEqualTo(0)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private fun startedTodayAssignmentsJson(count: Int) = """
         {
           "object": "collection",

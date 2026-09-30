@@ -1,5 +1,12 @@
 package com.crazyfluff.shellfstudy.feature.dashboard
 
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeBucket
+import kotlinx.datetime.LocalDate
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollTo
@@ -501,7 +508,7 @@ class DashboardScreenTest {
     }
 
     @Test
-    fun studyTimeCard_showsTimeOnTheLevelAndTodayAgainstTheGoal_andOpensTheScreen() {
+    fun studyTimeCard_showsTodayAgainstTheGoal_andOpensTheScreen() {
         var opened = false
         val overview = StudyTimeOverview(
             today = StudyTimeSplit(lessonMs = 6 * 60_000L, reviewMs = 12 * 60_000L),
@@ -509,8 +516,7 @@ class DashboardScreenTest {
             goalStreakDays = 0,
             lastSevenDays = emptyList(),
             pace = StudyPace(reviewMsPerItem = 10_000L, lessonMsPerItem = 120_000L),
-            hasAnyData = true,
-            levelTotalsMs = mapOf(8 to (4 * 60 + 24) * 60_000L)
+            hasAnyData = true
         )
         composeTestRule.setContent {
             DashboardScreen(
@@ -524,16 +530,85 @@ class DashboardScreenTest {
         }
 
         composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(StudyTimeTestTags.DASHBOARD_CARD))
-        composeTestRule.onNodeWithTag(StudyTimeTestTags.DASHBOARD_LEVEL_TIME, useUnmergedTree = true)
-            .assertTextEquals("4h 24m this level")
-        composeTestRule.onNodeWithText("of 30m", useUnmergedTree = true).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Reviews 12m", useUnmergedTree = true).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Lessons 6m", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.DASHBOARD_TODAY_TOTAL, useUnmergedTree = true)
+            .assertTextEquals("18m")
+        composeTestRule.onNodeWithText("of 30m today", useUnmergedTree = true).assertIsDisplayed()
         // The daily plan estimate is gone from the card.
         composeTestRule.onNodeWithText("Today's plan", substring = true, useUnmergedTree = true).assertDoesNotExist()
         composeTestRule.onNodeWithTag(StudyTimeTestTags.DASHBOARD_CARD).performClick()
         assert(opened)
     }
+
+    @Test
+    fun studyTimeCard_showsTheFlameWithTheDaysStudied_andHidesItAtZero() {
+        var streak by mutableStateOf(0)
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = studyTimeDashboard(studyTimeOverview(), studyStreakDays = streak),
+                callbacks = dashboardCallbacks()
+            )
+        }
+
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(StudyTimeTestTags.DASHBOARD_CARD))
+        composeTestRule.onAllNodesWithTag(StudyTimeTestTags.DASHBOARD_STREAK, useUnmergedTree = true)
+            .assertCountEquals(0)
+        streak = 4
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.DASHBOARD_STREAK, useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("4", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun studyTimeCard_tapOnTheWeekChartStillOpensTheScreen() {
+        var opened = false
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = studyTimeDashboard(studyTimeOverview()),
+                callbacks = dashboardCallbacks(onOpenStudyTime = { opened = true })
+            )
+        }
+
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(StudyTimeTestTags.DASHBOARD_CARD))
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.BAR_CHART, useUnmergedTree = true)
+            .performTouchInput { click(center) }
+        assert(opened)
+    }
+
+    @Test
+    fun studyTimeCard_beforeAnySession_invitesOneAndHasNoWeekChart() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = studyTimeDashboard(
+                    studyTimeOverview(today = StudyTimeSplit.ZERO, days = emptyList(), hasAnyData = false)
+                ),
+                callbacks = dashboardCallbacks()
+            )
+        }
+
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(StudyTimeTestTags.DASHBOARD_CARD))
+        composeTestRule.onNodeWithText("Starts with your next session", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag(StudyTimeTestTags.BAR_CHART, useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    private fun studyTimeOverview(
+        today: StudyTimeSplit = StudyTimeSplit(lessonMs = 4 * 60_000L, reviewMs = 17 * 60_000L),
+        days: List<StudyTimeBucket> = (0 until 7).map { offset ->
+            StudyTimeBucket(LocalDate(2026, 9, 24 + offset), StudyTimeSplit(reviewMs = (offset + 1) * 5 * 60_000L))
+        },
+        hasAnyData: Boolean = true
+    ) = StudyTimeOverview(
+        today = today,
+        goalMs = 30 * 60_000L,
+        goalStreakDays = 0,
+        lastSevenDays = days,
+        pace = StudyPace(),
+        hasAnyData = hasAnyData
+    )
+
+    private fun studyTimeDashboard(overview: StudyTimeOverview, studyStreakDays: Int = 0) = DashboardUiState(
+        fetchState = DashboardFetch.Idle, username = "x", level = 8, studyTime = overview,
+        studyStreakDays = studyStreakDays
+    )
 
     @Test
     fun studyTimeCard_isAbsentUntilTheStudyTimeLogHasBeenRead() {

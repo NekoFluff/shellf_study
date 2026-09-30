@@ -497,7 +497,7 @@ private fun LazyListScope.dashboardItems(
                     TimedComposition("studyTimeCard") {
                         StudyTimeCard(
                             overview = uiState.studyTime,
-                            level = uiState.level,
+                            studyStreakDays = uiState.studyStreakDays,
                             onOpen = callbacks.onOpenStudyTime,
                             modifier = Modifier.fillMaxWidth()
                         )

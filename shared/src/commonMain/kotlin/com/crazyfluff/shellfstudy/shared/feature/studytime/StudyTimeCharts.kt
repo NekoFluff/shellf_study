@@ -54,6 +54,9 @@ import kotlinx.datetime.DayOfWeek
 /**
  * Stacked lesson/review bars, oldest on the left. [goalLineMs] and [averageLineMs] draw as dashed
  * reference lines when given. Tapping a bar selects it; tapping it again clears the selection.
+ * [highlightIndex] fades the other bars without selecting anything, e.g. today on the dashboard.
+ * [goalLineDash] shortens the goal line's dashes for a chart too small to fit many long ones.
+ * With [selectable] false the chart takes no taps, so a clickable parent still gets them.
  */
 @Composable
 fun StudyTimeBarChart(
@@ -63,7 +66,10 @@ fun StudyTimeBarChart(
     modifier: Modifier = Modifier,
     goalLineMs: Long? = null,
     averageLineMs: Long? = null,
-    height: Dp = 140.dp
+    height: Dp = 140.dp,
+    highlightIndex: Int? = null,
+    goalLineDash: Dp = 8.dp,
+    selectable: Boolean = true
 ) {
     val lessonColor = lessonTimeColor()
     val reviewColor = reviewTimeColor()
@@ -81,14 +87,20 @@ fun StudyTimeBarChart(
             .fillMaxWidth()
             .height(height)
             .testTag(StudyTimeTestTags.BAR_CHART)
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    val (count, selected, select) = tapState
-                    if (count == 0) return@detectTapGestures
-                    val index = (offset.x / (size.width.toFloat() / count)).toInt().coerceIn(0, count - 1)
-                    select(if (index == selected) null else index)
+            .then(
+                if (!selectable) {
+                    Modifier
+                } else {
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures { offset ->
+                            val (count, selected, select) = tapState
+                            if (count == 0) return@detectTapGestures
+                            val index = (offset.x / (size.width.toFloat() / count)).toInt().coerceIn(0, count - 1)
+                            select(if (index == selected) null else index)
+                        }
+                    }
                 }
-            }
+            )
     ) {
         if (buckets.isEmpty()) return@Canvas
         val slot = size.width / buckets.size
@@ -99,7 +111,7 @@ fun StudyTimeBarChart(
 
         buckets.forEachIndexed { index, bucket ->
             val x = index * slot + gap / 2f
-            val alpha = if (selectedIndex == null || selectedIndex == index) 1f else 0.3f
+            val alpha = barAlpha(index, selectedIndex, highlightIndex)
             if (bucket.split.totalMs == 0L) {
                 val stub = 2.dp.toPx()
                 drawRoundRect(trackColor, Offset(x, size.height - stub), Size(barWidth, stub), radius)
@@ -117,10 +129,20 @@ fun StudyTimeBarChart(
         }
 
         fun yOf(ms: Long) = size.height - heightOf(ms)
-        goalLineMs?.takeIf { it > 0L }?.let { drawReferenceLine(yOf(it), goalColor, dash = 8.dp.toPx()) }
+        goalLineMs?.takeIf { it > 0L }?.let { drawReferenceLine(yOf(it), goalColor, dash = goalLineDash.toPx()) }
         averageLineMs?.takeIf { it > 0L }?.let { drawReferenceLine(yOf(it), averageColor, dash = 3.dp.toPx()) }
     }
 }
+
+/** A selection fades the other bars hard; a highlight, which isn't a choice, fades them less. */
+private fun barAlpha(index: Int, selectedIndex: Int?, highlightIndex: Int?): Float = when {
+    selectedIndex != null -> if (selectedIndex == index) 1f else SELECTION_FADE
+    highlightIndex != null -> if (highlightIndex == index) 1f else HIGHLIGHT_FADE
+    else -> 1f
+}
+
+private const val SELECTION_FADE = 0.3f
+private const val HIGHLIGHT_FADE = 0.45f
 
 /** One day's column: reviews at the base, the habit every day has, with lessons stacked on top — both
  *  clipped to a single rounded-top outline so the bar reads as one column. */
