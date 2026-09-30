@@ -63,11 +63,7 @@ fun StudyTimeCard(
                     modifier = Modifier.testTag(StudyTimeTestTags.DASHBOARD_RING)
                 )
                 Spacer(modifier = Modifier.width(16.dp))
-                TodaySummary(
-                    overview = overview,
-                    levelTime = levelTimeThisLevel(level?.let { overview.levelTotalsMs[it] }),
-                    modifier = Modifier.weight(1f)
-                )
+                TodaySummary(overview = overview, modifier = Modifier.weight(1f))
                 if (overview.hasAnyData) {
                     Spacer(modifier = Modifier.width(12.dp))
                     StudyTimeBarChart(
@@ -78,6 +74,17 @@ fun StudyTimeCard(
                         modifier = Modifier.width(72.dp)
                     )
                 }
+            }
+            // Its own full-width line: squeezed between the ring and the mini-chart it didn't fit on a
+            // phone. No "Level 8 · day 9" either; the greeting at the top of the dashboard says that.
+            levelTimeThisLevel(level?.let { overview.levelTotalsMs[it] })?.let { levelTime ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = levelTime,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(StudyTimeTestTags.DASHBOARD_LEVEL_TIME)
+                )
             }
             if (planEstimate != null && planEstimate.totalMs > 0L) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -99,23 +106,9 @@ fun StudyTimeCard(
 }
 
 @Composable
-private fun TodaySummary(
-    overview: StudyTimeOverview,
-    levelTime: String?,
-    modifier: Modifier = Modifier
-) {
+private fun TodaySummary(overview: StudyTimeOverview, modifier: Modifier = Modifier) {
     Column(modifier = modifier.testTag(StudyTimeTestTags.DASHBOARD_TODAY)) {
-        // No "Level 8 · day 9" here: the greeting at the top of the dashboard already says it.
-        if (levelTime != null) {
-            Text(
-                text = levelTime,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                modifier = Modifier.testTag(StudyTimeTestTags.DASHBOARD_LEVEL_TIME)
-            )
-        }
         if (overview.hasAnyData) {
-            Spacer(modifier = Modifier.height(4.dp))
             ChartLegendItem(reviewTimeColor(), "Reviews ${formatStudyDuration(overview.today.reviewMs)}")
             ChartLegendItem(lessonTimeColor(), "Lessons ${formatStudyDuration(overview.today.lessonMs)}")
         } else {
