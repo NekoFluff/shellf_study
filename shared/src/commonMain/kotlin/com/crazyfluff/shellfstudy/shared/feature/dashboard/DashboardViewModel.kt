@@ -48,8 +48,6 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
-import com.crazyfluff.shellfstudy.shared.data.studytime.QueueEstimate
-import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeAggregator
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeOverview
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeRepository
 import kotlin.math.ceil
@@ -111,15 +109,6 @@ data class DashboardUiState(
 
     val isReviewsCardEnabled: Boolean
         get() = hasActiveReviewSession || reviewCount > 0
-
-    /** Lessons still to do to reach today's lesson goal, capped by how many are available. */
-    val lessonsLeftForGoal: Int
-        get() = minOf(lessonCount, (dailyLessonGoal - lessonsCompletedToday).coerceAtLeast(0))
-
-    /** How long today's plan (every due review plus the rest of the lesson goal) should take at
-     *  the learner's own pace. */
-    val todaysPlanEstimate: QueueEstimate?
-        get() = studyTime?.let { StudyTimeAggregator.estimateQueue(reviewCount, lessonsLeftForGoal, it.pace) }
 }
 
 /**

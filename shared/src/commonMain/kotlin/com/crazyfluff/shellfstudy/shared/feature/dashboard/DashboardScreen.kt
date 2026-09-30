@@ -486,9 +486,6 @@ private fun LazyListScope.dashboardItems(uiState: DashboardUiState, callbacks: D
                     TimedComposition("studyTimeCard") {
                         StudyTimeCard(
                             overview = uiState.studyTime,
-                            planEstimate = uiState.todaysPlanEstimate,
-                            reviewCount = uiState.reviewCount,
-                            lessonsLeftForGoal = uiState.lessonsLeftForGoal,
                             level = uiState.level,
                             onOpen = callbacks.onOpenStudyTime,
                             modifier = Modifier.fillMaxWidth()

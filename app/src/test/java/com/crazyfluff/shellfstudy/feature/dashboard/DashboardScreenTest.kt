@@ -492,7 +492,7 @@ class DashboardScreenTest {
     }
 
     @Test
-    fun studyTimeCard_showsTimeOnTheLevelTodayAgainstTheGoalAndTodaysPlan_andOpensTheScreen() {
+    fun studyTimeCard_showsTimeOnTheLevelAndTodayAgainstTheGoal_andOpensTheScreen() {
         var opened = false
         val overview = StudyTimeOverview(
             today = StudyTimeSplit(lessonMs = 6 * 60_000L, reviewMs = 12 * 60_000L),
@@ -520,10 +520,8 @@ class DashboardScreenTest {
         composeTestRule.onNodeWithText("of 30m", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("Reviews 12m", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("Lessons 6m", useUnmergedTree = true).assertIsDisplayed()
-        // 60 reviews at 10s plus the 5 lessons left for the goal at 2m each.
-        // The card is clickable, so it merges its children; the line is read from the unmerged tree.
-        composeTestRule.onNodeWithTag(StudyTimeTestTags.DASHBOARD_ESTIMATE, useUnmergedTree = true)
-            .assertTextEquals("Today's plan: 60 reviews + 5 lessons ≈ 20m at your pace")
+        // The daily plan estimate is gone from the card.
+        composeTestRule.onNodeWithText("Today's plan", substring = true, useUnmergedTree = true).assertDoesNotExist()
         composeTestRule.onNodeWithTag(StudyTimeTestTags.DASHBOARD_CARD).performClick()
         assert(opened)
     }

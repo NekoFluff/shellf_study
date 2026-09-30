@@ -192,18 +192,6 @@ class StudyTimeAggregatorTest {
         assertNull(pace.reviewMsPerItem)
     }
 
-    @Test
-    fun estimateQueue_usesThePaceAndFallsBackToDefaults() {
-        val pace = StudyPace(reviewMsPerItem = 9_000L, lessonMsPerItem = 90_000L)
-        val ownPace = StudyTimeAggregator.estimateQueue(100, 5, pace)
-        assertEquals(900_000L, ownPace.reviewMs)
-        assertEquals(450_000L, ownPace.lessonMs)
-
-        val noPace = StudyTimeAggregator.estimateQueue(10, 1, StudyPace())
-        assertEquals(10 * StudyTimeAggregator.DEFAULT_REVIEW_MS_PER_ITEM, noPace.reviewMs)
-        assertEquals(StudyTimeAggregator.DEFAULT_LESSON_MS_PER_ITEM, noPace.lessonMs)
-    }
-
     // --- levels ---
 
     @Test

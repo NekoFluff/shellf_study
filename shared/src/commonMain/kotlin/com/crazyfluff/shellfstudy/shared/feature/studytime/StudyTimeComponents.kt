@@ -133,7 +133,6 @@ fun StudyGoalRing(
 object StudyTimeTestTags {
     const val DASHBOARD_CARD = "study_time_dashboard_card"
     const val DASHBOARD_LEVEL_TIME = "study_time_dashboard_level_time"
-    const val DASHBOARD_ESTIMATE = "study_time_dashboard_estimate"
     const val EMPTY_STATE = "study_time_empty_state"
     const val TODAY_TOTAL = "study_time_today_total"
     const val GOAL_STREAK = "study_time_goal_streak"

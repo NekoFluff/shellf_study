@@ -122,11 +122,6 @@ enum class PartOfDay(val phrase: String, val hours: List<Int>) {
     NIGHT("late at night", (NIGHT_STARTS_AT until StudyHeatmap.HOURS).toList() + (0 until MORNING_STARTS_AT).toList())
 }
 
-/** Roughly how long the current queue will take at the learner's pace. */
-data class QueueEstimate(val reviewMs: Long, val lessonMs: Long) {
-    val totalMs: Long get() = reviewMs + lessonMs
-}
-
 /** What the dashboard card and the screen's hero both show. */
 data class StudyTimeOverview(
     val today: StudyTimeSplit,

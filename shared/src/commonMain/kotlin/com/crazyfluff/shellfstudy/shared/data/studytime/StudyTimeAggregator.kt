@@ -193,11 +193,6 @@ object StudyTimeAggregator {
         return streak
     }
 
-    fun estimateQueue(reviewCount: Int, lessonCount: Int, pace: StudyPace): QueueEstimate = QueueEstimate(
-        reviewMs = reviewCount * (pace.reviewMsPerItem ?: DEFAULT_REVIEW_MS_PER_ITEM),
-        lessonMs = lessonCount * (pace.lessonMsPerItem ?: DEFAULT_LESSON_MS_PER_ITEM)
-    )
-
 }
 
 private fun overview(

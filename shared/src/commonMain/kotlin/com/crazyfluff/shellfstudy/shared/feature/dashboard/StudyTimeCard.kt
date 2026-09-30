@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.crazyfluff.shellfstudy.shared.data.studytime.QueueEstimate
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeOverview
 import com.crazyfluff.shellfstudy.shared.feature.studytime.ChartLegendItem
 import com.crazyfluff.shellfstudy.shared.feature.studytime.StudyGoalRing
@@ -30,16 +28,12 @@ import com.crazyfluff.shellfstudy.shared.feature.studytime.lessonTimeColor
 import com.crazyfluff.shellfstudy.shared.feature.studytime.reviewTimeColor
 
 /**
- * Time on the current WaniKani level, today's study time against the daily goal (the ring), the past
- * week at a glance, and how long today's plan should take at the learner's own pace. Tapping it opens
- * the full study-time screen.
+ * Time on the current WaniKani level, today's study time against the daily goal (the ring), and the
+ * past week at a glance. Tapping it opens the full study-time screen.
  */
 @Composable
 fun StudyTimeCard(
     overview: StudyTimeOverview,
-    planEstimate: QueueEstimate?,
-    reviewCount: Int,
-    lessonsLeftForGoal: Int,
     level: Int?,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier
@@ -85,21 +79,6 @@ fun StudyTimeCard(
                     modifier = Modifier.testTag(StudyTimeTestTags.DASHBOARD_LEVEL_TIME)
                 )
             }
-            if (planEstimate != null && planEstimate.totalMs > 0L) {
-                Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = todaysPlanText(
-                        estimate = planEstimate,
-                        reviewCount = reviewCount,
-                        lessonsLeftForGoal = lessonsLeftForGoal,
-                        hasOwnPace = overview.pace.reviewMsPerItem != null
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.testTag(StudyTimeTestTags.DASHBOARD_ESTIMATE)
-                )
-            }
         }
     }
 }
@@ -132,17 +111,3 @@ private fun TodaySummary(overview: StudyTimeOverview, modifier: Modifier = Modif
  *  is. Counts only what was recorded since tracking began, the same as the screen's per-level list. */
 internal fun levelTimeThisLevel(levelMs: Long?): String? =
     levelMs?.takeIf { it > 0L }?.let { "${formatStudyDuration(it)} this level" }
-
-internal fun todaysPlanText(
-    estimate: QueueEstimate,
-    reviewCount: Int,
-    lessonsLeftForGoal: Int,
-    hasOwnPace: Boolean
-): String {
-    val parts = buildList {
-        if (reviewCount > 0) add("$reviewCount ${if (reviewCount == 1) "review" else "reviews"}")
-        if (lessonsLeftForGoal > 0) add("$lessonsLeftForGoal ${if (lessonsLeftForGoal == 1) "lesson" else "lessons"}")
-    }
-    val pace = if (hasOwnPace) "at your pace" else "at a typical pace"
-    return "Today's plan: ${parts.joinToString(" + ")} ≈ ${formatStudyDuration(estimate.totalMs)} $pace"
-}
