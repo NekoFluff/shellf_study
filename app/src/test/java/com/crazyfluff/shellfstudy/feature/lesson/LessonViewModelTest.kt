@@ -62,6 +62,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import kotlinx.coroutines.flow.first
 import org.junit.rules.TemporaryFolder
 import com.crazyfluff.shellfstudy.fakes.AssignmentFixture
 import com.crazyfluff.shellfstudy.fakes.FIXTURE_INSTANT
@@ -723,6 +724,56 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
         val queued = repositories.outboxDao.allLessonStarts()
         assertThat(queued).hasSize(1)
         assertThat(queued.first().assignmentId).isEqualTo(101L)
+    }
+
+    @Test
+    fun `finishing a lesson item marks today as a study day`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertThat(repositories.statsRepository.observeStudyStreak().first().isActiveToday).isTrue()
+    }
+
+    @Test
+    fun `a missed lesson answer does not mark today as a study day`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+            viewModel.startSelectedLessons()
+            awaitItem()
+            viewModel.nextStudyCard()
+            awaitItem() // quiz begins
+
+            viewModel.onAnswerInputChange("wrong")
+            awaitItem()
+            viewModel.submitAnswer()
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertThat(repositories.statsRepository.observeStudyStreak().first().isActiveToday).isFalse()
     }
 
     @Test

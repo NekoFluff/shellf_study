@@ -49,8 +49,8 @@ import com.crazyfluff.shellfstudy.shared.feature.studytime.reviewTimeColor
 @Composable
 fun StudyTimeCard(
     overview: StudyTimeOverview,
-    /** Consecutive days with a review, not [StudyTimeOverview.goalStreakDays]: people read a streak
-     *  as "days I studied", and a goal streak left them at nothing after two days of reviews. */
+    /** Consecutive days with a review or lesson, not [StudyTimeOverview.goalStreakDays]: people read
+     *  a streak as "days I studied", and a goal streak left them at nothing after two days of reviews. */
     studyStreakDays: Int,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier

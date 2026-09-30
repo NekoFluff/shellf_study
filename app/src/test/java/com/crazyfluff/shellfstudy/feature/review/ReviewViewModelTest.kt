@@ -309,6 +309,33 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
+    fun `one continued review marks today as a study day without finishing the session`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+
+            viewModel.onAnswerInputChange("Mouth")
+            awaitItem()
+            viewModel.submitAnswer()
+            var settled = awaitItem()
+            while (settled.question!!.feedback == null) settled = awaitItem()
+
+            // Still undoable, so not yet a study day.
+            assertThat(repositories.statsRepository.observeStudyStreak().first().isActiveToday).isFalse()
+
+            viewModel.onContinue()
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertThat(repositories.statsRepository.observeStudyStreak().first().isActiveToday).isTrue()
+    }
+
+    @Test
     fun `completing a review durably queues the submission in the outbox instead of calling the network`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 

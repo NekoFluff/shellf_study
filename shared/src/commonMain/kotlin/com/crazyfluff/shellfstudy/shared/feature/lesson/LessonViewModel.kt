@@ -970,6 +970,8 @@ class LessonViewModel(
             if (isNewlyStarted) {
                 assignmentRepository.applyOptimisticLessonStart(item.assignmentId, item.srsSystemId)
                 outboxRepository.enqueueLessonStart(item.assignmentId, item.subjectId)
+                // A lesson counts as studying today, for the streak and the daily reminder.
+                statsRepository.markStudyActivityToday()
             }
         }
         when {

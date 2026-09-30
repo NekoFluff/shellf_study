@@ -9,7 +9,8 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 /** One calendar day (local zone, ISO `YYYY-MM-DD`) on which the user completed at least one
- *  review — the only local record needed to drive the study-streak reminder notification. */
+ *  review or lesson item — the local record behind the study streak and its reminder
+ *  notification. */
 @Entity(tableName = "study_activity_days")
 data class StudyActivityDayEntity(@PrimaryKey val date: String)
 

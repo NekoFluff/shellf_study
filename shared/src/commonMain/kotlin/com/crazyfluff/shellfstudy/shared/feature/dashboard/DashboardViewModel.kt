@@ -83,7 +83,7 @@ data class DashboardUiState(
     val hasLastSessionSummary: Boolean = false,
     /** Null until the study-time log has been read once. */
     val studyTime: StudyTimeOverview? = null,
-    /** Consecutive days with a review in the app, today counting once there's been one. */
+    /** Consecutive days with a review or lesson in the app, today counting once there's been one. */
     val studyStreakDays: Int = 0
 ) {
     /** The last fetch failed but cached content is still on screen — see [DashboardFetch.Stale]. */

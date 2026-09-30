@@ -29,7 +29,7 @@ import kotlin.time.Instant
 private val STALENESS = 1.hours
 
 /** Owns review statistics, level progressions, and the local study-activity log (which days had
- *  at least one review — drives the daily study-streak reminder). */
+ *  at least one review or lesson — drives the study streak and its daily reminder). */
 class StatsRepository(
     private val api: WaniKaniApi,
     private val reviewStatisticDao: ReviewStatisticDao,
@@ -121,8 +121,9 @@ class StatsRepository(
         )
 
     /** Marks today as an active study day — local-only, never gated on network (there's nothing to
-     *  sync, this data has no server counterpart), called directly from the review-grading path so
-     *  the streak stays live even offline. Idempotent: a day already marked active is a no-op. */
+     *  sync, this data has no server counterpart), called directly from the review- and
+     *  lesson-grading paths so the streak stays live even offline. Idempotent: a day already
+     *  marked active is a no-op. */
     suspend fun markStudyActivityToday() {
         val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
         studyActivityDao.markActive(StudyActivityDayEntity(date = today.toString()))
