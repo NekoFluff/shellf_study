@@ -25,8 +25,7 @@ class ReviewPrioritizerTest {
     )
 
     @Test
-    fun `this level's not-yet-Guru radicals and kanji tier ahead of everything else`() {
-        val select = ReviewPrioritizer.tierSelector(currentLevel = 3)
+    fun `this level's not-yet-Guru radicals and kanji are the priority items and nothing else is`() {
         val gatingKanji = item(1, level = 3, srsStage = 3, subjectType = SubjectType.KANJI)
         val gatingRadical = item(2, level = 3, srsStage = 1, subjectType = SubjectType.RADICAL)
         val earlyVocab = item(3, level = 3, srsStage = 1, subjectType = SubjectType.VOCABULARY)
@@ -38,34 +37,21 @@ class ReviewPrioritizerTest {
         // The kanji count toward the level-up bar and the radicals unlock them, so both are special
         // while they're below Guru on the current level. Vocabulary never gates a level, and neither
         // does anything already at Guru or from an earlier level.
-        val priorityTier = select(gatingKanji)
-        assertEquals(priorityTier, select(gatingRadical))
-        listOf(earlyVocab, otherLevelKanji, otherLevelRadical, guruKanji, guruRadical).forEach {
-            assertTrue(priorityTier < select(it), "expected ${it.subjectType} ${it.assignmentId} after the gating tier")
-        }
+        val ids = ReviewPrioritizer.priorityIds(
+            listOf(gatingKanji, gatingRadical, earlyVocab, otherLevelKanji, otherLevelRadical, guruKanji, guruRadical),
+            currentLevel = 3
+        )
+        assertEquals(setOf(1L, 2L), ids)
     }
 
     @Test
-    fun `everything outside the level-up tier shares one tier so due order survives among them`() {
-        val select = ReviewPrioritizer.tierSelector(currentLevel = 3)
-        assertEquals(
-            select(item(1, level = 3, srsStage = 1, subjectType = SubjectType.VOCABULARY)),
-            select(item(2, level = 2, srsStage = 1, subjectType = SubjectType.KANJI))
+    fun `with no current level cached nothing is a priority item`() {
+        // A null level means no level progression has synced yet. Nothing is special; the queue
+        // stays on its plain path.
+        val ids = ReviewPrioritizer.priorityIds(
+            listOf(item(1, level = 3, srsStage = 3, subjectType = SubjectType.KANJI)),
+            currentLevel = null
         )
-        assertEquals(
-            select(item(1, level = 3, srsStage = 1, subjectType = SubjectType.VOCABULARY)),
-            select(item(3, level = 3, srsStage = 5, subjectType = SubjectType.KANJI))
-        )
-    }
-
-    @Test
-    fun `with no current level cached every item shares one tier instead of none matching`() {
-        // A null level means no level progression has synced yet. Treating it as "level 0" would
-        // match nothing and make the setting look broken; the whole queue is simply one tier.
-        val select = ReviewPrioritizer.tierSelector(currentLevel = null)
-        assertEquals(
-            select(item(1, level = 3, srsStage = 3, subjectType = SubjectType.KANJI)),
-            select(item(2, level = 3, srsStage = 1, subjectType = SubjectType.VOCABULARY))
-        )
+        assertTrue(ids.isEmpty())
     }
 }

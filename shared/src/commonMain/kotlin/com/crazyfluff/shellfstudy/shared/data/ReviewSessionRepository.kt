@@ -35,7 +35,12 @@ data class PersistedReviewSession(
     // (process death, or navigating away and back) doesn't silently drop that submission — the grade
     // is committed as soon as the session resumes, treating that the same as an implicit Continue.
     // Defaults to null for data persisted before this field existed.
-    val pendingSubmissionAssignmentId: Long? = null
+    val pendingSubmissionAssignmentId: Long? = null,
+    // The items the rank-up setting admits ahead of the rest (see QuizSession.priorityIds), fixed
+    // when the session was built so a resume keeps the split the reserve was sorted by. Defaults to
+    // empty for data persisted before this field existed — that session finishes with no priority
+    // applied, exactly as it would have before.
+    val priorityAssignmentIds: List<Long> = emptyList()
 )
 
 /**

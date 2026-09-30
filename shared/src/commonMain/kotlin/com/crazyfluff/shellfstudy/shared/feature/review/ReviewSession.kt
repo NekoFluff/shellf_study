@@ -25,7 +25,8 @@ internal data class ReviewSession(
         totalQuestions = quiz.totalQuestions,
         sessionActiveElapsedMs = sessionActiveElapsedMs,
         answeredQuestions = quiz.persistedAnswers(),
-        pendingSubmissionAssignmentId = pendingSubmissionAssignmentId
+        pendingSubmissionAssignmentId = pendingSubmissionAssignmentId,
+        priorityAssignmentIds = quiz.priorityIds.toList()
     )
 }
 

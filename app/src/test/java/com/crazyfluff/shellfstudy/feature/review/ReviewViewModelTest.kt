@@ -1782,7 +1782,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
-    fun `rank-up review priority admits the current level's not-yet-Guru kanji ahead of older due vocabulary`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `rank-up review priority admits the current level's not-yet-Guru kanji ahead of older due vocabulary, which only backfills`() = runTest(mainDispatcherRule.dispatcher) {
         seedLevel(3)
         dispatch(
             jsonResponse(manyVocabAndKanjiAssignmentsJson(vocabCount = 12, kanjiCount = 2)),
@@ -1803,16 +1803,17 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
             val session = reviewSessionRepository.load()!!
             val inFlight = session.queue.map { it.assignmentId }.toSet()
             assertThat(inFlight).containsAtLeast(1012L, 1013L)
-            assertThat(inFlight).hasSize(10)
-            // The other eight slots go to the oldest vocabulary items, in due order.
-            assertThat(inFlight - setOf(1012L, 1013L)).containsExactly(1000L, 1001L, 1002L, 1003L, 1004L, 1005L, 1006L, 1007L)
-            // The remaining four items wait in reserve — the last two vocabulary items, which gave up
-            // their slots to the kanji, plus nothing else: the reserve is due-order after tier order.
-            assertThat(session.reserve.map { it.assignmentId }.toSet())
-                .containsExactly(1008L, 1009L, 1010L, 1011L)
+            // While a kanji is unfinished, vocabulary only backfills the working set up to
+            // RANK_UP_BACKFILL_ITEMS — the three oldest, in due order — rather than filling all ten.
+            assertThat(inFlight).hasSize(5)
+            assertThat(inFlight - setOf(1012L, 1013L)).containsExactly(1000L, 1001L, 1002L)
+            // Everything else waits in reserve, in due order.
+            assertThat(session.reserve.map { it.assignmentId }.distinct())
+                .containsExactly(1003L, 1004L, 1005L, 1006L, 1007L, 1008L, 1009L, 1010L, 1011L).inOrder()
+            assertThat(session.priorityAssignmentIds).containsExactly(1012L, 1013L)
 
             // And the session can actually draw them.
-            val admitted = drawInFlightItems(viewModel) { awaitItem() }
+            val admitted = drawInFlightItems(viewModel, poolSize = 5) { awaitItem() }
             assertThat(admitted).containsAtLeast(1012L, 1013L)
         }
     }
@@ -1845,7 +1846,66 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
         }
     }
 
-    /** Seeds the level the review-priority rule reads via `ReviewPrioritizer.tierSelector`. */
+    @Test
+    fun `a resumed rank-up session keeps its priority items even after the setting changes`() = runTest(mainDispatcherRule.dispatcher) {
+        seedLevel(3)
+        dispatch(
+            jsonResponse(manyVocabAndKanjiAssignmentsJson(vocabCount = 12, kanjiCount = 2)),
+            jsonResponse(manyVocabAndKanjiSubjectsJson(vocabCount = 12, kanjiCount = 2, kanjiLevel = 3))
+        )
+        settingsRepository.setReviewPriority(ReviewPriority.RANK_UP)
+
+        createViewModel().uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+        }
+        // The split is fixed when the session is built: switching back to DEFAULT (or levelling up)
+        // before resuming must not re-sort a reserve that was sorted for rank-up.
+        settingsRepository.setReviewPriority(ReviewPriority.DEFAULT)
+        seedLevel(4)
+
+        val resumed = createViewModel()
+        resumed.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            resumed.dontKnowAnswer()
+            awaitItem()
+            resumed.onContinue()
+            awaitItem()
+        }
+
+        val snapshot = reviewSessionRepository.load()!!
+        assertThat(snapshot.priorityAssignmentIds).containsExactly(1012L, 1013L)
+        assertThat(snapshot.queue.map { it.assignmentId }.toSet()).hasSize(5)
+    }
+
+    @Test
+    fun `a session persisted before priority ids existed resumes with no priority applied`() = runTest(mainDispatcherRule.dispatcher) {
+        seedLevel(3)
+        dispatch(
+            jsonResponse(manyVocabAndKanjiAssignmentsJson(vocabCount = 12, kanjiCount = 2)),
+            jsonResponse(manyVocabAndKanjiSubjectsJson(vocabCount = 12, kanjiCount = 2, kanjiLevel = 3))
+        )
+        settingsRepository.setReviewPriority(ReviewPriority.RANK_UP)
+        createViewModel().uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+        }
+        val persisted = reviewSessionRepository.load()!!
+        reviewSessionRepository.save(persisted.copy(priorityAssignmentIds = emptyList()))
+
+        val resumed = createViewModel()
+        resumed.uiState.test {
+            var state = awaitItem()
+            while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
+            assertThat(state.question).isNotNull()
+            resumed.dontKnowAnswer()
+            awaitItem()
+        }
+        assertThat(reviewSessionRepository.load()!!.priorityAssignmentIds).isEmpty()
+    }
+
+    /** Seeds the level the review-priority rule reads via `ReviewPrioritizer.priorityIds`. */
     private suspend fun seedLevel(level: Int) {
         repositories.levelProgressionDao.upsertAll(
             listOf(
@@ -1866,16 +1926,17 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
      */
     private suspend fun drawInFlightItems(
         viewModel: ReviewViewModel,
+        poolSize: Int = 10,
         awaitNextState: suspend () -> ReviewUiState
     ): Set<Long> {
         val seen = mutableSetOf<Long>()
         var state = viewModel.uiState.value
-        // 10 distinct items drawn uniformly with replacement needs ~29 draws on average (coupon
-        // collector) and can in principle run long — the pool is fixed at 10 because nothing ever
-        // completes, so this always terminates, and the bound only guards against a regression that
-        // let the pool grow.
+        // [poolSize] distinct items drawn uniformly with replacement needs ~29 draws on average for
+        // 10 (coupon collector) and can in principle run long — the pool is fixed because nothing
+        // ever completes, so this always terminates, and the bound only guards against a regression
+        // that let the pool grow.
         var safetyCounter = 0
-        while (seen.size < 10 && safetyCounter < 400) {
+        while (seen.size < poolSize && safetyCounter < 400) {
             safetyCounter++
             seen += state.question!!.item.assignmentId
             viewModel.dontKnowAnswer()

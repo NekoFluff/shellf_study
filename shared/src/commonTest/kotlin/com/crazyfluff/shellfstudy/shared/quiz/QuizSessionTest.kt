@@ -176,7 +176,8 @@ class QuizSessionTest {
             reserve = session.persistedReserve(),
             progress = session.persistedProgress(),
             answered = session.persistedAnswers(),
-            totalQuestions = session.totalQuestions
+            totalQuestions = session.totalQuestions,
+            priorityIds = session.priorityIds
         )
 
         assertNotNull(restored)
@@ -185,6 +186,48 @@ class QuizSessionTest {
         assertEquals(session.progress, restored.progress)
         assertEquals(session.answered, restored.answered)
         assertEquals(session.totalQuestions, restored.totalQuestions)
+        assertEquals(session.priorityIds, restored.priorityIds)
+    }
+
+    @Test
+    fun priorityIdsSurvivePersistingAndKeepHoldingOrdinaryItemsBackAfterARestore() {
+        val items = (1L..8L).map(::radical)
+        val session = QuizSession<ReviewItem>()
+            .withQuestionsFor(items, shuffle = false, cap = 4, priorityIds = setOf(7L, 8L), backfillCap = 3)
+        // Both priority items, plus one ordinary item backfilling to three.
+        assertEquals(listOf(7L, 8L, 1L), session.inFlight.map { it.item.assignmentId })
+
+        val restored = QuizSession.restore(
+            itemsById = items.associateBy { it.assignmentId },
+            inFlight = session.persistedInFlight(),
+            reserve = session.persistedReserve(),
+            priorityIds = session.priorityIds
+        )!!
+        // Finishing the ordinary item frees a slot; with priority items still in flight only the
+        // backfill refills, one ordinary item back up to three — not two, up to the cap of four.
+        val afterOrdinary = restored.grade(isCorrect = false, elapsedMs = 1, cap = 4, backfillCap = 3)
+            .grade(isCorrect = false, elapsedMs = 1, cap = 4, backfillCap = 3)
+            .grade(isCorrect = true, elapsedMs = 1, cap = 4, backfillCap = 3)
+        assertEquals(setOf(7L, 8L, 2L), afterOrdinary.inFlight.map { it.item.assignmentId }.toSet())
+    }
+
+    @Test
+    fun undoingAGradeThatAdmittedItemsPutsTheQueueBackExactlyAsItWas() {
+        val items = (1L..8L).map(::radical)
+        // One priority item in flight beside two backfilled ordinary ones; the rest wait.
+        val start = QuizSession<ReviewItem>()
+            .withQuestionsFor(items, shuffle = true, cap = 6, priorityIds = setOf(8L), backfillCap = 3)
+        val onPriority = generateSequence(start) {
+            it.grade(isCorrect = false, elapsedMs = 1, cap = 6, backfillCap = 3)
+        }.first { it.current?.item?.assignmentId == 8L }
+
+        // Finishing the last priority item lifts the barrier, admitting three items at once.
+        val graded = onPriority.grade(isCorrect = true, elapsedMs = 1, cap = 6, backfillCap = 3)
+        assertEquals(6, graded.inFlight.map { it.item.assignmentId }.distinct().size)
+
+        val undone = graded.undoLastGrade()!!
+        assertEquals(onPriority.inFlight, undone.inFlight)
+        assertEquals(onPriority.reserve, undone.reserve)
     }
 
     @Test

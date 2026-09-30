@@ -73,7 +73,7 @@ class TestRepositories(
     val reviewStatisticDao: FakeReviewStatisticDao,
     /** Exposed so a test can seed the *current level* — [StatsRepository] keeps this DAO private,
      *  and a review session's rank-up priority reads the level from it (see
-     *  `ReviewPrioritizer.tierSelector`). */
+     *  `ReviewPrioritizer.priorityIds`). */
     val levelProgressionDao: FakeLevelProgressionDao,
     val subjectRepository: SubjectRepository,
     val assignmentRepository: AssignmentRepository,

@@ -32,6 +32,11 @@ data class QuizSession<T : QuizDisplayItem>(
     /** The question most recently graded — what [undoLastGrade] reverts. Undo is only offered while
      *  that grade's feedback is on screen, so this is never consulted once the session has moved on. */
     val lastGraded: GradedQuestion<T>? = null,
+    /** Items admitted ahead of the rest — Review's rank-up setting (see [QuizQueue.admitNext]). Fixed
+     *  when the questions are built and persisted with the session, so a resume keeps exactly the
+     *  split the reserve was sorted by, even if the learner has since levelled up or changed the
+     *  setting. Empty means no priority at all. */
+    val priorityIds: Set<Long> = emptySet(),
     private val shuffleOnAdmit: Boolean = true
 ) {
     val current: PendingQuestion<T>? get() = inFlight.firstOrNull()
@@ -45,22 +50,31 @@ data class QuizSession<T : QuizDisplayItem>(
     /**
      * A fresh set of questions over [items], keeping [progress] and [answered] — a lesson quizzes each
      * batch as its own pass, but summarizes the whole session. See [QuizQueue.build] for [shuffle],
-     * [cap] and [priorityOf].
+     * [cap] and [backfillCap]; [priorityIds] are the items [QuizQueue.build]'s `isPriority` accepts.
      */
     fun withQuestionsFor(
         items: List<T>,
         shuffle: Boolean = true,
         cap: Int? = null,
-        priorityOf: ((T) -> Int)? = null
+        priorityIds: Set<Long> = emptySet(),
+        backfillCap: Int? = null
     ): QuizSession<T> {
         val queue = QuizQueue<T>().apply {
-            build(items, typesFor = { questionTypesFor(it.subjectType) }, shuffle = shuffle, cap = cap, priorityOf = priorityOf)
+            build(
+                items,
+                typesFor = { questionTypesFor(it.subjectType) },
+                shuffle = shuffle,
+                cap = cap,
+                isPriority = isPriorityFor(priorityIds),
+                backfillCap = backfillCap
+            )
         }
         return copy(
             inFlight = queue.toList(),
             reserve = queue.reserveList(),
             totalQuestions = queue.size,
             lastGraded = null,
+            priorityIds = priorityIds,
             shuffleOnAdmit = shuffle
         )
     }
@@ -74,7 +88,7 @@ data class QuizSession<T : QuizDisplayItem>(
      * Grades [current]. A correct answer takes the question out; a wrong one records the miss and sends
      * it to the back. With [deferSiblingOnCorrect], an item still owed its other question type has that
      * one moved to the back too, so it is not the next thing drawn. With a [cap], a freed slot admits
-     * the next item from [reserve].
+     * from [reserve] by [QuizQueue.admitNext]'s rule, with [priorityIds] and [backfillCap].
      *
      * Returns this session unchanged when there is no current question.
      */
@@ -82,7 +96,8 @@ data class QuizSession<T : QuizDisplayItem>(
         isCorrect: Boolean,
         elapsedMs: Long,
         deferSiblingOnCorrect: Boolean = false,
-        cap: Int? = null
+        cap: Int? = null,
+        backfillCap: Int? = null
     ): QuizSession<T> {
         val question = current ?: return this
         val item = question.item
@@ -97,38 +112,40 @@ data class QuizSession<T : QuizDisplayItem>(
         } else if (deferSiblingOnCorrect && !itemDone) {
             queue.moveMatchingToBack { it.item.assignmentId == item.assignmentId }
         }
-        cap?.let(queue::admitNext)
+        cap?.let { queue.admitNext(it, isPriorityFor(priorityIds), backfillCap) }
 
         return copy(
             inFlight = queue.toList(),
             reserve = queue.reserveList(),
             progress = progress + (item.assignmentId to after),
             answered = answered + AnsweredQuestionRecord(item, question.type, isCorrect, elapsedMs),
-            lastGraded = GradedQuestion(question, isCorrect, itemDone)
+            lastGraded = GradedQuestion(
+                question, isCorrect, itemDone, inFlightBefore = inFlight, reserveBefore = reserve
+            )
         )
     }
 
     /**
      * Reverts [lastGraded], putting its question back in front as [current] — for a typo, or a correct
      * answer the learner takes back before it is committed. Null when there is nothing to undo.
+     *
+     * The queue goes back to exactly how it stood before the grade, not just the graded question: a
+     * completing answer may have admitted items from [reserve] (and reshuffled the working set), and
+     * leaving those admitted beside an item that is unfinished again could push the working set past
+     * its cap, or let ordinary items in past the rank-up backfill.
      */
     fun undoLastGrade(): QuizSession<T>? {
         val graded = lastGraded ?: return null
         val question = graded.question
         val itemProgress = progress[question.item.assignmentId] ?: return null
-        val queue = toQueue()
         val reverted = if (graded.isCorrect) {
-            // A correct answer took the question out outright — put it back at the front.
-            queue.pushFront(question)
             itemProgress.withDone(question.type, false)
         } else {
-            // A wrong answer sent it to the back — bring that copy forward again.
-            queue.moveMatchingToFront { it.item.assignmentId == question.item.assignmentId && it.type == question.type }
             itemProgress.withIncorrectAttempt(question.type, by = -1)
         }
         return copy(
-            inFlight = queue.toList(),
-            reserve = queue.reserveList(),
+            inFlight = graded.inFlightBefore,
+            reserve = graded.reserveBefore,
             progress = progress + (question.item.assignmentId to reverted),
             answered = answered.dropLast(1),
             lastGraded = null
@@ -187,7 +204,8 @@ data class QuizSession<T : QuizDisplayItem>(
             reserve: List<PersistedQuestion> = emptyList(),
             progress: List<PersistedItemProgress> = emptyList(),
             answered: List<PersistedAnsweredQuestion> = emptyList(),
-            totalQuestions: Int = 0
+            totalQuestions: Int = 0,
+            priorityIds: Set<Long> = emptySet()
         ): QuizSession<T>? {
             val restoredInFlight = inFlight.mapNotNull { it.toPendingQuestionOrNull(itemsById) }
             val restoredReserve = reserve.mapNotNull { it.toPendingQuestionOrNull(itemsById) }
@@ -212,15 +230,29 @@ data class QuizSession<T : QuizDisplayItem>(
                     val type = QuestionType.fromPersisted(p.questionType) ?: return@mapNotNull null
                     AnsweredQuestionRecord(item, type, p.isCorrect, p.elapsedMs)
                 },
-                totalQuestions = totalQuestions
+                totalQuestions = totalQuestions,
+                priorityIds = priorityIds
             )
         }
     }
 }
 
+/** [QuizQueue]'s `isPriority` over [priorityIds] — null when there are none, which keeps the queue on
+ *  its original no-priority path rather than a check that happens to reject everything. */
+private fun <T : QuizDisplayItem> isPriorityFor(priorityIds: Set<Long>): ((T) -> Boolean)? =
+    if (priorityIds.isEmpty()) null else { item -> item.assignmentId in priorityIds }
+
 /** A graded question, as [QuizSession.lastGraded] keeps it. [completedItem] is whether this answer
- *  finished its item — every question type it has now answered correctly. */
-data class GradedQuestion<T>(val question: PendingQuestion<T>, val isCorrect: Boolean, val completedItem: Boolean)
+ *  finished its item — every question type it has now answered correctly. [inFlightBefore] and
+ *  [reserveBefore] are the queue as it stood before the grade, what [QuizSession.undoLastGrade] puts
+ *  back; both are the session's own immutable lists, so keeping them copies nothing. */
+data class GradedQuestion<T>(
+    val question: PendingQuestion<T>,
+    val isCorrect: Boolean,
+    val completedItem: Boolean,
+    val inFlightBefore: List<PendingQuestion<T>>,
+    val reserveBefore: List<PendingQuestion<T>>
+)
 
 private fun <T : QuizDisplayItem> PendingQuestion<T>.toPersisted(): PersistedQuestion =
     PersistedQuestion(item.assignmentId, type.name)

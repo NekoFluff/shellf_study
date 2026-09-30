@@ -1,11 +1,18 @@
 package com.crazyfluff.shellfstudy.shared.quiz
 
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class QuizQueueTest {
+
+    private fun isP(item: String) = item.startsWith("P")
+    private fun priority(count: Int) = (0 until count).map { "P$it" }
+    private fun ordinary(count: Int) = (0 until count).map { "O$it" }
 
     @Test
     fun build_createsOneEntryPerItemPerType() {
@@ -33,27 +40,6 @@ class QuizQueueTest {
         assertEquals(PendingQuestion("B", QuestionType.MEANING), queue.current)
         queue.removeCurrent()
         assertEquals(first, queue.current)
-    }
-
-    @Test
-    fun moveMatchingToFront_movesLastMatchToFront() {
-        val queue = QuizQueue<String>()
-        // After build(shuffle=false): A-MEANING, A-READING, B-MEANING, B-READING
-        queue.build(listOf("A", "B"), typesFor = { listOf(QuestionType.MEANING, QuestionType.READING) }, shuffle = false)
-        queue.removeCurrent() // consume A-MEANING → queue: A-READING, B-MEANING, B-READING
-        // Two entries match item=="B": B-MEANING (index 1) and B-READING (index 2).
-        // indexOfLast finds B-READING — that one moves to front.
-        queue.moveMatchingToFront { it.item == "B" }
-        assertEquals(PendingQuestion("B", QuestionType.READING), queue.current)
-    }
-
-    @Test
-    fun moveMatchingToFront_noOp_whenPredicateMatchesNothing() {
-        val queue = QuizQueue<String>()
-        queue.build(listOf("A"), typesFor = { listOf(QuestionType.MEANING) }, shuffle = false)
-        val before = queue.toList()
-        queue.moveMatchingToFront { it.item == "Z" }
-        assertEquals(before, queue.toList())
     }
 
     @Test
@@ -181,72 +167,190 @@ class QuizQueueTest {
     }
 
     @Test
-    fun build_withPriority_admitsLowestTierItemsFirst() {
+    fun build_withPriority_admitsPriorityItemsFirst() {
         val queue = QuizQueue<String>()
-        // "A" and "B" are tier 0, "C" and "D" tier 1 — but they sit in the *reverse* order here, so
-        // a queue that ignored the tier key would admit C first.
+        // "A" and "B" are priority items, but sit *after* "C" and "D" here, so a queue that ignored
+        // isPriority would admit C first.
         queue.build(
             listOf("C", "D", "A", "B"),
             typesFor = { listOf(QuestionType.MEANING) },
             shuffle = false,
             cap = 2,
-            priorityOf = { if (it == "A" || it == "B") 0 else 1 }
+            isPriority = { it == "A" || it == "B" }
         )
         assertEquals(setOf("A", "B"), queue.toList().map { it.item }.toSet())
-        assertEquals(setOf("C", "D"), queue.reserveList().map { it.item }.toSet())
+        assertEquals(listOf("C", "D"), queue.reserveList().map { it.item })
     }
 
     @Test
-    fun build_withPriority_ordersReserveByTier_soAdmitNextKeepsFeedingPriorityItems() {
+    fun build_withPriority_keepsPriorityItemsAheadInReserve_soAdmitNextKeepsFeedingThem() {
         val queue = QuizQueue<String>()
+        // Three priority items and a cap of one: the two left behind must be admitted before the
+        // ordinary one — this is the property the whole setting rests on.
         queue.build(
-            listOf("C", "D", "A", "B"),
-            typesFor = { listOf(QuestionType.MEANING) },
-            shuffle = false,
-            cap = 2,
-            priorityOf = { if (it == "A" || it == "B") 0 else 1 }
-        )
-        // Nothing tier-0 is left behind, so the reserve is just the tier-1 items, in queue order.
-        assertEquals(listOf("C", "D"), queue.reserveList().map { it.item })
-
-        // With three tier-0 items and a cap of one, the two left behind must be admitted before the
-        // tier-1 one — this is the property the whole setting rests on.
-        val second = QuizQueue<String>()
-        second.build(
             listOf("C", "A", "B"),
             typesFor = { listOf(QuestionType.MEANING) },
             shuffle = false,
             cap = 1,
-            priorityOf = { if (it == "C") 1 else 0 }
+            isPriority = { it != "C" }
         )
-        assertEquals(listOf("A"), second.toList().map { it.item })
-        assertEquals(listOf("B", "C"), second.reserveList().map { it.item })
-        second.admitNext(cap = 2)
-        assertTrue(second.toList().any { it.item == "B" })
+        assertEquals(listOf("A"), queue.toList().map { it.item })
+        assertEquals(listOf("B", "C"), queue.reserveList().map { it.item })
+        assertEquals(listOf("B"), queue.admitNext(cap = 2, isPriority = { it != "C" }))
     }
 
     @Test
-    fun build_withPriorityAndShuffle_stillLeadsWithAPriorityItemAndKeepsReserveTierOrdered() {
+    fun build_withPriorityAndShuffle_stillSelectsThePriorityItems() {
         val queue = QuizQueue<String>()
-        // Every tier-0 item must be admitted ahead of every tier-1 item, but *which* of the two
-        // tier-0 items shows up first is left to the shuffle.
+        // Every priority item must be admitted ahead of every ordinary one, but *which* of the two
+        // shows up first is left to the shuffle.
         repeat(20) {
             queue.build(
                 listOf("C", "D", "A", "B"),
                 typesFor = { listOf(QuestionType.MEANING) },
                 shuffle = true,
                 cap = 2,
-                priorityOf = { if (it == "A" || it == "B") 0 else 1 }
+                isPriority = { it == "A" || it == "B" }
             )
             assertEquals(setOf("A", "B"), queue.toList().map { it.item }.toSet())
-            assertEquals(setOf("C", "D"), queue.reserveList().map { it.item }.toSet())
+            assertEquals(listOf("C", "D"), queue.reserveList().map { it.item })
+        }
+    }
+
+    @Test
+    fun build_withFewPriorityItems_backfillsOrdinaryOnesOnlyUpToTheBackfillCap() {
+        val queue = QuizQueue<String>()
+        queue.build(
+            ordinary(10) + listOf("P0", "P1"),
+            typesFor = { listOf(QuestionType.MEANING) },
+            shuffle = false,
+            cap = 10,
+            isPriority = ::isP,
+            backfillCap = 5
+        )
+        // Both priority items, plus the three oldest ordinary ones — not the eight a plain cap of
+        // ten would have let in beside them.
+        assertEquals(listOf("P0", "P1", "O0", "O1", "O2"), queue.toList().map { it.item })
+        assertEquals(ordinary(10).drop(3), queue.reserveList().map { it.item })
+    }
+
+    @Test
+    fun build_withManyPriorityItems_fillsTheCapWithThem_andAdmitsTheNextPriorityItemFirst() {
+        val queue = QuizQueue<String>()
+        queue.build(
+            ordinary(3) + priority(12),
+            typesFor = { listOf(QuestionType.MEANING) },
+            shuffle = false,
+            cap = 10,
+            isPriority = ::isP,
+            backfillCap = 5
+        )
+        assertEquals(priority(10), queue.toList().map { it.item })
+
+        queue.removeCurrent() // P0 finished
+        assertEquals(listOf("P10"), queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 5))
+    }
+
+    @Test
+    fun admitNext_holdsOrdinaryItemsBack_whileAPriorityItemIsInFlightAndTheBackfillIsFull() {
+        val queue = QuizQueue<String>()
+        // Six priority items in flight, nothing priority left in reserve, and four ordinary in flight.
+        queue.restore(
+            inFlight = (priority(6) + ordinary(4)).map { PendingQuestion(it, QuestionType.MEANING) },
+            reserve = listOf("O4", "O5").map { PendingQuestion(it, QuestionType.MEANING) },
+            shuffleOnAdmit = false
+        )
+        // Finishing an item anywhere in the working set, not just at its head.
+        fun finish(item: String) =
+            queue.restore(queue.toList().filter { it.item != item }, queue.reserveList(), shuffleOnAdmit = false)
+
+        // An ordinary item finishing frees a slot, but six items are still in flight — over the
+        // backfill — and a priority item is among them, so nothing comes in.
+        finish("O0")
+        assertEquals(emptyList(), queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 5))
+
+        // Down to four in flight (still with priority items): ordinary items backfill to five.
+        finish("P0"); finish("P1"); finish("O1"); finish("O2"); finish("O3")
+        assertEquals(4, queue.inFlightItemCount)
+        assertEquals(listOf("O4"), queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 5))
+        assertEquals(5, queue.inFlightItemCount)
+    }
+
+    @Test
+    fun admitNext_refillsToTheCapInOneCall_onceTheLastPriorityItemFinishes() {
+        val queue = QuizQueue<String>()
+        queue.restore(
+            inFlight = (listOf("P0") + ordinary(4)).map { PendingQuestion(it, QuestionType.MEANING) },
+            reserve = ordinary(20).drop(4).map { PendingQuestion(it, QuestionType.MEANING) },
+            shuffleOnAdmit = false
+        )
+        queue.removeCurrent() // P0, the last priority item, finishes
+        assertEquals(
+            listOf("O4", "O5", "O6", "O7", "O8", "O9"),
+            queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 5)
+        )
+        assertEquals(10, queue.inFlightItemCount)
+    }
+
+    @Test
+    fun admitNext_rejectsABackfillCapThatCouldDeadlockOrExceedTheCap() {
+        val queue = QuizQueue<String>()
+        assertFailsWith<IllegalArgumentException> { queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 0) }
+        assertFailsWith<IllegalArgumentException> { queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 11) }
+    }
+
+    @Test
+    fun aSimulatedSessionNeverBreaksTheCapOrTheBackfill_andAlwaysDrains() {
+        // Seeded so a failure reproduces. Every step answers the current question right or wrong at
+        // random, the way QuizSession.grade drives the queue, and checks the invariants the rank-up
+        // setting relies on after each admission.
+        repeat(50) { seed ->
+            val random = Random(seed)
+            val items = (0 until 40).map { if (random.nextInt(4) == 0) "P$it" else "O$it" }.shuffled(random)
+            val queue = QuizQueue<String>()
+            queue.build(
+                items,
+                typesFor = { listOf(QuestionType.MEANING, QuestionType.READING) },
+                shuffle = true,
+                cap = 10,
+                isPriority = ::isP,
+                backfillCap = 5
+            )
+            val answered = mutableMapOf<String, Int>()
+            var steps = 0
+            while (!queue.isEmpty) {
+                assertTrue(steps++ < 10_000, "seed $seed did not drain")
+                val question = assertNotNull(queue.current, "seed $seed: questions in reserve but none in flight")
+                queue.removeCurrent()
+                if (random.nextInt(3) == 0) {
+                    queue.requeue(question)
+                } else {
+                    answered[question.item] = (answered[question.item] ?: 0) + 1
+                }
+                var count = queue.inFlightItemCount
+                var priorityInFlight = queue.toList().any { isP(it.item) }
+                val admitted = queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 5)
+
+                assertTrue(queue.inFlightItemCount <= 10, "seed $seed: over the cap")
+                // Replays the admissions in order, so each is checked against the working set it
+                // actually joined.
+                admitted.forEach { item ->
+                    assertTrue(
+                        isP(item) || !priorityInFlight || count < 5,
+                        "seed $seed: $item was admitted past the backfill beside a priority item"
+                    )
+                    count++
+                    priorityInFlight = priorityInFlight || isP(item)
+                }
+            }
+            assertEquals(items.toSet(), answered.filterValues { it == 2 }.keys, "seed $seed: not every item finished")
         }
     }
 
     @Test
     fun buildWithoutPriority_isUnchangedByTheNewParameter() {
         val queue = QuizQueue<String>()
-        // No tier key: the first `cap` items of the (unshuffled) list are admitted, exactly as before.
+        // No isPriority: the first `cap` items of the (unshuffled) list are admitted, exactly as before.
         queue.build(
             listOf("A", "B", "C"),
             typesFor = { listOf(QuestionType.MEANING) },
@@ -260,8 +364,8 @@ class QuizQueueTest {
     @Test
     fun buildWithoutPriority_ignoresTiersEntirely() {
         val queue = QuizQueue<String>()
-        // The same list and the same tier key as build_withPriority_admitsLowestTierItemsFirst, but
-        // with priorityOf omitted — which is exactly how Review's DEFAULT mode calls build. A "B"
+        // The same list as build_withPriority_admitsPriorityItemsFirst, but with isPriority
+        // omitted — which is exactly how Review's DEFAULT mode calls build. A "B"
         // that would have led is admitted only in its own position, proving DEFAULT is the untouched
         // pre-setting path rather than a tier function that happens to rank everything equally.
         queue.build(
@@ -272,17 +376,6 @@ class QuizQueueTest {
         )
         assertEquals(listOf("C", "D"), queue.toList().map { it.item })
         assertEquals(listOf("A", "B"), queue.reserveList().map { it.item })
-    }
-
-    @Test
-    fun pushFront_reinsertsRemovedQuestionAsCurrent() {
-        val queue = QuizQueue<String>()
-        queue.build(listOf("A", "B"), typesFor = { listOf(QuestionType.MEANING) }, shuffle = false)
-        val removed = queue.removeCurrent()!!
-        // B is now current; pushing the removed A back should make it current again, ahead of B.
-        queue.pushFront(removed)
-        assertEquals(removed, queue.current)
-        assertEquals(2, queue.size)
     }
 
     @Test

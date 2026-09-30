@@ -107,6 +107,12 @@ private fun QuizSessionSummary<ReviewItem>.toCompletePhase() = ReviewUiState.Pha
  *  ([buildQueue]) and on every grade, which admits one more item whenever one finishes. */
 private const val MAX_IN_FLIGHT_REVIEW_ITEMS = 10
 
+/** Under the rank-up review priority, how many items the working set may hold while ordinary items
+ *  are only backfilling it — any rank-up item still unfinished keeps ordinary ones from filling it to
+ *  [MAX_IN_FLIGHT_REVIEW_ITEMS]. Big enough that a session with only a couple of rank-up items isn't
+ *  the same two questions on repeat, small enough that those items still come round often. */
+private const val RANK_UP_BACKFILL_ITEMS = 5
+
 /**
  * Identifies the word whose pitch accent the current question's hint should be watching — null
  * whenever there is nothing to show (a meaning question, the "show answer reading pitch accent"
@@ -305,7 +311,8 @@ class ReviewViewModel(
             reserve = persisted.reserve,
             progress = persisted.progress,
             answered = persisted.answeredQuestions,
-            totalQuestions = persisted.totalQuestions
+            totalQuestions = persisted.totalQuestions,
+            priorityIds = persisted.priorityAssignmentIds.toSet()
         )
         if (quiz == null) {
             sessionController.complete()
@@ -336,20 +343,21 @@ class ReviewViewModel(
         // paths use: this runs once, during the loading spinner, so the extra read costs nothing,
         // and `latestSettings` isn't reliable here — loadOrResume() (called first in init) can build
         // this queue before the settings collector coroutine has taken its first emission.
-        // The level is likewise fetched once per build (not per admission), matching
-        // MAX_IN_FLIGHT_REVIEW_ITEMS's "sort once at session start" contract — an item that reaches
-        // Guru mid-session keeps whatever admission order it was queued with rather than being
-        // re-sorted out from under the reserve.
-        val priority = settingsRepository.settings.first().reviewPriority
-        val tierOf = ReviewPrioritizer.tierSelector(statsRepository.observeCurrentLevel().first())
-        // The tier key, not a pre-sorted list: QuizQueue sorts the *whole* queue by tier, so the
-        // reserve stays in priority order too and admitNext keeps feeding level-up kanji in as slots
-        // free. DEFAULT passes no key at all, leaving build on its original shuffled-selection path.
+        // The priority items are chosen once, here, and persisted with the session — an item that
+        // reaches Guru, a level-up, or a settings change mid-session never re-sorts the reserve out
+        // from under it, and a resume keeps the same split. DEFAULT passes none at all, leaving build
+        // on its original shuffled-selection path.
+        val priorityIds = when (settingsRepository.settings.first().reviewPriority) {
+            ReviewPriority.DEFAULT -> emptySet()
+            ReviewPriority.RANK_UP ->
+                ReviewPrioritizer.priorityIds(items, statsRepository.observeCurrentLevel().first())
+        }
         session = ReviewSession(
             QuizSession<ReviewItem>().withQuestionsFor(
                 items,
                 cap = MAX_IN_FLIGHT_REVIEW_ITEMS,
-                priorityOf = if (priority == ReviewPriority.DEFAULT) null else tierOf
+                priorityIds = priorityIds,
+                backfillCap = RANK_UP_BACKFILL_ITEMS
             )
         )
 
@@ -419,7 +427,8 @@ class ReviewViewModel(
             // An item with a still-pending sibling question type has that one pushed to the back, so
             // it isn't the entry most likely to be drawn again right away.
             deferSiblingOnCorrect = true,
-            cap = MAX_IN_FLIGHT_REVIEW_ITEMS
+            cap = MAX_IN_FLIGHT_REVIEW_ITEMS,
+            backfillCap = RANK_UP_BACKFILL_ITEMS
         )
         val graded = quiz.lastGraded ?: return
         if (graded.completedItem) segmentItemsCompleted++

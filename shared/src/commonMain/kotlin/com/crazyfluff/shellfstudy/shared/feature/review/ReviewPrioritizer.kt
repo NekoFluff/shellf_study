@@ -13,12 +13,13 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
  *  Under [ReviewPriority.RANK_UP] this level's radicals and kanji that haven't reached Guru yet come
  *  first. The kanji are what move the level-up bar (90% of a level's kanji at Guru+, per
  *  [LevelUpProgress]). The radicals gate those kanji: a kanji only unlocks once its radicals reach
- *  Guru. Together they're everything standing between the learner and the next level. Both share
- *  one tier, keeping their relative due order.
+ *  Guru. Together they're everything standing between the learner and the next level. Both are
+ *  admitted as one group, keeping their relative due order, and ordinary items only backfill a
+ *  small working set until they're all finished (see QuizQueue.admitNext).
  *
  *  Everything else — vocabulary, other levels' items, and this level's radicals and kanji already
  *  past Guru — keeps its relative due order behind them. Already-passed items are dropped from the
- *  priority tier rather than merely deprioritized, so a session can't keep racing an item that has
+ *  priority group rather than merely deprioritized, so a session can't keep racing an item that has
  *  stopped gating anything.
  *
  *  Whether the level-up bar is already met is deliberately *not* a factor here, unlike
@@ -26,13 +27,6 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
  *  once the bar is met WaniKani lets a new level's items unlock, and those arrive as fresh reviews —
  *  so racing them stays the right call either way. */
 object ReviewPrioritizer {
-
-    /** Highest tier, admitted first. Not [Int.MIN_VALUE] so it can sit under [DEFAULT_TIER] if a
-     *  middle tier is ever needed. */
-    private const val LEVEL_UP_TIER = 0
-
-    /** Everything else, in its existing relative order. */
-    private const val DEFAULT_TIER = 1
 
     /** WaniKani's own Guru threshold — matching [com.crazyfluff.shellfstudy.shared.data.AssignmentRepository]'s
      *  private `GURU_SRS_STAGE`, and shared with [LevelUpProgress]'s counting rule. */
@@ -42,24 +36,21 @@ object ReviewPrioritizer {
     private val LEVEL_GATING_TYPES = setOf(SubjectType.RADICAL, SubjectType.KANJI)
 
     /**
-     * The tier key [com.crazyfluff.shellfstudy.shared.quiz.QuizQueue.build] sorts the queue by —
-     * lower is admitted first. Handed over as a function rather than a pre-sorted list so the queue
-     * can order the *whole* queue, keeping [com.crazyfluff.shellfstudy.shared.quiz.QuizQueue]'s
-     * reserve in priority order too, not just the ten items admitted up front. Callers pass it only
-     * for [ReviewPriority.RANK_UP]; omitting it entirely is what keeps DEFAULT on the queue's
-     * original path.
+     * The assignment ids of [items] that go ahead of the rest — what
+     * [com.crazyfluff.shellfstudy.shared.quiz.QuizSession.withQuestionsFor] takes as `priorityIds`.
+     * Computed once when a session is built and persisted with it, so an item that reaches Guru (or a
+     * level-up) mid-session doesn't reshuffle the split the reserve was sorted by. Callers ask only for
+     * [ReviewPriority.RANK_UP]; DEFAULT passes no ids at all, keeping the queue on its original path.
      */
-    fun tierSelector(currentLevel: Int?): (ReviewItem) -> Int =
-        { item -> priorityOf(item, currentLevel) }
+    fun priorityIds(items: List<ReviewItem>, currentLevel: Int?): Set<Long> =
+        items.filter { gatesLevelUp(it, currentLevel) }.mapTo(mutableSetOf()) { it.assignmentId }
 
     /** A null [currentLevel] means "level unknown" (no level progression cached yet) — it degrades to
-     *  no tier being special rather than guessing level 0, which would match nothing and silently make
-     *  the setting inert. */
-    private fun priorityOf(item: ReviewItem, currentLevel: Int?): Int {
-        if (currentLevel == null) return DEFAULT_TIER
-        val gating = item.subjectType in LEVEL_GATING_TYPES &&
+     *  nothing being special rather than guessing level 0, which would match nothing either but look
+     *  like a deliberate choice. */
+    fun gatesLevelUp(item: ReviewItem, currentLevel: Int?): Boolean =
+        currentLevel != null &&
+            item.subjectType in LEVEL_GATING_TYPES &&
             item.level == currentLevel &&
             item.srsStage < GURU_SRS_STAGE
-        return if (gating) LEVEL_UP_TIER else DEFAULT_TIER
-    }
 }

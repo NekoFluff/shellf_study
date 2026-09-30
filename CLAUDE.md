@@ -96,7 +96,7 @@ Every feature should have both ViewModel/business-logic coverage and screen/UI c
 
 - **Happy path and error path** — `fetchFreshQueue` sets `errorMessage` on `ApiResult.Error`; retry clears it.
 - **SRS stage transitions** — `passedAt` and `burnedAt` are set (and not overwritten) correctly.
-- **Quiz engine invariants** — `QuizQueue.moveMatchingToFront` uses `indexOfLast`; `QuizGradingGuard` blocks concurrent submissions.
+- **Quiz engine invariants** — `QuizQueue.admitNext` never exceeds its cap or lets ordinary items past the rank-up backfill while a priority item is in flight; `QuizSession.undoLastGrade` restores the queue exactly as it was before the grade; `QuizGradingGuard` blocks concurrent submissions.
 - **Silent drops** — missing DB rows (e.g. subject not cached) produce empty collections, not crashes.
 - **Guard clauses** — `startSelectedLessons` with empty selection, `pauseActiveSegment` after session complete, etc.
 
