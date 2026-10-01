@@ -13,7 +13,7 @@ data class PendingQuestion<T>(val item: T, val type: QuestionType)
  *
  * [reserve] is a FIFO: admission always takes from its head, so the order it was built with decides
  * which items get admitted next. Review's rank-up priority setting rides on that, via [build]'s
- * [isPriority] and [backfillCap] — see [admitNext] for the admission rule and the invariants it keeps.
+ * [isPriority] — see [admitNext] for the admission rule and the invariants it keeps.
  */
 class QuizQueue<T> {
     private val inFlight = ArrayDeque<PendingQuestion<T>>()
@@ -45,22 +45,20 @@ class QuizQueue<T> {
      * rely on. A finite [cap] admits only that many items up front, holding the rest in [reserve]
      * for [admitNext] to pull from as items finish.
      *
-     * [isPriority] and [backfillCap] are Review's rank-up priority setting. Without [isPriority]
-     * (every caller but Review), [items] is shuffled as one pool and the first [cap] are admitted, so
-     * the *selection* is an arbitrary draw. With it, [items] is stably sorted priority-first instead
-     * and admitted by [admitNext]'s rule, so the priority items are selected first and ordinary ones
-     * only backfill up to [backfillCap] until every priority item is finished. Within each group the
-     * caller's own order survives. Draw order inside [inFlight] is still shuffled either way.
+     * [isPriority] is Review's rank-up priority setting. Without it (every caller but Review),
+     * [items] is shuffled as one pool and the first [cap] are admitted, so the *selection* is an
+     * arbitrary draw. With it, [items] is stably sorted priority-first instead and admitted by
+     * [admitNext]'s rule, so the working set holds only priority items until every one of them is
+     * finished. Within each group the caller's own order survives. Draw order inside [inFlight] is
+     * still shuffled either way.
      */
     fun build(
         items: List<T>,
         typesFor: (T) -> List<QuestionType>,
         shuffle: Boolean = true,
         cap: Int? = null,
-        isPriority: ((T) -> Boolean)? = null,
-        backfillCap: Int? = null
+        isPriority: ((T) -> Boolean)? = null
     ) {
-        requireValidBackfill(cap, backfillCap)
         shuffleOnAdmit = shuffle
         inFlight.clear()
         reserve.clear()
@@ -77,7 +75,7 @@ class QuizQueue<T> {
             // reserve so the opening admission follows exactly the rule every later one does.
             val sorted = items.sortedBy { if (isPriority(it)) 0 else 1 }
             reserve.addAll(sorted.flatMap { item -> typesFor(item).map { PendingQuestion(item, it) } })
-            admitWhileRoom(cap ?: Int.MAX_VALUE, isPriority, backfillCap)
+            admitWhileRoom(cap ?: Int.MAX_VALUE, isPriority)
         }
         // Shuffled as its own pass (not just inherited from the item-level shuffle above) so an
         // item's own question types land at independently random positions — otherwise they'd always
@@ -120,30 +118,28 @@ class QuizQueue<T> {
      * has room under [cap]. No-op when nothing is free, so it's safe to call unconditionally after
      * every graded answer rather than only when something's actually free. Returns the items admitted.
      *
-     * With [isPriority] and [backfillCap], an ordinary (non-priority) item at the reserve's head is
-     * admitted only while fewer than [backfillCap] items are in flight, for as long as any priority
-     * item is still in flight. A priority item is always admitted up to [cap]. So every priority item
-     * finishes before ordinary items fill the working set, and a session with only a couple of
-     * priority items still has [backfillCap] items to rotate through instead of repeating the same
-     * two. This holds because:
+     * With [isPriority], an ordinary (non-priority) item is admitted only once no priority item is
+     * left in flight; a priority item is always admitted up to [cap]. So the working set holds only
+     * priority items until every one of them is finished, then fills with ordinary ones. This holds
+     * because:
      *  - [build] sorts [reserve] priority-first and nothing re-sorts it, so once its head is ordinary
      *    no priority item is left behind it;
-     *  - an empty working set always admits (0 < [backfillCap], which must be at least 1), so the
-     *    session always drains;
-     *  - [cap] is checked before every admission, and [backfillCap] may not exceed it.
-     * Without them the rule is plain "room under [cap]", unchanged from before the setting existed.
+     *  - an empty working set has no priority item in it, so it always admits and the session always
+     *    drains;
+     *  - [cap] is checked before every admission.
+     * Without [isPriority] the rule is plain "room under [cap]", unchanged from before the setting
+     * existed.
      */
-    fun admitNext(cap: Int, isPriority: ((T) -> Boolean)? = null, backfillCap: Int? = null): List<T> {
-        requireValidBackfill(cap, backfillCap)
-        val admitted = admitWhileRoom(cap, isPriority, backfillCap)
+    fun admitNext(cap: Int, isPriority: ((T) -> Boolean)? = null): List<T> {
+        val admitted = admitWhileRoom(cap, isPriority)
         if (admitted.isNotEmpty() && shuffleOnAdmit) inFlight.shuffle()
         return admitted
     }
 
-    private fun admitWhileRoom(cap: Int, isPriority: ((T) -> Boolean)?, backfillCap: Int?): List<T> {
+    private fun admitWhileRoom(cap: Int, isPriority: ((T) -> Boolean)?): List<T> {
         val admitted = mutableListOf<T>()
         var next = reserve.firstOrNull()?.item
-        while (next != null && canAdmit(next, cap, isPriority, backfillCap)) {
+        while (next != null && canAdmit(next, cap, isPriority)) {
             while (reserve.isNotEmpty() && reserve.first().item == next) {
                 inFlight.addLast(reserve.removeFirst())
             }
@@ -154,19 +150,9 @@ class QuizQueue<T> {
     }
 
     /** [admitNext]'s rule for the reserve's head, [next]. */
-    private fun canAdmit(next: T, cap: Int, isPriority: ((T) -> Boolean)?, backfillCap: Int?): Boolean {
-        val count = inFlightItemCount
-        val backfillAllows = isPriority == null || backfillCap == null || isPriority(next) ||
-            count < backfillCap || inFlight.none { isPriority(it.item) }
-        return count < cap && backfillAllows
-    }
-
-    private fun requireValidBackfill(cap: Int?, backfillCap: Int?) {
-        if (backfillCap == null) return
-        require(backfillCap >= 1) {
-            "backfillCap must be at least 1 so an empty working set always admits, was $backfillCap"
-        }
-        require(cap == null || backfillCap <= cap) { "backfillCap ($backfillCap) must not exceed cap ($cap)" }
+    private fun canAdmit(next: T, cap: Int, isPriority: ((T) -> Boolean)?): Boolean {
+        val priorityAllows = isPriority == null || isPriority(next) || inFlight.none { isPriority(it.item) }
+        return inFlightItemCount < cap && priorityAllows
     }
 
     /** Keeps [current] and everything already admitted that matches [predicate]; drops the rest of

@@ -37,8 +37,8 @@ data class ReviewForecast(
  *  items land in the batch is an arbitrary draw, exactly as every session behaved before this setting
  *  existed. [RANK_UP] makes selection deterministic instead, favoring the current level's not-yet-Guru
  *  radicals and kanji: the kanji move WaniKani's level-up bar (90% of a level's kanji at Guru+), and
- *  the radicals unlock those kanji. While any of them is unfinished, other items only backfill a
- *  smaller working set, so they're all worked through before the session moves on. */
+ *  the radicals unlock those kanji. While any of them is unfinished, no other item enters the working
+ *  set, so they're all worked through before the session moves on. */
 enum class ReviewPriority(val label: String) {
     DEFAULT("Default"),
     RANK_UP("Rank up")

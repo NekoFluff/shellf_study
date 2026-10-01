@@ -3,7 +3,6 @@ package com.crazyfluff.shellfstudy.shared.quiz
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -218,20 +217,19 @@ class QuizQueueTest {
     }
 
     @Test
-    fun build_withFewPriorityItems_backfillsOrdinaryOnesOnlyUpToTheBackfillCap() {
+    fun build_withFewPriorityItems_admitsOnlyThem() {
         val queue = QuizQueue<String>()
         queue.build(
             ordinary(10) + listOf("P0", "P1"),
             typesFor = { listOf(QuestionType.MEANING) },
             shuffle = false,
             cap = 10,
-            isPriority = ::isP,
-            backfillCap = 5
+            isPriority = ::isP
         )
-        // Both priority items, plus the three oldest ordinary ones — not the eight a plain cap of
-        // ten would have let in beside them.
-        assertEquals(listOf("P0", "P1", "O0", "O1", "O2"), queue.toList().map { it.item })
-        assertEquals(ordinary(10).drop(3), queue.reserveList().map { it.item })
+        // Just the two priority items — not the eight ordinary ones a plain cap of ten would have
+        // let in beside them.
+        assertEquals(listOf("P0", "P1"), queue.toList().map { it.item })
+        assertEquals(ordinary(10), queue.reserveList().map { it.item })
     }
 
     @Test
@@ -242,68 +240,47 @@ class QuizQueueTest {
             typesFor = { listOf(QuestionType.MEANING) },
             shuffle = false,
             cap = 10,
-            isPriority = ::isP,
-            backfillCap = 5
+            isPriority = ::isP
         )
         assertEquals(priority(10), queue.toList().map { it.item })
 
         queue.removeCurrent() // P0 finished
-        assertEquals(listOf("P10"), queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 5))
+        assertEquals(listOf("P10"), queue.admitNext(cap = 10, isPriority = ::isP))
     }
 
     @Test
-    fun admitNext_holdsOrdinaryItemsBack_whileAPriorityItemIsInFlightAndTheBackfillIsFull() {
+    fun admitNext_holdsOrdinaryItemsBack_whileAnyPriorityItemIsInFlight() {
         val queue = QuizQueue<String>()
-        // Six priority items in flight, nothing priority left in reserve, and four ordinary in flight.
+        // Two priority items in flight, nothing priority left in reserve.
         queue.restore(
-            inFlight = (priority(6) + ordinary(4)).map { PendingQuestion(it, QuestionType.MEANING) },
-            reserve = listOf("O4", "O5").map { PendingQuestion(it, QuestionType.MEANING) },
+            inFlight = priority(2).map { PendingQuestion(it, QuestionType.MEANING) },
+            reserve = ordinary(3).map { PendingQuestion(it, QuestionType.MEANING) },
             shuffleOnAdmit = false
         )
-        // Finishing an item anywhere in the working set, not just at its head.
-        fun finish(item: String) =
-            queue.restore(queue.toList().filter { it.item != item }, queue.reserveList(), shuffleOnAdmit = false)
-
-        // An ordinary item finishing frees a slot, but six items are still in flight — over the
-        // backfill — and a priority item is among them, so nothing comes in.
-        finish("O0")
-        assertEquals(emptyList(), queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 5))
-
-        // Down to four in flight (still with priority items): ordinary items backfill to five.
-        finish("P0"); finish("P1"); finish("O1"); finish("O2"); finish("O3")
-        assertEquals(4, queue.inFlightItemCount)
-        assertEquals(listOf("O4"), queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 5))
-        assertEquals(5, queue.inFlightItemCount)
+        // One finishes, freeing a slot — but P1 is still in flight, so nothing comes in.
+        queue.removeCurrent()
+        assertEquals(emptyList(), queue.admitNext(cap = 10, isPriority = ::isP))
+        assertEquals(listOf("P1"), queue.toList().map { it.item })
     }
 
     @Test
     fun admitNext_refillsToTheCapInOneCall_onceTheLastPriorityItemFinishes() {
         val queue = QuizQueue<String>()
         queue.restore(
-            inFlight = (listOf("P0") + ordinary(4)).map { PendingQuestion(it, QuestionType.MEANING) },
-            reserve = ordinary(20).drop(4).map { PendingQuestion(it, QuestionType.MEANING) },
+            inFlight = listOf(PendingQuestion("P0", QuestionType.MEANING)),
+            reserve = ordinary(20).map { PendingQuestion(it, QuestionType.MEANING) },
             shuffleOnAdmit = false
         )
         queue.removeCurrent() // P0, the last priority item, finishes
-        assertEquals(
-            listOf("O4", "O5", "O6", "O7", "O8", "O9"),
-            queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 5)
-        )
+        assertEquals(ordinary(10), queue.admitNext(cap = 10, isPriority = ::isP))
         assertEquals(10, queue.inFlightItemCount)
     }
 
     @Test
-    fun admitNext_rejectsABackfillCapThatCouldDeadlockOrExceedTheCap() {
-        val queue = QuizQueue<String>()
-        assertFailsWith<IllegalArgumentException> { queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 0) }
-        assertFailsWith<IllegalArgumentException> { queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 11) }
-    }
-
-    @Test
-    fun aSimulatedSessionNeverBreaksTheCapOrTheBackfill_andAlwaysDrains() {
+    fun aSimulatedSessionAsksEveryPriorityItemBeforeAnyOrdinaryOne_andAlwaysDrains() {
         // Seeded so a failure reproduces. Every step answers the current question right or wrong at
-        // random, the way QuizSession.grade drives the queue, and checks the invariants the rank-up
-        // setting relies on after each admission.
+        // random, the way QuizSession.grade drives the queue — misses included, since a requeued
+        // priority question is exactly what used to surface late.
         repeat(50) { seed ->
             val random = Random(seed)
             val items = (0 until 40).map { if (random.nextInt(4) == 0) "P$it" else "O$it" }.shuffled(random)
@@ -313,35 +290,33 @@ class QuizQueueTest {
                 typesFor = { listOf(QuestionType.MEANING, QuestionType.READING) },
                 shuffle = true,
                 cap = 10,
-                isPriority = ::isP,
-                backfillCap = 5
+                isPriority = ::isP
             )
             val answered = mutableMapOf<String, Int>()
+            var askedOrdinary = false
             var steps = 0
             while (!queue.isEmpty) {
                 assertTrue(steps++ < 10_000, "seed $seed did not drain")
                 val question = assertNotNull(queue.current, "seed $seed: questions in reserve but none in flight")
+                assertTrue(
+                    !(askedOrdinary && isP(question.item)),
+                    "seed $seed: ${question.item} was asked after an ordinary item"
+                )
+                askedOrdinary = askedOrdinary || !isP(question.item)
                 queue.removeCurrent()
                 if (random.nextInt(3) == 0) {
                     queue.requeue(question)
                 } else {
                     answered[question.item] = (answered[question.item] ?: 0) + 1
                 }
-                var count = queue.inFlightItemCount
-                var priorityInFlight = queue.toList().any { isP(it.item) }
-                val admitted = queue.admitNext(cap = 10, isPriority = ::isP, backfillCap = 5)
+                queue.admitNext(cap = 10, isPriority = ::isP)
 
+                val inFlight = queue.toList().map { it.item }
                 assertTrue(queue.inFlightItemCount <= 10, "seed $seed: over the cap")
-                // Replays the admissions in order, so each is checked against the working set it
-                // actually joined.
-                admitted.forEach { item ->
-                    assertTrue(
-                        isP(item) || !priorityInFlight || count < 5,
-                        "seed $seed: $item was admitted past the backfill beside a priority item"
-                    )
-                    count++
-                    priorityInFlight = priorityInFlight || isP(item)
-                }
+                assertTrue(
+                    inFlight.all(::isP) || inFlight.none(::isP),
+                    "seed $seed: priority and ordinary items in flight together"
+                )
             }
             assertEquals(items.toSet(), answered.filterValues { it == 2 }.keys, "seed $seed: not every item finished")
         }

@@ -109,12 +109,6 @@ private fun QuizSessionSummary<ReviewItem>.toCompletePhase() = ReviewUiState.Pha
  *  ([buildQueue]) and on every grade, which admits one more item whenever one finishes. */
 private const val MAX_IN_FLIGHT_REVIEW_ITEMS = 10
 
-/** Under the rank-up review priority, how many items the working set may hold while ordinary items
- *  are only backfilling it — any rank-up item still unfinished keeps ordinary ones from filling it to
- *  [MAX_IN_FLIGHT_REVIEW_ITEMS]. Big enough that a session with only a couple of rank-up items isn't
- *  the same two questions on repeat, small enough that those items still come round often. */
-private const val RANK_UP_BACKFILL_ITEMS = 5
-
 /**
  * Identifies the word whose pitch accent the current question's hint should be watching — null
  * whenever there is nothing to show (a meaning question, the "show answer reading pitch accent"
@@ -364,8 +358,7 @@ class ReviewViewModel(
             QuizSession<ReviewItem>().withQuestionsFor(
                 items,
                 cap = MAX_IN_FLIGHT_REVIEW_ITEMS,
-                priorityIds = priorityIds,
-                backfillCap = RANK_UP_BACKFILL_ITEMS
+                priorityIds = priorityIds
             )
         )
 
@@ -432,8 +425,7 @@ class ReviewViewModel(
             // An item with a still-pending sibling question type has that one pushed to the back, so
             // it isn't the entry most likely to be drawn again right away.
             deferSiblingOnCorrect = true,
-            cap = MAX_IN_FLIGHT_REVIEW_ITEMS,
-            backfillCap = RANK_UP_BACKFILL_ITEMS
+            cap = MAX_IN_FLIGHT_REVIEW_ITEMS
         )
         val graded = quiz.lastGraded ?: return
         if (graded.completedItem) segmentItemsCompleted++

@@ -50,14 +50,13 @@ data class QuizSession<T : QuizDisplayItem>(
     /**
      * A fresh set of questions over [items], keeping [progress] and [answered] — a lesson quizzes each
      * batch as its own pass, but summarizes the whole session. See [QuizQueue.build] for [shuffle],
-     * [cap] and [backfillCap]; [priorityIds] are the items [QuizQueue.build]'s `isPriority` accepts.
+     * and [cap]; [priorityIds] are the items [QuizQueue.build]'s `isPriority` accepts.
      */
     fun withQuestionsFor(
         items: List<T>,
         shuffle: Boolean = true,
         cap: Int? = null,
-        priorityIds: Set<Long> = emptySet(),
-        backfillCap: Int? = null
+        priorityIds: Set<Long> = emptySet()
     ): QuizSession<T> {
         val queue = QuizQueue<T>().apply {
             build(
@@ -65,8 +64,7 @@ data class QuizSession<T : QuizDisplayItem>(
                 typesFor = { questionTypesFor(it.subjectType) },
                 shuffle = shuffle,
                 cap = cap,
-                isPriority = isPriorityFor(priorityIds),
-                backfillCap = backfillCap
+                isPriority = isPriorityFor(priorityIds)
             )
         }
         return copy(
@@ -88,7 +86,7 @@ data class QuizSession<T : QuizDisplayItem>(
      * Grades [current]. A correct answer takes the question out; a wrong one records the miss and sends
      * it to the back. With [deferSiblingOnCorrect], an item still owed its other question type has that
      * one moved to the back too, so it is not the next thing drawn. With a [cap], a freed slot admits
-     * from [reserve] by [QuizQueue.admitNext]'s rule, with [priorityIds] and [backfillCap].
+     * from [reserve] by [QuizQueue.admitNext]'s rule, with [priorityIds].
      *
      * Returns this session unchanged when there is no current question.
      */
@@ -96,8 +94,7 @@ data class QuizSession<T : QuizDisplayItem>(
         isCorrect: Boolean,
         elapsedMs: Long,
         deferSiblingOnCorrect: Boolean = false,
-        cap: Int? = null,
-        backfillCap: Int? = null
+        cap: Int? = null
     ): QuizSession<T> {
         val question = current ?: return this
         val item = question.item
@@ -112,7 +109,7 @@ data class QuizSession<T : QuizDisplayItem>(
         } else if (deferSiblingOnCorrect && !itemDone) {
             queue.moveMatchingToBack { it.item.assignmentId == item.assignmentId }
         }
-        cap?.let { queue.admitNext(it, isPriorityFor(priorityIds), backfillCap) }
+        cap?.let { queue.admitNext(it, isPriorityFor(priorityIds)) }
 
         return copy(
             inFlight = queue.toList(),
@@ -132,7 +129,7 @@ data class QuizSession<T : QuizDisplayItem>(
      * The queue goes back to exactly how it stood before the grade, not just the graded question: a
      * completing answer may have admitted items from [reserve] (and reshuffled the working set), and
      * leaving those admitted beside an item that is unfinished again could push the working set past
-     * its cap, or let ordinary items in past the rank-up backfill.
+     * its cap, or leave ordinary items in flight beside an unfinished rank-up item.
      */
     fun undoLastGrade(): QuizSession<T>? {
         val graded = lastGraded ?: return null

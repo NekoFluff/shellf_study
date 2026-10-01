@@ -1800,7 +1800,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
-    fun `rank-up review priority admits the current level's not-yet-Guru kanji ahead of older due vocabulary, which only backfills`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `rank-up review priority admits only the current level's not-yet-Guru kanji until they're finished, ahead of older due vocabulary`() = runTest(mainDispatcherRule.dispatcher) {
         seedLevel(3)
         dispatch(
             jsonResponse(manyVocabAndKanjiAssignmentsJson(vocabCount = 12, kanjiCount = 2)),
@@ -1821,17 +1821,15 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
             val session = reviewSessionRepository.load()!!
             val inFlight = session.queue.map { it.assignmentId }.toSet()
             assertThat(inFlight).containsAtLeast(1012L, 1013L)
-            // While a kanji is unfinished, vocabulary only backfills the working set up to
-            // RANK_UP_BACKFILL_ITEMS — the three oldest, in due order — rather than filling all ten.
-            assertThat(inFlight).hasSize(5)
-            assertThat(inFlight - setOf(1012L, 1013L)).containsExactly(1000L, 1001L, 1002L)
-            // Everything else waits in reserve, in due order.
+            // While a kanji is unfinished, no vocabulary enters the working set at all.
+            assertThat(inFlight).containsExactly(1012L, 1013L)
+            // All the vocabulary waits in reserve, in due order.
             assertThat(session.reserve.map { it.assignmentId }.distinct())
-                .containsExactly(1003L, 1004L, 1005L, 1006L, 1007L, 1008L, 1009L, 1010L, 1011L).inOrder()
+                .containsExactlyElementsIn((1000L..1011L).toList()).inOrder()
             assertThat(session.priorityAssignmentIds).containsExactly(1012L, 1013L)
 
             // And the session can actually draw them.
-            val admitted = drawInFlightItems(viewModel, poolSize = 5) { awaitItem() }
+            val admitted = drawInFlightItems(viewModel, poolSize = 2) { awaitItem() }
             assertThat(admitted).containsAtLeast(1012L, 1013L)
         }
     }
@@ -1894,7 +1892,7 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
 
         val snapshot = reviewSessionRepository.load()!!
         assertThat(snapshot.priorityAssignmentIds).containsExactly(1012L, 1013L)
-        assertThat(snapshot.queue.map { it.assignmentId }.toSet()).hasSize(5)
+        assertThat(snapshot.queue.map { it.assignmentId }.toSet()).containsExactly(1012L, 1013L)
     }
 
     @Test
