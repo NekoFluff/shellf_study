@@ -15,8 +15,9 @@ import com.crazyfluff.shellfstudy.shared.designsystem.window.KeepWindowOutOfKeyb
 
 /*
  * Material's dialog and sheet, for every screen to use instead of Material's own. Each one draws in
- * a window of its own on Android. A window without a text field has to stay out of keyboard focus,
- * or closing it flashes the keyboard (see KeepWindowOutOfKeyboardFocus). detekt's ForbiddenImport
+ * a window of its own on Android. A window without a text field stays out of keyboard focus, so
+ * closing it can't flash the keyboard when the device's keyboard state is stuck (see
+ * KeepWindowOutOfKeyboardFocus). detekt's ForbiddenImport
  * points everything else here, so a new dialog can't skip it by accident.
  *
  * There are two dialogs rather than one with a flag. Getting the choice wrong fails silently either

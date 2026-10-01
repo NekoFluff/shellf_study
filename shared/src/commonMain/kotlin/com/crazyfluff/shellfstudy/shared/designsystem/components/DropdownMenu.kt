@@ -14,11 +14,10 @@ import androidx.compose.ui.window.PopupProperties
  * Material's dropdown menu, with a popup that never becomes the keyboard's target. Use it instead of
  * `androidx.compose.material3.DropdownMenu` for every menu.
  *
- * A plain focusable menu window takes keyboard focus while it's open. When it closes, Android hands
- * keyboard control to a display-level fallback that can still hold a stale "keyboard visible" request
- * from whichever app last showed the keyboard, so the keyboard flashed up over the screen until the
- * app window took focus back and hid it. Keeping the menu out of keyboard focus (see
- * [menuPopupProperties]) leaves the app window as the target throughout, with nothing to hand over.
+ * A plain focusable menu window takes keyboard focus while it's open. Keeping it out of keyboard
+ * focus (see [menuPopupProperties]) leaves the app window as the target throughout, so closing the
+ * menu never hands keyboard control anywhere. That matters when the device's keyboard state is
+ * stuck, which otherwise flashes the keyboard as the menu closes (see `KeepWindowOutOfKeyboardFocus`).
  */
 @Composable
 fun DropdownMenu(

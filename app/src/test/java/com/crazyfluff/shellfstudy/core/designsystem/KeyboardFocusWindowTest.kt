@@ -18,9 +18,10 @@ import org.robolectric.shadows.ShadowDialog
 /**
  * Reads the keyboard-focus flag off the real Android window each wrapper opens.
  *
- * A dialog or sheet without a text field must carry FLAG_ALT_FOCUSABLE_IM, or closing it flashes the
- * keyboard (see KeepWindowOutOfKeyboardFocus). A dialog with a text field must not, or its keyboard
- * never opens. Both failures are invisible in a screen test, which only sees the composition.
+ * A dialog or sheet without a text field must carry FLAG_ALT_FOCUSABLE_IM, or it can flash the
+ * keyboard when the device's keyboard state is stuck (see KeepWindowOutOfKeyboardFocus). A dialog
+ * with a text field must not, or its keyboard never opens. Both failures are invisible in a screen
+ * test, which only sees the composition.
  */
 @RunWith(AndroidJUnit4::class)
 class KeyboardFocusWindowTest {

@@ -6,7 +6,7 @@ A WaniKani (Japanese kanji/vocabulary SRS) client for Android and iOS, built wit
 
 - **Kotlin Multiplatform** — the entire app (business logic, repositories, ViewModels, and Compose UI) lives in the `shared/` module
 - **Compose Multiplatform (Material 3)**, no XML layouts, no SwiftUI
-- **Dialogs, sheets and menus** come from `designsystem/components`, never Material directly: `AppAlertDialog` (no text field), `AppTextInputDialog` (has one), `AppModalBottomSheet`, `DropdownMenu`. On Android each draws in its own window, and a window without a text field must stay out of keyboard focus, or closing it flashes the keyboard (see `designsystem/window/KeyboardFocus.kt`). detekt's `ForbiddenImport` enforces this.
+- **Dialogs, sheets and menus** come from `designsystem/components`, never Material directly: `AppAlertDialog` (no text field), `AppTextInputDialog` (has one), `AppModalBottomSheet`, `DropdownMenu`. On Android each draws in its own window, and a window without a text field stays out of keyboard focus, as Android's `AlertDialog` does; this guards against a keyboard flash when the device's keyboard state is stuck (see `designsystem/window/KeyboardFocus.kt`). detekt's `ForbiddenImport` enforces this. A keyboard-flash report: reboot the device and check `dumpsys input_method` before suspecting the app.
 - **MVVM / unidirectional data flow** — `ViewModel` exposes a single `StateFlow<UiState>`, and feature composables may take that `ViewModel` as a parameter
 - **Koin** for dependency injection (`shared/di/SharedModules.kt` + platform extensions)
 - **Ktor** + kotlinx.serialization for the WaniKani API v2 client (OkHttp on Android, Darwin on iOS)

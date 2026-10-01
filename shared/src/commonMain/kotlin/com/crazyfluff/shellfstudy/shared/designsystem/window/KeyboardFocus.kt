@@ -8,14 +8,18 @@ import androidx.compose.runtime.Composable
  * Call it from inside the window's own content. The design-system wrappers (`AppAlertDialog`,
  * `AppModalBottomSheet`) already do; nothing else should need to.
  *
- * Why: on Android, a focusable dialog or sheet window takes keyboard focus while it's open. When it
- * closes, the system hands keyboard control to a display-level fallback that can still hold an
- * earlier "keyboard visible" request, and re-shows the keyboard until the app window takes focus
- * back and hides it. Confirmed on a Galaxy S22 (Android 16): the keyboard stayed up for about 0.6 s
- * after a sheet was dismissed. Android's own `AlertDialog` avoids this by setting
- * `FLAG_ALT_FOCUSABLE_IM` whenever it has no text editor; Compose's `Dialog` and Material's
- * `ModalBottomSheet` don't, so this sets it. The window stays focusable, so Back and tapping
- * outside still dismiss it. See also `DropdownMenu`, which fixes the same handover for menus.
+ * Why: a window without a text field shouldn't be a keyboard target. Android's own `AlertDialog`
+ * sets `FLAG_ALT_FOCUSABLE_IM` whenever it has no text editor; Compose's `Dialog` and Material's
+ * `ModalBottomSheet` don't, so this sets it. The window stays focusable, so Back and tapping outside
+ * still dismiss it.
+ *
+ * On a healthy device this has no visible effect. It matters when the device's keyboard state gets
+ * stuck: the display-level keyboard target keeps a stale "visible" request, and whenever a focusable
+ * window closes and hands keyboard control back to it, the keyboard flashes up until the app window
+ * takes focus and hides it. Seen on a Galaxy S22 (Android 16, Sep 2026). Other apps flashed the same
+ * way, and a reboot cleared it, so it was the device, not the app. If a flash is reported, reboot
+ * first and check `adb shell dumpsys input_method` before changing code. See also `DropdownMenu`,
+ * which does the same for menus.
  */
 @Composable
 expect fun KeepWindowOutOfKeyboardFocus()
