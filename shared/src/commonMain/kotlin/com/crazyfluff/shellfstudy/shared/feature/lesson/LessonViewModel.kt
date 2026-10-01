@@ -57,6 +57,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -83,7 +84,9 @@ data class LessonUiState(
      *  Room flow, rather than a per-batch snapshot fetched once at study time. A subject absent from
      *  the map has no cached summary (yet); [RelatedSubjectsSection]/[toRelatedSubjectsUiState] is
      *  what turns "absent" into a "not cached yet" caption rather than silence. */
-    val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap()
+    val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
+    /** Drives the overflow menu's "Mute audio"/"Unmute audio" label. */
+    val isAudioMuted: Boolean = false
 ) : QuizSessionState<LessonUiState, LessonItem> {
 
     override val question: QuizQuestionState<LessonItem>? get() = (phase as? Phase.Quiz)?.question
@@ -284,6 +287,12 @@ class LessonViewModel(
             // used to mirror into the UI state are provided app-wide by LocalDisplaySettings instead,
             // so a settings change no longer re-emits a whole LessonUiState.
             settingsRepository.settings.collect { latestSettings = it }
+        }
+        // The one setting the screen itself renders (the overflow menu's mute label), mirrored apart
+        // from latestSettings so only a mute toggle re-emits the UI state.
+        viewModelScope.launch {
+            settingsRepository.settings.map { it.audioMuted }.distinctUntilChanged()
+                .collect { muted -> _uiState.update { it.copy(isAudioMuted = muted) } }
         }
         // The study card and the quiz hint both read pitch accents from
         // LessonUiState.pitchAccentsBySubjectId, which this collector keeps live off the repository's
@@ -1009,6 +1018,10 @@ class LessonViewModel(
     override fun finishForNow() {
         if (_uiState.value.phase !is LessonUiState.Phase.BatchComplete) return
         _uiState.update { it.copy(exit = LessonUiState.ExitRequest.Parked) }
+    }
+
+    override fun toggleAudioMuted() {
+        viewModelScope.launch { settingsRepository.toggleAudioMuted() }
     }
 
     override fun abandonSession() {

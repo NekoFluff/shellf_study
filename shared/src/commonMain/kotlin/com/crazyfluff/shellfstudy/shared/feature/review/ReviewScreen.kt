@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import com.crazyfluff.shellfstudy.shared.designsystem.components.MuteAudioMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -71,6 +72,7 @@ object ReviewScreenTestTags {
     const val SEARCH_BUTTON = "review_search_button"
     const val OVERFLOW_MENU = "review_overflow_menu"
     const val ABANDON_MENU_ITEM = "review_abandon_menu_item"
+    const val MUTE_AUDIO_MENU_ITEM = "review_mute_audio_menu_item"
     const val ABANDON_CONFIRM_BUTTON = "review_abandon_confirm_button"
     const val DETAILS_TOGGLE = "review_details_toggle"
     const val TYPE_MISMATCH_TEXT = "review_type_mismatch_text"
@@ -175,6 +177,11 @@ fun ReviewScreen(
             abandonConfirmButton = ReviewScreenTestTags.ABANDON_CONFIRM_BUTTON
         ),
         extraMenuItems = { closeMenu ->
+            MuteAudioMenuItem(
+                muted = uiState.isAudioMuted,
+                testTag = ReviewScreenTestTags.MUTE_AUDIO_MENU_ITEM,
+                onClick = { closeMenu(); actions.toggleAudioMuted() }
+            )
             DropdownMenuItem(
                 text = { Text("Wrap up") },
                 leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },

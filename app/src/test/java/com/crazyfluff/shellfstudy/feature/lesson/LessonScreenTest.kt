@@ -1483,6 +1483,26 @@ class LessonScreenTest {
     }
 
     @Test
+    fun overflowMenu_muteItem_followsMutedState_andInvokesToggle() {
+        val actions = RecordingLessonActions()
+        setScreen(studyState(studyItems = listOf(radicalItem)), actions = actions)
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.MUTE_AUDIO_MENU_ITEM)
+            .assertTextEquals("Mute audio")
+            .performClick()
+        assertThat(actions.calls).contains("toggleAudioMuted")
+    }
+
+    @Test
+    fun overflowMenu_muteItem_offersUnmute_whenMuted() {
+        setScreen(studyState(studyItems = listOf(radicalItem)).copy(isAudioMuted = true))
+
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(LessonScreenTestTags.MUTE_AUDIO_MENU_ITEM).assertTextEquals("Unmute audio")
+    }
+
+    @Test
     fun overflowMenu_abandonConfirmed_invokesCallback_duringStudyPhase() {
         val actions = RecordingLessonActions()
         setScreen(
@@ -1670,5 +1690,6 @@ private class RecordingLessonActions : LessonActions {
     override fun closeDetails() = record("closeDetails")
     override fun continueSession() = record("continueSession")
     override fun finishForNow() = record("finishForNow")
+    override fun toggleAudioMuted() = record("toggleAudioMuted")
     override fun abandonSession() = record("abandonSession")
 }

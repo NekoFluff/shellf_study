@@ -186,6 +186,30 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun muteAudioMenuItem_followsMutedState_andInvokesCallback() {
+        var toggled = false
+        var muted by mutableStateOf(false)
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = DashboardUiState(
+                    fetchState = DashboardFetch.Idle, username = "x", level = 1, isAudioMuted = muted
+                ),
+                callbacks = dashboardCallbacks(onToggleAudioMuted = { toggled = true })
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.MUTE_AUDIO_MENU_ITEM)
+            .assertTextEquals("Mute audio")
+            .performClick()
+        assert(toggled)
+
+        muted = true
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.MUTE_AUDIO_MENU_ITEM).assertTextEquals("Unmute audio")
+    }
+
+    @Test
     fun settingsMenuItem_isNestedUnderOverflowMenu_andInvokesCallback() {
         var openedSettings = false
         composeTestRule.setContent {

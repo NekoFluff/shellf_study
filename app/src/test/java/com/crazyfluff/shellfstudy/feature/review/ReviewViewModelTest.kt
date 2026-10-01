@@ -645,6 +645,24 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
     }
 
     @Test
+    fun `toggleAudioMuted persists the mute and mirrors it into the UI state`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            viewModel.toggleAudioMuted()
+            var state = awaitItem()
+            while (!state.isAudioMuted) state = awaitItem()
+            assertThat(settingsRepository.settings.first().audioMuted).isTrue()
+
+            viewModel.toggleAudioMuted()
+            while (state.isAudioMuted) state = awaitItem()
+            assertThat(settingsRepository.settings.first().audioMuted).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `autoplay is skipped once the setting is turned off`() = runTest(mainDispatcherRule.dispatcher) {
         settingsRepository.setAutoplayPronunciationAudio(false)
         dispatch(jsonResponse(kanjiAssignmentsJson()), jsonResponse(kanjiSubjectsJson()))

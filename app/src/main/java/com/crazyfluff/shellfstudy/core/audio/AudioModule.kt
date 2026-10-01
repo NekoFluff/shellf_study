@@ -11,9 +11,12 @@ import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.crazyfluff.shellfstudy.shared.data.AUDIO_CACHE_MAX_BYTES
+import com.crazyfluff.shellfstudy.shared.data.mutedBy
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
+import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.di.APPLICATION_SCOPE
+import kotlinx.coroutines.CoroutineScope
 import org.koin.android.ext.koin.androidContext
-import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.io.File
 
@@ -47,5 +50,8 @@ val audioModule = module {
             .build()
     }
     single { androidContext().getSystemService(AudioManager::class.java) }
-    single { RealPronunciationAudioPlayer(get(), get()) } bind PronunciationAudioPlayer::class
+    single<PronunciationAudioPlayer> {
+        RealPronunciationAudioPlayer(get(), get())
+            .mutedBy(get<SettingsRepository>(), get<CoroutineScope>(APPLICATION_SCOPE))
+    }
 }

@@ -66,5 +66,8 @@ interface LessonActions {
     /** The batch checkpoint's "Finishing for now" — keeps the session and leaves the screen. */
     fun finishForNow()
 
+    /** Mutes or unmutes all pronunciation audio, persisted app-wide. */
+    fun toggleAudioMuted()
+
     fun abandonSession()
 }

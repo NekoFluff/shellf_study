@@ -61,6 +61,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.performance.JANK_STATE_SCR
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.TimedComposition
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.ReportJankState
 import com.crazyfluff.shellfstudy.shared.designsystem.components.AbandonSessionMenuItem
+import com.crazyfluff.shellfstudy.shared.designsystem.components.MuteAudioMenuItem
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
@@ -99,6 +100,7 @@ object DashboardScreenTestTags {
     const val ABANDON_LESSON_CONFIRM_BUTTON = "dashboard_abandon_lesson_confirm_button"
     const val LAST_SESSION_SUMMARY_MENU_ITEM = "dashboard_last_session_summary_menu_item"
     const val STUDY_TIME_MENU_ITEM = "dashboard_study_time_menu_item"
+    const val MUTE_AUDIO_MENU_ITEM = "dashboard_mute_audio_menu_item"
 }
 
 /** Bundles [DashboardScreen]'s callback lambdas into one param — the screen otherwise ends up with
@@ -118,6 +120,7 @@ data class DashboardCallbacks(
     val onOpenStudyTime: () -> Unit,
     val onAbandonReviewSession: () -> Unit,
     val onAbandonLessonSession: () -> Unit,
+    val onToggleAudioMuted: () -> Unit,
     val onSearchQueryChange: (String) -> Unit,
     val onLevelProgressLevelChange: (Int) -> Unit,
     val onLeaderboardMetricChange: (LeaderboardMetric) -> Unit,
@@ -278,6 +281,7 @@ private fun rememberDashboardCallbacks(
         onOpenStudyTime = onOpenStudyTime,
         onAbandonReviewSession = viewModel::abandonReviewSession,
         onAbandonLessonSession = viewModel::abandonLessonSession,
+        onToggleAudioMuted = viewModel::toggleAudioMuted,
         onSearchQueryChange = searchViewModel::onQueryChange,
         onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
         onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange,
@@ -407,6 +411,11 @@ private fun DashboardTopBar(
             )
             HorizontalDivider()
         }
+        MuteAudioMenuItem(
+            muted = uiState.isAudioMuted,
+            testTag = DashboardScreenTestTags.MUTE_AUDIO_MENU_ITEM,
+            onClick = { menuExpanded = false; callbacks.onToggleAudioMuted() }
+        )
         DropdownMenuItem(
             text = { Text("Study time") },
             leadingIcon = { Icon(Icons.Default.Timer, contentDescription = null) },

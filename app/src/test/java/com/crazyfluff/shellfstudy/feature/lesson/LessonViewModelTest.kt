@@ -261,6 +261,24 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     }
 
     @Test
+    fun `toggleAudioMuted persists the mute and mirrors it into the UI state`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            viewModel.toggleAudioMuted()
+            var state = awaitItem()
+            while (!state.isAudioMuted) state = awaitItem()
+            assertThat(settingsRepository.settings.first().audioMuted).isTrue()
+
+            viewModel.toggleAudioMuted()
+            while (state.isAudioMuted) state = awaitItem()
+            assertThat(settingsRepository.settings.first().audioMuted).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `loads a batch of lessons into the select phase with all pre-selected`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
 

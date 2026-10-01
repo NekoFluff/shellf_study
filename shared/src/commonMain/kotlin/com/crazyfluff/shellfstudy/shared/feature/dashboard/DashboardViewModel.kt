@@ -84,7 +84,10 @@ data class DashboardUiState(
     /** Null until the study-time log has been read once. */
     val studyTime: StudyTimeOverview? = null,
     /** Consecutive days with a review or lesson in the app, today counting once there's been one. */
-    val studyStreakDays: Int = 0
+    val studyStreakDays: Int = 0,
+    /** Drives the overflow menu's "Mute audio"/"Unmute audio" label — see
+     *  [com.crazyfluff.shellfstudy.shared.data.AppSettings.audioMuted]. */
+    val isAudioMuted: Boolean = false
 ) {
     /** The last fetch failed but cached content is still on screen — see [DashboardFetch.Stale]. */
     val isShowingCachedData: Boolean
@@ -180,11 +183,15 @@ private data class SecondaryCardsState(
     val hasLastSessionSummary: Boolean,
     val reviewForecast: ReviewForecast,
     val studyTime: StudyTimeOverview,
-    val studyStreakDays: Int
+    val studyStreakDays: Int,
+    val isAudioMuted: Boolean
 )
 
 private data class LocalDueCounts(val reviewCount: Int, val lessonCount: Int)
 
+// One public function per dashboard affordance (card pickers, session actions, the mute toggle);
+// splitting them across classes would scatter the screen's single action surface.
+@Suppress("TooManyFunctions")
 class DashboardViewModel(
     private val reviewSessionController: ReviewSessionController,
     private val lessonSessionController: LessonSessionController,
@@ -301,9 +308,10 @@ class DashboardViewModel(
         lastSessionSummaryRepository.exists,
         reviewForecastFlow,
         studyTimeRepository.observeOverview().distinctUntilChanged(),
-        statsRepository.observeStudyStreak().map { it.currentStreakDays }.distinctUntilChanged()
-    ) { hasLastSessionSummary, reviewForecast, studyTime, studyStreakDays ->
-        SecondaryCardsState(hasLastSessionSummary, reviewForecast, studyTime, studyStreakDays)
+        statsRepository.observeStudyStreak().map { it.currentStreakDays }.distinctUntilChanged(),
+        settingsRepository.settings.map { it.audioMuted }.distinctUntilChanged()
+    ) { hasLastSessionSummary, reviewForecast, studyTime, studyStreakDays, isAudioMuted ->
+        SecondaryCardsState(hasLastSessionSummary, reviewForecast, studyTime, studyStreakDays, isAudioMuted)
     }
 
     val uiState: StateFlow<DashboardUiState> = combine(
@@ -352,7 +360,8 @@ class DashboardViewModel(
             hasLastSessionSummary = secondary.hasLastSessionSummary,
             reviewForecast = secondary.reviewForecast,
             studyTime = secondary.studyTime,
-            studyStreakDays = secondary.studyStreakDays
+            studyStreakDays = secondary.studyStreakDays,
+            isAudioMuted = secondary.isAudioMuted
         )
     }
         // Room's invalidation is table-level, so every write anywhere in the assignments, subjects,
@@ -408,6 +417,10 @@ class DashboardViewModel(
 
     fun onReviewForecastColorModeChange(colorMode: ReviewForecastColorMode) {
         _dashboardData.update { it.copy(selectedForecastColorMode = colorMode) }
+    }
+
+    fun toggleAudioMuted() {
+        viewModelScope.launch { settingsRepository.toggleAudioMuted() }
     }
 
     private suspend fun seedFromCache() {

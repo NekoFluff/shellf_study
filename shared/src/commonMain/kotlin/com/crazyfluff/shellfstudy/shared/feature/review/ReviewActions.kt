@@ -44,5 +44,8 @@ interface ReviewActions {
     /** Ends the session early, still showing the summary for what was reviewed. */
     fun wrapUp()
 
+    /** Mutes or unmutes all pronunciation audio, persisted app-wide. */
+    fun toggleAudioMuted()
+
     fun abandonSession()
 }

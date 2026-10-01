@@ -50,6 +50,9 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val showPitchAccent: Boolean = true,
     val autoplayPronunciationAudio: Boolean = true,
+    /** Silences every pronunciation clip, autoplay and manual taps alike — see
+     *  [MutingPronunciationAudioPlayer]. Toggled from the dashboard/lesson/review overflow menus. */
+    val audioMuted: Boolean = false,
     val restrictAudioToMp3: Boolean = false,
     val showSubjectTypeLabel: Boolean = false,
     val showTotalTimer: Boolean = false,
@@ -90,6 +93,7 @@ class SettingsRepository(
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val showPitchAccentKey = booleanPreferencesKey("show_pitch_accent")
     private val autoplayPronunciationAudioKey = booleanPreferencesKey("autoplay_pronunciation_audio")
+    private val audioMutedKey = booleanPreferencesKey("audio_muted")
     private val restrictAudioToMp3Key = booleanPreferencesKey("restrict_audio_to_mp3")
     private val showSubjectTypeLabelKey = booleanPreferencesKey("show_subject_type_label")
     private val showTotalTimerKey = booleanPreferencesKey("show_total_timer")
@@ -130,6 +134,7 @@ class SettingsRepository(
                 ?: ThemeMode.SYSTEM,
             showPitchAccent = prefs[showPitchAccentKey] ?: true,
             autoplayPronunciationAudio = prefs[autoplayPronunciationAudioKey] ?: true,
+            audioMuted = prefs[audioMutedKey] ?: false,
             restrictAudioToMp3 = prefs[restrictAudioToMp3Key] ?: false,
             showSubjectTypeLabel = prefs[showSubjectTypeLabelKey] ?: false,
             showTotalTimer = prefs[showTotalTimerKey] ?: false,
@@ -185,6 +190,16 @@ class SettingsRepository(
 
     suspend fun setAutoplayPronunciationAudio(enabled: Boolean) {
         dataStore.edit { it[autoplayPronunciationAudioKey] = enabled }
+    }
+
+    suspend fun setAudioMuted(muted: Boolean) {
+        dataStore.edit { it[audioMutedKey] = muted }
+    }
+
+    /** Flips [AppSettings.audioMuted] inside one edit, so it reads the stored value rather than a
+     *  possibly-stale UI copy. */
+    suspend fun toggleAudioMuted() {
+        dataStore.edit { it[audioMutedKey] = !(it[audioMutedKey] ?: false) }
     }
 
     suspend fun setRestrictAudioToMp3(enabled: Boolean) {

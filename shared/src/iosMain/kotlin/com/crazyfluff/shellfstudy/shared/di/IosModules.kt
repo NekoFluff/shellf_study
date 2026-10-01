@@ -7,6 +7,8 @@ import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.TokenCipher
 import com.crazyfluff.shellfstudy.shared.data.KeychainTokenCipher
+import com.crazyfluff.shellfstudy.shared.data.mutedBy
+import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.getPreferencesDataStore
 import com.crazyfluff.shellfstudy.shared.database.getAppDatabaseBuilder
 import com.crazyfluff.shellfstudy.shared.database.friends.getFriendsDatabaseBuilder
@@ -21,7 +23,6 @@ import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import org.koin.dsl.bind
 import org.koin.dsl.module
 
 private val iosDatabaseModule = module {
@@ -42,7 +43,10 @@ private val iosDataStoreModule = module {
 
 private val iosAudioModule = module {
     single { IosAudioFileCache() }
-    single { IosPronunciationAudioPlayer(get()) } bind PronunciationAudioPlayer::class
+    single<PronunciationAudioPlayer> {
+        IosPronunciationAudioPlayer(get())
+            .mutedBy(get<SettingsRepository>(), get<CoroutineScope>(APPLICATION_SCOPE))
+    }
 }
 
 /** Periodic background sync (BGTaskScheduler) is stubbed — it fires opportunistically from the

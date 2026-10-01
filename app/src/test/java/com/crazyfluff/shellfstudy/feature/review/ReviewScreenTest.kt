@@ -792,6 +792,26 @@ class ReviewScreenTest {
     }
 
     @Test
+    fun overflowMenu_muteItem_followsMutedState_andInvokesToggle() {
+        val actions = RecordingReviewActions()
+        setScreen(activeState(totalCount = 1, remainingCount = 1), actions = actions)
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.MUTE_AUDIO_MENU_ITEM)
+            .assertTextEquals("Mute audio")
+            .performClick()
+        assertThat(actions.calls).contains("toggleAudioMuted")
+    }
+
+    @Test
+    fun overflowMenu_muteItem_offersUnmute_whenMuted() {
+        setScreen(activeState(totalCount = 1, remainingCount = 1).copy(isAudioMuted = true))
+
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(ReviewScreenTestTags.MUTE_AUDIO_MENU_ITEM).assertTextEquals("Unmute audio")
+    }
+
+    @Test
     fun overflowMenu_isAbsent_whenNoReviewsAvailable() {
         setScreen(ReviewUiState(phase = ReviewUiState.Phase.NoReviewsAvailable))
 
@@ -952,5 +972,6 @@ private class RecordingReviewActions : ReviewActions {
     override fun toggleDetails() = record("toggleDetails")
     override fun closeDetails() = record("closeDetails")
     override fun wrapUp() = record("wrapUp")
+    override fun toggleAudioMuted() = record("toggleAudioMuted")
     override fun abandonSession() = record("abandonSession")
 }

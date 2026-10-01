@@ -70,6 +70,30 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `audio is unmuted by default and toggleAudioMuted flips the stored value`() = runTest {
+        val repository = createRepository()
+
+        repository.settings.test {
+            assertThat(awaitItem().audioMuted).isFalse()
+            repository.toggleAudioMuted()
+            assertThat(awaitItem().audioMuted).isTrue()
+            repository.toggleAudioMuted()
+            assertThat(awaitItem().audioMuted).isFalse()
+        }
+    }
+
+    @Test
+    fun `setAudioMuted persists the chosen value`() = runTest {
+        val repository = createRepository()
+
+        repository.setAudioMuted(true)
+
+        repository.settings.test {
+            assertThat(awaitItem().audioMuted).isTrue()
+        }
+    }
+
+    @Test
     fun `setShowSubjectTypeLabel persists the chosen value`() = runTest {
         val repository = createRepository()
 

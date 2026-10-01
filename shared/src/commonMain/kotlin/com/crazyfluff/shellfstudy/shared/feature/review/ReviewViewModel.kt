@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -57,7 +58,9 @@ data class ReviewUiState(
     val phase: Phase = Phase.Loading,
     // Deliberately not folded into Phase — see LessonUiState.exit's doc comment for why. A review has
     // only the one way out, so a boolean rather than that feature's sealed exit request.
-    val isAbandoned: Boolean = false
+    val isAbandoned: Boolean = false,
+    /** Drives the overflow menu's "Mute audio"/"Unmute audio" label. */
+    val isAudioMuted: Boolean = false
 ) : QuizSessionState<ReviewUiState, ReviewItem> {
 
     override val question: QuizQuestionState<ReviewItem>? get() = (phase as? Phase.Active)?.question
@@ -206,6 +209,12 @@ class ReviewViewModel(
             // used to mirror into the UI state are provided app-wide by LocalDisplaySettings instead,
             // so a settings change no longer re-emits a whole ReviewUiState.
             settingsRepository.settings.collect { latestSettings = it }
+        }
+        // The one setting the screen itself renders (the overflow menu's mute label), mirrored apart
+        // from latestSettings so only a mute toggle re-emits the UI state.
+        viewModelScope.launch {
+            settingsRepository.settings.map { it.audioMuted }.distinctUntilChanged()
+                .collect { muted -> _uiState.update { it.copy(isAudioMuted = muted) } }
         }
         // The hint's pitch patterns are followed live rather than fetched once at grading time: the
         // repository's Room flow is the single source of truth, so whichever writer resolves the word
@@ -532,6 +541,10 @@ class ReviewViewModel(
      *  rest — the user already saw "Correct!" feedback for it, so it reads as finished to them,
      *  matching what the abandon confirmation dialog's copy promises ("this won't affect items
      *  you've already submitted"). */
+    override fun toggleAudioMuted() {
+        viewModelScope.launch { settingsRepository.toggleAudioMuted() }
+    }
+
     override fun abandonSession() {
         viewModelScope.launch {
             commitPendingSubmission()

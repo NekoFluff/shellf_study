@@ -76,6 +76,7 @@ import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.model.LessonItem
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SectionTitle
+import com.crazyfluff.shellfstudy.shared.designsystem.components.MuteAudioMenuItem
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizEmptyQueueContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizEmptyQueueTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.QuizErrorContent
@@ -164,6 +165,7 @@ object LessonScreenTestTags {
     const val SEARCH_BUTTON = "lesson_search_button"
     const val OVERFLOW_MENU = "lesson_overflow_menu"
     const val ABANDON_MENU_ITEM = "lesson_abandon_menu_item"
+    const val MUTE_AUDIO_MENU_ITEM = "lesson_mute_audio_menu_item"
     const val ABANDON_CONFIRM_BUTTON = "lesson_abandon_confirm_button"
     const val STUDY_BATCH_LABEL = "lesson_study_batch_label"
     fun typeSelectorChipTag(type: SubjectType) = "lesson_type_selector_${type.name.lowercase()}"
@@ -269,6 +271,14 @@ fun LessonScreen(
             abandonMenuItem = LessonScreenTestTags.ABANDON_MENU_ITEM,
             abandonConfirmButton = LessonScreenTestTags.ABANDON_CONFIRM_BUTTON
         ),
+        extraMenuItems = { closeMenu ->
+            MuteAudioMenuItem(
+                muted = uiState.isAudioMuted,
+                testTag = LessonScreenTestTags.MUTE_AUDIO_MENU_ITEM,
+                onClick = { closeMenu(); actions.toggleAudioMuted() }
+            )
+            HorizontalDivider()
+        },
         detailSheet = { isSearchActive ->
             val quizPhase = uiState.phase as? LessonUiState.Phase.Quiz
             if (quizPhase != null) {

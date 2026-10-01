@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.cash.turbine.test
+import kotlinx.coroutines.flow.first
 import com.crazyfluff.shellfstudy.MainDispatcherRule
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardBannerState
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardContentState
@@ -232,6 +233,23 @@ class DashboardViewModelTest {
                     else -> jsonResponse(emptyCollectionJson())
                 }
             }
+        }
+    }
+
+    @Test
+    fun `toggleAudioMuted persists the mute and mirrors it into the UI state`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            viewModel.toggleAudioMuted()
+            var state = awaitItem()
+            while (!state.isAudioMuted) state = awaitItem()
+            assertThat(settingsRepository.settings.first().audioMuted).isTrue()
+
+            viewModel.toggleAudioMuted()
+            while (state.isAudioMuted) state = awaitItem()
+            assertThat(settingsRepository.settings.first().audioMuted).isFalse()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
