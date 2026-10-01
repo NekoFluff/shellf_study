@@ -128,11 +128,12 @@ private fun VocabularyReadingList(
                 // gets no button at all rather than one that plays nothing.
                 ReadingRow(
                     reading = reading,
-                    audio = {
+                    audio = { previous ->
                         selectAudioFor(
                             pronunciationAudios,
                             reading,
-                            mp3Only = displaySettings.restrictAudioToMp3
+                            mp3Only = displaySettings.restrictAudioToMp3,
+                            previous = previous
                         )
                     }
                 )

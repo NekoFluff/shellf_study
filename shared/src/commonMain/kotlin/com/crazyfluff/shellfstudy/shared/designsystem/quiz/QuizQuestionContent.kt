@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.designsystem.quiz
 
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.DisplaySettings
+import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -89,13 +90,14 @@ data class QuizQuestionTestTags(
         )
 }
 
-/** The reading, its live pitch-accent answer, and the audio clip that survived the caller's own
- *  audio settings — always produced/cleared together, so callers carry one value instead of three
- *  fields that only make sense in combination. */
+/** The reading, its live pitch-accent answer, and the subject's pronunciation clips — always
+ *  produced/cleared together, so callers carry one value instead of three fields that only make
+ *  sense in combination. All of the clips rather than one picked up front, so each tap of the
+ *  hint's play button picks its own (see [ReadingRow]); the mp3-only filter is applied there too. */
 data class AnswerReadingHint(
     val reading: String,
     val pitchAccents: PitchAccentUiState = PitchAccentUiState.Unavailable,
-    val audio: PronunciationAudio? = null
+    val audios: List<PronunciationAudio> = emptyList()
 )
 
 /**
@@ -273,7 +275,14 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
                 Column {
                     ReadingRow(
                         reading = answerHint.reading,
-                        audio = { answerHint.audio }
+                        audio = { previous ->
+                            selectAudioFor(
+                                answerHint.audios,
+                                answerHint.reading,
+                                mp3Only = display.restrictAudioToMp3,
+                                previous = previous
+                            )
+                        }
                     )
                     PitchAccentDiagram(answerHint.pitchAccents.forReading(answerHint.reading))
                     Spacer(modifier = Modifier.height(2.dp))

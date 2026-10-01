@@ -10,18 +10,52 @@ private fun audio(
     url: String,
     contentType: String = "audio/mpeg",
     pronunciation: String? = null,
-    gender: String? = null
+    gender: String? = null,
+    voiceActorId: Long? = null
 ) = PronunciationAudio(
     url = url,
     contentType = contentType,
     pronunciation = pronunciation,
     gender = gender,
-    voiceActorId = null,
+    voiceActorId = voiceActorId,
     voiceActorName = null,
     voiceDescription = null
 )
 
 class AudioSelectionTest {
+
+    /** WaniKani's shape: two voice actors, each in several formats. */
+    private val twoVoicesThreeFormats = listOf(
+        audio("kenichi.mp3", gender = "male", voiceActorId = 1),
+        audio("kenichi.ogg", contentType = "audio/ogg", gender = "male", voiceActorId = 1),
+        audio("kenichi.webm", contentType = "audio/webm", gender = "male", voiceActorId = 1),
+        audio("kyoko.mp3", gender = "female", voiceActorId = 2),
+        audio("kyoko.ogg", contentType = "audio/ogg", gender = "female", voiceActorId = 2),
+        audio("kyoko.webm", contentType = "audio/webm", gender = "female", voiceActorId = 2)
+    )
+
+    @Test
+    fun `random never repeats the previous voice when another voice exists`() {
+        var previous = selectAudioFor(twoVoicesThreeFormats, reading = "reading")
+        repeat(50) {
+            val next = selectAudioFor(twoVoicesThreeFormats, reading = "reading", previous = previous)
+            assertTrue(next!!.voiceActorId != previous!!.voiceActorId)
+            previous = next
+        }
+    }
+
+    @Test
+    fun `random replays the only voice when there is no other`() {
+        val oneVoice = twoVoicesThreeFormats.filter { it.voiceActorId == 1L }
+        val previous = selectAudioFor(oneVoice, reading = "reading")
+        assertEquals(1L, selectAudioFor(oneVoice, reading = "reading", previous = previous)?.voiceActorId)
+    }
+
+    @Test
+    fun `random plays a voice's mp3 when it has one`() {
+        val picked = (1..50).map { selectAudioFor(twoVoicesThreeFormats, reading = "reading")?.url }.toSet()
+        assertEquals(setOf("kenichi.mp3", "kyoko.mp3"), picked)
+    }
 
     @Test
     fun `random default varies across the eligible clips`() {

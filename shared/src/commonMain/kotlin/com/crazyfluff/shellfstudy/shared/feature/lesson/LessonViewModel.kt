@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
-import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.isAuthError
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
@@ -852,15 +851,13 @@ class LessonViewModel(
         } else {
             null
         }
-        // Selected here, where the item and the settings are already in hand, so the hint's row only
-        // has to render whatever clip this produced — null when none survives the mp3-only filter.
         // The pitch patterns are *not* copied here: the hint reads them live off
         // LessonUiState.pitchAccentsBySubjectId, so a write from any source reaches it in place.
-        val answerReadingAudio = answerReading?.let { reading ->
-            selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
-        }
         updateGrade {
-            it.copy(answerHint = answerReading?.let { reading -> AnswerReadingHint(reading = reading, audio = answerReadingAudio) })
+            val hint = answerReading?.let { reading ->
+                AnswerReadingHint(reading = reading, audios = item.pronunciationAudios)
+            }
+            it.copy(answerHint = hint)
         }
 
         if (type == QuestionType.READING && settings.autoplayPronunciationAudio) {

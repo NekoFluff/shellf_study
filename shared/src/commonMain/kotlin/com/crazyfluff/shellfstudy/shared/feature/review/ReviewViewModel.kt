@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
-import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
 import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
 import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
@@ -402,13 +401,10 @@ class ReviewViewModel(
         val characters = item.characters
         if (type == QuestionType.READING && settings.showAnswerReadingPitchAccent && isPitchAccentEligible(item.subjectType) && characters != null) {
             val answerReading = item.readings.firstOrNull()
-            // Selected here, where the item and the settings are already in hand, so the hint's row
-            // only has to render whatever clip this produced — null when none survives the filter.
-            val answerReadingAudio = answerReading?.let { reading ->
-                selectAudioFor(item.pronunciationAudios, reading, mp3Only = settings.restrictAudioToMp3)
-            }
             updateGrade {
-                val hint = answerReading?.let { reading -> AnswerReadingHint(reading, audio = answerReadingAudio) }
+                val hint = answerReading?.let { reading ->
+                    AnswerReadingHint(reading, audios = item.pronunciationAudios)
+                }
                 it.copy(answerHint = hint)
             }
             pitchAccentHintKey.value = answerReading?.let { PitchAccentHintKey(item.assignmentId, characters, it) }

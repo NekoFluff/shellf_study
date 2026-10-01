@@ -227,7 +227,7 @@ class LessonScreenTest {
                         feedback = it,
                         answerRevealed = answerRevealed,
                         answerHint = answerReading?.let { reading ->
-                            AnswerReadingHint(reading = reading, audio = answerReadingAudio)
+                            AnswerReadingHint(reading = reading, audios = listOfNotNull(answerReadingAudio))
                         }
                     )
                 }

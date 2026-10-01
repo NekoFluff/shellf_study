@@ -95,6 +95,29 @@ class ReadingRowTest {
     }
 
     @Test
+    fun `hands the selector the clip this row last played`() {
+        val previousSeen = mutableListOf<PronunciationAudio?>()
+        val player = FakePronunciationAudioPlayer()
+        var tap = 0
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalPronunciationAudioPlayer provides player) {
+                ReadingRow(reading = "みず", audio = { previous ->
+                    previousSeen += previous
+                    audio.copy(url = "${audio.url}#${tap++}")
+                })
+            }
+        }
+        previousSeen.clear() // composition's own "is there a button" calls
+
+        val playButton = composeTestRule.onNodeWithContentDescription("Play pronunciation for みず")
+        playButton.performClick()
+        playButton.performClick()
+
+        assertThat(previousSeen.filterNotNull()).containsExactly(player.playedAudios[0])
+        assertThat(previousSeen.first()).isNull()
+    }
+
+    @Test
     fun `shows no play button when there is no clip for the reading`() {
         setContentWithPlayer(audio = null)
 

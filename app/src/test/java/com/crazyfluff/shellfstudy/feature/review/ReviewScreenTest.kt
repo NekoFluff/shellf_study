@@ -112,7 +112,7 @@ class ReviewScreenTest {
                             AnswerReadingHint(
                                 reading = reading,
                                 pitchAccents = answerPitchAccents,
-                                audio = answerReadingAudio
+                                audios = listOfNotNull(answerReadingAudio)
                             )
                         }
                     )
