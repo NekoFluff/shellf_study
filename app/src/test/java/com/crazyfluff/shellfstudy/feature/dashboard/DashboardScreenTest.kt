@@ -537,7 +537,6 @@ class DashboardScreenTest {
         val overview = StudyTimeOverview(
             today = StudyTimeSplit(lessonMs = 6 * 60_000L, reviewMs = 12 * 60_000L),
             goalMs = 30 * 60_000L,
-            goalStreakDays = 0,
             lastSevenDays = emptyList(),
             pace = StudyPace(reviewMsPerItem = 10_000L, lessonMsPerItem = 120_000L),
             hasAnyData = true
@@ -623,7 +622,6 @@ class DashboardScreenTest {
     ) = StudyTimeOverview(
         today = today,
         goalMs = 30 * 60_000L,
-        goalStreakDays = 0,
         lastSevenDays = days,
         pace = StudyPace(),
         hasAnyData = hasAnyData

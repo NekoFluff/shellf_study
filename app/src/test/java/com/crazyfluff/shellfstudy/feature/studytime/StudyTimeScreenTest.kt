@@ -6,6 +6,7 @@ import androidx.compose.ui.test.performScrollTo
 import com.crazyfluff.shellfstudy.shared.data.studytime.LifetimeEstimate
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -49,7 +50,8 @@ class StudyTimeScreenTest {
         segments: List<StudySegment>,
         window: StudyTimeWindow = StudyTimeWindow.WEEK,
         selected: Int? = null,
-        lifetime: LifetimeEstimate? = null
+        lifetime: LifetimeEstimate? = null,
+        studyStreakDays: Int = 0
     ) =
         StudyTimeUiState.Loaded(
             report = StudyTimeAggregator.report(
@@ -60,7 +62,8 @@ class StudyTimeScreenTest {
                 goalMs = 30 * 60_000L,
                 currentLevel = 8
             ).copy(lifetime = lifetime),
-            selectedBarIndex = selected
+            selectedBarIndex = selected,
+            studyStreakDays = studyStreakDays
         )
 
     private val history = LifetimeEstimate(
@@ -106,12 +109,14 @@ class StudyTimeScreenTest {
     }
 
     @Test
-    fun showsTodaysTotalGoalStreakAndPeriodStats() {
-        setContent(loaded(someStudy))
+    fun showsTodaysTotalStudyStreakAndPeriodStats() {
+        setContent(loaded(someStudy, studyStreakDays = 4))
 
         composeTestRule.onNodeWithTag(StudyTimeTestTags.TODAY_TOTAL).assertTextEquals("35m")
         composeTestRule.onNodeWithText("Daily goal of 30m met").assertIsDisplayed()
-        composeTestRule.onNodeWithTag(StudyTimeTestTags.GOAL_STREAK).assertTextEquals("1-day goal streak")
+        composeTestRule.onNode(hasText("4") and hasAnyAncestor(hasTestTag(StudyTimeTestTags.STUDY_STREAK)))
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("1-day goal streak").assertDoesNotExist()
         scrollTo(StudyTimeTestTags.PERIOD_TOTAL)
         composeTestRule.onNodeWithTag(StudyTimeTestTags.PERIOD_TOTAL).assertTextContains("1h")
         composeTestRule.onNodeWithTag(StudyTimeTestTags.PERIOD_REVIEW_ITEMS).assertTextContains("270")
@@ -163,8 +168,19 @@ class StudyTimeScreenTest {
         setContent(loaded(someStudy, selected = 6))
 
         scrollTo(StudyTimeTestTags.SELECTED_BAR)
-        composeTestRule.onNodeWithTag(StudyTimeTestTags.SELECTED_BAR)
-            .assertTextEquals("Thu, Sep 24: 35m (reviews 20m, lessons 15m)")
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.SELECTED_BAR).assertTextEquals("Thu, Sep 24")
+        fun inColumn(tag: String, text: String) = hasText(text) and hasAnyAncestor(hasTestTag(tag))
+        composeTestRule.onNode(inColumn(StudyTimeTestTags.SELECTED_BAR_REVIEWS, "20m")).assertIsDisplayed()
+        composeTestRule.onNode(inColumn(StudyTimeTestTags.SELECTED_BAR_REVIEWS, "120 reviews")).assertIsDisplayed()
+        composeTestRule.onNode(inColumn(StudyTimeTestTags.SELECTED_BAR_LESSONS, "15m")).assertIsDisplayed()
+        composeTestRule.onNode(inColumn(StudyTimeTestTags.SELECTED_BAR_LESSONS, "5 lessons")).assertIsDisplayed()
+    }
+
+    @Test
+    fun hidesTheStreakBeforeAnyStudyDay() {
+        setContent(loaded(someStudy))
+
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.STUDY_STREAK).assertDoesNotExist()
     }
 
     @Test

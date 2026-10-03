@@ -108,6 +108,24 @@ class StudyTimeAggregatorTest {
         assertEquals(split(reviewMinutes = 100), buckets[50].split)
     }
 
+    @Test
+    fun buckets_countItemsTowardTheDayASessionStarted() {
+        val segments = listOf(
+            segment("2026-09-23T23:50:00Z", 20, StudyKind.REVIEW, items = 40),
+            segment("2026-09-24T08:00:00Z", 10, StudyKind.LESSON, items = 5),
+            segment("2026-09-24T09:00:00Z", 10, StudyKind.REVIEW, items = 30)
+        )
+        val daily = StudyTimeAggregator.dailyTotals(StudyTimeAggregator.slice(segments, utc))
+        val items = StudyTimeAggregator.dailyItems(segments, utc)
+
+        val week = StudyTimeAggregator.buckets(daily, today, StudyTimeWindow.WEEK, items)
+        val year = StudyTimeAggregator.buckets(daily, today, StudyTimeWindow.YEAR, items)
+
+        assertEquals(StudyItemCounts(reviews = 40), week[5].items)
+        assertEquals(StudyItemCounts(reviews = 30, lessons = 5), week.last().items)
+        assertEquals(StudyItemCounts(reviews = 70, lessons = 5), year.last().items)
+    }
+
     // --- period stats ---
 
     @Test
@@ -250,32 +268,6 @@ class StudyTimeAggregatorTest {
         assertNull(StudyHeatmap(List(7 * StudyHeatmap.HOURS) { 0L }).peakPartOfDay)
     }
 
-    // --- goal streak ---
-
-    @Test
-    fun goalStreak_countsTodayOnlyOnceMetAndIsNotBrokenByAnUnfinishedToday() {
-        val goal = 30 * MINUTE
-        val daily = mapOf(
-            LocalDate.parse("2026-09-21") to split(reviewMinutes = 45),
-            LocalDate.parse("2026-09-22") to split(reviewMinutes = 30),
-            LocalDate.parse("2026-09-23") to split(lessonMinutes = 20, reviewMinutes = 15),
-            today to split(reviewMinutes = 5)
-        )
-
-        assertEquals(3, StudyTimeAggregator.goalStreak(daily, today, goal))
-        assertEquals(4, StudyTimeAggregator.goalStreak(daily + (today to split(reviewMinutes = 30)), today, goal))
-    }
-
-    @Test
-    fun goalStreak_breaksOnAMissedDay() {
-        val daily = mapOf(
-            LocalDate.parse("2026-09-21") to split(reviewMinutes = 45),
-            LocalDate.parse("2026-09-23") to split(reviewMinutes = 45)
-        )
-
-        assertEquals(1, StudyTimeAggregator.goalStreak(daily, today, 30 * MINUTE))
-    }
-
     // --- report ---
 
     @Test
@@ -299,7 +291,6 @@ class StudyTimeAggregatorTest {
 
         assertEquals(45 * MINUTE, overview.today.totalMs)
         assertEquals(1f, overview.goalFraction)
-        assertEquals(1, overview.goalStreakDays)
     }
 
     @Test

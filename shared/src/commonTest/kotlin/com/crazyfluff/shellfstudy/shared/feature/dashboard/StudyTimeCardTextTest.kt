@@ -28,7 +28,6 @@ class StudyTimeCardTextTest {
     private fun overview(todayMs: Long, goalMs: Long, hasAnyData: Boolean = true) = StudyTimeOverview(
         today = StudyTimeSplit(reviewMs = todayMs),
         goalMs = goalMs,
-        goalStreakDays = 0,
         lastSevenDays = emptyList(),
         pace = StudyPace(),
         hasAnyData = hasAnyData

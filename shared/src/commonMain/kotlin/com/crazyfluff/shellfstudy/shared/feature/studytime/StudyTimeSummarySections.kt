@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.feature.studytime
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,14 +8,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -30,22 +33,34 @@ import kotlin.math.roundToInt
 // Today, history and period totals — the "how much" half of the screen.
 
 @Composable
-internal fun TodayCard(overview: StudyTimeOverview) {
+internal fun TodayCard(overview: StudyTimeOverview, studyStreakDays: Int) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             StudyGoalRing(
-                fraction = overview.goalFraction,
+                today = overview.today,
+                goalMs = overview.goalMs,
                 centerText = "${(overview.goalFraction * 100).roundToInt()}%",
                 size = 88.dp,
                 strokeWidth = 8.dp
             )
             Spacer(modifier = Modifier.width(20.dp))
-            Column {
-                Text(
-                    text = "Today",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Today",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (studyStreakDays >= 1) {
+                        StudyStreakPill(
+                            days = studyStreakDays,
+                            iconSize = 16.dp,
+                            textStyle = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.testTag(StudyTimeTestTags.STUDY_STREAK)
+                        )
+                    }
+                }
                 Text(
                     text = formatStudyDuration(overview.today.totalMs),
                     style = MaterialTheme.typography.headlineMedium,
@@ -61,18 +76,9 @@ internal fun TodayCard(overview: StudyTimeOverview) {
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     ChartLegendItem(reviewTimeColor(), "Reviews ${formatStudyDuration(overview.today.reviewMs)}")
                     ChartLegendItem(lessonTimeColor(), "Lessons ${formatStudyDuration(overview.today.lessonMs)}")
-                }
-                if (overview.goalStreakDays > 0) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "${overview.goalStreakDays}-day goal streak",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.testTag(StudyTimeTestTags.GOAL_STREAK)
-                    )
                 }
             }
         }
@@ -111,13 +117,8 @@ internal fun HistoryCard(
         )
         Spacer(modifier = Modifier.height(12.dp))
         val selected = selectedBarIndex?.let { report.buckets.getOrNull(it) }
-        Text(
-            text = selected?.let { bucketDetail(it, isDaily) } ?: "Tap a bar for details",
-            style = MaterialTheme.typography.bodySmall,
-            color = with(MaterialTheme.colorScheme) { if (selected != null) onSurface else onSurfaceVariant },
-            modifier = Modifier.testTag(StudyTimeTestTags.SELECTED_BAR)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+        BarDetailPanel(selected, isDaily)
+        Spacer(modifier = Modifier.height(12.dp))
         StudyTimeBarChart(
             buckets = report.buckets,
             selectedIndex = selectedBarIndex,
@@ -144,17 +145,72 @@ internal fun HistoryCard(
     }
 }
 
-private fun bucketDetail(bucket: StudyTimeBucket, isDaily: Boolean): String {
-    val date = if (isDaily) {
-        "${bucket.start.dayOfWeek.shortLabel()}, ${SHORT_DATE_FORMAT.format(bucket.start)}"
-    } else {
-        "Week of ${SHORT_DATE_FORMAT.format(bucket.start)}"
+/** The tapped bar: its date and total, then time and items for reviews and lessons side by side. Laid
+ *  out the same with nothing tapped, so the chart under it doesn't jump on the first tap. */
+@Composable
+private fun BarDetailPanel(bucket: StudyTimeBucket?, isDaily: Boolean) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(emptyCellColor())
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = bucket?.let { bucketDate(it, isDaily) } ?: "Tap a bar for details",
+                style = MaterialTheme.typography.labelLarge,
+                color = with(MaterialTheme.colorScheme) { if (bucket != null) onSurface else onSurfaceVariant },
+                modifier = Modifier.weight(1f).testTag(StudyTimeTestTags.SELECTED_BAR)
+            )
+            Text(
+                text = bucket?.let { formatStudyDuration(it.split.totalMs) } ?: "",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BarDetailColumn(
+                color = reviewTimeColor(),
+                label = "Reviews",
+                ms = bucket?.split?.reviewMs,
+                count = bucket?.items?.reviews?.let { countLabel(it, "review") },
+                modifier = Modifier.weight(1f).testTag(StudyTimeTestTags.SELECTED_BAR_REVIEWS)
+            )
+            BarDetailColumn(
+                color = lessonTimeColor(),
+                label = "Lessons",
+                ms = bucket?.split?.lessonMs,
+                count = bucket?.items?.lessons?.let { countLabel(it, "lesson") },
+                modifier = Modifier.weight(1f).testTag(StudyTimeTestTags.SELECTED_BAR_LESSONS)
+            )
+        }
     }
-    val split = bucket.split
-    if (split.totalMs == 0L) return "$date: no study"
-    return "$date: ${formatStudyDuration(split.totalMs)} " +
-        "(reviews ${formatStudyDuration(split.reviewMs)}, lessons ${formatStudyDuration(split.lessonMs)})"
 }
+
+/** A swatch and label over the time and item count, or dashes with nothing tapped. */
+@Composable
+private fun BarDetailColumn(color: Color, label: String, ms: Long?, count: String?, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        ChartLegendItem(color, label)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(text = ms?.let(::formatStudyDuration) ?: "–", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = count ?: " ",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun bucketDate(bucket: StudyTimeBucket, isDaily: Boolean): String = if (isDaily) {
+    "${bucket.start.dayOfWeek.shortLabel()}, ${SHORT_DATE_FORMAT.format(bucket.start)}"
+} else {
+    "Week of ${SHORT_DATE_FORMAT.format(bucket.start)}"
+}
+
+private fun countLabel(count: Int, noun: String): String =
+    "${formatCount(count.toLong())} $noun${if (count == 1) "" else "s"}"
 
 @Composable
 internal fun PeriodStatsCard(stats: StudyTimePeriodStats, window: StudyTimeWindow) {

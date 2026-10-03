@@ -57,7 +57,7 @@ object StudyTimeAggregator {
         return StudyTimeReport(
             overview = overview(segments, slices, today, zone, goalMs),
             window = window,
-            buckets = buckets(daily, today, window),
+            buckets = buckets(daily, today, window, dailyItems(segments, zone)),
             stats = periodStats(daily, segments, today, zone, window),
             levels = levelTotals(slices),
             currentLevel = currentLevel,
@@ -93,15 +93,32 @@ object StudyTimeAggregator {
         return totals
     }
 
+    /** Items finished per day, each segment counted toward the day it started — unlike time, a
+     *  count can't be split across midnight. */
+    internal fun dailyItems(segments: List<StudySegment>, zone: TimeZone): Map<LocalDate, StudyItemCounts> {
+        val totals = mutableMapOf<LocalDate, StudyItemCounts>()
+        for (segment in segments) {
+            val date = Instant.fromEpochMilliseconds(segment.startedAtMs).toLocalDateTime(zone).date
+            totals[date] = (totals[date] ?: StudyItemCounts.ZERO).plus(segment.kind, segment.itemsCompleted)
+        }
+        return totals
+    }
+
     /** Oldest first, zero-filled, the last bucket ending today. */
     internal fun buckets(
         daily: Map<LocalDate, StudyTimeSplit>,
         today: LocalDate,
-        window: StudyTimeWindow
+        window: StudyTimeWindow,
+        dailyItems: Map<LocalDate, StudyItemCounts> = emptyMap()
     ): List<StudyTimeBucket> =
         (window.bucketCount - 1 downTo 0).map { bucketsAgo ->
             val start = today.minus(bucketsAgo * window.daysPerBucket + window.daysPerBucket - 1, DateTimeUnit.DAY)
-            StudyTimeBucket(start, sumDays(daily, start, window.daysPerBucket))
+            val days = (0 until window.daysPerBucket).map { start.plus(it, DateTimeUnit.DAY) }
+            StudyTimeBucket(
+                start = start,
+                split = sumDays(daily, start, window.daysPerBucket),
+                items = days.fold(StudyItemCounts.ZERO) { acc, day -> acc + (dailyItems[day] ?: StudyItemCounts.ZERO) }
+            )
         }
 
     /** Time comes from the day totals; item counts come from whole segments, counted toward the day
@@ -180,19 +197,6 @@ object StudyTimeAggregator {
         return StudyHeatmap(cells.toList())
     }
 
-    /** Like the study streak: today counts once it's met, and not meeting it yet doesn't break it. */
-    internal fun goalStreak(daily: Map<LocalDate, StudyTimeSplit>, today: LocalDate, goalMs: Long): Int {
-        if (goalMs <= 0L) return 0
-        fun met(date: LocalDate) = (daily[date]?.totalMs ?: 0L) >= goalMs
-        var cursor = if (met(today)) today else today.minus(1, DateTimeUnit.DAY)
-        var streak = 0
-        while (met(cursor)) {
-            streak++
-            cursor = cursor.minus(1, DateTimeUnit.DAY)
-        }
-        return streak
-    }
-
 }
 
 private fun overview(
@@ -206,7 +210,6 @@ private fun overview(
     return StudyTimeOverview(
         today = daily[today] ?: StudyTimeSplit.ZERO,
         goalMs = goalMs,
-        goalStreakDays = StudyTimeAggregator.goalStreak(daily, today, goalMs),
         lastSevenDays = StudyTimeAggregator.buckets(daily, today, StudyTimeWindow.WEEK),
         pace = StudyTimeAggregator.pace(segments, today, zone),
         hasAnyData = segments.isNotEmpty(),

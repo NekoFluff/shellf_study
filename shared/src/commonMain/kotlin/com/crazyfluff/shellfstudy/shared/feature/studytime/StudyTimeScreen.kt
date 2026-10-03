@@ -83,6 +83,7 @@ fun StudyTimeScreen(
                 StudyTimeContent(
                     report = uiState.report,
                     selectedBarIndex = uiState.selectedBarIndex,
+                    studyStreakDays = uiState.studyStreakDays,
                     onWindowSelect = onWindowSelect,
                     onBarSelect = onBarSelect,
                     contentPadding = innerPadding
@@ -145,6 +146,7 @@ private fun StudyTimeEmptyState(goalMs: Long, lifetime: LifetimeEstimate?, modif
 private fun StudyTimeContent(
     report: StudyTimeReport,
     selectedBarIndex: Int?,
+    studyStreakDays: Int,
     onWindowSelect: (StudyTimeWindow) -> Unit,
     onBarSelect: (Int?) -> Unit,
     contentPadding: PaddingValues
@@ -154,7 +156,7 @@ private fun StudyTimeContent(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item(key = "today") { TodayCard(report.overview) }
+        item(key = "today") { TodayCard(report.overview, studyStreakDays) }
         item(key = "history") {
             HistoryCard(report, selectedBarIndex, onWindowSelect, onBarSelect)
         }

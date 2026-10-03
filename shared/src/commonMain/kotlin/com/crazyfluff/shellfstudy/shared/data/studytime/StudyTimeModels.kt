@@ -32,8 +32,27 @@ data class StudyTimeSplit(val lessonMs: Long = 0L, val reviewMs: Long = 0L) {
     }
 }
 
-/** A chart bar: one day, or for [StudyTimeWindow.YEAR] the 7 days starting at [start]. */
-data class StudyTimeBucket(val start: LocalDate, val split: StudyTimeSplit)
+/** Review and lesson items finished. */
+data class StudyItemCounts(val reviews: Int = 0, val lessons: Int = 0) {
+    operator fun plus(other: StudyItemCounts) = StudyItemCounts(reviews + other.reviews, lessons + other.lessons)
+
+    fun plus(kind: StudyKind, items: Int) = when (kind) {
+        StudyKind.LESSON -> copy(lessons = lessons + items)
+        StudyKind.REVIEW -> copy(reviews = reviews + items)
+    }
+
+    companion object {
+        val ZERO = StudyItemCounts()
+    }
+}
+
+/** A chart bar: one day, or for [StudyTimeWindow.YEAR] the 7 days starting at [start]. [items] counts
+ *  each session toward the day it started, like [StudyTimePeriodStats]. */
+data class StudyTimeBucket(
+    val start: LocalDate,
+    val split: StudyTimeSplit,
+    val items: StudyItemCounts = StudyItemCounts.ZERO
+)
 
 /** How far back the chart and period stats look. Every window ends today. */
 enum class StudyTimeWindow(val bucketCount: Int, val daysPerBucket: Int) {
@@ -126,8 +145,6 @@ enum class PartOfDay(val phrase: String, val hours: List<Int>) {
 data class StudyTimeOverview(
     val today: StudyTimeSplit,
     val goalMs: Long,
-    /** Consecutive days meeting [goalMs], including today only once it's met. */
-    val goalStreakDays: Int,
     val lastSevenDays: List<StudyTimeBucket>,
     val pace: StudyPace,
     val hasAnyData: Boolean,

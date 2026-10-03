@@ -8,17 +8,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,14 +22,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeOverview
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeSplit
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.StreakColor
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.StreakColorDark
-import com.crazyfluff.shellfstudy.shared.designsystem.theme.themeAwareColor
+import com.crazyfluff.shellfstudy.shared.feature.studytime.StudyStreakPill
 import com.crazyfluff.shellfstudy.shared.feature.studytime.StudyTimeBarChart
 import com.crazyfluff.shellfstudy.shared.feature.studytime.StudyTimeTestTags
 import com.crazyfluff.shellfstudy.shared.feature.studytime.emptyCellColor
@@ -49,8 +42,8 @@ import com.crazyfluff.shellfstudy.shared.feature.studytime.reviewTimeColor
 @Composable
 fun StudyTimeCard(
     overview: StudyTimeOverview,
-    /** Consecutive days with a review or lesson, not [StudyTimeOverview.goalStreakDays]: people read
-     *  a streak as "days I studied", and a goal streak left them at nothing after two days of reviews. */
+    /** Consecutive days with a review or lesson, not days meeting the time goal: people read a
+     *  streak as "days I studied", and a goal streak left them at nothing after two days of reviews. */
     studyStreakDays: Int,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier
@@ -115,45 +108,13 @@ private fun TodayLine(overview: StudyTimeOverview, studyStreakDays: Int) {
         )
         Spacer(modifier = Modifier.weight(1f))
         if (studyStreakDays >= 1) {
-            StudyStreak(days = studyStreakDays, modifier = Modifier.alignByBaseline())
-        }
-    }
-}
-
-/** A small orange pill: a flame and the day count. */
-@Composable
-private fun StudyStreak(days: Int, modifier: Modifier = Modifier) {
-    val accent = streakColor()
-    Surface(
-        shape = CircleShape,
-        color = accent.copy(alpha = STREAK_PILL_ALPHA),
-        modifier = modifier.testTag(StudyTimeTestTags.DASHBOARD_STREAK)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.LocalFireDepartment,
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(12.dp)
+            StudyStreakPill(
+                days = studyStreakDays,
+                modifier = Modifier.alignByBaseline().testTag(StudyTimeTestTags.DASHBOARD_STREAK)
             )
-            Spacer(modifier = Modifier.width(2.dp))
-            Text(text = days.toString(), style = MaterialTheme.typography.labelMedium, color = accent)
         }
     }
 }
-
-/** Deep orange on the light card, a lighter orange on the dark one, black on e-ink. */
-@Composable
-private fun streakColor(): Color = themeAwareColor(
-    default = StreakColor,
-    einkValue = Color.Black,
-    darkValue = StreakColorDark
-)
-
-private const val STREAK_PILL_ALPHA = 0.16f
 
 /** Reviews then lessons, each as its share of the goal. Past the goal the bar is full and keeps
  *  the split, scaled down together. */
