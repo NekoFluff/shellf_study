@@ -168,6 +168,7 @@ class LessonScreenTest {
         studyIndex: Int = 0,
         strokeOrderBySubjectId: Map<Long, StrokeOrderUiState> = emptyMap(),
         relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
+        phoneticallySimilarIdsBySubjectId: Map<Long, List<Long>> = emptyMap(),
         batchIndex: Int = 0,
         batchCount: Int = 1
     ) = LessonUiState(
@@ -178,7 +179,8 @@ class LessonScreenTest {
             batchIndex = batchIndex,
             batchCount = batchCount
         ),
-        relatedSubjectsById = relatedSubjectsById
+        relatedSubjectsById = relatedSubjectsById,
+        phoneticallySimilarIdsBySubjectId = phoneticallySimilarIdsBySubjectId
     )
 
     private fun batchCompleteState(
@@ -618,6 +620,36 @@ class LessonScreenTest {
 
         composeTestRule.onAllNodesWithText("Not loaded yet").assertCountEquals(0)
         composeTestRule.onAllNodesWithText("Used in").assertCountEquals(0)
+    }
+
+    @Test
+    fun studyPhase_vocabularyWithPhoneticallySimilarWords_showsThemAsTiles() {
+        val similar = SubjectSummary(
+            subjectId = 77,
+            subjectType = SubjectType.VOCABULARY,
+            characters = "強力",
+            level = 9,
+            meanings = listOf("Strength"),
+            readings = listOf("きょうりょく")
+        )
+        setScreen(
+            studyState(
+                studyItems = listOf(vocabularyItem),
+                studyIndex = 0,
+                relatedSubjectsById = mapOf(77L to similar),
+                phoneticallySimilarIdsBySubjectId = mapOf(vocabularyItem.subjectId to listOf(77L))
+            )
+        )
+
+        composeTestRule.onNodeWithText("Phonetically similar").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("強力").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun studyPhase_noPhoneticallySimilarIds_showsNoPhoneticallySimilarSection() {
+        setScreen(studyState(studyItems = listOf(vocabularyItem), studyIndex = 0))
+
+        composeTestRule.onAllNodesWithText("Phonetically similar").assertCountEquals(0)
     }
 
     @Test

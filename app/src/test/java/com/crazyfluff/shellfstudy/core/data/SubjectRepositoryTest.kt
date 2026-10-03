@@ -214,6 +214,47 @@ class SubjectRepositoryTest {
     }
 
     @Test
+    fun `observePhoneticallySimilarIds keys each word's vocabulary matches by its id`() = runTest {
+        repositories.subjectDao.upsertAll(
+            listOf(
+                readingSubject(id = 930, type = "vocabulary", characters = "協力", readingKey = "キョウリョク"),
+                readingSubject(id = 931, type = "vocabulary", characters = "強力", readingKey = "キョウリョク", level = 2),
+                readingSubject(
+                    id = 932, type = "kana_vocabulary", characters = "きょうりょく", readingKey = "キョウリョク", level = 1
+                ),
+                readingSubject(id = 933, type = "kanji", characters = "校", readingKey = "コウ"),
+                readingSubject(id = 934, type = "kanji", characters = "高", readingKey = "コウ"),
+                readingSubject(id = 935, type = "vocabulary", characters = "高", readingKey = "コウ"),
+                readingSubject(id = 936, type = "vocabulary", characters = "学校", readingKey = "ガッコウ")
+            )
+        )
+
+        repository.observePhoneticallySimilarIds(listOf(930L, 933L, 935L, 936L, 999L)).test {
+            val similar = awaitItem()
+            // Lowest level first; the uncached 999 is absent rather than an empty entry.
+            assertThat(similar[930L]).containsExactly(932L, 931L).inOrder()
+            // A kanji gets no matches, and a word doesn't match kanji reading the same.
+            assertThat(similar[933L]).isEmpty()
+            assertThat(similar[935L]).isEmpty()
+            assertThat(similar[936L]).isEmpty()
+            assertThat(similar).doesNotContainKey(999L)
+        }
+    }
+
+    private fun readingSubject(id: Long, type: String, characters: String, readingKey: String, level: Int = 1) =
+        SubjectEntity(
+            id = id,
+            subjectType = type,
+            level = level,
+            slug = characters,
+            characters = characters,
+            meanings = listOf(MeaningData(meaning = characters, primary = true)),
+            readings = emptyList(),
+            documentUrl = null,
+            primaryReadingKey = readingKey
+        )
+
+    @Test
     fun `syncSubjects maps pronunciation audios into the cached subject`() = runTest {
         server.enqueue(jsonResponse(SUBJECTS_JSON))
         repository.syncSubjects(force = true)

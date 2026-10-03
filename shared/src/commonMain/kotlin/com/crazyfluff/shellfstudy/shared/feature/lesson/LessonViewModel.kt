@@ -84,6 +84,11 @@ data class LessonUiState(
      *  the map has no cached summary (yet); [RelatedSubjectsSection]/[toRelatedSubjectsUiState] is
      *  what turns "absent" into a "not cached yet" caption rather than silence. */
     val relatedSubjectsById: Map<Long, SubjectSummary> = emptyMap(),
+    /** The "phonetically similar" subject ids for every item currently in play, keyed by subject id
+     *  — kept apart from the item itself because, unlike its visually-similar ids, they aren't a
+     *  property of the subject but a live match against whatever else is cached. Their summaries
+     *  land in [relatedSubjectsById] alongside every other related subject's. */
+    val phoneticallySimilarIdsBySubjectId: Map<Long, List<Long>> = emptyMap(),
     /** Drives the overflow menu's "Mute audio"/"Unmute audio" label. */
     val isAudioMuted: Boolean = false
 ) : QuizSessionState<LessonUiState, LessonItem> {
@@ -324,16 +329,29 @@ class LessonViewModel(
         viewModelScope.launch {
             pitchAccentItems
                 .flatMapLatest { items ->
-                    val relatedIds = items
-                        .flatMap { it.componentSubjectIds + it.amalgamationSubjectIds + it.visuallySimilarSubjectIds }
-                        .distinct()
-                    if (relatedIds.isEmpty()) {
-                        flowOf(emptyMap())
-                    } else {
-                        subjectRepository.observeSubjectSummaries(relatedIds).map { it.associateBy { s -> s.subjectId } }
+                    subjectRepository.observePhoneticallySimilarIds(items.map { it.subjectId })
+                        // Items with no match are left out of the map entirely, so a batch with none
+                        // leaves the state equal to before and the StateFlow doesn't re-emit it.
+                        .map { phonetic -> phonetic.filterValues { it.isNotEmpty() } }
+                        .distinctUntilChanged()
+                        .flatMapLatest { phonetic ->
+                            val ownRelatedIds = items.flatMap {
+                                it.componentSubjectIds + it.amalgamationSubjectIds + it.visuallySimilarSubjectIds
+                            }
+                            val relatedIds = (ownRelatedIds + phonetic.values.flatten()).distinct()
+                            val summaries = if (relatedIds.isEmpty()) {
+                                flowOf(emptyMap())
+                            } else {
+                                subjectRepository.observeSubjectSummaries(relatedIds).map { it.associateBy { s -> s.subjectId } }
+                            }
+                            summaries.map { related -> phonetic to related }
+                        }
+                }
+                .collect { (phonetic, related) ->
+                    _uiState.update {
+                        it.copy(phoneticallySimilarIdsBySubjectId = phonetic, relatedSubjectsById = related)
                     }
                 }
-                .collect { related -> _uiState.update { it.copy(relatedSubjectsById = related) } }
         }
         // The initial value is handled by beginBatchQuiz/resumeQuizPhase/sessionTiming.resume() below
         // instead — see QuizSessionTiming.wireForegroundTracking's doc comment. The gate keeps a batch

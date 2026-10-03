@@ -32,6 +32,7 @@ import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.designsystem.strokeorder.StrokeOrderUiState
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
+import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
@@ -531,6 +532,54 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
                 while (state.relatedSubjectsById[9001L] == null) state = awaitItem()
                 assertThat(state.relatedSubjectsById[9001L]?.meanings).containsExactly("Other word")
                 assertThat((state.phase as LessonUiState.Phase.Study).batchIndex).isEqualTo(0)
+            }
+        }
+
+    @Test
+    fun `a lesson word's phonetically similar vocabulary reaches the study card, a kanji reading the same doesn't`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            dispatch(jsonResponse(vocabAssignmentsJson()), jsonResponse(vocabSubjectsJson()))
+            // 件亜 is synced with primary reading けんあ; seed another word and a kanji reading the same.
+            repositories.subjectDao.upsertAll(
+                listOf(
+                    SubjectEntity(
+                        id = 9101L,
+                        subjectType = "vocabulary",
+                        level = 5,
+                        slug = "homophone",
+                        characters = "険亜",
+                        meanings = listOf(MeaningData(meaning = "Homophone", primary = true)),
+                        readings = listOf(ReadingData(reading = "けんあ", primary = true)),
+                        documentUrl = null,
+                        primaryReadingKey = "ケンア"
+                    ),
+                    SubjectEntity(
+                        id = 9102L,
+                        subjectType = "kanji",
+                        level = 1,
+                        slug = "kanjireading",
+                        characters = "件",
+                        meanings = listOf(MeaningData(meaning = "Matter", primary = true)),
+                        readings = listOf(ReadingData(reading = "けんあ", primary = true)),
+                        documentUrl = null,
+                        primaryReadingKey = "ケンア"
+                    )
+                )
+            )
+
+            val viewModel = createViewModel()
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+
+                viewModel.startSelectedLessons()
+                while (state.relatedSubjectsById[9101L] == null) state = awaitItem()
+
+                assertThat(state.phoneticallySimilarIdsBySubjectId[8001L]).containsExactly(9101L)
+                assertThat(state.relatedSubjectsById[9101L]?.characters).isEqualTo("険亜")
+                assertThat(state.relatedSubjectsById).doesNotContainKey(9102L)
+                cancelAndIgnoreRemainingEvents()
             }
         }
 

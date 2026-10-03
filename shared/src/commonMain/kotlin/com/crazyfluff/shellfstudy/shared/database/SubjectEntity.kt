@@ -46,6 +46,10 @@ data class SubjectEntity(
     val primaryReadingKey: String = ""
 )
 
+/** A subject's id, type and [SubjectEntity.primaryReadingKey] — the "phonetically similar" lookup's
+ *  row, kept to the three columns it matches on rather than whole subjects. */
+data class SubjectReadingKeyRow(val id: Long, val subjectType: String, val primaryReadingKey: String)
+
 /** One subject type's total subject count — the item-spread "locked" type-breakdown source. */
 data class SubjectTypeCount(val subjectType: String, val count: Int)
 
@@ -88,17 +92,17 @@ interface SubjectDao {
     @Query("SELECT * FROM subjects WHERE searchTarget LIKE '%' || :query || '%' ESCAPE '\\' LIMIT 200")
     fun observeSearch(query: String): Flow<List<SubjectEntity>>
 
-    /** Other vocabulary/kana-vocabulary subjects sharing this subject's exact primary reading —
-     *  powers the "Phonetically similar" section. */
+    /** Every subject whose primary reading is one of [readingKeys], lowest level first — the
+     *  candidates for the "Phonetically similar" section. Which of them count as similar to a given
+     *  subject (vocabulary only, not the subject itself) is decided by the caller. */
     @Query(
         """
-        SELECT id FROM subjects
-        WHERE subjectType IN ('vocabulary', 'kana_vocabulary')
-          AND primaryReadingKey = :readingKey AND primaryReadingKey != ''
-          AND id != :excludeId
+        SELECT id, subjectType, primaryReadingKey FROM subjects
+        WHERE primaryReadingKey IN (:readingKeys) AND primaryReadingKey != ''
+        ORDER BY level, id
         """
     )
-    fun observePhoneticallySimilarIds(readingKey: String, excludeId: Long): Flow<List<Long>>
+    fun observeByPrimaryReadingKeys(readingKeys: List<String>): Flow<List<SubjectReadingKeyRow>>
 
     @Query("SELECT COUNT(*) FROM subjects")
     fun observeTotalCount(): Flow<Int>

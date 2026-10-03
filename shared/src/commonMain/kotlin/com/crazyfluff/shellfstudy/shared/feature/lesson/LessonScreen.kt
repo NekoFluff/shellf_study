@@ -100,6 +100,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectReadi
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.componentsGroup
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.headlineGlyphBoxHeight
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.usedInGroup
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.phoneticallySimilarGroup
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.visuallySimilarGroup
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
@@ -371,6 +372,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonPhaseContent(
             study = phase,
             pitchAccentsBySubjectId = uiState.pitchAccentsBySubjectId,
             relatedSubjectsById = uiState.relatedSubjectsById,
+            phoneticallySimilarIdsBySubjectId = uiState.phoneticallySimilarIdsBySubjectId,
             actions = actions
         )
 
@@ -447,6 +449,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
     study: LessonUiState.Phase.Study,
     pitchAccentsBySubjectId: Map<Long, PitchAccentUiState>,
     relatedSubjectsById: Map<Long, SubjectSummary>,
+    phoneticallySimilarIdsBySubjectId: Map<Long, List<Long>>,
     actions: LessonActions
 ) {
     val openSubjectDetail = LocalOpenSubjectDetail.current
@@ -585,6 +588,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 LessonContextSentencesSection(item.contextSentences)
             }
             visuallySimilarGroup(item.subjectType, item.visuallySimilarSubjectIds, relatedSubjectsById)?.let { group ->
+                RelatedSubjectsSection(group = group, onSubjectClick = openSubjectDetail)
+            }
+            phoneticallySimilarGroup(
+                item.subjectType,
+                phoneticallySimilarIdsBySubjectId[item.subjectId].orEmpty(),
+                relatedSubjectsById
+            )?.let { group ->
                 RelatedSubjectsSection(group = group, onSubjectClick = openSubjectDetail)
             }
             RelatedSubjectsSection(

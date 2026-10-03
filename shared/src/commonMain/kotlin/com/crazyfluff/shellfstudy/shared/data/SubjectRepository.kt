@@ -8,6 +8,7 @@ import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.database.SubjectReadingKeyRow
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.CharacterImageData
@@ -167,20 +168,61 @@ class SubjectRepository(
                 }
             val phoneticallySimilarFlow: Flow<List<Long>> =
                 if (entity != null &&
-                    (type == SubjectType.VOCABULARY || type == SubjectType.KANA_VOCABULARY) &&
+                    entity.subjectType in PHONETICALLY_MATCHED_TYPES &&
                     entity.primaryReadingKey.isNotEmpty()
                 ) {
-                    subjectDao.observePhoneticallySimilarIds(entity.primaryReadingKey, entity.id)
+                    subjectDao.observeByPrimaryReadingKeys(listOf(entity.primaryReadingKey))
+                        .map { candidates -> phoneticallySimilarIds(entity, candidates) }
                 } else {
-                    // Kanji/radicals have no reading to match on — a confirmed absence, same as
-                    // pitch accents above.
+                    // Kanji/radicals don't get the section — a confirmed absence, same as pitch
+                    // accents above.
                     flowOf(emptyList())
                 }
             combine(pitchAccentsFlow, phoneticallySimilarFlow) { pitchAccents, phoneticallySimilarIds ->
                 entity?.toSubjectDetail(pitchAccents, phoneticallySimilarIds)
             }
         }.flowOn(defaultDispatcher)
+
+    /**
+     * The "phonetically similar" subject ids for each of [subjectIds], keyed by subject id — the
+     * batch form of what [observeSubjectDetail] carries for one subject, for screens showing several
+     * subjects at once (the lesson study cards). Live off Room, so a background sync that adds a
+     * newly-cached match reaches the caller in place. A subject that isn't cached is absent from the
+     * map; one with no matches maps to an empty list.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observePhoneticallySimilarIds(subjectIds: List<Long>): Flow<Map<Long, List<Long>>> =
+        chunkedIds(subjectIds) { subjectDao.observeByIds(it) }.flatMapLatest { entities ->
+            val readingKeys = entities
+                .filter { it.subjectType in PHONETICALLY_MATCHED_TYPES && it.primaryReadingKey.isNotEmpty() }
+                .map { it.primaryReadingKey }
+                .distinct()
+            chunkedIds(readingKeys) { subjectDao.observeByPrimaryReadingKeys(it) }.map { candidates ->
+                val candidatesByKey = candidates.groupBy { it.primaryReadingKey }
+                entities.associate { entity ->
+                    entity.id to phoneticallySimilarIds(entity, candidatesByKey[entity.primaryReadingKey].orEmpty())
+                }
+            }
+        }.flowOn(defaultDispatcher)
 }
+
+/** The subject types (WK object type strings) that get a "phonetically similar" section, and that
+ *  count as a match for one — vocabulary of either kind. Kanji and radicals get none. */
+private val PHONETICALLY_MATCHED_TYPES = setOf("vocabulary", "kana_vocabulary")
+
+/** The ids among [candidates] that are phonetically similar to [subject]: vocabulary with the same
+ *  primary reading, other than [subject] itself. Empty for anything but vocabulary. */
+private fun phoneticallySimilarIds(subject: SubjectEntity, candidates: List<SubjectReadingKeyRow>): List<Long> =
+    if (subject.subjectType !in PHONETICALLY_MATCHED_TYPES || subject.primaryReadingKey.isEmpty()) {
+        emptyList()
+    } else {
+        candidates
+            .filter {
+                it.id != subject.id && it.subjectType in PHONETICALLY_MATCHED_TYPES &&
+                    it.primaryReadingKey == subject.primaryReadingKey
+            }
+            .map { it.id }
+    }
 
 private fun buildSearchTarget(characters: String?, slug: String, meanings: List<String>, readings: List<String>): String =
     (listOfNotNull(characters) + slug + meanings + readings).joinToString(" ").lowercase()

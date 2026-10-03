@@ -8,6 +8,7 @@ import com.crazyfluff.shellfstudy.shared.database.LevelProgressItemRow
 import com.crazyfluff.shellfstudy.shared.database.SrsStageTypeCount
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.database.SubjectReadingKeyRow
 import com.crazyfluff.shellfstudy.shared.database.SubjectTypeCount
 import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsDao
 import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsEntity
@@ -38,13 +39,12 @@ class FakeSubjectDao(private val writeLog: SyncWriteLog? = null) : SubjectDao {
         return subjects.map { map -> map.values.filter { it.searchTarget.contains(unescaped, ignoreCase = true) }.take(200) }
     }
 
-    override fun observePhoneticallySimilarIds(readingKey: String, excludeId: Long): Flow<List<Long>> =
+    override fun observeByPrimaryReadingKeys(readingKeys: List<String>): Flow<List<SubjectReadingKeyRow>> =
         subjects.map { map ->
-            map.values.filter {
-                (it.subjectType == "vocabulary" || it.subjectType == "kana_vocabulary") &&
-                    it.primaryReadingKey == readingKey && it.primaryReadingKey.isNotEmpty() &&
-                    it.id != excludeId
-            }.map { it.id }
+            map.values
+                .filter { it.primaryReadingKey.isNotEmpty() && it.primaryReadingKey in readingKeys }
+                .sortedWith(compareBy({ it.level }, { it.id }))
+                .map { SubjectReadingKeyRow(it.id, it.subjectType, it.primaryReadingKey) }
         }
 
     override fun observeTotalCount(): Flow<Int> = subjects.map { it.size }
