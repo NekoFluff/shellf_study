@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.designsystem.quiz
 
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.DisplaySettings
 import com.crazyfluff.shellfstudy.shared.audio.selectAudioFor
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.designsystem.settings.LocalDisplaySettings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -272,6 +273,7 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
                 )
         ) {
             if (answerHint != null) {
+                val player = LocalPronunciationAudioPlayer.current
                 Column {
                     ReadingRow(
                         reading = answerHint.reading,
@@ -280,7 +282,8 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
                                 answerHint.audios,
                                 answerHint.reading,
                                 mp3Only = display.restrictAudioToMp3,
-                                previous = previous
+                                previous = previous,
+                                isAvailable = { player?.isAvailableOffline(it) ?: true }
                             )
                         }
                     )

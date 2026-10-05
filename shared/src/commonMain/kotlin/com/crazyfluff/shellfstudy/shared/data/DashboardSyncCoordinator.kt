@@ -14,7 +14,10 @@ class DashboardSyncCoordinator(
     private val waniKaniRepository: WaniKaniRepository,
     private val syncOrchestrator: SyncOrchestrator,
     private val dashboardCacheRepository: DashboardCacheRepository,
-    private val localHistoryGuard: LocalHistoryGuard
+    private val localHistoryGuard: LocalHistoryGuard,
+    /** Told about every successfully fetched user — how the offline audio library learns the user's
+     *  level. Must not block: it runs on the dashboard's critical path. */
+    private val onUserFetched: (WaniKaniUser) -> Unit = {}
 ) {
     val cachedSummary: Flow<CachedDashboardSummary?> = dashboardCacheRepository.cachedSummary
 
@@ -37,7 +40,10 @@ class DashboardSyncCoordinator(
             val user = userDeferred.await()
             // The dashboard fetches /user straight after every login and on every load, before a
             // session can start, so this is where local history gets matched to the account.
-            if (user is ApiResult.Success) localHistoryGuard.claimFor(user.data.id)
+            if (user is ApiResult.Success) {
+                localHistoryGuard.claimFor(user.data.id)
+                onUserFetched(user.data)
+            }
             user to summaryDeferred.await()
         }
 

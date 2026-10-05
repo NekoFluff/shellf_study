@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.data.model
 
 import androidx.compose.runtime.Immutable
 
+import com.crazyfluff.shellfstudy.shared.network.MAX_WANIKANI_LEVEL
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlin.math.ceil
 import kotlin.time.Instant
@@ -11,7 +12,9 @@ data class WaniKaniUser(
     /** WaniKani's stable user id — unlike [username], it never changes. */
     val id: String,
     val username: String,
-    val level: Int
+    val level: Int,
+    /** The highest level whose content the account's subscription unlocks. */
+    val maxLevelGranted: Int = MAX_WANIKANI_LEVEL
 )
 
 @Immutable

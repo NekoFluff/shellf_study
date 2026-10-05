@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.di
 import com.crazyfluff.shellfstudy.core.notifications.DailyStreakReminderWorker
 import com.crazyfluff.shellfstudy.core.notifications.DeferredNotificationWorker
 import com.crazyfluff.shellfstudy.core.notifications.ReviewNotificationWorker
+import com.crazyfluff.shellfstudy.core.audio.AudioDownloadWorker
 import com.crazyfluff.shellfstudy.core.sync.OutboxSyncWorker
 import com.crazyfluff.shellfstudy.core.sync.SyncWorker
 import org.koin.android.ext.koin.androidContext
@@ -22,10 +23,19 @@ val workerModule = module {
     }
 
     worker {
+        AudioDownloadWorker(
+            appContext = androidContext(),
+            params = it.get(),
+            offlineAudioManager = get()
+        )
+    }
+
+    worker {
         SyncWorker(
             appContext = androidContext(),
             params = it.get(),
             syncOrchestrator = get(),
+            outboxDrainer = get(),
             notificationCoordinator = get(),
             outboxSyncScheduler = get()
         )

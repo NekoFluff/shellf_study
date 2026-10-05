@@ -135,7 +135,8 @@ class OutboxSyncWorkerTest {
         seedAssignment(id = 102, subjectId = 2, srsStage = 1)
         queueReview(assignmentId = 101, subjectId = 1)
         queueReview(assignmentId = 102, subjectId = 2)
-        server.enqueue(emptyResponse(422)) // row 101's submitReview — definitively rejected
+        server.enqueue(emptyResponse(422)) // row 101's submitReview, with its timestamp
+        server.enqueue(emptyResponse(422)) // …and without it — definitively rejected
         server.enqueue(jsonResponse(singleAssignmentJson(id = 101, subjectId = 1, srsStage = 1))) // refetchAssignment(101)
         server.enqueue(jsonResponse(reviewResultJson(assignmentId = 102, subjectId = 2, startingStage = 1, endingStage = 2))) // row 102 succeeds
 

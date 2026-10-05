@@ -402,6 +402,16 @@ class DashboardViewModel(
                 onDashboardResumed()
             }
         }
+
+        // Work done offline reaches WaniKani whenever the connection comes back, which is usually
+        // not when the dashboard last fetched — so the counts it shows still include that work until
+        // they are fetched again. Before the first resume there is nothing to correct: the cold-start
+        // refresh is about to fetch anyway.
+        viewModelScope.launch {
+            outboxRepository.workDelivered.collect {
+                if (hasCompletedInitialSync) refreshAfterResume()
+            }
+        }
     }
 
     fun onLevelProgressLevelChange(level: Int) {
@@ -520,49 +530,53 @@ class DashboardViewModel(
                 return@launch
             }
 
-            // One pass, with assignments on a short freshness window — see
-            // SyncOrchestrator.syncAllForResume.
-            dashboardSyncCoordinator.syncForResume()
+            refreshAfterResume()
+        }
+    }
 
-            val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()
+    private suspend fun refreshAfterResume() {
+        // One pass, with assignments on a short freshness window — see
+        // SyncOrchestrator.syncAllForResume.
+        dashboardSyncCoordinator.syncForResume()
 
-            if (userResult is ApiResult.Error && userResult.isAuthError) {
-                logoutCoordinator.logout()
-                _dashboardData.update { it.copy(isLoggedOut = true) }
-                return@launch
-            }
+        val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()
 
-            val user = (userResult as? ApiResult.Success)?.data
-            val summary = (summaryResult as? ApiResult.Success)?.data
-            // ApiResult has no variant besides Success and Error, so "one of the two came back
-            // empty" is the same question as "did either of them come back an Error".
-            val failedFetch = (userResult as? ApiResult.Error) ?: (summaryResult as? ApiResult.Error)
-            val syncedAtMillis = Clock.System.now().toEpochMilliseconds()
+        if (userResult is ApiResult.Error && userResult.isAuthError) {
+            logoutCoordinator.logout()
+            _dashboardData.update { it.copy(isLoggedOut = true) }
+            return
+        }
 
-            _dashboardData.update {
-                val resolvedUsername = user?.username ?: it.username
-                val resolvedLevel = user?.level ?: it.level
-                val resolvedLessonCount = summary?.lessonCount ?: it.lessonCount
-                val resolvedReviewCount = summary?.reviewCount ?: it.reviewCount
-                it.copy(
-                    username = resolvedUsername,
-                    level = resolvedLevel,
-                    lessonCount = resolvedLessonCount,
-                    reviewCount = resolvedReviewCount,
-                    // Same three outcomes as the cold-start path above: a clean fetch, cached
-                    // content that outlived a failure, or nothing at all to show.
-                    fetchState = when {
-                        failedFetch == null -> DashboardFetch.Idle
-                        resolvedUsername != null -> DashboardFetch.Stale
-                        else -> DashboardFetch.Failed(failedFetch.message)
-                    },
-                    lastSyncedAtMillis = if (failedFetch != null) it.lastSyncedAtMillis else syncedAtMillis
-                )
-            }
+        val user = (userResult as? ApiResult.Success)?.data
+        val summary = (summaryResult as? ApiResult.Success)?.data
+        // ApiResult has no variant besides Success and Error, so "one of the two came back
+        // empty" is the same question as "did either of them come back an Error".
+        val failedFetch = (userResult as? ApiResult.Error) ?: (summaryResult as? ApiResult.Error)
+        val syncedAtMillis = Clock.System.now().toEpochMilliseconds()
 
-            if (user != null && summary != null) {
-                dashboardSyncCoordinator.cacheSummary(user, summary, syncedAtMillis)
-            }
+        _dashboardData.update {
+            val resolvedUsername = user?.username ?: it.username
+            val resolvedLevel = user?.level ?: it.level
+            val resolvedLessonCount = summary?.lessonCount ?: it.lessonCount
+            val resolvedReviewCount = summary?.reviewCount ?: it.reviewCount
+            it.copy(
+                username = resolvedUsername,
+                level = resolvedLevel,
+                lessonCount = resolvedLessonCount,
+                reviewCount = resolvedReviewCount,
+                // Same three outcomes as the cold-start path above: a clean fetch, cached
+                // content that outlived a failure, or nothing at all to show.
+                fetchState = when {
+                    failedFetch == null -> DashboardFetch.Idle
+                    resolvedUsername != null -> DashboardFetch.Stale
+                    else -> DashboardFetch.Failed(failedFetch.message)
+                },
+                lastSyncedAtMillis = if (failedFetch != null) it.lastSyncedAtMillis else syncedAtMillis
+            )
+        }
+
+        if (user != null && summary != null) {
+            dashboardSyncCoordinator.cacheSummary(user, summary, syncedAtMillis)
         }
     }
 

@@ -10,6 +10,8 @@ import com.crazyfluff.shellfstudy.shared.session.PersistedSessionStore
 import com.google.common.truth.Truth.assertThat
 import io.ktor.client.engine.HttpClientEngine
 import org.junit.Test
+import okio.Path
+import com.crazyfluff.shellfstudy.shared.data.audio.AudioDownloadScheduler
 import org.junit.runner.RunWith
 import org.koin.dsl.module
 import org.koin.test.verify.verify
@@ -24,9 +26,8 @@ import org.koin.test.verify.verify
  * passing while the real graph breaks. It also means the shared half — [sharedAppModules], which iOS
  * installs too — is covered here, where the previous version checked only a hand-picked subset.
  *
- * One module is still excluded: [audioModule]. ExoPlayer uses a builder pattern — `SimpleCache(File,
- * CacheEvictor)` and `ExoPlayer.Builder` take parameters that are not Koin bindings, so static analysis
- * reports them as missing. Audio wiring is exercised in integration instead.
+ * One module is still excluded: [audioModule]. `ExoPlayer.Builder` takes parameters that are not Koin
+ * bindings, so static analysis reports them as missing. Audio wiring is exercised in integration instead.
  */
 @RunWith(AndroidJUnit4::class)
 class AppModulesVerificationTest {
@@ -51,6 +52,10 @@ class AppModulesVerificationTest {
                 // Declared by the excluded audioModule above; naming it here still lets the verifier
                 // confirm the ViewModels that inject it have a complete graph.
                 PronunciationAudioPlayer::class,
+                // Also from audioModule: where the offline audio library lives, and how its
+                // downloads are scheduled (WorkManager on Android).
+                Path::class,
+                AudioDownloadScheduler::class,
                 // Ktor's HttpClient constructor takes HttpClientEngine internally; the actual engine
                 // (OkHttp) is supplied at construction time by createWaniKaniHttpClient(), not via Koin.
                 HttpClientEngine::class,

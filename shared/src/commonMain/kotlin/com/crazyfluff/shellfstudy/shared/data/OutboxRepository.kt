@@ -8,7 +8,11 @@ import com.crazyfluff.shellfstudy.shared.data.model.ReviewGrade
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingLessonStartEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -72,4 +76,17 @@ class OutboxRepository(
     }
 
     suspend fun resetAuthBlock() = setBlockedOnAuth(false)
+
+    private val _workDelivered =
+        MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** Fires after a drain pass that got at least one queued grade or lesson start to WaniKani —
+     *  typically work done offline, reaching the server once the connection is back. Anything that
+     *  shows server-derived counts should refetch then: a `/summary` read before the drain still
+     *  counts that work as outstanding. */
+    val workDelivered: SharedFlow<Unit> = _workDelivered.asSharedFlow()
+
+    internal fun notifyWorkDelivered() {
+        _workDelivered.tryEmit(Unit)
+    }
 }

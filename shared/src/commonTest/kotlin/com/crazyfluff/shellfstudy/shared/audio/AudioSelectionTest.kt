@@ -121,4 +121,37 @@ class AudioSelectionTest {
             }
         )
     }
+
+    @Test
+    fun `offline random rotates only among voices that are downloaded`() {
+        val downloaded = setOf("kyoko.mp3")
+        repeat(30) {
+            val picked = selectAudioFor(
+                twoVoicesThreeFormats,
+                reading = "reading",
+                isAvailable = { it.url in downloaded }
+            )
+            assertEquals("kyoko.mp3", picked?.url)
+        }
+    }
+
+    @Test
+    fun `offline the only downloaded voice replays rather than switching to one that can't play`() {
+        val kyoko = twoVoicesThreeFormats.first { it.url == "kyoko.mp3" }
+        val picked = selectAudioFor(
+            twoVoicesThreeFormats,
+            reading = "reading",
+            previous = kyoko,
+            isAvailable = { it.url == "kyoko.mp3" }
+        )
+        assertEquals("kyoko.mp3", picked?.url)
+    }
+
+    @Test
+    fun `with nothing downloaded the choice is made as if everything were`() {
+        val picked = (1..50).map {
+            selectAudioFor(twoVoicesThreeFormats, reading = "reading", isAvailable = { false })?.url
+        }.toSet()
+        assertEquals(setOf("kenichi.mp3", "kyoko.mp3"), picked)
+    }
 }

@@ -25,7 +25,8 @@ enum class AccountStore {
     DashboardCache,
     LastSessionSummary,
     ReviewSession,
-    LessonSession
+    LessonSession,
+    OfflineAudio
 }
 
 /** What a wipe managed to do — see [AccountDataCleaner.clearAll]. */
@@ -64,7 +65,9 @@ class AccountDataCleaner(
     private val dashboardCacheRepository: DashboardCacheRepository,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
     private val reviewSessionController: ReviewSessionController,
-    private val lessonSessionController: LessonSessionController
+    private val lessonSessionController: LessonSessionController,
+    /** Downloaded pronunciation clips and the offline audio choices — see OfflineAudioManager. */
+    private val clearOfflineAudio: suspend () -> Unit = {}
 ) {
     suspend fun clearAll(): AccountCleanupOutcome {
         val failures = mutableMapOf<AccountStore, Throwable>()
@@ -80,6 +83,7 @@ class AccountDataCleaner(
         wipe(AccountStore.LastSessionSummary, failures) { lastSessionSummaryRepository.clearAll() }
         wipe(AccountStore.ReviewSession, failures) { reviewSessionController.abandon() }
         wipe(AccountStore.LessonSession, failures) { lessonSessionController.abandon() }
+        wipe(AccountStore.OfflineAudio, failures) { clearOfflineAudio() }
 
         return if (failures.isEmpty()) AccountCleanupOutcome.Complete else AccountCleanupOutcome.Partial(failures)
     }

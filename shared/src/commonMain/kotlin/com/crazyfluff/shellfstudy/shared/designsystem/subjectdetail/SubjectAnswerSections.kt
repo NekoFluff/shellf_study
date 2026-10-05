@@ -120,6 +120,7 @@ private fun VocabularyReadingList(
     pitchAccents: PitchAccentUiState
 ) {
     val displaySettings = LocalDisplaySettings.current
+    val player = LocalPronunciationAudioPlayer.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         readings.forEach { reading ->
             Column {
@@ -133,7 +134,8 @@ private fun VocabularyReadingList(
                             pronunciationAudios,
                             reading,
                             mp3Only = displaySettings.restrictAudioToMp3,
-                            previous = previous
+                            previous = previous,
+                            isAvailable = { player?.isAvailableOffline(it) ?: true }
                         )
                     }
                 )

@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.audio
 
 import android.media.AudioAttributes
+import android.net.Uri
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import androidx.media3.common.MediaItem
@@ -13,12 +14,14 @@ import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
 
 /**
- * Backed by one reusable [ExoPlayer] instance (injected already configured with HTTP caching —
- * see AudioModule). Calling [play] while a clip is already playing just replaces the current
- * media item rather than overlapping two clips. The [PronunciationAudioPlayer] interface itself
- * lives in :shared, alongside an AVPlayer-backed iOS implementation
+ * Backed by one reusable [ExoPlayer] instance. Plays local files only: it sits behind
+ * [com.crazyfluff.shellfstudy.shared.data.audio.LibraryBackedAudioPlayer], which hands it each clip
+ * with `url` set to the stored file's path (see AudioModule). Calling [play] while a clip is already
+ * playing just replaces the current media item rather than overlapping two clips. The
+ * [PronunciationAudioPlayer] interface itself lives in :shared, alongside an AVPlayer-backed iOS implementation
  * ([com.crazyfluff.shellfstudy.shared.data.IosPronunciationAudioPlayer]) — this ExoPlayer-based
  * one stays Android-only.
  *
@@ -94,7 +97,7 @@ class RealPronunciationAudioPlayer(
             _state.value = PlaybackState.ERROR
             return
         }
-        exoPlayer.setMediaItem(MediaItem.fromUri(audio.url))
+        exoPlayer.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(audio.url))))
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
     }

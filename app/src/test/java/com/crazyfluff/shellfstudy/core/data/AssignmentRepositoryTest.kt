@@ -10,6 +10,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ReviewItem
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioMetadataData
@@ -36,6 +37,8 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+
+private const val PAST = "2020-01-01T00:00:00.000000Z"
 
 private fun Instant.truncatedToHour(): Instant = Instant.fromEpochSeconds((epochSeconds / 3600) * 3600)
 
@@ -139,6 +142,43 @@ class AssignmentRepositoryTest {
         val request = server.takeRequest()
         assertThat(request.method).isEqualTo("PUT")
         assertThat(request.target).contains("/assignments/777/start")
+    }
+
+    @Test
+    fun `startAssignment sends the time the lesson was actually finished`() = runTest {
+        server.enqueue(jsonResponse(startAssignmentResultJson(id = 777)))
+
+        repository.startAssignment(777, startedAt = "2026-03-01T08:00:00Z")
+
+        assertThat(server.takeRequest().body!!.utf8()).contains("\"started_at\":\"2026-03-01T08:00:00Z\"")
+    }
+
+    @Test
+    fun `a sync does not overwrite an assignment whose review is still waiting in the outbox`() = runTest {
+        // Graded offline: stage 3 -> 4 locally, the submission still queued. The server's row is from
+        // before that review, and writing it would put the item back in the review queue.
+        repositories.assignmentDao.upsertAll(listOf(seedAssignment(id = 999, subjectId = 440, srsStage = 4)))
+        repositories.outboxDao.insertReviewSubmission(
+            PendingReviewSubmissionEntity(
+                assignmentId = 999, subjectId = 440,
+                incorrectMeaningAnswers = 0, incorrectReadingAnswers = 0, gradedAt = "2026-01-01T00:00:00Z"
+            )
+        )
+        server.enqueue(
+            jsonResponse(
+                collectionJson(
+                    listOf(
+                        assignmentData(id = 999, subjectId = 440, srsStage = 3, availableAt = PAST),
+                        assignmentData(id = 1000, subjectId = 441, srsStage = 2, availableAt = PAST)
+                    )
+                )
+            )
+        )
+
+        repository.syncAssignments(force = true)
+
+        assertThat(repositories.assignmentDao.getById(999)?.srsStage).isEqualTo(4)
+        assertThat(repositories.assignmentDao.getById(1000)?.srsStage).isEqualTo(2)
     }
 
     @Test

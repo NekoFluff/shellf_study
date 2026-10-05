@@ -24,8 +24,12 @@ import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
+import com.crazyfluff.shellfstudy.shared.data.audio.AudioLibrary
+import com.crazyfluff.shellfstudy.shared.data.audio.OfflineAudioManager
 import com.crazyfluff.shellfstudy.shared.data.strokeorder.CmpStrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeRepository
+import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.SubjectImagePrefetcher
 import com.crazyfluff.shellfstudy.shared.feature.auth.AuthViewModel
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardViewModel
 import com.crazyfluff.shellfstudy.shared.feature.lastsession.LastSessionSummaryViewModel
@@ -34,6 +38,7 @@ import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonViewModel
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewViewModel
 import com.crazyfluff.shellfstudy.shared.feature.studytime.StudyTimeViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
+import com.crazyfluff.shellfstudy.shared.feature.settings.OfflineAudioViewModel
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsViewModel
 import com.crazyfluff.shellfstudy.shared.feature.splash.SplashViewModel
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailViewModel
@@ -53,6 +58,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
+import io.ktor.client.HttpClient
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
@@ -60,6 +67,10 @@ import org.koin.dsl.module
 import org.koin.dsl.onClose
 
 val APPLICATION_SCOPE = named("applicationScope")
+
+/** Where [AudioLibrary] keeps its clips — an okio `Path` each platform module provides, somewhere the
+ *  OS never clears on its own. */
+val AUDIO_LIBRARY_ROOT = named("audioLibraryRoot")
 
 val coroutineScopeModule = module {
     // onClose cancels the scope with the container. Koin tears down on stopKoin(), which the
@@ -105,7 +116,8 @@ val repositoryModule = module {
             assignmentDao = get(),
             subjectDao = get(),
             syncStateDao = get(),
-            srsSystemDao = get()
+            srsSystemDao = get(),
+            pendingAssignmentIds = { get<OutboxDao>().getPendingAssignmentIds() }
         )
     }
 
@@ -146,7 +158,8 @@ val repositoryModule = module {
             dashboardCacheRepository = get(),
             lastSessionSummaryRepository = get(),
             reviewSessionController = get(),
-            lessonSessionController = get()
+            lessonSessionController = get(),
+            clearOfflineAudio = { get<OfflineAudioManager>().clearForLogout() }
         )
     }
     single {
@@ -163,7 +176,23 @@ val repositoryModule = module {
             waniKaniRepository = get(),
             syncOrchestrator = get(),
             dashboardCacheRepository = get(),
-            localHistoryGuard = get()
+            localHistoryGuard = get(),
+            onUserFetched = { user ->
+                get<CoroutineScope>(APPLICATION_SCOPE).launch { get<OfflineAudioManager>().onUserRefreshed(user) }
+            }
+        )
+    }
+    // Downloaded pronunciation audio. A plain client rather than the WaniKani one: the clips are on
+    // WaniKani's CDN, which needs no API token, and the token has no business being sent there.
+    single { AudioLibrary(root = get(AUDIO_LIBRARY_ROOT), httpClient = HttpClient()) }
+    single { SubjectImagePrefetcher(context = get()) }
+    single {
+        OfflineAudioManager(
+            dataStore = get(),
+            library = get(),
+            subjectDao = get(),
+            scheduler = get(),
+            prefetchImages = get<SubjectImagePrefetcher>()::prefetch
         )
     }
     // Sessions persist to their own Room database rather than the shared preferences DataStore. The
@@ -260,6 +289,7 @@ val notificationCoordinatorModule = module {
 val viewModelModule = module {
     viewModel { ThemeViewModel(get()) }
     viewModel { StudyTimeViewModel(get(), get()) }
+    viewModel { OfflineAudioViewModel(get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { AuthViewModel(get(), get(), get(), get(), get()) }
     viewModel { SplashViewModel(get(), get(), get()) }

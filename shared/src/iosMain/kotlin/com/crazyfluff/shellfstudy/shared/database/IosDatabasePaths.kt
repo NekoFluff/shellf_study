@@ -1,7 +1,11 @@
 package com.crazyfluff.shellfstudy.shared.database
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSCachesDirectory
+import platform.Foundation.NSNumber
+import platform.Foundation.NSURL
+import platform.Foundation.NSURLIsExcludedFromBackupKey
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSUserDomainMask
@@ -30,4 +34,26 @@ internal fun iosCachesDirectoryPath(): String {
         error = null
     )
     return requireNotNull(cachesDirectory?.path)
+}
+
+/** Where the offline audio library keeps its clips: Application Support, which the OS never purges
+ *  (unlike Caches), excluded from iCloud backup since every clip can be downloaded again. */
+@OptIn(ExperimentalForeignApi::class)
+internal fun iosAudioLibraryDirectoryPath(): String {
+    val supportDirectory = NSFileManager.defaultManager.URLForDirectory(
+        directory = NSApplicationSupportDirectory,
+        inDomain = NSUserDomainMask,
+        appropriateForURL = null,
+        create = true,
+        error = null
+    )
+    val library = requireNotNull(supportDirectory?.URLByAppendingPathComponent("audio_library"))
+    NSFileManager.defaultManager.createDirectoryAtURL(
+        library,
+        withIntermediateDirectories = true,
+        attributes = null,
+        error = null
+    )
+    library.setResourceValue(NSNumber(bool = true), forKey = NSURLIsExcludedFromBackupKey, error = null)
+    return requireNotNull(library.path)
 }

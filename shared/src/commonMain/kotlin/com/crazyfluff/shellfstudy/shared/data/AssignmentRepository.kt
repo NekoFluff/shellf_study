@@ -19,6 +19,8 @@ import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.network.AssignmentData
 import com.crazyfluff.shellfstudy.shared.network.ReviewResultData
+import com.crazyfluff.shellfstudy.shared.network.StartAssignmentBody
+import com.crazyfluff.shellfstudy.shared.network.StartAssignmentRequest
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.WkResourceItem
@@ -82,7 +84,9 @@ class AssignmentRepository(
     private val subjectDao: SubjectDao,
     private val syncStateDao: SyncStateDao,
     private val srsSystemDao: SrsSystemDao,
-    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** Assignments with outbox rows not yet sent — see the write in [fetchAssignments]. */
+    private val pendingAssignmentIds: suspend () -> Collection<Long> = { emptyList() }
 ) {
     suspend fun syncAssignments(force: Boolean = false): ApiResult<Unit> = safeApiCall {
         fetchAssignments(force)?.let { completeResourceSync(syncStateDao, SyncResources.ASSIGNMENTS, it) }
@@ -109,11 +113,25 @@ class AssignmentRepository(
                     nextPage = { url -> api.getAssignmentsPage(url) }
                 ).map { it.toEntity() }
             },
-            write = { assignmentDao.upsertAll(it) }
+            write = { rows -> assignmentDao.upsertAll(withoutPendingWork(rows)) }
         )
 
-    suspend fun startAssignment(assignmentId: Long): ApiResult<Unit> = safeApiCall {
-        val response = api.startAssignment(assignmentId)
+    /**
+     * Drops server rows for assignments that still have work in the outbox. Those rows are the server's
+     * state from *before* that work, so writing them would undo the optimistic local stage — an item
+     * reviewed offline would come back as due, a lesson finished offline would come back as a lesson.
+     * Nothing is lost by skipping: draining the row writes the server's answer for it, and the server
+     * row's `updated_at` moves when it accepts the work, so the next incremental fetch returns it again.
+     * Read at write time rather than fetch time, so a grade made while the fetch was in flight counts.
+     */
+    private suspend fun withoutPendingWork(rows: List<AssignmentEntity>): List<AssignmentEntity> {
+        val pending = pendingAssignmentIds().toSet()
+        return if (pending.isEmpty()) rows else rows.filterNot { it.id in pending }
+    }
+
+    /** [startedAt] is when the lesson was actually finished; null lets WaniKani use the request time. */
+    suspend fun startAssignment(assignmentId: Long, startedAt: String? = null): ApiResult<Unit> = safeApiCall {
+        val response = api.startAssignment(assignmentId, StartAssignmentRequest(StartAssignmentBody(startedAt)))
         assignmentDao.upsertAll(listOf(response.toEntity()))
     }
 

@@ -44,6 +44,8 @@ class MutingPronunciationAudioPlayer(
     }
 
     override fun stop() = delegate.stop()
+
+    override fun isAvailableOffline(audio: PronunciationAudio): Boolean = delegate.isAvailableOffline(audio)
 }
 
 /** How both platforms' DI wraps their real player: muted per [settingsRepository], with muting's

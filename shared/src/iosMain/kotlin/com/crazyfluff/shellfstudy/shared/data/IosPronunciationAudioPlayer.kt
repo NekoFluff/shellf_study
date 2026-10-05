@@ -1,15 +1,10 @@
 package com.crazyfluff.shellfstudy.shared.data
 
-import com.crazyfluff.shellfstudy.shared.data.audio.IosAudioFileCache
 import com.crazyfluff.shellfstudy.shared.data.model.PronunciationAudio
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryOptionDuckOthers
 import platform.AVFAudio.AVAudioSessionCategoryPlayback
@@ -18,6 +13,7 @@ import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
 import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
 import platform.AVFoundation.AVPlayerItemFailedToPlayToEndTimeNotification
+import platform.AVFoundation.AVPlayerItemStatusFailed
 import platform.AVFoundation.AVPlayerTimeControlStatusPlaying
 import platform.AVFoundation.AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate
 import platform.AVFoundation.currentItem
@@ -25,6 +21,7 @@ import platform.AVFoundation.pause
 import platform.AVFoundation.play
 import platform.AVFoundation.replaceCurrentItemWithPlayerItem
 import platform.AVFoundation.seekToTime
+import platform.AVFoundation.status
 import platform.AVFoundation.timeControlStatus
 import platform.CoreMedia.CMTimeMake
 import platform.Foundation.NSNotificationCenter
@@ -34,7 +31,9 @@ import platform.Foundation.NSURL
 import platform.darwin.NSObjectProtocol
 
 /**
- * AVPlayer-backed implementation for iOS. State is derived from [AVPlayer.timeControlStatus]
+ * AVPlayer-backed implementation for iOS. Plays local files only: it sits behind
+ * [com.crazyfluff.shellfstudy.shared.data.audio.LibraryBackedAudioPlayer], which hands it each clip
+ * with `url` set to the stored file's path (see IosModules). State is derived from [AVPlayer.timeControlStatus]
  * (playing/buffering), polled on a repeating [NSTimer] rather than KVO — subclassing NSObject to
  * observe a keyPath is possible from Kotlin/Native but far more cinterop surface than this narrow
  * player needs — plus notification observers for end-of-playback and failure. There's no
@@ -51,14 +50,11 @@ import platform.darwin.NSObjectProtocol
  * app-lifetime-old answer becoming stale once the user pauses their own music mid-session.
  */
 @OptIn(ExperimentalForeignApi::class)
-class IosPronunciationAudioPlayer(
-    private val audioFileCache: IosAudioFileCache
-) : PronunciationAudioPlayer {
+class IosPronunciationAudioPlayer : PronunciationAudioPlayer {
 
     private val player = AVPlayer()
     private val _state = MutableStateFlow(PlaybackState.IDLE)
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
-    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private var endObserver: NSObjectProtocol? = null
     private var failureObserver: NSObjectProtocol? = null
@@ -117,6 +113,13 @@ class IosPronunciationAudioPlayer(
 
     private fun pollState() {
         if (_state.value == PlaybackState.ERROR) return
+        // A file AVPlayer can't open fails the item rather than posting FailedToPlayToEndTime (that
+        // one is for failures part-way through), so without this it would sit silent with no error.
+        if (player.currentItem?.status == AVPlayerItemStatusFailed) {
+            _state.value = PlaybackState.ERROR
+            deactivateSession()
+            return
+        }
         _state.value = when (player.timeControlStatus) {
             AVPlayerTimeControlStatusPlaying -> PlaybackState.PLAYING
             AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate -> PlaybackState.BUFFERING
@@ -125,18 +128,10 @@ class IosPronunciationAudioPlayer(
     }
 
     override fun play(audio: PronunciationAudio) {
-        val cachedPath = audioFileCache.cachedFile(audio)
-        val url = if (cachedPath != null) {
-            NSURL.fileURLWithPath(cachedPath)
-        } else {
-            cacheScope.launch { audioFileCache.download(audio) }
-            NSURL.URLWithString(audio.url)
-        }
-        if (url == null) {
-            _state.value = PlaybackState.ERROR
-            return
-        }
+        val url = NSURL.fileURLWithPath(audio.url)
         removeItemObservers()
+        // Out of a previous clip's ERROR, which pollState otherwise holds on to.
+        _state.value = PlaybackState.BUFFERING
         AVAudioSession.sharedInstance().setActive(true, null)
         val item = AVPlayerItem(uRL = url)
         addItemObservers(item)

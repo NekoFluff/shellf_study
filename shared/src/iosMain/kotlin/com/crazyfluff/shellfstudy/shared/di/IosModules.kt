@@ -2,7 +2,12 @@ package com.crazyfluff.shellfstudy.shared.di
 
 import com.crazyfluff.shellfstudy.shared.data.IosOutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.IosPronunciationAudioPlayer
-import com.crazyfluff.shellfstudy.shared.data.audio.IosAudioFileCache
+import com.crazyfluff.shellfstudy.shared.data.audio.AudioDownloadScheduler
+import com.crazyfluff.shellfstudy.shared.data.audio.IosAudioDownloadScheduler
+import com.crazyfluff.shellfstudy.shared.data.audio.LibraryBackedAudioPlayer
+import com.crazyfluff.shellfstudy.shared.data.audio.OfflineAudioManager
+import com.crazyfluff.shellfstudy.shared.database.iosAudioLibraryDirectoryPath
+import com.crazyfluff.shellfstudy.shared.database.iosCachesDirectoryPath
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.TokenCipher
@@ -21,7 +26,12 @@ import com.crazyfluff.shellfstudy.shared.notifications.NotificationPoster
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler
 import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import kotlin.time.Instant
+import coil3.PlatformContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.plus
+import okio.FileSystem
+import okio.Path.Companion.toPath
 import kotlinx.coroutines.launch
 import org.koin.dsl.module
 
@@ -42,10 +52,25 @@ private val iosDataStoreModule = module {
 }
 
 private val iosAudioModule = module {
-    single { IosAudioFileCache() }
+    single { PlatformContext.INSTANCE }
+    single(AUDIO_LIBRARY_ROOT) {
+        // Clips used to live in a purgeable cache here, before the library replaced it.
+        get<CoroutineScope>(APPLICATION_SCOPE).launch {
+            val oldCache = "${iosCachesDirectoryPath()}/pronunciation_audio".toPath()
+            runCatching { FileSystem.SYSTEM.deleteRecursively(oldCache) }
+        }
+        iosAudioLibraryDirectoryPath().toPath()
+    }
+    single<AudioDownloadScheduler> {
+        IosAudioDownloadScheduler(get(APPLICATION_SCOPE)) { get<OfflineAudioManager>().runDownloads() }
+    }
     single<PronunciationAudioPlayer> {
-        IosPronunciationAudioPlayer(get())
-            .mutedBy(get<SettingsRepository>(), get<CoroutineScope>(APPLICATION_SCOPE))
+        val applicationScope = get<CoroutineScope>(APPLICATION_SCOPE)
+        LibraryBackedAudioPlayer(
+            library = get(),
+            localPlayer = IosPronunciationAudioPlayer(),
+            scope = applicationScope + Dispatchers.Main
+        ).mutedBy(get<SettingsRepository>(), applicationScope)
     }
 }
 

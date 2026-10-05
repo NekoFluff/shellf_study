@@ -8,6 +8,10 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -69,6 +73,7 @@ fun SubjectGlyph(
     val maxFontSize = (size.value * GlyphFontFraction).sp
     val textStyle = MaterialTheme.typography.headlineSmall
     val glyphColor = color ?: subjectColor(subjectType)
+    var imageFailed by remember(characterImageUrl) { mutableStateOf(false) }
 
     when {
         // Only height is constrained here, not width — vocabulary "characters" can be a whole word
@@ -88,7 +93,12 @@ fun SubjectGlyph(
                 autoSize = TextAutoSize.StepBased(minFontSize = MinGlyphFontSize, maxFontSize = maxFontSize)
             )
         }
-        characterImageUrl != null -> Box(modifier = modifier.width(size).height(boxHeight), contentAlignment = Alignment.Center) {
+        // An image that can't load (offline, and never shown before so not in Coil's disk cache)
+        // falls through to the text fallback below rather than leaving an empty box.
+        characterImageUrl != null && !imageFailed -> Box(
+            modifier = modifier.width(size).height(boxHeight),
+            contentAlignment = Alignment.Center
+        ) {
             // These SVGs are flat monochrome line art (fill:none, a single stroke color) baked to a
             // hardcoded fallback black by inlineSvgStyles — tinting to the same
             // subject-type color the text-glyph branch above uses keeps them visible and consistent
@@ -98,6 +108,7 @@ fun SubjectGlyph(
                 model = characterImageUrl,
                 contentDescription = null,
                 colorFilter = ColorFilter.tint(glyphColor),
+                onError = { imageFailed = true },
                 modifier = Modifier.size(size * GlyphInkScale)
             )
         }

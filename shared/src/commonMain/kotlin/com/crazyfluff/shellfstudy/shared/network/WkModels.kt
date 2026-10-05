@@ -8,8 +8,17 @@ data class UserData(
     val id: String,
     val username: String,
     val level: Int,
-    @SerialName("started_at") val startedAt: String
+    @SerialName("started_at") val startedAt: String,
+    val subscription: SubscriptionData? = null
 )
+
+@Serializable
+data class SubscriptionData(
+    /** The highest level whose content this account can study: 3 on a free account, 60 otherwise. */
+    @SerialName("max_level_granted") val maxLevelGranted: Int = MAX_WANIKANI_LEVEL
+)
+
+const val MAX_WANIKANI_LEVEL = 60
 
 @Serializable
 data class SummaryData(
@@ -166,7 +175,10 @@ data class ReviewSubmissionRequest(val review: ReviewSubmissionBody)
 data class ReviewSubmissionBody(
     @SerialName("assignment_id") val assignmentId: Long,
     @SerialName("incorrect_meaning_answers") val incorrectMeaningAnswers: Int,
-    @SerialName("incorrect_reading_answers") val incorrectReadingAnswers: Int
+    @SerialName("incorrect_reading_answers") val incorrectReadingAnswers: Int,
+    /** When the review was actually done. Omitted (null, with `explicitNulls = false`) means "now" to
+     *  WaniKani; sent for outbox rows so a review graded offline counts from when it happened. */
+    @SerialName("created_at") val createdAt: String? = null
 )
 
 @Serializable

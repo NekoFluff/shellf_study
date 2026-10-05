@@ -69,6 +69,7 @@ object SettingsScreenTestTags {
     const val PITCH_ACCENT_TOGGLE = "settings_pitch_accent_toggle"
     const val AUTOPLAY_AUDIO_TOGGLE = "settings_autoplay_audio_toggle"
     const val MP3_ONLY_AUDIO_TOGGLE = "settings_mp3_only_audio_toggle"
+    const val OFFLINE_AUDIO_ROW = "settings_offline_audio_row"
     const val SHOW_SUBJECT_TYPE_LABEL_TOGGLE = "settings_show_subject_type_label_toggle"
     const val SHOW_TOTAL_TIMER_TOGGLE = "settings_show_total_timer_toggle"
     const val SHOW_QUESTION_TIMER_TOGGLE = "settings_show_question_timer_toggle"
@@ -124,6 +125,7 @@ data class StepperRowTestTags(
 fun SettingsRoute(
     onBack: () -> Unit,
     onOpenLeaderboard: () -> Unit = {},
+    onOpenOfflineAudio: () -> Unit = {},
     onLoggedOut: () -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel()
 ) {
@@ -144,6 +146,7 @@ fun SettingsRoute(
             if (enabled) requestNotificationPermission() else viewModel.onNotificationsEnabledChange(false)
         },
         onOpenLeaderboard = onOpenLeaderboard,
+        onOpenOfflineAudio = onOpenOfflineAudio,
         onBack = onBack,
         appVersion = rememberAppVersion()
     )
@@ -165,6 +168,7 @@ fun SettingsScreen(
     actions: SettingsActions,
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onOpenLeaderboard: () -> Unit = {},
+    onOpenOfflineAudio: () -> Unit = {},
     onBack: () -> Unit,
     appVersion: AppVersion? = null
 ) {
@@ -193,7 +197,7 @@ fun SettingsScreen(
             StudySessionsGroup(uiState, actions)
             AnsweringGroup(uiState, actions)
             QuizScreenGroup(uiState, actions)
-            AudioGroup(uiState, actions)
+            AudioGroup(uiState, actions, onOpenOfflineAudio)
             SubjectPagesGroup(uiState, actions)
             AppearanceGroup(uiState, actions)
             NotificationsGroup(uiState, actions, onNotificationsEnabledChange)
@@ -359,8 +363,14 @@ private fun QuizScreenGroup(uiState: SettingsUiState, actions: SettingsActions) 
 }
 
 @Composable
-private fun AudioGroup(uiState: SettingsUiState, actions: SettingsActions) {
+private fun AudioGroup(uiState: SettingsUiState, actions: SettingsActions, onOpenOfflineAudio: () -> Unit) {
     ListGroup(title = "Audio") {
+        NavRow(
+            title = "Offline audio",
+            subtitle = "Download pronunciation audio to play without a connection",
+            onClick = onOpenOfflineAudio,
+            testTag = SettingsScreenTestTags.OFFLINE_AUDIO_ROW
+        )
         SwitchRow(
             title = "Auto-play pronunciation",
             subtitle = "When a reading answer is revealed",

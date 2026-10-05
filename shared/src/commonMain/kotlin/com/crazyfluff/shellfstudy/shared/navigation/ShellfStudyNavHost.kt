@@ -14,6 +14,7 @@ import com.crazyfluff.shellfstudy.shared.feature.studytime.StudyTimeRoute
 import com.crazyfluff.shellfstudy.shared.feature.leaderboard.LeaderboardRoute
 import com.crazyfluff.shellfstudy.shared.feature.lesson.LessonRoute
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewRoute
+import com.crazyfluff.shellfstudy.shared.feature.settings.OfflineAudioRoute
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsRoute
 import com.crazyfluff.shellfstudy.shared.feature.splash.SplashRoute
 import kotlinx.serialization.Serializable
@@ -28,6 +29,7 @@ sealed interface ShellfStudyDestination {
     @Serializable data object Leaderboard : ShellfStudyDestination
     @Serializable data object LastSessionSummary : ShellfStudyDestination
     @Serializable data object StudyTime : ShellfStudyDestination
+    @Serializable data object OfflineAudio : ShellfStudyDestination
 }
 
 /**
@@ -125,6 +127,9 @@ fun ShellfStudyNavHost(
                 SettingsRoute(
                     onBack = { navController.popBackStackSafely() },
                     onOpenLeaderboard = { navController.navigate(ShellfStudyDestination.Leaderboard) { launchSingleTop = true } },
+                    onOpenOfflineAudio = {
+                        navController.navigate(ShellfStudyDestination.OfflineAudio) { launchSingleTop = true }
+                    },
                     // Settings sits above Dashboard, so popping through Dashboard clears both. Back
                     // from sign-in then leaves the app instead of returning to a signed-out screen.
                     onLoggedOut = {
@@ -149,6 +154,11 @@ fun ShellfStudyNavHost(
         composable<ShellfStudyDestination.StudyTime> {
             ReportedDestination("study_time") {
                 StudyTimeRoute(onBack = { navController.popBackStackSafely() })
+            }
+        }
+        composable<ShellfStudyDestination.OfflineAudio> {
+            ReportedDestination("offline_audio") {
+                OfflineAudioRoute(onBack = { navController.popBackStackSafely() })
             }
         }
     }

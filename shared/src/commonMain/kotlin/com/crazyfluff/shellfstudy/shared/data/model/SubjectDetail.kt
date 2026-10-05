@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.data.model
 
+import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
@@ -56,10 +57,15 @@ data class PronunciationAudio(
     val gender: String?,
     val voiceActorId: Long?,
     val voiceActorName: String?,
-    val voiceDescription: String?
+    val voiceDescription: String?,
+    /** The level of the subject this clip belongs to, which is how the offline audio library files
+     *  and manages it. 0 when unknown. */
+    val level: Int = 0
 )
 
-fun SubjectEntity.toPronunciationAudios(): List<PronunciationAudio> = pronunciationAudios.map {
+fun SubjectEntity.toPronunciationAudios(): List<PronunciationAudio> = pronunciationAudios.toPronunciationAudios(level)
+
+fun List<PronunciationAudioData>.toPronunciationAudios(level: Int): List<PronunciationAudio> = map {
     PronunciationAudio(
         url = it.url,
         contentType = it.contentType,
@@ -67,6 +73,7 @@ fun SubjectEntity.toPronunciationAudios(): List<PronunciationAudio> = pronunciat
         gender = it.metadata?.gender,
         voiceActorId = it.metadata?.voiceActorId,
         voiceActorName = it.metadata?.voiceActorName,
-        voiceDescription = it.metadata?.voiceDescription
+        voiceDescription = it.metadata?.voiceDescription,
+        level = level
     )
 }

@@ -20,6 +20,13 @@ interface OutboxDao {
     @Query("SELECT * FROM pending_lesson_starts WHERE status = 'PENDING' ORDER BY id ASC")
     suspend fun getPendingLessonStarts(): List<PendingLessonStartEntity>
 
+    /** Every assignment with a grade or lesson start still waiting to reach WaniKani. */
+    @Query(
+        "SELECT assignmentId FROM pending_review_submissions WHERE status = 'PENDING' " +
+            "UNION SELECT assignmentId FROM pending_lesson_starts WHERE status = 'PENDING'"
+    )
+    suspend fun getPendingAssignmentIds(): List<Long>
+
     @Delete
     suspend fun deleteReviewSubmission(entity: PendingReviewSubmissionEntity)
 

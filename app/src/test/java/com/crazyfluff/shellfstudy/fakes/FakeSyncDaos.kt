@@ -153,6 +153,10 @@ class FakeOutboxDao : OutboxDao {
     override suspend fun getPendingLessonStarts(): List<PendingLessonStartEntity> =
         lessonStarts.value.values.filter { it.status == OutboxStatus.PENDING.name }.sortedBy { it.id }
 
+    override suspend fun getPendingAssignmentIds(): List<Long> =
+        (getPendingReviewSubmissions().map { it.assignmentId } + getPendingLessonStarts().map { it.assignmentId })
+            .distinct()
+
     override suspend fun deleteReviewSubmission(entity: PendingReviewSubmissionEntity) {
         reviewSubmissions.value = reviewSubmissions.value - entity.id
     }

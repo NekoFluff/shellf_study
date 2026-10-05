@@ -69,7 +69,7 @@ kotlin {
             implementation(libs.ktor.client.logging)
             implementation(libs.androidx.sqlite.bundled)
             api(libs.androidx.datastore.preferences.core)
-            implementation(libs.okio)
+            api(libs.okio)
             api(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtime.compose)
             implementation(compose.runtime)

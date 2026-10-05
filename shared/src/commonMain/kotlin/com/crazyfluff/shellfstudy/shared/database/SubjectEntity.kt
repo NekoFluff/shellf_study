@@ -50,6 +50,10 @@ data class SubjectEntity(
  *  row, kept to the three columns it matches on rather than whole subjects. */
 data class SubjectReadingKeyRow(val id: Long, val subjectType: String, val primaryReadingKey: String)
 
+/** A vocabulary subject's level and pronunciation clips — the offline audio library's catalog row,
+ *  kept to the two columns it needs rather than whole subjects. */
+data class SubjectAudioRow(val level: Int, val pronunciationAudios: List<PronunciationAudioData>)
+
 /** One subject type's total subject count — the item-spread "locked" type-breakdown source. */
 data class SubjectTypeCount(val subjectType: String, val count: Int)
 
@@ -103,6 +107,12 @@ interface SubjectDao {
         """
     )
     fun observeByPrimaryReadingKeys(readingKeys: List<String>): Flow<List<SubjectReadingKeyRow>>
+
+    @Query("SELECT level, pronunciationAudios FROM subjects WHERE subjectType IN ('vocabulary', 'kana_vocabulary')")
+    suspend fun getAudioRows(): List<SubjectAudioRow>
+
+    @Query("SELECT characterImageUrl FROM subjects WHERE level = :level AND characterImageUrl IS NOT NULL")
+    suspend fun getCharacterImageUrlsAtLevel(level: Int): List<String>
 
     @Query("SELECT COUNT(*) FROM subjects")
     fun observeTotalCount(): Flow<Int>

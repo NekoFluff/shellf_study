@@ -294,6 +294,108 @@ class OutboxDrainerTest {
             .containsExactly(102L)
     }
 
+    @Test
+    fun `drain sends when the lesson and review were actually done, not when the queue drains`() = runTest {
+        // Work done offline drains hours later. Without these, the start lands "now", the review that
+        // followed it is then before the assignment's available_at, and WaniKani rejects it.
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.target.orEmpty()
+                return when {
+                    request.method == "PUT" && path.contains("/start") -> jsonResponse(startedAssignmentJson(101, 1))
+                    request.method == "POST" && path.startsWith("/reviews") -> jsonResponse(reviewResultJson(101, 1, 1, 2))
+                    else -> emptyResponse(404)
+                }
+            }
+        }
+        repositories.outboxDao.insertLessonStart(
+            PendingLessonStartEntity(assignmentId = 101, subjectId = 1, startedAt = "2026-03-01T08:00:00Z")
+        )
+        repositories.outboxDao.insertReviewSubmission(
+            PendingReviewSubmissionEntity(
+                assignmentId = 101, subjectId = 1,
+                incorrectMeaningAnswers = 0, incorrectReadingAnswers = 0, gradedAt = "2026-03-01T12:30:00Z"
+            )
+        )
+
+        assertThat(buildDrainer().drain()).isEqualTo(DrainOutcome.SUCCESS)
+
+        assertThat(server.takeRequest().body!!.utf8()).contains("\"started_at\":\"2026-03-01T08:00:00Z\"")
+        assertThat(server.takeRequest().body!!.utf8()).contains("\"created_at\":\"2026-03-01T12:30:00Z\"")
+    }
+
+    @Test
+    fun `a review rejected with its timestamp is retried once without it before being retired`() = runTest {
+        // A device clock ahead of WaniKani's makes a just-graded review "in the future". The retry
+        // lets the server's own clock decide instead of losing the review.
+        val bodies = mutableListOf<String>()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.method == "POST" && request.target.orEmpty().startsWith("/reviews")) {
+                    val body = request.body!!.utf8()
+                    synchronized(bodies) { bodies += body }
+                    return if (body.contains("created_at")) {
+                        emptyResponse(422)
+                    } else {
+                        jsonResponse(reviewResultJson(101, 1, 1, 2))
+                    }
+                }
+                return emptyResponse(404)
+            }
+        }
+        queueReview(assignmentId = 101, subjectId = 1)
+
+        assertThat(buildDrainer().drain()).isEqualTo(DrainOutcome.SUCCESS)
+
+        assertThat(bodies).hasSize(2)
+        assertThat(bodies[1]).doesNotContain("created_at")
+        assertThat(repositories.outboxDao.allReviewSubmissions()).isEmpty()
+    }
+
+    @Test
+    fun `a review rejected with and without its timestamp is retired as terminal`() = runTest {
+        val reviewPosts = AtomicInteger()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.target.orEmpty()
+                return when {
+                    request.method == "POST" && path.startsWith("/reviews") -> {
+                        reviewPosts.incrementAndGet()
+                        emptyResponse(422)
+                    }
+                    request.method == "GET" && path.startsWith("/assignments") ->
+                        jsonResponse(singleAssignmentJson(101, 1, 2))
+                    else -> emptyResponse(404)
+                }
+            }
+        }
+        queueReview(assignmentId = 101, subjectId = 1)
+
+        assertThat(buildDrainer().drain()).isEqualTo(DrainOutcome.SUCCESS)
+
+        assertThat(reviewPosts.get()).isEqualTo(2)
+        assertThat(repositories.outboxDao.allReviewSubmissions().single().status)
+            .isEqualTo(OutboxStatus.FAILED_TERMINAL.name)
+    }
+
+    @Test
+    fun `a pass that delivers work announces it, and one that delivers nothing stays quiet`() = runTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.method == "POST") jsonResponse(reviewResultJson(101, 1, 1, 2)) else emptyResponse(404)
+        }
+        val drainer = buildDrainer()
+
+        outboxRepository.workDelivered.test {
+            drainer.drain()
+            expectNoEvents()
+
+            queueReview(assignmentId = 101, subjectId = 1)
+            drainer.drain()
+            awaitItem()
+        }
+    }
+
     private fun startedAssignmentJson(id: Long, subjectId: Long) = """
         {
           "id": $id, "object": "assignment", "url": "https://api.wanikani.com/v2/assignments/$id",

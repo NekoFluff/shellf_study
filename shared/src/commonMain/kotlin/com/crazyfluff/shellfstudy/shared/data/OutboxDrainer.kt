@@ -29,19 +29,31 @@ class OutboxDrainer(
 ) {
     private val drainLock = Mutex()
 
+    /** Rows the current pass got to WaniKani. Only touched under [drainLock]. */
+    private var deliveredThisPass = 0
+
     suspend fun drain(): DrainOutcome = drainLock.withLock {
+        deliveredThisPass = 0
+        try {
+            drainLocked()
+        } finally {
+            if (deliveredThisPass > 0) outboxRepository.notifyWorkDelivered()
+        }
+    }
+
+    private suspend fun drainLocked(): DrainOutcome {
         val lessonResult = drainLessonStarts()
-        if (lessonResult != DrainOutcome.SUCCESS) return lessonResult
-        val reviewResult = drainReviewSubmissions()
-        if (reviewResult != DrainOutcome.SUCCESS) return reviewResult
-        outboxRepository.setBlockedOnAuth(false)
-        DrainOutcome.SUCCESS
+        val outcome = if (lessonResult != DrainOutcome.SUCCESS) lessonResult else drainReviewSubmissions()
+        if (outcome == DrainOutcome.SUCCESS) outboxRepository.setBlockedOnAuth(false)
+        return outcome
     }
 
     private suspend fun drainLessonStarts(): DrainOutcome = drain(
         rows = outboxDao.getPendingLessonStarts(),
         assignmentId = { it.assignmentId },
-        submit = { row -> assignmentRepository.startAssignment(row.assignmentId) },
+        submit = { row, withTimestamp ->
+            assignmentRepository.startAssignment(row.assignmentId, row.startedAt.takeIf { withTimestamp })
+        },
         onSuccess = { row, _ -> outboxDao.deleteLessonStart(row) },
         markTerminal = { row, message -> outboxDao.markLessonStartTerminal(row.id, message) }
     )
@@ -49,7 +61,7 @@ class OutboxDrainer(
     private suspend fun drainReviewSubmissions(): DrainOutcome = drain(
         rows = outboxDao.getPendingReviewSubmissions(),
         assignmentId = { it.assignmentId },
-        submit = { row ->
+        submit = { row, withTimestamp ->
             waniKaniRepository.submitReview(
                 row.assignmentId,
                 // Counts preserved end-to-end, not collapsed back to booleans: the row is the durable
@@ -59,7 +71,8 @@ class OutboxDrainer(
                     readingCorrect = row.incorrectReadingAnswers == 0,
                     incorrectMeaning = row.incorrectMeaningAnswers,
                     incorrectReading = row.incorrectReadingAnswers
-                )
+                ),
+                createdAt = row.gradedAt.takeIf { withTimestamp }
             )
         },
         // Deleted before reconciling, deliberately, and the opposite of what this used to do. The
@@ -90,17 +103,25 @@ class OutboxDrainer(
     private suspend fun <Row, T> drain(
         rows: List<Row>,
         assignmentId: (Row) -> Long,
-        submit: suspend (Row) -> ApiResult<T>,
+        submit: suspend (Row, withTimestamp: Boolean) -> ApiResult<T>,
         onSuccess: suspend (Row, T) -> Unit,
         markTerminal: suspend (Row, String?) -> Unit
     ): DrainOutcome {
         var retryNeeded = false
         for (row in rows) {
             val result = withContext(NonCancellable) {
-                submit(row).also { if (it is ApiResult.Success) onSuccess(row, it.data) }
+                // Rows carry the time the work was actually done, so a lesson finished offline and
+                // reviewed hours later (still offline) drains with the same spacing it happened with —
+                // sent without it, the start lands "now", the review is then early, and WaniKani
+                // rejects it. A timestamp can itself be the reason for a rejection (a device clock
+                // ahead of the server's makes it "in the future"), so a rejected row gets one more
+                // try without it before it is retired.
+                val timed = submit(row, true)
+                val attempt = if (timed is ApiResult.Error && timed.isTerminalRejection) submit(row, false) else timed
+                attempt.also { if (it is ApiResult.Success) onSuccess(row, it.data) }
             }
             when (result) {
-                is ApiResult.Success -> Unit
+                is ApiResult.Success -> deliveredThisPass++
                 is ApiResult.Error -> {
                     if (result.isAuthError) {
                         outboxRepository.setBlockedOnAuth(true)

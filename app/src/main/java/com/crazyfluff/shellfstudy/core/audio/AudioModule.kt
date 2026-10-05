@@ -3,40 +3,38 @@ package com.crazyfluff.shellfstudy.core.audio
 import android.media.AudioManager
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
-import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import com.crazyfluff.shellfstudy.shared.data.AUDIO_CACHE_MAX_BYTES
 import com.crazyfluff.shellfstudy.shared.data.mutedBy
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.audio.AudioDownloadScheduler
+import com.crazyfluff.shellfstudy.shared.data.audio.LibraryBackedAudioPlayer
 import com.crazyfluff.shellfstudy.shared.di.APPLICATION_SCOPE
+import com.crazyfluff.shellfstudy.shared.di.AUDIO_LIBRARY_ROOT
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
+import okio.Path.Companion.toOkioPath
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 import java.io.File
 
-@UnstableApi
 val audioModule = module {
-    single {
-        SimpleCache(
-            File(androidContext().cacheDir, "pronunciation_audio"),
-            LeastRecentlyUsedCacheEvictor(AUDIO_CACHE_MAX_BYTES)
-        )
+    // noBackupFilesDir: never cleared by the OS (unlike cacheDir) and left out of cloud backups —
+    // the clips can always be downloaded again, so there's no point uploading them.
+    single(AUDIO_LIBRARY_ROOT) {
+        val context = androidContext()
+        // Clips used to live in an ExoPlayer cache here, before the library replaced it.
+        get<CoroutineScope>(APPLICATION_SCOPE).launch(Dispatchers.IO) {
+            File(context.cacheDir, "pronunciation_audio").deleteRecursively()
+        }
+        File(context.noBackupFilesDir, "audio_library").toOkioPath()
     }
-    single<CacheDataSource.Factory> {
-        CacheDataSource.Factory()
-            .setCache(get<SimpleCache>())
-            .setUpstreamDataSourceFactory(DefaultHttpDataSource.Factory())
-    }
+    single<AudioDownloadScheduler> { WorkManagerAudioDownloadScheduler(androidContext()) }
     single {
         val context = androidContext()
         ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(get<CacheDataSource.Factory>()))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
@@ -51,7 +49,11 @@ val audioModule = module {
     }
     single { androidContext().getSystemService(AudioManager::class.java) }
     single<PronunciationAudioPlayer> {
-        RealPronunciationAudioPlayer(get(), get())
-            .mutedBy(get<SettingsRepository>(), get<CoroutineScope>(APPLICATION_SCOPE))
+        val applicationScope = get<CoroutineScope>(APPLICATION_SCOPE)
+        LibraryBackedAudioPlayer(
+            library = get(),
+            localPlayer = RealPronunciationAudioPlayer(get(), get()),
+            scope = applicationScope + Dispatchers.Main
+        ).mutedBy(get<SettingsRepository>(), applicationScope)
     }
 }

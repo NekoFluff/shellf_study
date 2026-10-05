@@ -8,6 +8,7 @@ import com.crazyfluff.shellfstudy.shared.database.LevelUpPathRow
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressItemRow
 import com.crazyfluff.shellfstudy.shared.database.SrsStageTypeCount
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
+import com.crazyfluff.shellfstudy.shared.database.SubjectAudioRow
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectReadingKeyRow
 import com.crazyfluff.shellfstudy.shared.database.SubjectTypeCount
@@ -53,6 +54,14 @@ class FakeSubjectDao(private val writeLog: SyncWriteLog? = null) : SubjectDao {
     override fun observeTotalCountsByType(): Flow<List<SubjectTypeCount>> = subjects.map { map ->
         map.values.groupingBy { it.subjectType }.eachCount().map { (type, count) -> SubjectTypeCount(type, count) }
     }
+
+    override suspend fun getAudioRows(): List<SubjectAudioRow> =
+        subjects.value.values
+            .filter { it.subjectType == "vocabulary" || it.subjectType == "kana_vocabulary" }
+            .map { SubjectAudioRow(it.level, it.pronunciationAudios) }
+
+    override suspend fun getCharacterImageUrlsAtLevel(level: Int): List<String> =
+        subjects.value.values.filter { it.level == level }.mapNotNull { it.characterImageUrl }
 
     /** Test-only helper so [FakeAssignmentDao] can enumerate every (non-hidden) subject at a level
      *  for its subject-driven, left-join-style level progress/level-up queries — mirroring the real
