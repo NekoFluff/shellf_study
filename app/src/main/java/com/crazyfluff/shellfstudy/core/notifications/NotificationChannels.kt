@@ -24,6 +24,13 @@ object AndroidNotificationChannels {
                 NotificationChannelCompat.Builder(NotificationChannels.STUDY_REMINDER, NotificationManagerCompat.IMPORTANCE_DEFAULT)
                     .setName("Daily study reminder")
                     .setDescription("A daily nudge to keep your study streak going.")
+                    .build(),
+                NotificationChannelCompat.Builder(
+                    NotificationChannels.LEVEL_UP,
+                    NotificationManagerCompat.IMPORTANCE_DEFAULT
+                )
+                    .setName("Level-up reviews")
+                    .setDescription("Lets you know when reviews that decide your fastest level-up are ready.")
                     .build()
             )
         )

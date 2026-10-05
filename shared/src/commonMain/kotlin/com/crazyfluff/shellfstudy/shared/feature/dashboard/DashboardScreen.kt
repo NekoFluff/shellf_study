@@ -536,6 +536,7 @@ private fun LazyListScope.dashboardItems(
                             progress = uiState.levelProgress,
                             maxLevel = uiState.level,
                             levelUpProgress = uiState.levelUpProgress,
+                            levelUpPath = uiState.levelUpPath,
                             onLevelChange = callbacks.onLevelProgressLevelChange,
                             modifier = Modifier.fillMaxWidth()
                         )

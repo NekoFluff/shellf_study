@@ -62,6 +62,9 @@ interface SettingsActions {
 
     fun onReviewsBacklogEnabledChange(enabled: Boolean)
 
+    /** Returns its [Job] for the same reason as [onDailyReminderHourChange]: it persists, then reschedules. */
+    fun onLevelUpRemindersEnabledChange(enabled: Boolean): Job
+
     fun onBacklogThresholdChange(threshold: Int)
 
     fun onDailyReminderEnabledChange(enabled: Boolean)

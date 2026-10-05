@@ -15,7 +15,14 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.data.model.LevelItem
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpPath
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpStep
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.getBoundsInRoot
+import com.google.common.truth.Truth.assertThat
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.onChildren
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectTypeProgress
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
@@ -23,6 +30,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.LevelProgressCard
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.LevelProgressTestTags
 
@@ -285,5 +294,111 @@ class LevelProgressCardTest {
 
         composeTestRule.onNodeWithTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + "1").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("drop").assertCountEquals(0)
+    }
+
+    private val pathComputedAt = Instant.parse("2026-10-04T10:00:00Z")
+
+    private fun kanjiId(index: Int) = SubjectType.KANJI.ordinal * 1000L + index
+    private fun radicalId(index: Int) = SubjectType.RADICAL.ordinal * 1000L + index
+
+    /**
+     * 25 kanji, 18 at Guru (items 1–18): 23 needed. The unpassed 19–25 reach Guru in *reverse*
+     * lesson order, 10h apart starting with 25, so the 5th (kanji 21, 50h out) sets the date.
+     * Radical 5 is unpassed.
+     */
+    private val samplePath = LevelUpPath(
+        kanjiTotal = 25,
+        alreadyGuruCount = 18,
+        upcomingGuruTimes = (1..7).map { pathComputedAt + (it * 10).hours },
+        computedAt = pathComputedAt,
+        guruAtBySubject = (19..25).associate { index ->
+            kanjiId(index) to pathComputedAt + ((26 - index) * 10).hours
+        } + (radicalId(5) to pathComputedAt + 5.hours),
+        decidingSubjectIds = (21..25).map(::kanjiId).toSet() + radicalId(5),
+        nextDecidingStep = LevelUpStep(pathComputedAt + 4.hours, radicalCount = 1, kanjiCount = 0, lessonCount = 0)
+    )
+
+    private val progressWithUnpassedRadical = sampleProgress.copy(
+        breakdown = sampleProgress.breakdown.map { entry ->
+            if (entry.subjectType == SubjectType.RADICAL) {
+                entry.copy(items = levelItems(SubjectType.RADICAL, total = 5, passed = 4))
+            } else {
+                entry
+            }
+        }
+    )
+
+    private fun setCurrentLevelCard(path: LevelUpPath = samplePath, guruCount: Int = 18) {
+        composeTestRule.setContent {
+            LevelProgressCard(
+                progress = progressWithUnpassedRadical,
+                maxLevel = 12,
+                levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = guruCount, kanjiTotal = 25),
+                levelUpPath = path
+            )
+        }
+    }
+
+    @Test
+    fun levelUpEtaAndNextStep_showWhileCollapsed() {
+        setCurrentLevelCard()
+
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_ETA).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("(in 2d 2h)", substring = true).assertCountEquals(1)
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_NEXT_STEP).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("1 radical review", substring = true).assertCountEquals(1)
+    }
+
+    @Test
+    fun levelUpEta_hiddenWhenReadyToLevelUp() {
+        setCurrentLevelCard(path = samplePath.copy(alreadyGuruCount = 23), guruCount = 23)
+
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_ETA).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_NEXT_STEP).assertCountEquals(0)
+    }
+
+    @Test
+    fun levelUpEtaAndSorting_offWhenNotViewingCurrentLevel() {
+        composeTestRule.setContent {
+            LevelProgressCard(
+                progress = progressWithUnpassedRadical,
+                maxLevel = 20,
+                levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 18, kanjiTotal = 25),
+                levelUpPath = samplePath
+            )
+        }
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.EXPAND_TOGGLE_BUTTON).performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_ETA).assertCountEquals(0)
+        // Another level keeps lesson order: the first unpassed kanji (19) follows the passed ones.
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.DETAIL_PREFIX + SubjectType.KANJI.name)
+            .onChildren()[18].assert(hasTestTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + kanjiId(19)))
+    }
+
+    @Test
+    fun levelUpEta_sitsBelowEveryBar() {
+        setCurrentLevelCard()
+
+        val etaTop = composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_ETA).getBoundsInRoot().top
+        val vocabRowBottom = composeTestRule
+            .onNodeWithTag(LevelProgressTestTags.ROW_PREFIX + SubjectType.VOCABULARY.name)
+            .getBoundsInRoot().bottom
+        assertThat(etaTop >= vocabRowBottom).isTrue()
+    }
+
+    @Test
+    fun kanjiChips_sortedPassedFirstThenByGuruTime() {
+        setCurrentLevelCard()
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.EXPAND_TOGGLE_BUTTON).performClick()
+        composeTestRule.waitForIdle()
+
+        val chips = composeTestRule
+            .onNodeWithTag(LevelProgressTestTags.DETAIL_PREFIX + SubjectType.KANJI.name)
+            .onChildren()
+        chips[0].assert(hasTestTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + kanjiId(1)))
+        chips[17].assert(hasTestTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + kanjiId(18)))
+        chips[18].assert(hasTestTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + kanjiId(25)))
+        chips[24].assert(hasTestTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + kanjiId(19)))
     }
 }

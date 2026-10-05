@@ -73,6 +73,19 @@ data class LevelProgressItemRow(
 /** One kanji assignment's SRS stage at a given level — the level-up-progress source. */
 data class KanjiLevelUpRow(val srsStage: Int)
 
+/** One radical or kanji at a given level, with whatever its assignment says about where it stands —
+ *  the fastest-level-up-path source (see `LevelUpPathCalculator`). The assignment columns are null
+ *  (and [srsStage] 0) for a subject WaniKani hasn't created an assignment for yet. */
+data class LevelUpPathRow(
+    val subjectId: Long,
+    val subjectType: String,
+    val srsSystemId: Long,
+    val componentSubjectIds: List<Long>,
+    val srsStage: Int,
+    val unlockedAt: String?,
+    val availableAt: String?
+)
+
 /** The three columns the review forecast buckets — see [AssignmentDao.observeUpcoming]. Deliberately
  *  not an [AssignmentEntity]: that would decode eleven more columns per upcoming assignment, none of
  *  which the forecast reads. On a maxed-out account the upcoming set runs to a few thousand rows, so
@@ -201,4 +214,19 @@ interface AssignmentDao {
         """
     )
     fun observeKanjiLevelUpRows(level: Int): Flow<List<KanjiLevelUpRow>>
+
+    /** Every radical and kanji at [level] with its assignment's stage and timing — the input to the
+     *  fastest-level-up path. Driven from [subjects] like [observeKanjiLevelUpRows], so a kanji with
+     *  no assignment row yet still shows up (as locked) and counts toward the level's total. */
+    @Query(
+        """
+        SELECT s.id as subjectId, s.subjectType as subjectType, s.srsSystemId as srsSystemId,
+               s.componentSubjectIds as componentSubjectIds, COALESCE(a.srsStage, 0) as srsStage,
+               a.unlockedAt as unlockedAt, a.availableAt as availableAt
+        FROM subjects s
+        LEFT JOIN assignments a ON a.subjectId = s.id AND a.hidden = 0
+        WHERE s.level = :level AND s.subjectType IN ('radical', 'kanji') AND s.hiddenAt IS NULL
+        """
+    )
+    fun observeLevelUpPathRows(level: Int): Flow<List<LevelUpPathRow>>
 }

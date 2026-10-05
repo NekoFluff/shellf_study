@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.model.LevelItem
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpPath
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectTypeProgress
@@ -59,6 +60,9 @@ import com.crazyfluff.shellfstudy.shared.designsystem.theme.srsStageColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.subjectTypeLabel
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
+import com.crazyfluff.shellfstudy.shared.designsystem.time.rememberIs24HourClock
+import kotlinx.datetime.TimeZone
+import kotlin.time.Instant
 
 object LevelProgressTestTags {
     const val CARD = "level_progress_card"
@@ -70,6 +74,8 @@ object LevelProgressTestTags {
     const val ITEM_CHIP_PREFIX = "level_progress_item_"
     const val LEVEL_UP_INDICATOR = "level_progress_level_up_indicator"
     const val LEVEL_UP_THRESHOLD_MARK = "level_progress_level_up_threshold_mark"
+    const val LEVEL_UP_ETA = "level_progress_level_up_eta"
+    const val LEVEL_UP_NEXT_STEP = "level_progress_level_up_next_step"
 }
 
 @Composable
@@ -77,11 +83,16 @@ fun LevelProgressCard(
     progress: LevelProgress?,
     maxLevel: Int? = null,
     levelUpProgress: LevelUpProgress? = null,
+    levelUpPath: LevelUpPath? = null,
     onLevelChange: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (progress == null) return
     var expanded by remember { mutableStateOf(false) }
+    // Level-up is a current-level-only concept: a past or future level paged to via the arrows
+    // below keeps its lesson order. Once the level is ready there's no date left to sort toward.
+    val isCurrentLevel = progress.level == maxLevel
+    val guruTimes = levelUpPath?.takeIf { isCurrentLevel && it.levelUpAt != null }?.guruAtBySubject.orEmpty()
 
     // Deliberately not a whole-card onClick: with the level-arrow IconButtons already living
     // inside it, a second nested clickable spanning the same area makes hit-testing (and
@@ -124,18 +135,20 @@ fun LevelProgressCard(
                 // Only the Kanji row, and only while viewing the level the user is actually on
                 // (not a past/future level paged to via the arrows above), should claim "you're
                 // this close to leveling up" — level-up is a current-level-only concept.
-                val relevantLevelUpProgress = if (entry.subjectType == SubjectType.KANJI && progress.level == maxLevel) {
-                    levelUpProgress
-                } else {
-                    null
-                }
+                val isCurrentLevelKanji = entry.subjectType == SubjectType.KANJI && isCurrentLevel
                 SubjectTypeProgressRow(
                     entry,
                     showDetail = expanded,
-                    levelUpProgress = relevantLevelUpProgress
+                    levelUpProgress = if (isCurrentLevelKanji) levelUpProgress else null,
+                    guruTimes = guruTimes
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
+            // Below every bar rather than under the kanji one, so it reads as a summary of the level.
+            LevelUpEtaLines(
+                levelUpPath.takeIf { isCurrentLevel },
+                levelUpReady = levelUpProgress?.isLevelUpReady == true
+            )
         }
     }
 }
@@ -144,7 +157,8 @@ fun LevelProgressCard(
 private fun SubjectTypeProgressRow(
     entry: SubjectTypeProgress,
     showDetail: Boolean,
-    levelUpProgress: LevelUpProgress? = null
+    levelUpProgress: LevelUpProgress? = null,
+    guruTimes: Map<Long, Instant> = emptyMap()
 ) {
     val accent = subjectColor(entry.subjectType)
     val openSubjectDetail = LocalOpenSubjectDetail.current
@@ -243,17 +257,45 @@ private fun SubjectTypeProgressRow(
                             .onSizeChanged { size -> naturalHeightPx = size.height }
                     ) {
                         Spacer(modifier = Modifier.height(8.dp))
+                        val items = remember(entry.items, guruTimes) { sortedByLevelUp(entry.items, guruTimes) }
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth().testTag(LevelProgressTestTags.DETAIL_PREFIX + entry.subjectType.name)
                         ) {
-                            entry.items.forEach { item -> LevelItemChip(item, onClick = openSubjectDetail) }
+                            items.forEach { item ->
+                                LevelItemChip(item, onClick = openSubjectDetail)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/** "Fastest level-up · Wed 8:00 PM (in 3d 9h)" and "Next: Today 2:00 PM · 4 radical reviews" —
+ *  below the bars, so they show while the card is collapsed. */
+@Composable
+private fun LevelUpEtaLines(path: LevelUpPath?, levelUpReady: Boolean) {
+    // Nothing once the level is ready: "Ready to level up!" already says it.
+    val levelUpAt = path?.levelUpAt
+    if (levelUpAt == null || levelUpReady) return
+    val is24h = rememberIs24HourClock()
+    val zone = TimeZone.currentSystemDefault()
+    Text(
+        text = levelUpEtaCaption(levelUpAt, path.computedAt, is24h, zone),
+        style = MaterialTheme.typography.bodySmall,
+        color = srsStageColor(SrsStage.GURU_1),
+        modifier = Modifier.testTag(LevelProgressTestTags.LEVEL_UP_ETA)
+    )
+    path.nextDecidingStep?.let { step ->
+        Text(
+            text = nextStepCaption(step, path.computedAt, is24h, zone),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag(LevelProgressTestTags.LEVEL_UP_NEXT_STEP)
+        )
     }
 }
 
@@ -327,6 +369,22 @@ private fun LevelItemChip(item: LevelItem, onClick: (Long) -> Unit) {
             }
         }
     }
+}
+
+/** Passed items first, in their lesson order; then by earliest Guru time on the fastest level-up path;
+ *  then anything with no known time. Unchanged when [guruTimes] has nothing for these items
+ *  (vocabulary, or another level). */
+internal fun sortedByLevelUp(items: List<LevelItem>, guruTimes: Map<Long, Instant>): List<LevelItem> {
+    if (items.none { it.subjectId in guruTimes }) return items
+    return items.sortedWith(
+        compareBy<LevelItem> { item ->
+            when {
+                item.passed -> 0
+                item.subjectId in guruTimes -> 1
+                else -> 2
+            }
+        }.thenBy { guruTimes[it.subjectId] }
+    )
 }
 
 /** (done, inProgress, locked) segment counts for [entry]'s bar. Gated on [LevelItem.passed]

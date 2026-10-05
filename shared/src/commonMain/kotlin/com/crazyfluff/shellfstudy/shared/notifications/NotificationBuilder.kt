@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.notifications
 
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpStep
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
 
@@ -37,6 +38,16 @@ object NotificationBuilder {
         body = "$totalDueNow are waiting — more than usual. A few rounds now will make a big dent.",
         destination = NotificationDeepLink.DESTINATION_DASHBOARD,
         priority = NotificationPriority.HIGH
+    )
+
+    fun levelUpReviewsReady(step: LevelUpStep): NotificationSpec = NotificationSpec(
+        id = NotificationIds.LEVEL_UP_REVIEWS,
+        channelId = NotificationChannels.LEVEL_UP,
+        title = "Your level-up is waiting on these",
+        body = "${step.itemsPhrase.replaceFirstChar { it.uppercase() }} " +
+            "${if (step.totalCount == 1) "is" else "are"} ready. " +
+            "Doing them now keeps your fastest level-up on track.",
+        destination = NotificationDeepLink.DESTINATION_DASHBOARD
     )
 
     fun studyReminder(currentStreakDays: Int): NotificationSpec = NotificationSpec(

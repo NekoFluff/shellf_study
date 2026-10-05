@@ -68,6 +68,7 @@ class SyncWorkerTest {
         assertThat(result).isEqualTo(ListenableWorker.Result.success())
         assertThat(notificationCoordinator.evaluateReviewsAndBacklogCallCount).isEqualTo(1)
         assertThat(notificationCoordinator.rescheduleNextReviewCheckCallCount).isEqualTo(1)
+        assertThat(notificationCoordinator.rescheduleLevelUpReminderCallCount).isEqualTo(1)
         assertThat(outboxSyncScheduler.requestCount).isEqualTo(1)
     }
 

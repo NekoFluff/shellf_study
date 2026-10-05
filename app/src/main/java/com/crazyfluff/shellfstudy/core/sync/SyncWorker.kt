@@ -20,6 +20,7 @@ class SyncWorker(
         is ApiResult.Success -> {
             notificationCoordinator.evaluateReviewsAndBacklog()
             notificationCoordinator.rescheduleNextReviewCheck()
+            notificationCoordinator.rescheduleLevelUpReminder()
             // A safety net for anything the per-mutation trigger didn't drain — confirmed online
             // at this point, so it's a cheap, correct place to also nudge the outbox.
             outboxSyncScheduler.requestSync()

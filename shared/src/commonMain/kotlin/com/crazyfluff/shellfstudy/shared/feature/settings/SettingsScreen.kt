@@ -83,6 +83,7 @@ object SettingsScreenTestTags {
     const val NOTIFICATIONS_MASTER_TOGGLE = "settings_notifications_master_toggle"
     const val REVIEWS_AVAILABLE_TOGGLE = "settings_reviews_available_toggle"
     const val REVIEWS_BACKLOG_TOGGLE = "settings_reviews_backlog_toggle"
+    const val LEVEL_UP_REMINDERS_TOGGLE = "settings_level_up_reminders_toggle"
     const val BACKLOG_THRESHOLD_DECREASE = "settings_backlog_threshold_decrease"
     const val BACKLOG_THRESHOLD_INCREASE = "settings_backlog_threshold_increase"
     const val BACKLOG_THRESHOLD_VALUE = "settings_backlog_threshold_value"
@@ -492,7 +493,7 @@ private fun NotificationsGroup(
     }
 }
 
-/** "Reviews ready" and the backlog warning, with the warning's threshold under it. */
+/** "Reviews ready", "Level-up reviews" and the backlog warning, with the warning's threshold under it. */
 @Composable
 private fun ReviewAlertRows(notifications: NotificationSettings, actions: SettingsActions) {
     val enabled = notifications.notificationsEnabled
@@ -502,6 +503,14 @@ private fun ReviewAlertRows(notifications: NotificationSettings, actions: Settin
         checked = notifications.reviewsAvailableEnabled,
         onCheckedChange = actions::onReviewsAvailableEnabledChange,
         testTag = SettingsScreenTestTags.REVIEWS_AVAILABLE_TOGGLE,
+        enabled = enabled
+    )
+    SwitchRow(
+        title = "Level-up reviews",
+        subtitle = "When reviews that decide your fastest level-up are ready",
+        checked = notifications.levelUpRemindersEnabled,
+        onCheckedChange = actions::onLevelUpRemindersEnabledChange,
+        testTag = SettingsScreenTestTags.LEVEL_UP_REMINDERS_TOGGLE,
         enabled = enabled
     )
     SwitchRow(

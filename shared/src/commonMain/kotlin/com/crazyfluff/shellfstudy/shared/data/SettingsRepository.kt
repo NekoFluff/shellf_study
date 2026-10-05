@@ -76,6 +76,7 @@ data class NotificationSettings(
     val notificationsEnabled: Boolean = false,
     val reviewsAvailableEnabled: Boolean = true,
     val reviewsBacklogEnabled: Boolean = true,
+    val levelUpRemindersEnabled: Boolean = true,
     val backlogThreshold: Int = 100,
     val dailyReminderEnabled: Boolean = true,
     val dailyReminderHour: Int = 20,
@@ -111,6 +112,7 @@ class SettingsRepository(
     private val reviewsAvailableEnabledKey = booleanPreferencesKey("notif_reviews_available_enabled")
     private val reviewsBacklogEnabledKey = booleanPreferencesKey("notif_reviews_backlog_enabled")
     private val backlogThresholdKey = intPreferencesKey("notif_backlog_threshold")
+    private val levelUpRemindersEnabledKey = booleanPreferencesKey("notif_level_up_enabled")
     private val dailyReminderEnabledKey = booleanPreferencesKey("notif_daily_reminder_enabled")
     private val dailyReminderHourKey = intPreferencesKey("notif_daily_reminder_hour")
     private val quietHoursEnabledKey = booleanPreferencesKey("notif_quiet_hours_enabled")
@@ -159,6 +161,7 @@ class SettingsRepository(
             notificationsEnabled = prefs[notificationsEnabledKey] ?: defaults.notificationsEnabled,
             reviewsAvailableEnabled = prefs[reviewsAvailableEnabledKey] ?: defaults.reviewsAvailableEnabled,
             reviewsBacklogEnabled = prefs[reviewsBacklogEnabledKey] ?: defaults.reviewsBacklogEnabled,
+            levelUpRemindersEnabled = prefs[levelUpRemindersEnabledKey] ?: defaults.levelUpRemindersEnabled,
             backlogThreshold = prefs[backlogThresholdKey] ?: defaults.backlogThreshold,
             dailyReminderEnabled = prefs[dailyReminderEnabledKey] ?: defaults.dailyReminderEnabled,
             dailyReminderHour = prefs[dailyReminderHourKey] ?: defaults.dailyReminderHour,
@@ -260,6 +263,10 @@ class SettingsRepository(
 
     suspend fun setReviewsBacklogEnabled(enabled: Boolean) {
         dataStore.edit { it[reviewsBacklogEnabledKey] = enabled }
+    }
+
+    suspend fun setLevelUpRemindersEnabled(enabled: Boolean) {
+        dataStore.edit { it[levelUpRemindersEnabledKey] = enabled }
     }
 
     suspend fun setBacklogThreshold(threshold: Int) {

@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.UpcomingAssignmentRow
 import com.crazyfluff.shellfstudy.shared.database.KanjiLevelUpRow
+import com.crazyfluff.shellfstudy.shared.database.LevelUpPathRow
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressItemRow
 import com.crazyfluff.shellfstudy.shared.database.SrsStageTypeCount
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
@@ -149,6 +150,23 @@ class FakeAssignmentDao(
         subjectsAtLevel(level)
             .filter { it.subjectType == "kanji" }
             .map { subject -> KanjiLevelUpRow(visibleAssignmentFor(subject.id, map)?.srsStage ?: 0) }
+    }
+
+    override fun observeLevelUpPathRows(level: Int): Flow<List<LevelUpPathRow>> = assignments.map { map ->
+        subjectsAtLevel(level)
+            .filter { it.subjectType == "radical" || it.subjectType == "kanji" }
+            .map { subject ->
+                val assignment = visibleAssignmentFor(subject.id, map)
+                LevelUpPathRow(
+                    subjectId = subject.id,
+                    subjectType = subject.subjectType,
+                    srsSystemId = subject.srsSystemId,
+                    componentSubjectIds = subject.componentSubjectIds,
+                    srsStage = assignment?.srsStage ?: 0,
+                    unlockedAt = assignment?.unlockedAt,
+                    availableAt = assignment?.availableAt
+                )
+            }
     }
 
     override fun observeAllStartedTimestamps(): Flow<List<String>> = assignments.map { map ->

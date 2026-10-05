@@ -7,8 +7,9 @@ import com.crazyfluff.shellfstudy.shared.notifications.DeferredNotificationCateg
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
 
 /**
- * Re-evaluates a category (currently just backlog) once quiet hours end, for a notification
- * that was suppressed rather than dropped. Re-reads live state instead of trusting counts
+ * Re-evaluates a category once quiet hours end, for a notification that was suppressed rather
+ * than dropped — or, for [DeferredNotificationCategory.LEVEL_UP], at the time the next deciding
+ * review comes due. Re-reads live state instead of trusting counts
  * captured when the deferral was scheduled, since time has passed.
  */
 class DeferredNotificationWorker(
@@ -21,6 +22,7 @@ class DeferredNotificationWorker(
         when (inputData.getString(KEY_CATEGORY)) {
             DeferredNotificationCategory.BACKLOG -> notificationCoordinator.evaluateReviewsAndBacklog()
             DeferredNotificationCategory.STUDY_REMINDER -> notificationCoordinator.evaluateStudyReminder()
+            DeferredNotificationCategory.LEVEL_UP -> notificationCoordinator.evaluateLevelUpReminder()
         }
     }
 

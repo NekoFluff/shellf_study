@@ -379,6 +379,19 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `level-up reminder toggle persists and reschedules only when turned on`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.onLevelUpRemindersEnabledChange(false).join()
+        assertThat(settingsRepository.notificationSettings.first().levelUpRemindersEnabled).isFalse()
+        assertThat(notificationCoordinator.rescheduleLevelUpReminderCallCount).isEqualTo(0)
+
+        viewModel.onLevelUpRemindersEnabledChange(true).join()
+        assertThat(settingsRepository.notificationSettings.first().levelUpRemindersEnabled).isTrue()
+        assertThat(notificationCoordinator.rescheduleLevelUpReminderCallCount).isEqualTo(1)
+    }
+
+    @Test
     fun `category toggles persist without touching scheduling`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = createViewModel()
 

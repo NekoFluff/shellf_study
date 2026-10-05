@@ -23,6 +23,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.Leaderboard
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpPath
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
@@ -69,6 +70,7 @@ data class DashboardUiState(
     val lessonsCompletedToday: Int = 0,
     val dailyLessonGoal: Int = 15,
     val levelUpProgress: LevelUpProgress? = null,
+    val levelUpPath: LevelUpPath? = null,
     val daysOnCurrentLevel: Int? = null,
     val reviewForecast: ReviewForecast? = null,
     val levelProgress: LevelProgress? = null,
@@ -173,6 +175,7 @@ private data class ProgressStatsState(
 
 private data class LevelDependentState(
     val levelUpProgress: LevelUpProgress? = null,
+    val levelUpPath: LevelUpPath? = null,
     val levelProgress: LevelProgress? = null
 )
 
@@ -278,10 +281,11 @@ class DashboardViewModel(
         } else {
             combine(
                 assignmentStatsRepository.observeLevelUpProgress(level),
+                assignmentStatsRepository.observeLevelUpPath(level),
                 selectedProgressLevel.map { it ?: level }.distinctUntilChanged()
                     .flatMapLatest { pagedLevel -> assignmentStatsRepository.observeLevelProgress(pagedLevel) }
-            ) { levelUp, levelProgress ->
-                LevelDependentState(levelUp, levelProgress)
+            ) { levelUp, levelUpPath, levelProgress ->
+                LevelDependentState(levelUp, levelUpPath, levelProgress)
             }
         }
     }
@@ -347,6 +351,7 @@ class DashboardViewModel(
                 itemSpread = progress.itemSpread,
                 completionProjection = progress.completionProjection,
                 levelUpProgress = levelDependent.levelUpProgress,
+                levelUpPath = levelDependent.levelUpPath,
                 levelProgress = levelDependent.levelProgress
             )
         },

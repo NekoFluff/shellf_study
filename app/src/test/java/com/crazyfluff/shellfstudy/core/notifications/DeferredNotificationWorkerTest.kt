@@ -52,6 +52,17 @@ class DeferredNotificationWorkerTest {
     }
 
     @Test
+    fun `LEVEL_UP category triggers evaluateLevelUpReminder`() = runTest {
+        val coordinator = FakeNotificationCoordinator()
+
+        val result = buildWorker(coordinator, DeferredNotificationCategory.LEVEL_UP).doWork()
+
+        assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        assertThat(coordinator.evaluateLevelUpReminderCallCount).isEqualTo(1)
+        assertThat(coordinator.evaluateStudyReminderCallCount).isEqualTo(0)
+    }
+
+    @Test
     fun `retries instead of crashing when the evaluation throws`() = runTest {
         val coordinator = FakeNotificationCoordinator().apply {
             throwOnEvaluateReviewsAndBacklog = IOException("offline")

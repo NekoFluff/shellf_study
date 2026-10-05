@@ -20,5 +20,6 @@ class ReviewNotificationWorker(
     override suspend fun doWork(): Result = retryOnFailure {
         notificationCoordinator.evaluateReviewsAndBacklog()
         notificationCoordinator.rescheduleNextReviewCheck()
+        notificationCoordinator.rescheduleLevelUpReminder()
     }
 }

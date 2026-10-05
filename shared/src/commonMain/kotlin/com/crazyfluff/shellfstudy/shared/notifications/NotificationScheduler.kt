@@ -7,7 +7,11 @@ object DeferredNotificationCategory {
     const val BACKLOG = "backlog"
     const val STUDY_REMINDER = "study_reminder"
 
-    val ALL = listOf(BACKLOG, STUDY_REMINDER)
+    /** Not only a quiet-hours deferral: the level-up reminder is always scheduled through this path,
+     *  for the time the next deciding review comes due. */
+    const val LEVEL_UP = "level_up"
+
+    val ALL = listOf(BACKLOG, STUDY_REMINDER, LEVEL_UP)
 }
 
 /**

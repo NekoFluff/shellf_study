@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlin.math.ceil
+import kotlin.time.Instant
 import kotlinx.serialization.Serializable
 
 data class WaniKaniUser(
@@ -31,6 +32,75 @@ data class LevelUpProgress(
     /** [kanjiTotal] > 0 guard avoids the vacuous "0 >= requiredCount(0) == 0" reading as ready
      *  during the no-data-yet default. */
     val isLevelUpReady: Boolean get() = kanjiTotal > 0 && kanjiGuruedOrHigher >= requiredCount
+}
+
+/**
+ * The earliest the current level's kanji can reach Guru if every lesson is done the moment it
+ * unlocks and every review is answered correctly the moment it comes due — see
+ * [com.crazyfluff.shellfstudy.shared.data.LevelUpPathCalculator].
+ *
+ * [upcomingGuruTimes] holds one sorted entry per not-yet-Guru kanji whose path could be worked out;
+ * a kanji whose SRS system isn't cached is left out rather than guessed at, so the list can be
+ * shorter than `kanjiTotal - alreadyGuruCount`.
+ */
+@Immutable
+data class LevelUpPath(
+    val kanjiTotal: Int,
+    val alreadyGuruCount: Int,
+    val upcomingGuruTimes: List<Instant>,
+    /** The `now` the path was worked out from — relative times ("in 2d 6h") count from here. */
+    val computedAt: Instant,
+    /** Every not-yet-Guru radical and kanji at the level with a known path, by subject id. */
+    val guruAtBySubject: Map<Long, Instant> = emptyMap(),
+    /** The items that set [levelUpAt]: every kanji reaching Guru by then, plus the slowest radical
+     *  gating each of those still locked. Holding any of them up moves the date; the rest are spare.
+     *  Empty when [levelUpAt] is null. */
+    val decidingSubjectIds: Set<Long> = emptySet(),
+    /** The soonest lesson or review session among [decidingSubjectIds]. */
+    val nextDecidingStep: LevelUpStep? = null
+) {
+    val requiredCount: Int get() = LevelUpProgress(alreadyGuruCount, kanjiTotal).requiredCount
+
+    /** Null when the level is already ready (nothing left to wait for) or when too few kanji have a
+     *  known path to reach [requiredCount]. */
+    val levelUpAt: Instant? get() {
+        val stillNeeded = requiredCount - alreadyGuruCount
+        return if (stillNeeded <= 0) null else upcomingGuruTimes.getOrNull(stillNeeded - 1)
+    }
+}
+
+/** One lesson or review session on the fastest level-up path: when it can start, and how many of the
+ *  deciding items it covers. [at] is when the session became available, so it's in the past for an
+ *  overdue review or a lesson waiting to be done — and stays put however often the path is recomputed. */
+@Immutable
+data class LevelUpStep(
+    val at: Instant,
+    val radicalCount: Int,
+    val kanjiCount: Int,
+    /** How many of the items are lessons rather than reviews. */
+    val lessonCount: Int
+) {
+    val totalCount: Int get() = radicalCount + kanjiCount
+
+    /** "4 radical reviews", "3 kanji lessons", or "2 radicals, 3 kanji" for a session that mixes
+     *  subject types or lessons with reviews. */
+    val itemsPhrase: String get() {
+        val kind = when (lessonCount) {
+            totalCount -> "lesson"
+            0 -> "review"
+            else -> null
+        }
+        return when {
+            kind != null && kanjiCount == 0 -> plural(radicalCount, "radical $kind")
+            kind != null && radicalCount == 0 -> plural(kanjiCount, "kanji $kind")
+            else -> listOfNotNull(
+                plural(radicalCount, "radical").takeIf { radicalCount > 0 },
+                "$kanjiCount kanji".takeIf { kanjiCount > 0 }
+            ).joinToString(", ")
+        }
+    }
+
+    private fun plural(count: Int, noun: String): String = if (count == 1) "1 $noun" else "$count ${noun}s"
 }
 
 /** Common shape shared by [LessonItem] and [ReviewItem] — everything a quiz-session-summary row or

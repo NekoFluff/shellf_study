@@ -813,7 +813,33 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `browsing the level progress card to a different level leaves current-level stats untouched`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `loads the fastest level-up path for the current level`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(
+            jsonResponse(userJson()),
+            jsonResponse(summaryJson()),
+            assignmentsResponse = jsonResponse(levelUpAssignmentsJson()),
+            subjectsResponse = jsonResponse(levelUpSubjectsJson())
+        )
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while ((state.levelUpPath?.kanjiTotal ?: 0) == 0) state = awaitItem()
+
+            // Two kanji: one at Guru, one at Apprentice II with no review time (so reviewable now).
+            // 90% of 2 rounds up to both, so the Apprentice one decides the date.
+            val path = state.levelUpPath!!
+            assertThat(path.alreadyGuruCount).isEqualTo(1)
+            assertThat(path.upcomingGuruTimes).hasSize(1)
+            assertThat(path.levelUpAt).isEqualTo(path.upcomingGuruTimes.single())
+            assertThat(path.levelUpAt!! > path.computedAt).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `browsing the level progress card to a different level leaves current-level stats untouched`()= runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(
             jsonResponse(userJson()),
             jsonResponse(summaryJson()),

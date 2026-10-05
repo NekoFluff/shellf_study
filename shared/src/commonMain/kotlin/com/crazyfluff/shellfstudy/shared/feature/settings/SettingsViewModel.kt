@@ -163,6 +163,13 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setReviewsBacklogEnabled(enabled) }
     }
 
+    /** Reschedules on enable so the reminder starts now instead of after the next sync; on disable
+     *  the pending wakeup stays and simply posts nothing (see `rescheduleLevelUpReminder`). */
+    override fun onLevelUpRemindersEnabledChange(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.setLevelUpRemindersEnabled(enabled)
+        if (enabled) notificationCoordinator.rescheduleLevelUpReminder()
+    }
+
     override fun onBacklogThresholdChange(threshold: Int) {
         viewModelScope.launch { settingsRepository.setBacklogThreshold(threshold) }
     }

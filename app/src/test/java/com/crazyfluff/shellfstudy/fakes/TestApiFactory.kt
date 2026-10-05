@@ -127,7 +127,7 @@ fun buildTestRepositories(
     return TestRepositories(
         api, subjectDao, assignmentDao, srsSystemDao, syncStateDao, studyActivityDao, outboxDao, outboxSyncScheduler,
         reviewStatisticDao, levelProgressionDao, subjectRepository, assignmentRepository,
-        AssignmentStatsRepository(assignmentDao, subjectDao, defaultDispatcher), pitchAccentRepository,
+        AssignmentStatsRepository(assignmentDao, subjectDao, srsSystemDao, defaultDispatcher), pitchAccentRepository,
         statsRepository, waniKaniRepository, syncOrchestrator, syncTransactionRunner, writeLog
     )
 }

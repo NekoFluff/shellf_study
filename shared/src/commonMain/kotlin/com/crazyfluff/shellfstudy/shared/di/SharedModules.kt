@@ -109,7 +109,7 @@ val repositoryModule = module {
         )
     }
 
-    single { AssignmentStatsRepository(assignmentDao = get(), subjectDao = get()) }
+    single { AssignmentStatsRepository(assignmentDao = get(), subjectDao = get(), srsSystemDao = get()) }
 
     single {
         StatsRepository(

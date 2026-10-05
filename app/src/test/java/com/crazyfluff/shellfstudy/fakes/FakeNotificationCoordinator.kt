@@ -31,9 +31,19 @@ class FakeNotificationCoordinator : NotificationCoordinator {
         throwOnRescheduleNextReviewCheck?.let { throw it }
     }
 
+    var rescheduleLevelUpReminderCallCount = 0
+        private set
+
+    override suspend fun rescheduleLevelUpReminder() {
+        rescheduleLevelUpReminderCallCount++
+        throwOnRescheduleLevelUpReminder?.let { throw it }
+    }
+
     var evaluateReviewsAndBacklogCallCount = 0
         private set
     var evaluateStudyReminderCallCount = 0
+        private set
+    var evaluateLevelUpReminderCallCount = 0
         private set
 
     /** Set to make the next call to the matching method throw, to exercise worker retry paths. */
@@ -41,6 +51,8 @@ class FakeNotificationCoordinator : NotificationCoordinator {
     var throwOnEvaluateStudyReminder: Throwable? = null
     var throwOnRescheduleNextReviewCheck: Throwable? = null
     var throwOnRescheduleDailyReminder: Throwable? = null
+    var throwOnRescheduleLevelUpReminder: Throwable? = null
+    var throwOnEvaluateLevelUpReminder: Throwable? = null
 
     override suspend fun evaluateReviewsAndBacklog() {
         evaluateReviewsAndBacklogCallCount++
@@ -50,5 +62,10 @@ class FakeNotificationCoordinator : NotificationCoordinator {
     override suspend fun evaluateStudyReminder() {
         evaluateStudyReminderCallCount++
         throwOnEvaluateStudyReminder?.let { throw it }
+    }
+
+    override suspend fun evaluateLevelUpReminder() {
+        evaluateLevelUpReminderCallCount++
+        throwOnEvaluateLevelUpReminder?.let { throw it }
     }
 }

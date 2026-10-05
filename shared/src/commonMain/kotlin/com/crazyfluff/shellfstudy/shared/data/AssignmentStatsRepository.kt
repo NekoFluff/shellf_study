@@ -5,6 +5,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ItemSpreadBucket
 import com.crazyfluff.shellfstudy.shared.data.model.foldKana
 import com.crazyfluff.shellfstudy.shared.data.model.LevelItem
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpPath
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
@@ -13,6 +14,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStageCalculator
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectTypeProgress
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
+import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
@@ -87,6 +89,7 @@ internal fun localMidnightIso(date: LocalDate, zone: TimeZone = TimeZone.current
 class AssignmentStatsRepository(
     private val assignmentDao: AssignmentDao,
     private val subjectDao: SubjectDao,
+    private val srsSystemDao: SrsSystemDao,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -234,5 +237,21 @@ class AssignmentStatsRepository(
                 kanjiGuruedOrHigher = rows.count { it.srsStage >= GURU_SRS_STAGE },
                 kanjiTotal = rows.size
             )
+        }.flowOn(defaultDispatcher)
+
+    /**
+     * The fastest possible level-up for [level] — see [LevelUpPathCalculator].
+     *
+     * Recomputed on every hour boundary as well as on writes: an overdue review is assumed to happen
+     * "now", so the whole path slides later each hour it's left undone even though nothing in the
+     * database changes.
+     */
+    fun observeLevelUpPath(level: Int): Flow<LevelUpPath> =
+        combine(
+            hourlyRolloverTicks(),
+            assignmentDao.observeLevelUpPathRows(level),
+            srsSystemDao.observeAll()
+        ) { now, rows, systems ->
+            LevelUpPathCalculator.calculate(rows, systems.associateBy { it.id }, now)
         }.flowOn(defaultDispatcher)
 }

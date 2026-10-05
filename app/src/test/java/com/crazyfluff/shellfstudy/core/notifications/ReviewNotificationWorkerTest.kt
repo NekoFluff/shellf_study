@@ -31,6 +31,7 @@ class ReviewNotificationWorkerTest {
         assertThat(result).isEqualTo(ListenableWorker.Result.success())
         assertThat(coordinator.evaluateReviewsAndBacklogCallCount).isEqualTo(1)
         assertThat(coordinator.rescheduleNextReviewCheckCallCount).isEqualTo(1)
+        assertThat(coordinator.rescheduleLevelUpReminderCallCount).isEqualTo(1)
     }
 
     @Test

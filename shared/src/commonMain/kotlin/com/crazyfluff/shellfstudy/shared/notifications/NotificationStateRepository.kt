@@ -14,7 +14,10 @@ import kotlin.time.Instant
 data class NotificationState(
     val lastNotifiedReviewCount: Int = 0,
     val lastBacklogNotifiedAt: Instant? = null,
-    val lastStreakReminderSentDate: LocalDate? = null
+    val lastStreakReminderSentDate: LocalDate? = null,
+    /** The [com.crazyfluff.shellfstudy.shared.data.model.LevelUpStep.at] last notified, so the same
+     *  deciding session is announced once however often the reminder is re-evaluated. */
+    val lastLevelUpNotifiedStepAt: Instant? = null
 )
 
 /**
@@ -29,6 +32,7 @@ class NotificationStateRepository(
     private val lastNotifiedReviewCountKey = intPreferencesKey("notif_last_notified_review_count")
     private val lastBacklogNotifiedAtKey = stringPreferencesKey("notif_last_backlog_notified_at")
     private val lastStreakReminderSentDateKey = stringPreferencesKey("notif_last_streak_reminder_sent_date")
+    private val lastLevelUpNotifiedStepAtKey = stringPreferencesKey("notif_last_level_up_notified_step_at")
 
     val state: Flow<NotificationState> = dataStore.data.map { prefs ->
         NotificationState(
@@ -36,6 +40,9 @@ class NotificationStateRepository(
             lastBacklogNotifiedAt = prefs[lastBacklogNotifiedAtKey]?.let { runCatching { Instant.parse(it) }.getOrNull() },
             lastStreakReminderSentDate = prefs[lastStreakReminderSentDateKey]?.let {
                 runCatching { LocalDate.parse(it) }.getOrNull()
+            },
+            lastLevelUpNotifiedStepAt = prefs[lastLevelUpNotifiedStepAtKey]?.let {
+                runCatching { Instant.parse(it) }.getOrNull()
             }
         )
     }.distinctUntilChanged()
@@ -52,11 +59,16 @@ class NotificationStateRepository(
         dataStore.edit { it[lastStreakReminderSentDateKey] = date.toString() }
     }
 
+    suspend fun recordLevelUpNotified(stepAt: Instant) {
+        dataStore.edit { it[lastLevelUpNotifiedStepAtKey] = stepAt.toString() }
+    }
+
     suspend fun clear() {
         dataStore.edit { prefs ->
             prefs.remove(lastNotifiedReviewCountKey)
             prefs.remove(lastBacklogNotifiedAtKey)
             prefs.remove(lastStreakReminderSentDateKey)
+            prefs.remove(lastLevelUpNotifiedStepAtKey)
         }
     }
 }

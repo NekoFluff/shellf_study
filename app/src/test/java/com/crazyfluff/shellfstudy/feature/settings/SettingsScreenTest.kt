@@ -666,6 +666,10 @@ private class RecordingSettingsActions : SettingsActions {
     override fun onReviewPriorityChange(priority: ReviewPriority) = record("onReviewPriorityChange", priority)
     override fun onReviewsAvailableEnabledChange(enabled: Boolean) = record("onReviewsAvailableEnabledChange", enabled)
     override fun onReviewsBacklogEnabledChange(enabled: Boolean) = record("onReviewsBacklogEnabledChange", enabled)
+    override fun onLevelUpRemindersEnabledChange(enabled: Boolean): Job {
+        record("onLevelUpRemindersEnabledChange", enabled)
+        return Job()
+    }
     override fun onBacklogThresholdChange(threshold: Int) = record("onBacklogThresholdChange", threshold)
     override fun onDailyReminderEnabledChange(enabled: Boolean) = record("onDailyReminderEnabledChange", enabled)
     override fun onDailyReminderHourChange(hour: Int): Job {

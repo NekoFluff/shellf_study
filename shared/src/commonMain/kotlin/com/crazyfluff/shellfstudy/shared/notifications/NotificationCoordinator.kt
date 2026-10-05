@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.shared.data.AssignmentStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpStep
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
@@ -28,11 +29,18 @@ interface NotificationCoordinator {
     suspend fun rescheduleDailyReminder()
     suspend fun rescheduleNextReviewCheck()
 
+    /** Schedules a wakeup for when the next review session that decides the fastest level-up comes
+     *  due. Never posts. */
+    suspend fun rescheduleLevelUpReminder()
+
     /** Posts. Background-only callers (workers). */
     suspend fun evaluateReviewsAndBacklog()
 
     /** Posts. Background-only callers (workers). */
     suspend fun evaluateStudyReminder()
+
+    /** Posts. Background-only callers (workers). */
+    suspend fun evaluateLevelUpReminder()
 }
 
 class DefaultNotificationCoordinator(
@@ -46,6 +54,7 @@ class DefaultNotificationCoordinator(
 
     override suspend fun onLogin() {
         rescheduleNextReviewCheck()
+        rescheduleLevelUpReminder()
         rescheduleDailyReminder()
     }
 
@@ -54,6 +63,7 @@ class DefaultNotificationCoordinator(
         listOf(
             NotificationIds.REVIEWS_AVAILABLE,
             NotificationIds.REVIEWS_BACKLOG,
+            NotificationIds.LEVEL_UP_REVIEWS,
             NotificationIds.STUDY_REMINDER
         ).forEach(notificationPoster::cancel)
         notificationStateRepository.clear()
@@ -77,6 +87,55 @@ class DefaultNotificationCoordinator(
         val forecast = assignmentStatsRepository.observeReviewForecast().first()
         val nextBucket = forecast.buckets.firstOrNull { it.newlyAvailableCount > 0 }
         notificationScheduler.scheduleNextReviewCheck(nextBucket?.availableAt)
+    }
+
+    /**
+     * Rides the deferred-notification path rather than the review check: it fires at a different
+     * time (the next *deciding* session, not the next batch of any reviews) and the review check's
+     * single unique wakeup can't hold both. There's no cancel for a deferred category, so turning
+     * the setting off leaves any pending wakeup in place — [evaluateLevelUpReminder] re-checks the
+     * setting when it fires and posts nothing.
+     */
+    override suspend fun rescheduleLevelUpReminder() {
+        val settings = settingsRepository.notificationSettings.first()
+        val step = if (settings.notificationsEnabled && settings.levelUpRemindersEnabled) currentLevelUpStep() else null
+        // An already-announced session is still "next" until the user works through it. Scheduling
+        // it again (at now, since it's due) would only wake evaluate to find it announced — and on
+        // every sync after. The next sync after those reviews brings a new step to schedule.
+        if (step == null || notificationStateRepository.state.first().lastLevelUpNotifiedStepAt == step.at) return
+        notificationScheduler.scheduleDeferredNotification(
+            DeferredNotificationCategory.LEVEL_UP,
+            maxOf(step.at, Clock.System.now())
+        )
+    }
+
+    override suspend fun evaluateLevelUpReminder() {
+        val settings = settingsRepository.notificationSettings.first()
+        if (!settings.notificationsEnabled || !settings.levelUpRemindersEnabled) return
+        val step = currentLevelUpStep() ?: return
+        val now = Clock.System.now()
+        val alreadyNotified = notificationStateRepository.state.first().lastLevelUpNotifiedStepAt == step.at
+        when {
+            alreadyNotified -> Unit
+            // Woken before the session is due (the path moved since this was scheduled): move the
+            // wakeup to the real time.
+            step.at > now -> rescheduleLevelUpReminder()
+            isQuiet(settings, now) -> notificationScheduler.scheduleDeferredNotification(
+                DeferredNotificationCategory.LEVEL_UP,
+                quietHoursEnd(settings, now)
+            )
+            else -> {
+                notificationPoster.post(NotificationBuilder.levelUpReviewsReady(step))
+                notificationStateRepository.recordLevelUpNotified(step.at)
+            }
+        }
+    }
+
+    /** The next deciding session on the current level's fastest level-up path, or null when there's
+     *  no level yet, the level is ready, or nothing is known. */
+    private suspend fun currentLevelUpStep(): LevelUpStep? {
+        val level = statsRepository.observeCurrentLevel().first() ?: return null
+        return assignmentStatsRepository.observeLevelUpPath(level).first().nextDecidingStep
     }
 
     override suspend fun evaluateReviewsAndBacklog() {

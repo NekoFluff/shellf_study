@@ -9,6 +9,9 @@ import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.fakes.FakeAssignmentDao
+import com.crazyfluff.shellfstudy.fakes.FakeLevelProgressionDao
+import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
+import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationPoster
 import com.crazyfluff.shellfstudy.fakes.FakeNotificationScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
@@ -27,6 +30,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import kotlin.time.Clock
+import kotlin.time.Instant
 
 class DefaultNotificationCoordinatorTest {
 
@@ -38,6 +42,7 @@ class DefaultNotificationCoordinatorTest {
     private lateinit var assignmentRepository: AssignmentRepository
     private lateinit var assignmentStatsRepository: AssignmentStatsRepository
     private lateinit var statsRepository: StatsRepository
+    private lateinit var levelProgressionDao: FakeLevelProgressionDao
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var notificationStateRepository: NotificationStateRepository
     private lateinit var notificationScheduler: FakeNotificationScheduler
@@ -55,6 +60,7 @@ class DefaultNotificationCoordinatorTest {
         assignmentRepository = repos.assignmentRepository
         assignmentStatsRepository = repos.assignmentStatsRepository
         statsRepository = repos.statsRepository
+        levelProgressionDao = repos.levelProgressionDao
 
         val settingsDataStore: DataStore<Preferences> =
             PreferenceDataStoreFactory.create(produceFile = { tempFolder.newFile("settings.preferences_pb") })
@@ -213,7 +219,7 @@ class DefaultNotificationCoordinatorTest {
         coordinator.onLogout()
 
         assertThat(notificationScheduler.cancelAllCallCount).isEqualTo(1)
-        assertThat(notificationPoster.cancelled).hasSize(3)
+        assertThat(notificationPoster.cancelled).hasSize(4)
         assertThat(notificationStateRepository.state.first().lastNotifiedReviewCount).isEqualTo(0)
     }
 
@@ -265,5 +271,107 @@ class DefaultNotificationCoordinatorTest {
         assertThat(notificationPoster.posted).isEmpty()
         assertThat(notificationScheduler.deferredNotifications.map { it.first })
             .containsExactly(DeferredNotificationCategory.STUDY_REMINDER)
+    }
+
+    /** Level 5 in progress, with one kanji at Apprentice IV: its next review is the only deciding
+     *  session, and passing it levels up. */
+    private suspend fun seedLevelUpKanji(availableAt: Instant) {
+        levelProgressionDao.upsertAll(
+            listOf(
+                LevelProgressionEntity(
+                    id = 1, level = 5, createdAt = "2026-01-01T00:00:00Z", unlockedAt = null,
+                    startedAt = null, passedAt = null, completedAt = null, abandonedAt = null
+                )
+            )
+        )
+        subjectDao.upsertAll(
+            listOf(
+                SubjectEntity(
+                    id = 50, subjectType = "kanji", level = 5, slug = "力", characters = "力",
+                    meanings = emptyList(), readings = emptyList(), documentUrl = null
+                )
+            )
+        )
+        assignmentDao.upsertAll(
+            listOf(
+                assignment(
+                    1, 50, srsStage = 4, availableAt = availableAt.toString(), unlockedAt = "2026-01-01T00:00:00Z"
+                ).copy(subjectType = "kanji")
+            )
+        )
+    }
+
+    private fun hourFromNow(hours: Int): Instant {
+        val now = Clock.System.now()
+        return Instant.fromEpochSeconds((now.epochSeconds / 3600 + hours) * 3600)
+    }
+
+    private fun levelUpDeferrals() =
+        notificationScheduler.deferredNotifications.filter { it.first == DeferredNotificationCategory.LEVEL_UP }
+
+    @Test
+    fun `rescheduleLevelUpReminder schedules a wakeup for the next deciding review`() = runTest {
+        enableNotifications()
+        val due = hourFromNow(3)
+        seedLevelUpKanji(availableAt = due)
+
+        coordinator.rescheduleLevelUpReminder()
+
+        assertThat(levelUpDeferrals()).containsExactly(DeferredNotificationCategory.LEVEL_UP to due)
+    }
+
+    @Test
+    fun `rescheduleLevelUpReminder does nothing when the setting is off`() = runTest {
+        enableNotifications()
+        settingsRepository.setLevelUpRemindersEnabled(false)
+        seedLevelUpKanji(availableAt = hourFromNow(3))
+
+        coordinator.rescheduleLevelUpReminder()
+
+        assertThat(levelUpDeferrals()).isEmpty()
+    }
+
+    @Test
+    fun `evaluateLevelUpReminder posts once for a due deciding review and never reschedules it`() = runTest {
+        enableNotifications()
+        settingsRepository.setQuietHoursEnabled(false)
+        seedLevelUpKanji(availableAt = hourFromNow(-2))
+
+        coordinator.evaluateLevelUpReminder()
+        coordinator.evaluateLevelUpReminder()
+        // Already announced, so another sync's reschedule must not wake the worker for it again.
+        coordinator.rescheduleLevelUpReminder()
+
+        assertThat(notificationPoster.posted.map { it.channelId }).containsExactly(NotificationChannels.LEVEL_UP)
+        assertThat(notificationPoster.posted.single().body).startsWith("1 kanji review is ready.")
+        assertThat(levelUpDeferrals()).isEmpty()
+    }
+
+    @Test
+    fun `evaluateLevelUpReminder woken early moves the wakeup instead of posting`() = runTest {
+        enableNotifications()
+        settingsRepository.setQuietHoursEnabled(false)
+        val due = hourFromNow(5)
+        seedLevelUpKanji(availableAt = due)
+
+        coordinator.evaluateLevelUpReminder()
+
+        assertThat(notificationPoster.posted).isEmpty()
+        assertThat(levelUpDeferrals()).containsExactly(DeferredNotificationCategory.LEVEL_UP to due)
+    }
+
+    @Test
+    fun `evaluateLevelUpReminder defers past quiet hours`() = runTest {
+        enableNotifications()
+        val nowHour = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).hour
+        settingsRepository.setQuietHoursEnabled(true)
+        settingsRepository.setQuietHoursStartHour(nowHour)
+        settingsRepository.setQuietHoursEndHour((nowHour + 23) % 24)
+        seedLevelUpKanji(availableAt = hourFromNow(-2))
+
+        coordinator.evaluateLevelUpReminder()
+
+        assertThat(notificationPoster.posted).isEmpty()
+        assertThat(levelUpDeferrals()).hasSize(1)
     }
 }
