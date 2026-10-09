@@ -2030,6 +2030,49 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     }
 
     @Test
+    fun `a session resumed on a later batch's study cards still summarizes every batch`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Moving on to a batch saves a study snapshot, and that snapshot used to carry the clock but
+            // not the earlier batches' results — so a session resumed on those cards ended with the
+            // whole session's time divided by the last batch's items alone.
+            dispatch(jsonResponse(threeRadicalAssignmentsJson()), jsonResponse(threeRadicalSubjectsJson()))
+            settingsRepository.setLessonBatchSize(2)
+
+            val firstViewModel = createViewModel()
+            firstViewModel.uiState.test {
+                var state = awaitItem()
+                while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+                firstViewModel.selectAll()
+                awaitItem()
+                firstViewModel.startSelectedLessons()
+                awaitItem() // batch 1 study
+                firstViewModel.nextStudyCard()
+                awaitItem()
+                firstViewModel.nextStudyCard()
+                state = awaitItem() // batch 1 quiz
+                state = answerEveryQuestionInBatch(state, firstViewModel)
+                assertThat(state.phase).isInstanceOf(LessonUiState.Phase.BatchComplete::class.java)
+                firstViewModel.continueSession()
+                while (state.phase !is LessonUiState.Phase.Study) state = awaitItem() // batch 2 study
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertThat(lessonSessionRepository.load()!!.phase).isEqualTo(PersistedLessonPhase.STUDY)
+
+            val secondViewModel = createViewModel()
+            secondViewModel.uiState.test {
+                var state = awaitItem()
+                while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+                assertThat((state.phase as LessonUiState.Phase.Study).batchIndex).isEqualTo(1)
+                secondViewModel.nextStudyCard()
+                state = awaitItem() // batch 2 quiz
+
+                val summary = answerEveryQuestionInBatch(state, secondViewModel).phase as LessonUiState.Phase.Complete
+
+                assertThat(summary.sessionItemsLearned).isEqualTo(3)
+            }
+        }
+
+    @Test
     fun `the picker defaults to what is left of the daily lesson goal`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(threeRadicalAssignmentsJson()), jsonResponse(threeRadicalSubjectsJson()))
         settingsRepository.setDailyLessonGoal(2)

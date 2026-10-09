@@ -452,6 +452,8 @@ class LessonViewModel(
 
         val strokeOrders = fetchStrokeOrders(items)
         pitchAccentItems.value = items
+        // The batches already done, which the summary still has to count — see studySnapshot.
+        session = session.copy(quiz = restoredQuiz(persisted, withQueue = false) ?: QuizSession())
         sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
         sessionController.begin()
         _uiState.update {

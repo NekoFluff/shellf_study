@@ -46,7 +46,12 @@ internal data class LessonSession(
         batchSize = batchSize,
         batchIndex = batchIndex,
         studyIndex = studyIndex,
-        sessionActiveElapsedMs = sessionActiveElapsedMs
+        sessionActiveElapsedMs = sessionActiveElapsedMs,
+        // The earlier batches' results, carried through this batch's cards. Without them a session
+        // resumed here kept the clock for every batch but the items of none, so the summary divided
+        // the whole session's time by however few items the remaining batches held.
+        progress = quiz.persistedProgress(),
+        answeredQuestions = quiz.persistedAnswers()
     )
 
     /**
