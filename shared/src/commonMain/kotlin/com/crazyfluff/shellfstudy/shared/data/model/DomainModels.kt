@@ -55,12 +55,9 @@ data class LevelUpPath(
     val computedAt: Instant,
     /** Every not-yet-Guru radical and kanji at the level with a known path, by subject id. */
     val guruAtBySubject: Map<Long, Instant> = emptyMap(),
-    /** The items that set [levelUpAt]: the kanji the level-up still needs (just that many, even when
-     *  more reach Guru in the same hour), plus the slowest radical gating each of those still locked.
-     *  Holding any of them up moves the date; the rest are spare. Empty when [levelUpAt] is null. */
-    val decidingSubjectIds: Set<Long> = emptySet(),
-    /** The soonest lesson or review session among [decidingSubjectIds]. */
-    val nextDecidingStep: LevelUpStep? = null
+    /** The next lesson or review session for the level's radicals and kanji below Guru, and how many
+     *  kanji are left. Null once the level is ready, or while its level-up time is unknown. */
+    val nextStep: LevelUpStep? = null
 ) {
     val requiredCount: Int get() = LevelUpProgress(alreadyGuruCount, kanjiTotal).requiredCount
 
@@ -72,38 +69,42 @@ data class LevelUpPath(
     }
 }
 
-/** One lesson or review session on the fastest level-up path: when it can start, and how many of the
- *  deciding items it covers. [at] is when the session became available, so it's in the past for an
- *  overdue review or a lesson waiting to be done — and stays put however often the path is recomputed. */
+/** The next lesson or review session for the current level's radicals and kanji below Guru. [at] is
+ *  when the session became available, so it's in the past for an overdue review or a lesson waiting to
+ *  be done, and stays put however often the path is recomputed. */
 @Immutable
 data class LevelUpStep(
     val at: Instant,
-    val radicalCount: Int,
-    val kanjiCount: Int,
-    /** How many of the items are lessons rather than reviews. */
-    val lessonCount: Int
+    val kanjiReviews: Int = 0,
+    val kanjiLessons: Int = 0,
+    val radicalReviews: Int = 0,
+    val radicalLessons: Int = 0,
+    /** Kanji still to reach Guru before the level-up — WaniKani levels up on kanji alone. */
+    val kanjiLeft: Int
 ) {
-    val totalCount: Int get() = radicalCount + kanjiCount
+    val totalCount: Int get() = kanjiReviews + kanjiLessons + radicalReviews + radicalLessons
 
-    /** "4 radical reviews", "3 kanji lessons", or "2 radicals, 3 kanji" for a session that mixes
-     *  subject types or lessons with reviews. */
-    val itemsPhrase: String get() {
-        val kind = when (lessonCount) {
-            totalCount -> "lesson"
-            0 -> "review"
-            else -> null
-        }
-        return when {
-            kind != null && kanjiCount == 0 -> plural(radicalCount, "radical $kind")
-            kind != null && radicalCount == 0 -> plural(kanjiCount, "kanji $kind")
-            else -> listOfNotNull(
-                plural(radicalCount, "radical").takeIf { radicalCount > 0 },
-                "$kanjiCount kanji".takeIf { kanjiCount > 0 }
-            ).joinToString(", ")
-        }
+    /** "3 kanji reviews and 2 radical reviews", "1 kanji lesson", "2 kanji lessons, 1 kanji review and
+     *  4 radical reviews" — kanji first, lessons before reviews, empty parts left out. */
+    val readyPhrase: String get() {
+        val parts = listOfNotNull(
+            part(kanjiLessons, "kanji lesson"),
+            part(kanjiReviews, "kanji review"),
+            part(radicalLessons, "radical lesson"),
+            part(radicalReviews, "radical review")
+        )
+        if (parts.size <= 1) return parts.joinToString()
+        return parts.dropLast(1).joinToString(", ") + " and " + parts.last()
     }
 
-    private fun plural(count: Int, noun: String): String = if (count == 1) "1 $noun" else "$count ${noun}s"
+    /** "12 kanji left before level up". */
+    val kanjiLeftPhrase: String get() = "$kanjiLeft kanji left before level up"
+
+    private fun part(count: Int, noun: String): String? = when (count) {
+        0 -> null
+        1 -> "1 $noun"
+        else -> "$count ${noun}s"
+    }
 }
 
 /** Common shape shared by [LessonItem] and [ReviewItem] — everything a quiz-session-summary row or

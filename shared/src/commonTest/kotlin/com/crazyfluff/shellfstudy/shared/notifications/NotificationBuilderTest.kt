@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.notifications
 
+import com.crazyfluff.shellfstudy.shared.data.model.LevelUpStep
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
 import com.crazyfluff.shellfstudy.shared.data.model.reviewForecastSummary
@@ -11,6 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.test.assertEquals
 import kotlin.time.Clock
+import kotlin.time.Instant
 
 class NotificationBuilderTest {
 
@@ -64,4 +66,22 @@ class NotificationBuilderTest {
         assertEquals("A quick session today gets your streak started.", spec.body)
     }
 
+    @Test
+    fun levelUpReminderSaysWhatIsReadyAndHowManyKanjiAreLeft() {
+        val spec = NotificationBuilder.levelUpReviewsReady(
+            LevelUpStep(Instant.parse("2026-10-04T10:00:00Z"), kanjiReviews = 3, radicalReviews = 2, kanjiLeft = 12)
+        )
+
+        assertEquals("Your level-up is waiting on these", spec.title)
+        assertEquals("3 kanji reviews and 2 radical reviews are ready. 12 kanji left before level up.", spec.body)
+    }
+
+    @Test
+    fun levelUpReminderUsesTheSingularForOneItem() {
+        val spec = NotificationBuilder.levelUpReviewsReady(
+            LevelUpStep(Instant.parse("2026-10-04T10:00:00Z"), kanjiLessons = 1, kanjiLeft = 1)
+        )
+
+        assertEquals("1 kanji lesson is ready. 1 kanji left before level up.", spec.body)
+    }
 }

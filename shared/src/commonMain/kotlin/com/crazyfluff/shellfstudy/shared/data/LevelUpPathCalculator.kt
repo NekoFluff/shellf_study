@@ -54,61 +54,24 @@ object LevelUpPathCalculator {
             guruAtBySubject = pending.mapNotNull { (id, p) -> p.guruAt?.let { id to it } }.toMap()
         )
         if (path.levelUpAt == null) return path
-
-        val decidingKanji = decidingKanji(kanji, kanjiPaths, stillNeeded = path.requiredCount - path.alreadyGuruCount)
-        val decidingRadicals = decidingKanji.filter { it.isLocked }.flatMap { row ->
-            slowestPendingComponents(row, radicalPaths)
-        }
-        val deciding = decidingKanji.map { it.subjectId }.toSet() + decidingRadicals
-        return path.copy(
-            decidingSubjectIds = deciding,
-            nextDecidingStep = nextStep(deciding, rows, pending)
-        )
+        return path.copy(nextStep = nextStep(rows, pending, kanjiLeft = path.requiredCount - path.alreadyGuruCount))
     }
 
     /**
-     * Exactly the [stillNeeded] kanji the level-up waits on: the earliest to reach Guru.
+     * The soonest lesson or review session among the level's radicals and kanji still below Guru,
+     * counting every one of them that can be done in the same clock hour (everything already due
+     * counts as "now"). Locked kanji have no step of their own yet.
      *
-     * Not "every kanji at Guru by the level-up time". Kanji learned together reach Guru in the same
-     * hour, so the level-up hour is usually shared by more kanji than are needed, and counting them all
-     * asked the learner for reviews the level-up didn't depend on, along with the radicals gating the
-     * spare kanji. Among kanji tied on that hour, the ones that are cheapest to get there win:
-     * already unlocked (no radicals to wait on), then furthest along, then by id so the choice is
-     * stable from one computation to the next.
+     * Every radical below Guru counts, not just those gating a kanji: they're the same items the
+     * rank-up review order pulls forward, so the reminder and the review queue agree on what's
+     * waiting.
+     *
+     * The step's time is the earliest *due* time in the group, not the clamped "now": an overdue
+     * session keeps the same [LevelUpStep.at] however often it's recomputed, which is what lets the
+     * level-up reminder recognise a session it has already announced.
      */
-    private fun decidingKanji(
-        kanji: List<LevelUpPathRow>,
-        kanjiPaths: Map<Long, ItemPath>,
-        stillNeeded: Int
-    ): List<LevelUpPathRow> = kanji
-        .mapNotNull { row -> kanjiPaths[row.subjectId]?.guruAt?.let { row to it } }
-        .sortedWith(
-            compareBy<Pair<LevelUpPathRow, Instant>> { (_, guruAt) -> guruAt }
-                .thenBy { (row, _) -> row.isLocked }
-                .thenByDescending { (row, _) -> row.srsStage }
-                .thenBy { (row, _) -> row.subjectId }
-        )
-        .take(stillNeeded)
-        .map { (row, _) -> row }
-
-    /** The not-yet-Guru radicals that set a locked kanji's unlock time: those reaching Guru last. */
-    private fun slowestPendingComponents(row: LevelUpPathRow, radicalPaths: Map<Long, ItemPath>): List<Long> {
-        val pendingComponents = row.componentSubjectIds.mapNotNull { id ->
-            radicalPaths[id]?.takeIf { it.inProgress }?.guruAt?.let { id to it }
-        }
-        val latest = pendingComponents.maxOfOrNull { it.second } ?: return emptyList()
-        return pendingComponents.filter { it.second == latest }.map { it.first }
-    }
-
-    /** The soonest lesson or review among [deciding] items, plus every deciding item that can be done
-     *  in the same clock hour (everything already due counts as "now"). Locked kanji have no step of
-     *  their own yet — the radicals gating them are in [deciding] and carry it.
-     *
-     *  The step's time is the earliest *due* time in the group, not the clamped "now": an overdue
-     *  session keeps the same [LevelUpStep.at] however often it's recomputed, which is what lets the
-     *  level-up reminder recognise a session it has already announced. */
-    private fun nextStep(deciding: Set<Long>, rows: List<LevelUpPathRow>, pending: Map<Long, ItemPath>): LevelUpStep? {
-        val steps = rows.filter { it.subjectId in deciding }.mapNotNull { row ->
+    private fun nextStep(rows: List<LevelUpPathRow>, pending: Map<Long, ItemPath>, kanjiLeft: Int): LevelUpStep? {
+        val steps = rows.mapNotNull { row ->
             val item = pending[row.subjectId]
             val doAt = item?.firstStepAt
             val dueAt = item?.dueAt
@@ -120,11 +83,14 @@ object LevelUpPathCalculator {
         }
         val firstHour = steps.minOfOrNull { it.doAt }?.truncatedToHour() ?: return null
         val inHour = steps.filter { it.doAt.truncatedToHour() == firstHour }
+        fun count(type: String, lesson: Boolean) = inHour.count { it.subjectType == type && it.isLesson == lesson }
         return LevelUpStep(
             at = inHour.minOf { it.dueAt },
-            radicalCount = inHour.count { it.subjectType == RADICAL },
-            kanjiCount = inHour.count { it.subjectType == KANJI },
-            lessonCount = inHour.count { it.isLesson }
+            kanjiReviews = count(KANJI, lesson = false),
+            kanjiLessons = count(KANJI, lesson = true),
+            radicalReviews = count(RADICAL, lesson = false),
+            radicalLessons = count(RADICAL, lesson = true),
+            kanjiLeft = kanjiLeft
         )
     }
 

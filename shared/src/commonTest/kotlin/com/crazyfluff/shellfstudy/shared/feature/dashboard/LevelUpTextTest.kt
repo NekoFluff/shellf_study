@@ -45,16 +45,26 @@ class LevelUpTextTest {
     }
 
     @Test
-    fun nextStepCaptionNamesTheItemsAndKind() {
+    fun nextStepCaptionNamesWhatIsReadyAndHowManyKanjiAreLeft() {
         fun caption(step: LevelUpStep) = nextStepCaption(step, now, is24h = true, zone = utc)
         val later = Instant.parse("2026-10-04T14:00:00Z")
 
-        assertEquals("Next: Today 14:00 · 4 radical reviews", caption(LevelUpStep(later, 4, 0, 0)))
-        assertEquals("Next: now · 1 kanji lesson", caption(LevelUpStep(now, 0, 1, 1)))
-        assertEquals("Next: now · 3 kanji reviews", caption(LevelUpStep(now, 0, 3, 0)))
-        // Mixed subject types, or lessons with reviews, list the counts without a kind.
-        assertEquals("Next: now · 2 radicals, 3 kanji", caption(LevelUpStep(now, 2, 3, 0)))
-        assertEquals("Next: now · 1 radical, 1 kanji", caption(LevelUpStep(now, 1, 1, 1)))
+        assertEquals(
+            "Next: Today 14:00 · 4 radical reviews · 12 kanji left before level up",
+            caption(LevelUpStep(later, radicalReviews = 4, kanjiLeft = 12))
+        )
+        assertEquals(
+            "Next: now · 1 kanji lesson · 1 kanji left before level up",
+            caption(LevelUpStep(now, kanjiLessons = 1, kanjiLeft = 1))
+        )
+        assertEquals(
+            "Next: now · 3 kanji reviews and 2 radical reviews · 9 kanji left before level up",
+            caption(LevelUpStep(now, kanjiReviews = 3, radicalReviews = 2, kanjiLeft = 9))
+        )
+        assertEquals(
+            "Next: now · 2 kanji lessons, 1 kanji review and 4 radical reviews · 9 kanji left before level up",
+            caption(LevelUpStep(now, kanjiReviews = 1, kanjiLessons = 2, radicalReviews = 4, kanjiLeft = 9))
+        )
     }
 
     private fun item(id: Long, passed: Boolean) = LevelItem(

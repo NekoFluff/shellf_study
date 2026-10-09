@@ -289,7 +289,7 @@ private fun LevelUpEtaLines(path: LevelUpPath?, levelUpReady: Boolean) {
         color = srsStageColor(SrsStage.GURU_1),
         modifier = Modifier.testTag(LevelProgressTestTags.LEVEL_UP_ETA)
     )
-    path.nextDecidingStep?.let { step ->
+    path.nextStep?.let { step ->
         Text(
             text = nextStepCaption(step, path.computedAt, is24h, zone),
             style = MaterialTheme.typography.bodySmall,

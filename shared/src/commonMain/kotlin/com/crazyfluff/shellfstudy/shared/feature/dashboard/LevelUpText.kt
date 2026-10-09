@@ -18,12 +18,12 @@ internal fun levelUpEtaCaption(levelUpAt: Instant, now: Instant, is24h: Boolean,
     "Fastest level-up · ${dayAndHour(levelUpAt, now, is24h, zone)} (${relativeEta(levelUpAt, now)})"
 
 /**
- * "Next: Today 2:00 PM · 4 radical reviews", "Next: now · 3 kanji lessons", or, for a session mixing
- * subject types or lessons with reviews, "Next: now · 2 radicals, 3 kanji".
+ * "Next: now · 3 kanji reviews and 2 radical reviews · 12 kanji left before level up", or with a time
+ * ("Next: Today 2:00 PM · …") for a session that isn't available yet.
  */
 internal fun nextStepCaption(step: LevelUpStep, now: Instant, is24h: Boolean, zone: TimeZone): String {
     val whenLabel = if (step.at <= now) "now" else dayAndHour(step.at, now, is24h, zone)
-    return "Next: $whenLabel · ${step.itemsPhrase}"
+    return "Next: $whenLabel · ${step.readyPhrase} · ${step.kanjiLeftPhrase}"
 }
 
 /** "in 2d 6h", "in 5h", "in under 1h" — whole hours, rounded down. */

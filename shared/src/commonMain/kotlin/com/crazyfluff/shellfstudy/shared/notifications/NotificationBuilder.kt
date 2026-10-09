@@ -44,9 +44,10 @@ object NotificationBuilder {
         id = NotificationIds.LEVEL_UP_REVIEWS,
         channelId = NotificationChannels.LEVEL_UP,
         title = "Your level-up is waiting on these",
-        body = "${step.itemsPhrase.replaceFirstChar { it.uppercase() }} " +
+        // "3 kanji reviews and 2 radical reviews are ready. 12 kanji left before level up."
+        body = "${step.readyPhrase.replaceFirstChar { it.uppercase() }} " +
             "${if (step.totalCount == 1) "is" else "are"} ready. " +
-            "Doing them now keeps your fastest level-up on track.",
+            "${step.kanjiLeftPhrase.replaceFirstChar { it.uppercase() }}.",
         destination = NotificationDeepLink.DESTINATION_DASHBOARD
     )
 

@@ -204,68 +204,34 @@ class LevelUpPathCalculatorTest {
     }
 
     @Test
-    fun decidingKanjiAreTheOnesReachingGuruByTheLevelUpIncludingTies() {
-        val hours = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 11)
-        val rows = hours.map { hour ->
-            kanji(srsStage = 4, availableAt = "2026-10-05T${hour.toString().padStart(2, '0')}:00:00.000000Z")
-        }
-        val path = LevelUpPathCalculator.calculate(rows, systems, now)
+    fun nextStepCountsEveryRadicalBelowGuruAndHowManyKanjiAreLeft() {
+        // The radical gates nothing that's still locked, but it's a level item below Guru all the same.
+        val radicalReview = radical(id = 100, srsStage = 2, availableAt = "2026-10-04T08:00:00.000000Z")
+        val kanjiReview = kanji(srsStage = 3, availableAt = "2026-10-04T09:00:00.000000Z")
+        val laterKanji = kanji(srsStage = 1, availableAt = "2026-10-05T09:00:00.000000Z")
+        val alreadyGuru = List(7) { kanji(srsStage = 5) }
 
-        // 11 kanji → 10 needed; the 10th earliest is at 09:00, shared with the 9th.
-        assertEquals(Instant.parse("2026-10-05T09:00:00Z"), path.levelUpAt)
-        assertEquals(rows.take(10).map { it.subjectId }.toSet(), path.decidingSubjectIds)
+        val path = calculate(radicalReview, kanjiReview, laterKanji, *alreadyGuru.toTypedArray())
+
+        // 9 kanji → 9 needed (90%, rounded up); 7 at Guru, so 2 left.
+        assertEquals(
+            LevelUpStep(Instant.parse("2026-10-04T08:00:00Z"), kanjiReviews = 1, radicalReviews = 1, kanjiLeft = 2),
+            path.nextStep
+        )
     }
 
     @Test
-    fun kanjiTiedOnTheLevelUpHourCountOnlyAsManyAsTheLevelUpNeeds() {
-        // 11 kanji → 10 needed. Two reach Guru early and nine share 09:00, so 8 of those nine are
-        // enough: counting all nine asked for a review the level-up didn't depend on.
-        val early = listOf(1, 2).map { hour ->
-            kanji(srsStage = 4, availableAt = "2026-10-05T0$hour:00:00.000000Z")
-        }
-        val tied = List(9) { kanji(srsStage = 4, availableAt = "2026-10-05T09:00:00.000000Z") }
-        val path = LevelUpPathCalculator.calculate(early + tied, systems, now)
-
-        assertEquals(Instant.parse("2026-10-05T09:00:00Z"), path.levelUpAt)
-        assertEquals(10, path.decidingSubjectIds.size)
-        assertTrue(path.decidingSubjectIds.containsAll(early.map { it.subjectId }))
-    }
-
-    @Test
-    fun aTieIsSettledInFavourOfKanjiThatNeedNoRadicalsFirst() {
-        // Both kanji reach Guru at the same time, but only one is needed: the unlocked one, not the
-        // locked one whose radical would then count as deciding too.
-        val radicalGate = radical(id = 100, srsStage = 5)
-        val locked = kanji(unlockedAt = null, components = listOf(100))
-        val unlocked = kanji(srsStage = 0)
-        val alreadyGuru = List(8) { kanji(srsStage = 5) }
-
-        val path = calculate(locked, unlocked, radicalGate, *alreadyGuru.toTypedArray())
-
-        assertEquals(setOf(unlocked.subjectId), path.decidingSubjectIds)
-    }
-
-    @Test
-    fun slowestRadicalGatingADecidingLockedKanjiIsDecidingAndFasterOneIsSpare() {
-        val fast = radical(id = 100, srsStage = 4, availableAt = "2026-10-04T12:00:00.000000Z")
-        val slow = radical(id = 101, srsStage = 4, availableAt = "2026-10-04T18:00:00.000000Z")
-        val locked = kanji(unlockedAt = null, components = listOf(100, 101))
-
-        val path = calculate(locked, fast, slow)
-
-        assertEquals(setOf(locked.subjectId, 101L), path.decidingSubjectIds)
-        assertEquals(LevelUpStep(Instant.parse("2026-10-04T18:00:00Z"), 1, 0, 0), path.nextDecidingStep)
-    }
-
-    @Test
-    fun nextDecidingStepGroupsEveryDecidingItemDueInTheSameHour() {
+    fun nextStepGroupsEveryItemDueInTheSameHour() {
         val path = calculate(
             kanji(srsStage = 3, availableAt = "2026-10-04T15:00:00.000000Z"),
             kanji(srsStage = 4, availableAt = "2026-10-04T15:00:00.000000Z"),
             kanji(srsStage = 1, availableAt = "2026-10-04T16:00:00.000000Z")
         )
 
-        assertEquals(LevelUpStep(Instant.parse("2026-10-04T15:00:00Z"), 0, 2, 0), path.nextDecidingStep)
+        assertEquals(
+            LevelUpStep(Instant.parse("2026-10-04T15:00:00Z"), kanjiReviews = 2, kanjiLeft = 3),
+            path.nextStep
+        )
     }
 
     @Test
@@ -277,16 +243,18 @@ class LevelUpPathCalculatorTest {
 
         // Both can be done now; the step keeps the earliest time either became available (the lesson
         // unlocked on Oct 1), so recomputing it later doesn't make it look like a new session.
-        assertEquals(LevelUpStep(Instant.parse(UNLOCKED), 0, 2, 1), path.nextDecidingStep)
+        assertEquals(
+            LevelUpStep(Instant.parse(UNLOCKED), kanjiReviews = 1, kanjiLessons = 1, kanjiLeft = 2),
+            path.nextStep
+        )
     }
 
     @Test
-    fun readyLevelHasNoDecidingItemsOrNextStep() {
+    fun readyLevelHasNoNextStep() {
         val rows = List(9) { kanji(srsStage = 5) } + kanji(srsStage = 1, availableAt = "2026-10-04T12:00:00.000000Z")
         val path = LevelUpPathCalculator.calculate(rows, systems, now)
 
-        assertEquals(emptySet(), path.decidingSubjectIds)
-        assertNull(path.nextDecidingStep)
+        assertNull(path.nextStep)
     }
 
     private companion object {

@@ -314,8 +314,7 @@ class LevelProgressCardTest {
         guruAtBySubject = (19..25).associate { index ->
             kanjiId(index) to pathComputedAt + ((26 - index) * 10).hours
         } + (radicalId(5) to pathComputedAt + 5.hours),
-        decidingSubjectIds = (21..25).map(::kanjiId).toSet() + radicalId(5),
-        nextDecidingStep = LevelUpStep(pathComputedAt + 4.hours, radicalCount = 1, kanjiCount = 0, lessonCount = 0)
+        nextStep = LevelUpStep(pathComputedAt + 4.hours, radicalReviews = 1, kanjiLeft = 5)
     )
 
     private val progressWithUnpassedRadical = sampleProgress.copy(

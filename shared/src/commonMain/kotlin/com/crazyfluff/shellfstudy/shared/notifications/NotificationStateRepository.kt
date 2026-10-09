@@ -16,7 +16,7 @@ data class NotificationState(
     val lastBacklogNotifiedAt: Instant? = null,
     val lastStreakReminderSentDate: LocalDate? = null,
     /** The [com.crazyfluff.shellfstudy.shared.data.model.LevelUpStep.at] last notified, so the same
-     *  deciding session is announced once however often the reminder is re-evaluated. */
+     *  level-up session is announced once however often the reminder is re-evaluated. */
     val lastLevelUpNotifiedStepAt: Instant? = null
 )
 
