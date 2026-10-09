@@ -53,9 +53,9 @@ object LevelUpPathCalculator {
             computedAt = now,
             guruAtBySubject = pending.mapNotNull { (id, p) -> p.guruAt?.let { id to it } }.toMap()
         )
-        val levelUpAt = path.levelUpAt ?: return path
+        if (path.levelUpAt == null) return path
 
-        val decidingKanji = kanji.filter { kanjiPaths[it.subjectId]?.guruAt?.let { at -> at <= levelUpAt } == true }
+        val decidingKanji = decidingKanji(kanji, kanjiPaths, stillNeeded = path.requiredCount - path.alreadyGuruCount)
         val decidingRadicals = decidingKanji.filter { it.isLocked }.flatMap { row ->
             slowestPendingComponents(row, radicalPaths)
         }
@@ -65,6 +65,31 @@ object LevelUpPathCalculator {
             nextDecidingStep = nextStep(deciding, rows, pending)
         )
     }
+
+    /**
+     * Exactly the [stillNeeded] kanji the level-up waits on: the earliest to reach Guru.
+     *
+     * Not "every kanji at Guru by the level-up time". Kanji learned together reach Guru in the same
+     * hour, so the level-up hour is usually shared by more kanji than are needed, and counting them all
+     * asked the learner for reviews the level-up didn't depend on, along with the radicals gating the
+     * spare kanji. Among kanji tied on that hour, the ones that are cheapest to get there win:
+     * already unlocked (no radicals to wait on), then furthest along, then by id so the choice is
+     * stable from one computation to the next.
+     */
+    private fun decidingKanji(
+        kanji: List<LevelUpPathRow>,
+        kanjiPaths: Map<Long, ItemPath>,
+        stillNeeded: Int
+    ): List<LevelUpPathRow> = kanji
+        .mapNotNull { row -> kanjiPaths[row.subjectId]?.guruAt?.let { row to it } }
+        .sortedWith(
+            compareBy<Pair<LevelUpPathRow, Instant>> { (_, guruAt) -> guruAt }
+                .thenBy { (row, _) -> row.isLocked }
+                .thenByDescending { (row, _) -> row.srsStage }
+                .thenBy { (row, _) -> row.subjectId }
+        )
+        .take(stillNeeded)
+        .map { (row, _) -> row }
 
     /** The not-yet-Guru radicals that set a locked kanji's unlock time: those reaching Guru last. */
     private fun slowestPendingComponents(row: LevelUpPathRow, radicalPaths: Map<Long, ItemPath>): List<Long> {

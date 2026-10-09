@@ -8,6 +8,7 @@ import com.crazyfluff.shellfstudy.shared.network.SrsStageData
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 class LevelUpPathCalculatorTest {
@@ -213,6 +214,35 @@ class LevelUpPathCalculatorTest {
         // 11 kanji → 10 needed; the 10th earliest is at 09:00, shared with the 9th.
         assertEquals(Instant.parse("2026-10-05T09:00:00Z"), path.levelUpAt)
         assertEquals(rows.take(10).map { it.subjectId }.toSet(), path.decidingSubjectIds)
+    }
+
+    @Test
+    fun kanjiTiedOnTheLevelUpHourCountOnlyAsManyAsTheLevelUpNeeds() {
+        // 11 kanji → 10 needed. Two reach Guru early and nine share 09:00, so 8 of those nine are
+        // enough: counting all nine asked for a review the level-up didn't depend on.
+        val early = listOf(1, 2).map { hour ->
+            kanji(srsStage = 4, availableAt = "2026-10-05T0$hour:00:00.000000Z")
+        }
+        val tied = List(9) { kanji(srsStage = 4, availableAt = "2026-10-05T09:00:00.000000Z") }
+        val path = LevelUpPathCalculator.calculate(early + tied, systems, now)
+
+        assertEquals(Instant.parse("2026-10-05T09:00:00Z"), path.levelUpAt)
+        assertEquals(10, path.decidingSubjectIds.size)
+        assertTrue(path.decidingSubjectIds.containsAll(early.map { it.subjectId }))
+    }
+
+    @Test
+    fun aTieIsSettledInFavourOfKanjiThatNeedNoRadicalsFirst() {
+        // Both kanji reach Guru at the same time, but only one is needed: the unlocked one, not the
+        // locked one whose radical would then count as deciding too.
+        val radicalGate = radical(id = 100, srsStage = 5)
+        val locked = kanji(unlockedAt = null, components = listOf(100))
+        val unlocked = kanji(srsStage = 0)
+        val alreadyGuru = List(8) { kanji(srsStage = 5) }
+
+        val path = calculate(locked, unlocked, radicalGate, *alreadyGuru.toTypedArray())
+
+        assertEquals(setOf(unlocked.subjectId), path.decidingSubjectIds)
     }
 
     @Test

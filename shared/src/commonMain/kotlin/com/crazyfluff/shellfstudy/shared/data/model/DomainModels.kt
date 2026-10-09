@@ -55,9 +55,9 @@ data class LevelUpPath(
     val computedAt: Instant,
     /** Every not-yet-Guru radical and kanji at the level with a known path, by subject id. */
     val guruAtBySubject: Map<Long, Instant> = emptyMap(),
-    /** The items that set [levelUpAt]: every kanji reaching Guru by then, plus the slowest radical
-     *  gating each of those still locked. Holding any of them up moves the date; the rest are spare.
-     *  Empty when [levelUpAt] is null. */
+    /** The items that set [levelUpAt]: the kanji the level-up still needs (just that many, even when
+     *  more reach Guru in the same hour), plus the slowest radical gating each of those still locked.
+     *  Holding any of them up moves the date; the rest are spare. Empty when [levelUpAt] is null. */
     val decidingSubjectIds: Set<Long> = emptySet(),
     /** The soonest lesson or review session among [decidingSubjectIds]. */
     val nextDecidingStep: LevelUpStep? = null
