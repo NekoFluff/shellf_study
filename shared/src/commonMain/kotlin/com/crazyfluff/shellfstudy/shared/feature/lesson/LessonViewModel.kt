@@ -922,6 +922,7 @@ class LessonViewModel(
         isCorrect: Boolean,
         candidates: List<String>,
         wasCloseMatch: Boolean,
+        matchedAnswer: String?,
         isGiveUp: Boolean
     ) {
         val questionElapsedMs = questionTiming.freeze()
@@ -958,7 +959,7 @@ class LessonViewModel(
         val revealedNow = isCorrect || isGiveUp || !requiresTapToRevealAnswer(settings, type)
 
         val answerGrade = QuizGrade.of(
-            isCorrect, candidates, wasCloseMatch, answerRevealed = revealedNow, rankChange = newRankChange
+            isCorrect, candidates, wasCloseMatch, matchedAnswer, answerRevealed = revealedNow, rankChange = newRankChange
         )
         updateQuizPhase { phase ->
             phase.copy(

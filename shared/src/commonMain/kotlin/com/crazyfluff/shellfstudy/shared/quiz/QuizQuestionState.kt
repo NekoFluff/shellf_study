@@ -66,15 +66,23 @@ data class QuizGrade(
     val answerHint: AnswerReadingHint? = null
 ) {
     companion object {
-        /** The grade for an answer judged against [candidates], the answers it could have been. */
+        /** The grade for an answer judged against [candidates], the answers it could have been, and
+         *  taken as [matchedAnswer] when correct. */
         fun of(
             isCorrect: Boolean,
             candidates: List<String>,
             wasCloseMatch: Boolean,
+            matchedAnswer: String?,
             answerRevealed: Boolean,
             rankChange: RankChange?
         ): QuizGrade = QuizGrade(
-            feedback = AnswerFeedback(isCorrect, candidates.joinToString(", "), wasCloseMatch, candidates.size),
+            feedback = AnswerFeedback(
+                isCorrect = isCorrect,
+                correctAnswer = candidates.joinToString(", "),
+                wasCloseMatch = wasCloseMatch,
+                matchedAnswer = matchedAnswer,
+                alsoAccepted = if (isCorrect) candidates.filterNot { it == matchedAnswer }.joinToString(", ") else ""
+            ),
             answerRevealed = answerRevealed,
             rankChange = rankChange
         )

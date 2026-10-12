@@ -283,6 +283,7 @@ class AssignmentRepository(
                 meanings = subject.acceptedMeanings(),
                 readings = subject.acceptedGradableReadings(),
                 auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
+                blacklistedMeanings = subject.blacklistAuxiliaryMeanings(),
                 pronunciationAudios = subject.toPronunciationAudios(),
                 srsSystemId = subject.srsSystemId
             )
@@ -333,6 +334,7 @@ class AssignmentRepository(
                 meaningMnemonic = subject.meaningMnemonic,
                 readingMnemonic = subject.readingMnemonic,
                 auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
+                blacklistedMeanings = subject.blacklistAuxiliaryMeanings(),
                 meaningHint = subject.meaningHint,
                 readingHint = subject.readingHint,
                 onyomiReadings = subject.readings.filter { it.type == "onyomi" }.map { it.reading },
@@ -383,6 +385,11 @@ private fun SubjectEntity.acceptedGradableReadings(): List<String> =
  *  decoys never meant to be treated as correct. */
 private fun SubjectEntity.whitelistAuxiliaryMeanings(): List<String> =
     auxiliaryMeanings.filter { it.type == "whitelist" }.map { it.meaning }
+
+/** WaniKani's blacklisted alternate meanings — decoys that grading refuses even as a close-enough
+ *  typo of a real meaning (see CloseEnoughMatcher.match's `rejected`). */
+private fun SubjectEntity.blacklistAuxiliaryMeanings(): List<String> =
+    auxiliaryMeanings.filter { it.type == "blacklist" }.map { it.meaning }
 
 /** Derives availableAt/passedAt/burnedAt from a target SRS stage — shared by every "patch this
  *  assignment to stage X" call site (optimistic review grade, optimistic lesson start, and

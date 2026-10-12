@@ -434,6 +434,15 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.testTag(testTags.feedbackText)
             )
+            feedbackCloseToText(feedback)?.let { closeTo ->
+                Text(
+                    text = closeTo,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             feedbackDetailPrefix(feedback)?.let { prefix ->
                 if (grade.answerRevealed) {
                     // Capped at a fixed height + internally scrollable rather than left unbounded:
@@ -441,7 +450,7 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
                     // non-scrolling Column's bounds and push the Continue button down underneath
                     // the swipe-up handle's reserved space below, silently stealing its taps.
                     ExpandableAnswerListText(
-                        joined = feedback.correctAnswer,
+                        joined = feedbackDetailAnswers(feedback),
                         resetKey = feedback,
                         prefix = prefix,
                         expandedMaxHeight = 96.dp,
@@ -454,7 +463,7 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizAnswerArea(
                     // onReveal instead of a local isRevealed flag — Continue's own lock depends on the
                     // ViewModel's answerRevealed, not just what's on screen here.
                     Text(
-                        text = "$prefix ${formatAnswerList(feedback.correctAnswer, expanded = false).text}",
+                        text = "$prefix ${formatAnswerList(feedbackDetailAnswers(feedback), expanded = false).text}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Transparent,
                         maxLines = 1,

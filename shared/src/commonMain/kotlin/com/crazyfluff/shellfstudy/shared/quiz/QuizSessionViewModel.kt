@@ -102,6 +102,7 @@ abstract class QuizSessionViewModel<
         isCorrect: Boolean,
         candidates: List<String>,
         wasCloseMatch: Boolean,
+        matchedAnswer: String?,
         isGiveUp: Boolean
     )
 
@@ -129,7 +130,8 @@ abstract class QuizSessionViewModel<
             val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
             val outcome = evaluateAnswer(
                 question.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
-                closeEnoughEnabled = latestSettings.closeEnoughAnswersEnabled
+                closeEnoughEnabled = latestSettings.closeEnoughAnswersEnabled,
+                blacklistedMeanings = item.blacklistedMeanings
             )
             when (outcome) {
                 AnswerOutcome.TypeMismatch ->
@@ -137,7 +139,7 @@ abstract class QuizSessionViewModel<
                 is AnswerOutcome.Graded ->
                     gradeAnswer(
                         item, type, outcome.isCorrect, candidates,
-                        wasCloseMatch = outcome.wasCloseMatch, isGiveUp = false
+                        wasCloseMatch = outcome.wasCloseMatch, matchedAnswer = outcome.matchedAnswer, isGiveUp = false
                     )
             }
         }
@@ -152,7 +154,7 @@ abstract class QuizSessionViewModel<
         val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
 
         gradingGuard.launchIfIdle {
-            gradeAnswer(item, type, isCorrect = false, candidates, wasCloseMatch = false, isGiveUp = true)
+            gradeAnswer(item, type, isCorrect = false, candidates, wasCloseMatch = false, matchedAnswer = null, isGiveUp = true)
         }
     }
 

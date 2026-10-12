@@ -124,6 +124,10 @@ interface QuizDisplayItem {
      *  question's acceptable answers from [meanings] + this + [readings]. */
     val auxiliaryMeanings: List<String>
 
+    /** WaniKani's blacklisted meanings — decoys that look like the answer but aren't, which grading
+     *  must refuse even as a close-enough typo. Never shown, only used to grade. */
+    val blacklistedMeanings: List<String>
+
     /** The subject's readings; empty for radicals, which are only ever asked for meaning. */
     val readings: List<String>
 
@@ -144,6 +148,7 @@ data class ReviewItem(
     /** WaniKani's own official alternate meanings (e.g. "1" alongside "one") — distinct from the
      *  primary [meanings], but just as acceptable a grading answer. */
     override val auxiliaryMeanings: List<String> = emptyList(),
+    override val blacklistedMeanings: List<String> = emptyList(),
     val pronunciationAudios: List<PronunciationAudio> = emptyList(),
     /** Carried along so a review's rank change can be computed synchronously against
      *  AssignmentRepository's in-memory SRS-system cache, with no DB access needed on the
@@ -192,6 +197,7 @@ data class LessonItem(
     val meaningMnemonic: String?,
     val readingMnemonic: String?,
     override val auxiliaryMeanings: List<String> = emptyList(),
+    override val blacklistedMeanings: List<String> = emptyList(),
     val meaningHint: String? = null,
     val readingHint: String? = null,
     val onyomiReadings: List<String> = emptyList(),

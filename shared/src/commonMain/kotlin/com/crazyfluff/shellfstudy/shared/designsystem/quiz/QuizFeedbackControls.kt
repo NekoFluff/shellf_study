@@ -129,7 +129,16 @@ fun GatedContinueButton(
  *  the swipe-up handle below it) down. Null means nothing to show below the headline. */
 fun feedbackDetailPrefix(feedback: AnswerFeedback): String? = when {
     !feedback.isCorrect -> "Answer:"
-    feedback.wasCloseMatch -> "Close to:"
-    feedback.answerCount > 1 -> "Also accepted:"
+    feedback.alsoAccepted.isNotBlank() -> "Also accepted:"
     else -> null
 }
+
+/** The answers listed after [feedbackDetailPrefix]: all of them for a wrong answer, and for a
+ *  correct one everything except the answer the input was taken as. */
+fun feedbackDetailAnswers(feedback: AnswerFeedback): String =
+    if (feedback.isCorrect) feedback.alsoAccepted else feedback.correctAnswer
+
+/** "Close to: <answer>", the line above "Also accepted:" naming what a close match was forgiven
+ *  against. Null for anything but a close match. */
+fun feedbackCloseToText(feedback: AnswerFeedback): String? =
+    feedback.matchedAnswer?.takeIf { feedback.wasCloseMatch }?.let { "Close to: $it" }

@@ -410,6 +410,7 @@ class ReviewViewModel(
         isCorrect: Boolean,
         candidates: List<String>,
         wasCloseMatch: Boolean,
+        matchedAnswer: String?,
         isGiveUp: Boolean
     ) {
         // Whether this grade is visible right away, or gated behind an explicit revealAnswer() tap —
@@ -446,7 +447,7 @@ class ReviewViewModel(
         val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
 
         val answerGrade = QuizGrade.of(
-            isCorrect, candidates, wasCloseMatch, answerRevealed = revealedNow, rankChange = newRankChange
+            isCorrect, candidates, wasCloseMatch, matchedAnswer, answerRevealed = revealedNow, rankChange = newRankChange
         )
         updateActive { active ->
             active.copy(

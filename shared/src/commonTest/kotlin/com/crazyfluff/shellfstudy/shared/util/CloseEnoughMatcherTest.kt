@@ -94,4 +94,64 @@ class CloseEnoughMatcherTest {
         assertTrue(result.isMatch)
         assertTrue(result.isExact)
     }
+
+    @Test
+    fun `punctuation and hyphens are cleaned up rather than spent as typos`() {
+        assertTrue(CloseEnoughMatcher.match("oclock", listOf("o'clock")).isExact)
+        assertTrue(CloseEnoughMatcher.match("well known", listOf("well-known")).isExact)
+        assertTrue(CloseEnoughMatcher.match("10th.", listOf("10th")).isExact)
+    }
+
+    @Test
+    fun `keyboard variants of quotes dashes and digits match the plain ones exactly`() {
+        assertTrue(CloseEnoughMatcher.match("o\u2019clock", listOf("o'clock")).isExact)
+        assertTrue(CloseEnoughMatcher.match("well\u2013known", listOf("well-known")).isExact)
+        assertTrue(CloseEnoughMatcher.match("\uFF14 days", listOf("4 days")).isExact)
+    }
+
+    @Test
+    fun `a different number is never a typo`() {
+        // "5 days" (length 6) allows 2 edits, and "4 days" is only 1 away.
+        assertFalse(CloseEnoughMatcher.match("4 days", listOf("5 days")).isMatch)
+    }
+
+    @Test
+    fun `a typo around the right number is still forgiven`() {
+        val result = CloseEnoughMatcher.match("10 dyas", listOf("10 days"))
+        assertTrue(result.isMatch)
+        assertFalse(result.isExact)
+    }
+
+    @Test
+    fun `a digit answer never fuzzy-matches a spelled-out candidate`() {
+        assertFalse(CloseEnoughMatcher.match("4", listOf("four")).isMatch)
+    }
+
+    @Test
+    fun `an exact rejected answer never matches even within typo distance of an accepted one`() {
+        // "ascend" (length 6) allows 2 edits, and "descend" is exactly 2 away.
+        assertFalse(CloseEnoughMatcher.match("descend", listOf("ascend"), rejected = listOf("descend")).isMatch)
+    }
+
+    @Test
+    fun `a typo closer to a rejected answer than to an accepted one is refused`() {
+        assertFalse(CloseEnoughMatcher.match("decsend", listOf("ascend"), rejected = listOf("descend")).isMatch)
+    }
+
+    @Test
+    fun `a typo as close to a rejected answer as to an accepted one is refused`() {
+        assertFalse(CloseEnoughMatcher.match("cars", listOf("cart"), rejected = listOf("card")).isMatch)
+    }
+
+    @Test
+    fun `a typo closer to the accepted answer is forgiven despite a rejected one`() {
+        val result = CloseEnoughMatcher.match("gudie", listOf("guide"), rejected = listOf("glide"))
+        assertTrue(result.isMatch)
+        assertEquals("guide", result.matchedCandidate)
+    }
+
+    @Test
+    fun `an exact accepted answer wins even if it is also rejected`() {
+        assertTrue(CloseEnoughMatcher.match("water", listOf("water"), rejected = listOf("water")).isExact)
+    }
 }

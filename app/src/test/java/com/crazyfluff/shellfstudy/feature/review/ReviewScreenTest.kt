@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -399,14 +400,52 @@ class ReviewScreenTest {
     }
 
     @Test
+    fun closeMatch_showsCloseToAndTheOtherAcceptedAnswers() {
+        setScreen(
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(
+                    isCorrect = true,
+                    correctAnswer = "Mouth, Opening",
+                    wasCloseMatch = true,
+                    matchedAnswer = "Mouth",
+                    alsoAccepted = "Opening"
+                )
+            )
+        )
+
+        composeTestRule.onNodeWithText("Close to: Mouth").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Also accepted: Opening").assertIsDisplayed()
+    }
+
+    @Test
+    fun exactMatch_alsoAcceptedLeavesOutTheMatchedAnswer() {
+        setScreen(
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(
+                    isCorrect = true,
+                    correctAnswer = "Mouth, Opening",
+                    matchedAnswer = "Mouth",
+                    alsoAccepted = "Opening"
+                )
+            )
+        )
+
+        composeTestRule.onNodeWithText("Also accepted: Opening").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Close to:", substring = true).assertCountEquals(0)
+    }
+
+    @Test
     fun answerDetailText_overAnswerCountCap_tapExpandsThenCollapses() {
         setScreen(
             activeState(
                 totalCount = 1, remainingCount = 1,
                 feedback = AnswerFeedback(
                     isCorrect = true,
-                    correctAnswer = "A, B, C, D, E",
-                    answerCount = 5
+                    correctAnswer = "Z, A, B, C, D, E",
+                    matchedAnswer = "Z",
+                    alsoAccepted = "A, B, C, D, E"
                 )
             )
         )

@@ -41,7 +41,10 @@ fun convertReadingSafely(rawAnswer: String): String =
 
 sealed interface AnswerOutcome {
     data object TypeMismatch : AnswerOutcome
-    data class Graded(val isCorrect: Boolean, val wasCloseMatch: Boolean) : AnswerOutcome
+
+    /** [matchedAnswer] is the accepted answer a correct input was taken as — the one a close match
+     *  was forgiven against, or the one an exact answer equals. Null for a wrong answer. */
+    data class Graded(val isCorrect: Boolean, val wasCloseMatch: Boolean, val matchedAnswer: String? = null) : AnswerOutcome
 }
 
 fun evaluateAnswer(
@@ -50,27 +53,33 @@ fun evaluateAnswer(
     meanings: List<String>,
     auxiliaryMeanings: List<String>,
     readings: List<String>,
-    closeEnoughEnabled: Boolean = true
+    closeEnoughEnabled: Boolean = true,
+    blacklistedMeanings: List<String> = emptyList()
 ): AnswerOutcome {
     val candidates = candidatesFor(meanings, auxiliaryMeanings, readings, type)
     return if (type == QuestionType.MEANING) {
-        val match = CloseEnoughMatcher.match(rawInput, candidates, allowCloseEnough = closeEnoughEnabled)
+        val match = CloseEnoughMatcher.match(
+            rawInput, candidates, rejected = blacklistedMeanings, allowCloseEnough = closeEnoughEnabled
+        )
         val readingCandidates = candidatesFor(meanings, auxiliaryMeanings, readings, QuestionType.READING)
         val looksLikeReading = rawInput.containsKana() ||
             CloseEnoughMatcher.match(convertReadingSafely(rawInput.trim()), readingCandidates).isMatch
         if (!match.isMatch && looksLikeReading) {
             AnswerOutcome.TypeMismatch
         } else {
-            AnswerOutcome.Graded(match.isMatch, wasCloseMatch = match.isMatch && !match.isExact)
+            AnswerOutcome.Graded(
+                match.isMatch, wasCloseMatch = match.isMatch && !match.isExact, matchedAnswer = match.matchedCandidate
+            )
         }
     } else {
         val normalizedAnswer = convertReadingSafely(rawInput.trim())
-        val isCorrect = candidates.any { it.trim().equals(normalizedAnswer, ignoreCase = true) }
+        val matchedReading = candidates.firstOrNull { it.trim().equals(normalizedAnswer, ignoreCase = true) }
+        val isCorrect = matchedReading != null
         val meaningCandidates = candidatesFor(meanings, auxiliaryMeanings, readings, QuestionType.MEANING)
         if (!isCorrect && CloseEnoughMatcher.match(rawInput, meaningCandidates).isMatch) {
             AnswerOutcome.TypeMismatch
         } else {
-            AnswerOutcome.Graded(isCorrect, wasCloseMatch = false)
+            AnswerOutcome.Graded(isCorrect, wasCloseMatch = false, matchedAnswer = matchedReading)
         }
     }
 }

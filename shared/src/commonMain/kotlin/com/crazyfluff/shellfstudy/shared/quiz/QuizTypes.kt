@@ -39,9 +39,13 @@ fun <T> PersistedQuestion.toPendingQuestionOrNull(itemsById: Map<Long, T>): Pend
     return PendingQuestion(item, type)
 }
 
+/** [correctAnswer] is every answer the question accepts, shown for a wrong answer. A correct one
+ *  instead shows [matchedAnswer] (the accepted answer the input was taken as — named only for a
+ *  close match, as "Close to:") and [alsoAccepted], everything else it would have accepted. */
 data class AnswerFeedback(
     val isCorrect: Boolean,
     val correctAnswer: String,
     val wasCloseMatch: Boolean = false,
-    val answerCount: Int = 1
+    val matchedAnswer: String? = null,
+    val alsoAccepted: String = ""
 )
