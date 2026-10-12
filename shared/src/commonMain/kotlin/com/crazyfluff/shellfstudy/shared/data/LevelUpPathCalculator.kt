@@ -54,7 +54,11 @@ object LevelUpPathCalculator {
             guruAtBySubject = pending.mapNotNull { (id, p) -> p.guruAt?.let { id to it } }.toMap()
         )
         if (path.levelUpAt == null) return path
-        return path.copy(nextStep = nextStep(rows, pending, kanjiLeft = path.requiredCount - path.alreadyGuruCount))
+        val kanjiLeft = path.requiredCount - path.alreadyGuruCount
+        return path.copy(
+            nextStep = nextStep(rows, pending, kanjiLeft, includeLessons = true),
+            nextReviewStep = nextStep(rows, pending, kanjiLeft, includeLessons = false)
+        )
     }
 
     /**
@@ -69,10 +73,18 @@ object LevelUpPathCalculator {
      * The step's time is the earliest *due* time in the group, not the clamped "now": an overdue
      * session keeps the same [LevelUpStep.at] however often it's recomputed, which is what lets the
      * level-up reminder recognise a session it has already announced.
+     *
+     * Without [includeLessons], pending lessons are passed over and the step is the soonest review
+     * session — what the level-up reminder announces.
      */
-    private fun nextStep(rows: List<LevelUpPathRow>, pending: Map<Long, ItemPath>, kanjiLeft: Int): LevelUpStep? {
+    private fun nextStep(
+        rows: List<LevelUpPathRow>,
+        pending: Map<Long, ItemPath>,
+        kanjiLeft: Int,
+        includeLessons: Boolean
+    ): LevelUpStep? {
         val steps = rows.mapNotNull { row ->
-            val item = pending[row.subjectId]
+            val item = pending[row.subjectId]?.takeIf { includeLessons || !it.firstStepIsLesson }
             val doAt = item?.firstStepAt
             val dueAt = item?.dueAt
             if (doAt == null || dueAt == null) {

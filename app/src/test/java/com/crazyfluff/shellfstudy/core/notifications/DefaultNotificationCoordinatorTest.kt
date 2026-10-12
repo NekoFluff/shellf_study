@@ -348,6 +348,25 @@ class DefaultNotificationCoordinatorTest {
     }
 
     @Test
+    fun `level-up reminder never fires for pending lessons`() = runTest {
+        enableNotifications()
+        settingsRepository.setQuietHoursEnabled(false)
+        seedLevelUpKanji(availableAt = hourFromNow(-2))
+        // Turn the kanji back into a lesson waiting to be done.
+        assignmentDao.upsertAll(
+            listOf(
+                assignment(1, 50, srsStage = 0, unlockedAt = "2026-01-01T00:00:00Z").copy(subjectType = "kanji")
+            )
+        )
+
+        coordinator.rescheduleLevelUpReminder()
+        coordinator.evaluateLevelUpReminder()
+
+        assertThat(notificationPoster.posted).isEmpty()
+        assertThat(levelUpDeferrals()).isEmpty()
+    }
+
+    @Test
     fun `evaluateLevelUpReminder woken early moves the wakeup instead of posting`() = runTest {
         enableNotifications()
         settingsRepository.setQuietHoursEnabled(false)

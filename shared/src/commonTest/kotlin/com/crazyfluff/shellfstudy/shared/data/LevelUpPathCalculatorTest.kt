@@ -250,11 +250,37 @@ class LevelUpPathCalculatorTest {
     }
 
     @Test
+    fun nextReviewStepPassesOverPendingLessons() {
+        val path = calculate(
+            kanji(srsStage = 0),
+            radical(id = 100, srsStage = 0),
+            kanji(srsStage = 2, availableAt = "2026-10-04T15:00:00.000000Z")
+        )
+
+        assertEquals(
+            LevelUpStep(Instant.parse(UNLOCKED), kanjiLessons = 1, radicalLessons = 1, kanjiLeft = 2),
+            path.nextStep
+        )
+        assertEquals(
+            LevelUpStep(Instant.parse("2026-10-04T15:00:00Z"), kanjiReviews = 1, kanjiLeft = 2),
+            path.nextReviewStep
+        )
+    }
+
+    @Test
+    fun nextReviewStepIsNullWhenOnlyLessonsArePending() {
+        val path = calculate(kanji(srsStage = 0), kanji(srsStage = 0))
+
+        assertNull(path.nextReviewStep)
+    }
+
+    @Test
     fun readyLevelHasNoNextStep() {
         val rows = List(9) { kanji(srsStage = 5) } + kanji(srsStage = 1, availableAt = "2026-10-04T12:00:00.000000Z")
         val path = LevelUpPathCalculator.calculate(rows, systems, now)
 
         assertNull(path.nextStep)
+        assertNull(path.nextReviewStep)
     }
 
     private companion object {

@@ -57,7 +57,10 @@ data class LevelUpPath(
     val guruAtBySubject: Map<Long, Instant> = emptyMap(),
     /** The next lesson or review session for the level's radicals and kanji below Guru, and how many
      *  kanji are left. Null once the level is ready, or while its level-up time is unknown. */
-    val nextStep: LevelUpStep? = null
+    val nextStep: LevelUpStep? = null,
+    /** [nextStep] with pending lessons left out: the next review session only. The level-up
+     *  reminder announces this one, so it never fires for lessons. */
+    val nextReviewStep: LevelUpStep? = null
 ) {
     val requiredCount: Int get() = LevelUpProgress(alreadyGuruCount, kanjiTotal).requiredCount
 

@@ -91,7 +91,7 @@ class DefaultNotificationCoordinator(
 
     /**
      * Rides the deferred-notification path rather than the review check: it fires at a different
-     * time (the next session for the level's radicals and kanji, not the next batch of any
+     * time (the next review session for the level's radicals and kanji, not the next batch of any
      * reviews) and the review check's single unique wakeup can't hold both. There's no cancel for
      * a deferred category, so turning the setting off leaves any pending wakeup in place —
      * [evaluateLevelUpReminder] re-checks the setting when it fires and posts nothing.
@@ -131,11 +131,12 @@ class DefaultNotificationCoordinator(
         }
     }
 
-    /** The next session for the current level's radicals and kanji below Guru, or null when there's
-     *  no level yet, the level is ready, or nothing is known. */
+    /** The next review session for the current level's radicals and kanji below Guru — lessons
+     *  never get a reminder — or null when there's no level yet, the level is ready, or no review
+     *  is known. */
     private suspend fun currentLevelUpStep(): LevelUpStep? {
         val level = statsRepository.observeCurrentLevel().first() ?: return null
-        return assignmentStatsRepository.observeLevelUpPath(level).first().nextStep
+        return assignmentStatsRepository.observeLevelUpPath(level).first().nextReviewStep
     }
 
     override suspend fun evaluateReviewsAndBacklog() {
