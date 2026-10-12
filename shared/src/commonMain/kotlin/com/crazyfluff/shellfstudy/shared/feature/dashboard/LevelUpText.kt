@@ -17,14 +17,30 @@ private const val HOURS_PER_DAY = 24
 internal fun levelUpEtaCaption(levelUpAt: Instant, now: Instant, is24h: Boolean, zone: TimeZone): String =
     "Fastest level-up · ${dayAndHour(levelUpAt, now, is24h, zone)} (${relativeEta(levelUpAt, now)})"
 
-/**
- * "Next: now · 3 kanji reviews and 2 radical reviews · 12 kanji left before level up", or with a time
- * ("Next: Today 2:00 PM · …") for a session that isn't available yet.
- */
-internal fun nextStepCaption(step: LevelUpStep, now: Instant, is24h: Boolean, zone: TimeZone): String {
-    val whenLabel = if (step.at <= now) "now" else dayAndHour(step.at, now, is24h, zone)
-    return "Next: $whenLabel · ${step.readyPhrase} · ${step.kanjiLeftPhrase}"
+/** "12 kanji left to Guru". */
+internal fun kanjiLeftCaption(kanjiLeft: Int): String = "$kanjiLeft kanji left to Guru"
+
+/** "Lessons ready now: 2 kanji · 1 radical", or null when the step has no lessons. Lessons are always
+ *  ready now — an unlocked lesson can be done straight away. */
+internal fun lessonsCaption(step: LevelUpStep): String? =
+    countsPhrase(kanji = step.kanjiLessons, radicals = step.radicalLessons)?.let { "Lessons ready now: $it" }
+
+/** "Reviews ready now: 3 kanji · 2 radicals", or with a time ("Next reviews: Today 2:00 PM · 1 radical")
+ *  for a session that isn't available yet. Null when the step has no reviews. */
+internal fun reviewsCaption(step: LevelUpStep, now: Instant, is24h: Boolean, zone: TimeZone): String? {
+    val counts = countsPhrase(kanji = step.kanjiReviews, radicals = step.radicalReviews) ?: return null
+    return if (step.at <= now) {
+        "Reviews ready now: $counts"
+    } else {
+        "Next reviews: ${dayAndHour(step.at, now, is24h, zone)} · $counts"
+    }
 }
+
+/** "3 kanji · 2 radicals" — kanji first, empty parts left out; null when both are zero. */
+private fun countsPhrase(kanji: Int, radicals: Int): String? = listOfNotNull(
+    "$kanji kanji".takeIf { kanji > 0 },
+    "$radicals ${if (radicals == 1) "radical" else "radicals"}".takeIf { radicals > 0 }
+).joinToString(" · ").ifEmpty { null }
 
 /** "in 2d 6h", "in 5h", "in under 1h" — whole hours, rounded down. */
 internal fun relativeEta(target: Instant, now: Instant): String {

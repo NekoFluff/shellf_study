@@ -7,6 +7,7 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -45,26 +46,37 @@ class LevelUpTextTest {
     }
 
     @Test
-    fun nextStepCaptionNamesWhatIsReadyAndHowManyKanjiAreLeft() {
-        fun caption(step: LevelUpStep) = nextStepCaption(step, now, is24h = true, zone = utc)
+    fun kanjiLeftCaptionSaysHowManyKanjiTheLevelUpNeeds() {
+        assertEquals("12 kanji left to Guru", kanjiLeftCaption(12))
+    }
+
+    @Test
+    fun lessonsCaptionCountsOnlyLessons() {
+        assertEquals(
+            "Lessons ready now: 2 kanji · 1 radical",
+            lessonsCaption(LevelUpStep(now, kanjiLessons = 2, radicalLessons = 1, kanjiReviews = 3, kanjiLeft = 9))
+        )
+        assertEquals(
+            "Lessons ready now: 3 radicals",
+            lessonsCaption(LevelUpStep(now, radicalLessons = 3, kanjiLeft = 9))
+        )
+        assertNull(lessonsCaption(LevelUpStep(now, kanjiReviews = 3, kanjiLeft = 9)))
+    }
+
+    @Test
+    fun reviewsCaptionSaysNowOrWhenTheyComeDue() {
+        fun caption(step: LevelUpStep) = reviewsCaption(step, now, is24h = true, zone = utc)
         val later = Instant.parse("2026-10-04T14:00:00Z")
 
         assertEquals(
-            "Next: Today 14:00 · 4 radical reviews · 12 kanji left before level up",
+            "Next reviews: Today 14:00 · 4 radicals",
             caption(LevelUpStep(later, radicalReviews = 4, kanjiLeft = 12))
         )
         assertEquals(
-            "Next: now · 1 kanji lesson · 1 kanji left before level up",
-            caption(LevelUpStep(now, kanjiLessons = 1, kanjiLeft = 1))
+            "Reviews ready now: 3 kanji · 1 radical",
+            caption(LevelUpStep(now - 2.hours, kanjiReviews = 3, radicalReviews = 1, kanjiLessons = 2, kanjiLeft = 9))
         )
-        assertEquals(
-            "Next: now · 3 kanji reviews and 2 radical reviews · 9 kanji left before level up",
-            caption(LevelUpStep(now, kanjiReviews = 3, radicalReviews = 2, kanjiLeft = 9))
-        )
-        assertEquals(
-            "Next: now · 2 kanji lessons, 1 kanji review and 4 radical reviews · 9 kanji left before level up",
-            caption(LevelUpStep(now, kanjiReviews = 1, kanjiLessons = 2, radicalReviews = 4, kanjiLeft = 9))
-        )
+        assertNull(caption(LevelUpStep(now, kanjiLessons = 1, kanjiLeft = 1)))
     }
 
     private fun item(id: Long, passed: Boolean) = LevelItem(

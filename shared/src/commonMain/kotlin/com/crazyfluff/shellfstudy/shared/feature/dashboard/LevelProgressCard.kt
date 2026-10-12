@@ -75,7 +75,9 @@ object LevelProgressTestTags {
     const val LEVEL_UP_INDICATOR = "level_progress_level_up_indicator"
     const val LEVEL_UP_THRESHOLD_MARK = "level_progress_level_up_threshold_mark"
     const val LEVEL_UP_ETA = "level_progress_level_up_eta"
-    const val LEVEL_UP_NEXT_STEP = "level_progress_level_up_next_step"
+    const val LEVEL_UP_KANJI_LEFT = "level_progress_level_up_kanji_left"
+    const val LEVEL_UP_LESSONS = "level_progress_level_up_lessons"
+    const val LEVEL_UP_REVIEWS = "level_progress_level_up_reviews"
 }
 
 @Composable
@@ -274,8 +276,9 @@ private fun SubjectTypeProgressRow(
     }
 }
 
-/** "Fastest level-up · Wed 8:00 PM (in 3d 9h)" and "Next: Today 2:00 PM · 4 radical reviews" —
- *  below the bars, so they show while the card is collapsed. */
+/** "Fastest level-up · Wed 8:00 PM (in 3d 9h)", how many kanji are left, then the lessons and the
+ *  reviews that move it along, each on its own line — below the bars, so they show while the card is
+ *  collapsed. */
 @Composable
 private fun LevelUpEtaLines(path: LevelUpPath?, levelUpReady: Boolean) {
     // Nothing once the level is ready: "Ready to level up!" already says it.
@@ -289,14 +292,25 @@ private fun LevelUpEtaLines(path: LevelUpPath?, levelUpReady: Boolean) {
         color = srsStageColor(SrsStage.GURU_1),
         modifier = Modifier.testTag(LevelProgressTestTags.LEVEL_UP_ETA)
     )
-    path.nextStep?.let { step ->
-        Text(
-            text = nextStepCaption(step, path.computedAt, is24h, zone),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.testTag(LevelProgressTestTags.LEVEL_UP_NEXT_STEP)
-        )
-    }
+    Text(
+        text = kanjiLeftCaption(path.requiredCount - path.alreadyGuruCount),
+        style = MaterialTheme.typography.bodySmall,
+        color = srsStageColor(SrsStage.GURU_1),
+        modifier = Modifier.testTag(LevelProgressTestTags.LEVEL_UP_KANJI_LEFT)
+    )
+    path.nextStep?.let(::lessonsCaption)?.let { NextStepLine(it, LevelProgressTestTags.LEVEL_UP_LESSONS) }
+    path.nextReviewStep?.let { reviewsCaption(it, path.computedAt, is24h, zone) }
+        ?.let { NextStepLine(it, LevelProgressTestTags.LEVEL_UP_REVIEWS) }
+}
+
+@Composable
+private fun NextStepLine(text: String, testTag: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag(testTag)
+    )
 }
 
 /** One kanji/radical/vocab item. Filled (subject-color background, white content) once passed,

@@ -314,7 +314,8 @@ class LevelProgressCardTest {
         guruAtBySubject = (19..25).associate { index ->
             kanjiId(index) to pathComputedAt + ((26 - index) * 10).hours
         } + (radicalId(5) to pathComputedAt + 5.hours),
-        nextStep = LevelUpStep(pathComputedAt + 4.hours, radicalReviews = 1, kanjiLeft = 5)
+        nextStep = LevelUpStep(pathComputedAt - 1.hours, kanjiLessons = 2, kanjiLeft = 5),
+        nextReviewStep = LevelUpStep(pathComputedAt + 4.hours, radicalReviews = 1, kanjiLeft = 5)
     )
 
     private val progressWithUnpassedRadical = sampleProgress.copy(
@@ -344,8 +345,12 @@ class LevelProgressCardTest {
 
         composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_ETA).assertIsDisplayed()
         composeTestRule.onAllNodesWithText("(in 2d 2h)", substring = true).assertCountEquals(1)
-        composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_NEXT_STEP).assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("1 radical review", substring = true).assertCountEquals(1)
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_KANJI_LEFT).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("5 kanji left to Guru").assertCountEquals(1)
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_LESSONS).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Lessons ready now: 2 kanji").assertCountEquals(1)
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.LEVEL_UP_REVIEWS).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Next reviews: ", substring = true).assertCountEquals(1)
     }
 
     @Test
@@ -353,7 +358,9 @@ class LevelProgressCardTest {
         setCurrentLevelCard(path = samplePath.copy(alreadyGuruCount = 23), guruCount = 23)
 
         composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_ETA).assertCountEquals(0)
-        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_NEXT_STEP).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_KANJI_LEFT).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_LESSONS).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_REVIEWS).assertCountEquals(0)
     }
 
     @Test
