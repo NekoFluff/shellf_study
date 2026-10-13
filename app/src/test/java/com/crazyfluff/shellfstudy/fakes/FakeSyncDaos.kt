@@ -8,6 +8,8 @@ import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
+import com.crazyfluff.shellfstudy.shared.database.StudyMaterialDao
+import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
@@ -39,6 +41,28 @@ class FakeSrsSystemDao(private val writeLog: SyncWriteLog? = null) : SrsSystemDa
     fun seed(vararg entities: SrsSystemEntity) {
         systems.value = systems.value + entities.associateBy { it.id }
     }
+}
+
+class FakeStudyMaterialDao(private val writeLog: SyncWriteLog? = null) : StudyMaterialDao {
+    private val materials = MutableStateFlow<Map<Long, StudyMaterialEntity>>(emptyMap())
+
+    /** Mirrors the real table's unique subjectId index: a row for a subject replaces any other. */
+    override suspend fun upsertAll(materials: List<StudyMaterialEntity>) {
+        writeLog?.record("study_materials", materials.size)
+        val replacedSubjects = materials.map { it.subjectId }.toSet()
+        this.materials.value = this.materials.value.filterValues { it.subjectId !in replacedSubjects } +
+            materials.associateBy { it.id }
+    }
+
+    override suspend fun clearAll() {
+        materials.value = emptyMap()
+    }
+
+    override fun observeBySubjectIds(subjectIds: List<Long>): Flow<List<StudyMaterialEntity>> =
+        materials.map { map -> map.values.filter { it.subjectId in subjectIds } }
+
+    /** Test-only: every stored row. */
+    fun all(): List<StudyMaterialEntity> = materials.value.values.toList()
 }
 
 class FakeReviewStatisticDao(private val writeLog: SyncWriteLog? = null) : ReviewStatisticDao {

@@ -11,6 +11,7 @@ import com.crazyfluff.shellfstudy.fakes.FakeNotificationCoordinator
 import com.crazyfluff.shellfstudy.fakes.FakeOutboxDao
 import com.crazyfluff.shellfstudy.fakes.FakeOutboxSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
+import com.crazyfluff.shellfstudy.fakes.FakeStudyMaterialDao
 import com.crazyfluff.shellfstudy.fakes.FakeSrsSystemDao
 import com.crazyfluff.shellfstudy.fakes.FakeSubjectDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncScheduler
@@ -101,6 +102,7 @@ class LogoutCoordinatorTest {
         val accountDataCleaner = AccountDataCleaner(
             assignmentDao = assignmentDao,
             reviewStatisticDao = FakeReviewStatisticDao(),
+            studyMaterialDao = FakeStudyMaterialDao(),
             levelProgressionDao = FakeLevelProgressionDao(),
             syncStateDao = syncStateDao,
             outboxDao = outboxDao,

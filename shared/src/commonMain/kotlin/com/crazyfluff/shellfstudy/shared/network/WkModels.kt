@@ -151,6 +151,19 @@ data class SrsStageData(
     @SerialName("interval_unit") val intervalUnit: String? = null
 )
 
+/** One subject's user-authored study material. Only the synonyms are mirrored locally — see
+ *  StudyMaterialEntity — but the notes are modelled so the DTO matches the documented object. */
+@Serializable
+data class StudyMaterialData(
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("subject_id") val subjectId: Long,
+    @SerialName("subject_type") val subjectType: String,
+    @SerialName("meaning_note") val meaningNote: String? = null,
+    @SerialName("reading_note") val readingNote: String? = null,
+    @SerialName("meaning_synonyms") val meaningSynonyms: List<String> = emptyList(),
+    val hidden: Boolean = false
+)
+
 @Serializable
 data class ReviewStatisticData(
     @SerialName("created_at") val createdAt: String,

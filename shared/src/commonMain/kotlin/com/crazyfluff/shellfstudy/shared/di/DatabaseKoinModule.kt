@@ -47,6 +47,7 @@ fun Module.registerDatabases(
     single { get<AppDatabase>().reviewStatisticDao() }
     single { get<AppDatabase>().levelProgressionDao() }
     single { get<AppDatabase>().syncStateDao() }
+    single { get<AppDatabase>().studyMaterialDao() }
 
     // Not destructive — this is the only local record of study activity and can't be re-fetched
     // from the API (see StudyActivityDatabase's doc comment). Physical file name is unchanged from

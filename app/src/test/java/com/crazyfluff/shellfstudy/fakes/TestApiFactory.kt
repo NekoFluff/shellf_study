@@ -71,6 +71,7 @@ class TestRepositories(
     val outboxDao: FakeOutboxDao,
     val outboxSyncScheduler: FakeOutboxSyncScheduler,
     val reviewStatisticDao: FakeReviewStatisticDao,
+    val studyMaterialDao: FakeStudyMaterialDao,
     /** Exposed so a test can seed the *current level* — [StatsRepository] keeps this DAO private,
      *  and a review session's rank-up priority reads the level from it (see
      *  `ReviewPrioritizer.priorityIds`). */
@@ -113,13 +114,14 @@ fun buildTestRepositories(
     val outboxDao = FakeOutboxDao()
     val outboxSyncScheduler = FakeOutboxSyncScheduler()
     val reviewStatisticDao = FakeReviewStatisticDao(writeLog)
+    val studyMaterialDao = FakeStudyMaterialDao(writeLog)
     val levelProgressionDao = FakeLevelProgressionDao(writeLog)
 
     val pitchAccentRepository = PitchAccentRepository(FakePitchAccentBundledSource(pitchAccentEntries))
     val subjectRepository =
         SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository, defaultDispatcher)
     val assignmentRepository = AssignmentRepository(
-        api, assignmentDao, subjectDao, syncStateDao, srsSystemDao, defaultDispatcher,
+        api, assignmentDao, subjectDao, syncStateDao, srsSystemDao, studyMaterialDao, defaultDispatcher,
         pendingAssignmentIds = outboxDao::getPendingAssignmentIds
     )
     val statsRepository = StatsRepository(api, reviewStatisticDao, levelProgressionDao, studyActivityDao, syncStateDao, defaultDispatcher)
@@ -129,7 +131,7 @@ fun buildTestRepositories(
 
     return TestRepositories(
         api, subjectDao, assignmentDao, srsSystemDao, syncStateDao, studyActivityDao, outboxDao, outboxSyncScheduler,
-        reviewStatisticDao, levelProgressionDao, subjectRepository, assignmentRepository,
+        reviewStatisticDao, studyMaterialDao, levelProgressionDao, subjectRepository, assignmentRepository,
         AssignmentStatsRepository(assignmentDao, subjectDao, srsSystemDao, defaultDispatcher), pitchAccentRepository,
         statsRepository, waniKaniRepository, syncOrchestrator, syncTransactionRunner, writeLog
     )

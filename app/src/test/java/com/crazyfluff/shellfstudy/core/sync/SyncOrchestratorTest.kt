@@ -72,7 +72,9 @@ class SyncOrchestratorTest {
         val first = repositories.syncOrchestrator.syncQueue()
 
         assertThat(first).isEqualTo(ApiResult.Success(Unit))
-        assertThat(pathsRequested()).containsExactly("/spaced_repetition_systems", "/subjects", "/assignments")
+        assertThat(pathsRequested()).containsExactly(
+            "/spaced_repetition_systems", "/subjects", "/assignments", "/study_materials"
+        )
 
         // Straight after, every one of those is inside its freshness window.
         requestedPaths.clear()

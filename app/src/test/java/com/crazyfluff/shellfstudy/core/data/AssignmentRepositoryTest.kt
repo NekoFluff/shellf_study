@@ -11,6 +11,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
+import com.crazyfluff.shellfstudy.shared.network.AuxiliaryMeaningData
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioData
 import com.crazyfluff.shellfstudy.shared.network.PronunciationAudioMetadataData
@@ -260,7 +261,7 @@ class AssignmentRepositoryTest {
         val srsSystemDao = FakeSrsSystemDao()
         val repository = AssignmentRepository(
             repositories.api, repositories.assignmentDao, repositories.subjectDao,
-            repositories.syncStateDao, srsSystemDao
+            repositories.syncStateDao, srsSystemDao, repositories.studyMaterialDao
         )
         val item = ReviewItem(
             assignmentId = 101, subjectId = 1, subjectType = SubjectType.RADICAL, characters = "口",
@@ -755,6 +756,111 @@ class AssignmentRepositoryTest {
           "data": [${items.joinToString(",")}]
         }
     """.trimIndent()
+
+    // --- study materials (user synonyms) ---
+
+    private fun studyMaterialJson(id: Long, subjectId: Long, synonyms: List<String>) = """
+        {
+          "object": "collection",
+          "url": "https://api.wanikani.com/v2/study_materials",
+          "pages": { "per_page": 500, "next_url": null, "previous_url": null },
+          "total_count": 1,
+          "data_updated_at": "2026-01-01T00:00:00.000000Z",
+          "data": [{
+            "id": $id,
+            "object": "study_material",
+            "url": "https://api.wanikani.com/v2/study_materials/$id",
+            "data_updated_at": "2026-01-01T00:00:00.000000Z",
+            "data": {
+              "created_at": "2026-01-01T00:00:00.000000Z",
+              "subject_id": $subjectId,
+              "subject_type": "kanji",
+              "meaning_note": null,
+              "reading_note": "a note",
+              "meaning_synonyms": [${synonyms.joinToString(",") { "\"$it\"" }}],
+              "hidden": false
+            }
+          }]
+        }
+    """.trimIndent()
+
+    @Test
+    fun `synced study material synonyms land on review and lesson items as accepted meanings`() = runTest {
+        seedSubject(id = 440, characters = "水", meaning = "Water", reading = "みず")
+        seedSubject(id = 441, characters = "火", meaning = "Fire", reading = "ひ")
+        server.enqueue(
+            jsonResponse(
+                collectionJson(
+                    listOf(
+                        assignmentData(id = 999, subjectId = 440, srsStage = 3, availableAt = PAST, startedAt = PAST),
+                        assignmentData(id = 888, subjectId = 441, srsStage = 0, unlockedAt = PAST)
+                    )
+                )
+            )
+        )
+        server.enqueue(jsonResponse(studyMaterialJson(id = 7, subjectId = 440, synonyms = listOf("aqua", "H2O"))))
+        server.enqueue(jsonResponse(studyMaterialJson(id = 8, subjectId = 441, synonyms = listOf("blaze"))))
+
+        repository.syncAssignments(force = true)
+        assertThat(repository.syncStudyMaterials(force = true)).isInstanceOf(ApiResult.Success::class.java)
+        server.takeRequest()
+        assertThat(server.takeRequest().url.encodedPath).isEqualTo("/study_materials")
+        // A second pass is incremental: it sends the cursor the first one recorded.
+        assertThat(repository.syncStudyMaterials(force = true)).isInstanceOf(ApiResult.Success::class.java)
+        assertThat(server.takeRequest().url.queryParameter("updated_after")).isNotNull()
+
+        repository.observeReviewQueue().test {
+            val item = awaitItem().single()
+            assertThat(item.meanings).containsExactly("Water")
+            assertThat(item.auxiliaryMeanings).containsExactly("aqua", "H2O").inOrder()
+        }
+        repository.observeLessonQueue().test {
+            assertThat(awaitItem().single().auxiliaryMeanings).containsExactly("blaze")
+        }
+        assertThat(repository.getReviewItems(listOf(999L)).single().auxiliaryMeanings).containsExactly("aqua", "H2O")
+        assertThat(repository.getLessonItems(listOf(888L)).single().auxiliaryMeanings).containsExactly("blaze")
+    }
+
+    @Test
+    fun `a synonym edited on WaniKani reaches an already-observed queue`() = runTest {
+        seedSubject(id = 440, characters = "水", meaning = "Water", reading = "みず")
+        server.enqueue(jsonResponse(assignmentJson(id = 999, availableAt = PAST)))
+        server.enqueue(jsonResponse(studyMaterialJson(id = 7, subjectId = 440, synonyms = listOf("aqua"))))
+        server.enqueue(jsonResponse(studyMaterialJson(id = 7, subjectId = 440, synonyms = listOf("liquid"))))
+        repository.syncAssignments(force = true)
+
+        repository.observeReviewQueue().test {
+            assertThat(awaitItem().single().auxiliaryMeanings).isEmpty()
+
+            repository.syncStudyMaterials(force = true)
+            assertThat(awaitItem().single().auxiliaryMeanings).containsExactly("aqua")
+
+            repository.syncStudyMaterials(force = true)
+            assertThat(awaitItem().single().auxiliaryMeanings).containsExactly("liquid")
+        }
+    }
+
+    @Test
+    fun `a synonym repeating a whitelisted alternate meaning is listed once`() = runTest {
+        repositories.subjectDao.upsertAll(
+            listOf(
+                SubjectEntity(
+                    id = 440, subjectType = "kanji", level = 3, slug = "一", characters = "一",
+                    meanings = listOf(MeaningData(meaning = "One", primary = true)),
+                    readings = listOf(ReadingData(reading = "いち", primary = true)),
+                    auxiliaryMeanings = listOf(AuxiliaryMeaningData(meaning = "1", type = "whitelist")),
+                    documentUrl = null, searchTarget = "一 one いち"
+                )
+            )
+        )
+        server.enqueue(jsonResponse(assignmentJson(id = 999, availableAt = PAST)))
+        server.enqueue(jsonResponse(studyMaterialJson(id = 7, subjectId = 440, synonyms = listOf("1", "uno"))))
+        repository.syncAssignments(force = true)
+        repository.syncStudyMaterials(force = true)
+
+        val item = repository.getReviewItems(listOf(999L)).single()
+        assertThat(item.auxiliaryMeanings).containsExactly("1", "uno").inOrder()
+    }
 
     // --- subject-drop and passedAt/burnedAt tests ---
 

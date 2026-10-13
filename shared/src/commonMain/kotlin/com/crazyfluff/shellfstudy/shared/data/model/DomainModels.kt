@@ -119,7 +119,8 @@ interface QuizDisplayItem {
     val characterImageUrl: String?
     val meanings: List<String>
 
-    /** WaniKani's own alternate meanings — acceptable answers, distinct from [meanings]. Here rather
+    /** WaniKani's own alternate meanings plus the user's synonyms — acceptable answers, distinct
+     *  from [meanings]. Here rather
      *  than on the concrete items because grading needs them: the shared submit/reveal flow builds a
      *  question's acceptable answers from [meanings] + this + [readings]. */
     val auxiliaryMeanings: List<String>
@@ -145,8 +146,8 @@ data class ReviewItem(
     val srsStage: Int,
     override val meanings: List<String>,
     override val readings: List<String>,
-    /** WaniKani's own official alternate meanings (e.g. "1" alongside "one") — distinct from the
-     *  primary [meanings], but just as acceptable a grading answer. */
+    /** WaniKani's own official alternate meanings (e.g. "1" alongside "one"), then the user's own
+     *  synonyms — distinct from the primary [meanings], but just as acceptable a grading answer. */
     override val auxiliaryMeanings: List<String> = emptyList(),
     override val blacklistedMeanings: List<String> = emptyList(),
     val pronunciationAudios: List<PronunciationAudio> = emptyList(),

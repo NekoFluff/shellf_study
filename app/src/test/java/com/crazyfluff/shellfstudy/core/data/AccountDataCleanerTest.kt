@@ -11,6 +11,7 @@ import com.crazyfluff.shellfstudy.fakes.FakeOutboxDao
 import com.crazyfluff.shellfstudy.fakes.FakeOutboxSyncScheduler
 import com.crazyfluff.shellfstudy.fakes.FakeReviewStatisticDao
 import com.crazyfluff.shellfstudy.fakes.FakeStudyActivityDao
+import com.crazyfluff.shellfstudy.fakes.FakeStudyMaterialDao
 import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
 import com.crazyfluff.shellfstudy.fakes.FakeSyncStateDao
 import com.crazyfluff.shellfstudy.shared.data.AccountCleanupOutcome
@@ -30,6 +31,7 @@ import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionEntity
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticEntity
+import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingLessonStartEntity
 import com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity
@@ -63,6 +65,7 @@ class AccountDataCleanerTest {
     private lateinit var json: Json
     private lateinit var assignmentDao: FakeAssignmentDao
     private lateinit var reviewStatisticDao: FakeReviewStatisticDao
+    private lateinit var studyMaterialDao: FakeStudyMaterialDao
     private lateinit var levelProgressionDao: FakeLevelProgressionDao
     private lateinit var syncStateDao: FakeSyncStateDao
     private lateinit var outboxDao: FakeOutboxDao
@@ -83,6 +86,7 @@ class AccountDataCleanerTest {
         json = Json { ignoreUnknownKeys = true }
         assignmentDao = FakeAssignmentDao()
         reviewStatisticDao = FakeReviewStatisticDao()
+        studyMaterialDao = FakeStudyMaterialDao()
         levelProgressionDao = FakeLevelProgressionDao()
         syncStateDao = FakeSyncStateDao()
         outboxDao = FakeOutboxDao()
@@ -100,6 +104,7 @@ class AccountDataCleanerTest {
     private fun buildCleaner(assignmentDao: AssignmentDao = this.assignmentDao) = AccountDataCleaner(
         assignmentDao = assignmentDao,
         reviewStatisticDao = reviewStatisticDao,
+        studyMaterialDao = studyMaterialDao,
         levelProgressionDao = levelProgressionDao,
         syncStateDao = syncStateDao,
         outboxDao = outboxDao,
@@ -123,6 +128,9 @@ class AccountDataCleanerTest {
                     percentageCorrect = 100, hidden = false
                 )
             )
+        )
+        studyMaterialDao.upsertAll(
+            listOf(StudyMaterialEntity(id = 1, subjectId = 1, meaningSynonyms = listOf("gob"), hidden = false))
         )
         levelProgressionDao.upsertAll(
             listOf(
@@ -168,6 +176,7 @@ class AccountDataCleanerTest {
 
         assertThat(assignmentDao.getById(1)).isNull()
         assertThat(reviewStatisticDao.all()).isEmpty()
+        assertThat(studyMaterialDao.all()).isEmpty()
         levelProgressionDao.observeAll().test { assertThat(awaitItem()).isEmpty() }
         assertThat(syncStateDao.get("assignments")).isNull()
         assertThat(outboxDao.allReviewSubmissions()).isEmpty()

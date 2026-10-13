@@ -117,6 +117,7 @@ val repositoryModule = module {
             subjectDao = get(),
             syncStateDao = get(),
             srsSystemDao = get(),
+            studyMaterialDao = get(),
             pendingAssignmentIds = { get<OutboxDao>().getPendingAssignmentIds() }
         )
     }
@@ -151,6 +152,7 @@ val repositoryModule = module {
         AccountDataCleaner(
             assignmentDao = get(),
             reviewStatisticDao = get(),
+            studyMaterialDao = get(),
             levelProgressionDao = get(),
             syncStateDao = get(),
             outboxDao = get(),

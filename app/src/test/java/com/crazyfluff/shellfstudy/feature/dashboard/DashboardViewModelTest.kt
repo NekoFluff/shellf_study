@@ -161,6 +161,7 @@ class DashboardViewModelTest {
         val accountDataCleaner = AccountDataCleaner(
             assignmentDao = repositories.assignmentDao,
             reviewStatisticDao = repositories.reviewStatisticDao,
+            studyMaterialDao = repositories.studyMaterialDao,
             levelProgressionDao = FakeLevelProgressionDao(),
             syncStateDao = repositories.syncStateDao,
             outboxDao = repositories.outboxDao,

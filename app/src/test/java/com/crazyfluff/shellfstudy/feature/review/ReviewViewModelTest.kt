@@ -367,7 +367,8 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
         assertThat(repositories.outboxSyncScheduler.requestCount).isEqualTo(1)
         // No POST /reviews should ever have been made from the ViewModel path — the network call is
         // now exclusively the background sync worker's job.
-        assertThat(server.requestCount).isAtMost(3) // just the queue sync: SRS systems, subjects, assignments
+        // Just the queue sync: SRS systems, subjects, assignments, study materials.
+        assertThat(server.requestCount).isAtMost(4)
     }
 
     @Test

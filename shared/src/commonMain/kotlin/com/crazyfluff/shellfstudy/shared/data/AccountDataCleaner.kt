@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.shared.data
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressionDao
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
+import com.crazyfluff.shellfstudy.shared.database.StudyMaterialDao
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
 import com.crazyfluff.shellfstudy.shared.database.outbox.OutboxDao
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
@@ -17,6 +18,7 @@ import kotlinx.coroutines.CancellationException
 enum class AccountStore {
     Assignments,
     ReviewStatistics,
+    StudyMaterials,
     LevelProgressions,
     SyncState,
     PendingReviews,
@@ -58,6 +60,7 @@ sealed interface AccountCleanupOutcome {
 class AccountDataCleaner(
     private val assignmentDao: AssignmentDao,
     private val reviewStatisticDao: ReviewStatisticDao,
+    private val studyMaterialDao: StudyMaterialDao,
     private val levelProgressionDao: LevelProgressionDao,
     private val syncStateDao: SyncStateDao,
     private val outboxDao: OutboxDao,
@@ -74,6 +77,7 @@ class AccountDataCleaner(
 
         wipe(AccountStore.Assignments, failures) { assignmentDao.clearAll() }
         wipe(AccountStore.ReviewStatistics, failures) { reviewStatisticDao.clearAll() }
+        wipe(AccountStore.StudyMaterials, failures) { studyMaterialDao.clearAll() }
         wipe(AccountStore.LevelProgressions, failures) { levelProgressionDao.clearAll() }
         wipe(AccountStore.SyncState, failures) { syncStateDao.clearAll() }
         wipe(AccountStore.PendingReviews, failures) { outboxDao.clearReviewSubmissions() }

@@ -58,6 +58,27 @@ class AppDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `migration 11 to 12 creates the study materials table with its unique subject index`() {
+        withDatabase { connection ->
+            migrationFrom(11).migrate(connection)
+            migrationFrom(11).migrate(connection)
+
+            assertThat(connection.indexNames("study_materials")).contains("index_study_materials_subjectId")
+            // A second row for the same subject replaces the first, as the unique index promises.
+            val columns = "study_materials (id, subjectId, meaningSynonyms, hidden)"
+            connection.execSQL("INSERT INTO $columns VALUES (1, 440, '[\"aqua\"]', 0)")
+            connection.execSQL("INSERT OR REPLACE INTO $columns VALUES (2, 440, '[]', 0)")
+            val count = connection.prepare("SELECT COUNT(*) FROM study_materials")
+            try {
+                count.step()
+                assertThat(count.getLong(0)).isEqualTo(1)
+            } finally {
+                count.close()
+            }
+        }
+    }
+
     /**
      * Room refuses to open a database whose version no migration covers, and the destructive fallback
      * then wipes it — so a gap in this list is a silent full re-download for whoever is on the older

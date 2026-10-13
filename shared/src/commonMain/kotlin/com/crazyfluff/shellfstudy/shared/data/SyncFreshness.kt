@@ -46,6 +46,7 @@ object SyncResources {
     const val SRS_SYSTEMS = "srs_systems"
     const val REVIEW_STATISTICS = "review_statistics"
     const val LEVEL_PROGRESSIONS = "level_progressions"
+    const val STUDY_MATERIALS = "study_materials"
 }
 
 /**

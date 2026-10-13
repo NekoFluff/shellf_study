@@ -35,6 +35,22 @@ private val MIGRATION_10_11 = object : Migration(10, 11) {
 }
 
 /**
+ * Adds the `study_materials` table, the user's own meaning synonyms. A new, empty table: the next
+ * sync finds no cursor for it and fetches every study material in full.
+ */
+private val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `study_materials` (`id` INTEGER NOT NULL, `subjectId` INTEGER NOT NULL, " +
+                "`meaningSynonyms` TEXT NOT NULL, `hidden` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+        )
+        connection.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_study_materials_subjectId` ON `study_materials` (`subjectId`)"
+        )
+    }
+}
+
+/**
  * Schema migrations for [AppDatabase], newest last.
  *
  * [buildAppDatabase] still falls back to a destructive migration, but that fallback is a safety net
@@ -49,4 +65,4 @@ private val MIGRATION_10_11 = object : Migration(10, 11) {
  * failing. The list is public rather than internal only so that test, which lives in `:app` because
  * that is where an Android-side SQLite driver can run on the JVM, can apply the real list.
  */
-val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_9_10, MIGRATION_10_11)
+val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)

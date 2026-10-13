@@ -65,9 +65,10 @@ class SyncOrchestrator(
     }
 
     /**
-     * What the lesson and review screens need before they can build a queue: assignments, and the
-     * subjects and SRS systems they resolve against — without the queue load waiting on (or failing
-     * over) statistics it does not show. Every resource stays on its normal freshness window.
+     * What the lesson and review screens need before they can build a queue: assignments, the
+     * subjects and SRS systems they resolve against, and the user's synonyms grading accepts —
+     * without the queue load waiting on (or failing over) statistics it does not show.
+     * Every resource stays on its normal freshness window.
      *
      * Takes the same lock as [syncAll], so it can never interleave with a pass writing the same cursors.
      */
@@ -142,6 +143,7 @@ class SyncOrchestrator(
                     staleness = if (resumeAssignments) ASSIGNMENTS_RESUME_STALENESS else ASSIGNMENTS_STALENESS
                 )
             },
+            ResourceFetch(SyncResources.STUDY_MATERIALS) { assignmentRepository.fetchStudyMaterials(force) },
             ResourceFetch(SyncResources.REVIEW_STATISTICS) { statsRepository.fetchReviewStatistics(force) },
             ResourceFetch(SyncResources.LEVEL_PROGRESSIONS) { statsRepository.fetchLevelProgressions(force) }
         ).filter { it.resource in resources }
@@ -151,8 +153,8 @@ class SyncOrchestrator(
         }
 
         // Written in dependency order — the order [fetchers] lists them in. SRS systems before subjects
-        // (subjects reference them), subjects before assignments and statistics (both resolve subject
-        // content), and level progressions last as they reference nothing.
+        // (subjects reference them), subjects before assignments, study materials and statistics (all
+        // resolve subject content), and level progressions last as they reference nothing.
         val writes: List<Pair<String, ResourceSync<*>>> = fetchers.zip(fetched).mapNotNull { (fetcher, result) ->
             (result as? ApiResult.Success)?.data?.let { fetcher.resource to it }
         }
@@ -195,8 +197,16 @@ private val ALL_RESOURCES = setOf(
     SyncResources.SRS_SYSTEMS,
     SyncResources.SUBJECTS,
     SyncResources.ASSIGNMENTS,
+    SyncResources.STUDY_MATERIALS,
     SyncResources.REVIEW_STATISTICS,
     SyncResources.LEVEL_PROGRESSIONS
 )
 
-private val QUEUE_RESOURCES = setOf(SyncResources.SRS_SYSTEMS, SyncResources.SUBJECTS, SyncResources.ASSIGNMENTS)
+/** Study materials are in here because grading reads them: a synonym added on WaniKani should count
+ *  in the next session without waiting for a full pass. */
+private val QUEUE_RESOURCES = setOf(
+    SyncResources.SRS_SYSTEMS,
+    SyncResources.SUBJECTS,
+    SyncResources.ASSIGNMENTS,
+    SyncResources.STUDY_MATERIALS
+)

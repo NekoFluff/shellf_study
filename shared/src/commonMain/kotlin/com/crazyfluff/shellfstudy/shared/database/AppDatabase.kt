@@ -16,9 +16,10 @@ import kotlinx.coroutines.Dispatchers
         SrsSystemEntity::class,
         ReviewStatisticEntity::class,
         LevelProgressionEntity::class,
+        StudyMaterialEntity::class,
         SyncStateEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -30,6 +31,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun reviewStatisticDao(): ReviewStatisticDao
     abstract fun levelProgressionDao(): LevelProgressionDao
     abstract fun syncStateDao(): SyncStateDao
+    abstract fun studyMaterialDao(): StudyMaterialDao
 }
 
 @Suppress("KotlinNoActualForExpect")

@@ -29,6 +29,37 @@ class QuizAnsweringTest {
         assertEquals(AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = false, matchedAnswer = "Go Up"), meaning("go-up"))
     }
 
+    /** User synonyms reach grading as auxiliary meanings — AssignmentRepository appends them to the
+     *  whitelisted alternates — so they are accepted exactly and close-matched, as on WaniKani. */
+    private fun withSynonyms(input: String, synonyms: List<String>) = evaluateAnswer(
+        input, QuestionType.MEANING,
+        meanings = listOf("Ascend", "Rise"),
+        auxiliaryMeanings = listOf("Go Up") + synonyms,
+        readings = listOf("のぼる"),
+        blacklistedMeanings = listOf("Descend")
+    )
+
+    @Test
+    fun `a user synonym is accepted exactly`() {
+        assertEquals(
+            AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = false, matchedAnswer = "Climb"),
+            withSynonyms("climb", listOf("Climb"))
+        )
+    }
+
+    @Test
+    fun `a user synonym is close-matched like any accepted meaning`() {
+        assertEquals(
+            AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = true, matchedAnswer = "Mount up"),
+            withSynonyms("mount uo", listOf("Mount up"))
+        )
+    }
+
+    @Test
+    fun `without the synonym the same answer is wrong`() {
+        assertEquals(AnswerOutcome.Graded(isCorrect = false, wasCloseMatch = false), withSynonyms("climb", emptyList()))
+    }
+
     @Test
     fun `a blacklisted decoy is graded incorrect rather than close`() {
         assertEquals(AnswerOutcome.Graded(isCorrect = false, wasCloseMatch = false), meaning("descend"))
