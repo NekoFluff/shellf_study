@@ -387,7 +387,7 @@ class DashboardViewModelTest {
 
         viewModel.uiState.test {
             var state = awaitItem()
-            viewModel.onDashboardResumed() // cold start: forces a full sync, including assignments
+            viewModel.onDashboardResumed() // cold start: syncs everything stale, including assignments
             while (state.fetchState is DashboardFetch.InFlight) state = awaitItem()
             val coldStartSyncedAt = state.lastSyncedAtMillis
 
@@ -418,6 +418,37 @@ class DashboardViewModelTest {
     // depending on scheduling rather than on the behaviour, which is worse than no test — the first
     // version silently could not fail at all, because runTest's virtual clock never advances
     // Clock.System, so the window never elapsed.
+
+    /** Every app launch used to force a full pass: subjects and SRS systems past their one-day window,
+     *  and every level progression, even when the last run had fetched them minutes before. */
+    @Test
+    fun `a cold start leaves fresh subjects alone, and pull-to-refresh still forces them`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        val now = Clock.System.now().toString()
+        repositories.syncStateDao.upsert(
+            com.crazyfluff.shellfstudy.shared.database.SyncStateEntity(
+                resource = "subjects", lastSyncedAt = now, lastSyncSuccessAt = now
+            )
+        )
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            viewModel.onDashboardResumed()
+            while (state.fetchState is DashboardFetch.InFlight || state.lastSyncedAtMillis == null) state = awaitItem()
+            val coldStartSyncedAt = state.lastSyncedAtMillis
+            val coldStart = generateSequence { server.takeRequest(0, TimeUnit.MILLISECONDS) }.toList()
+            assertThat(coldStart.count { it.target.orEmpty().startsWith("/subjects") }).isEqualTo(0)
+            assertThat(coldStart.count { it.target.orEmpty().startsWith("/assignments") }).isAtLeast(1)
+
+            viewModel.refresh()
+            while (state.lastSyncedAtMillis == coldStartSyncedAt) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val pulled = generateSequence { server.takeRequest(0, TimeUnit.MILLISECONDS) }.toList()
+        assertThat(pulled.count { it.target.orEmpty().startsWith("/subjects") }).isAtLeast(1)
+    }
 
     @Test
     fun `a resume with work in the outbox asks for it to be sent straight away`() = runTest(mainDispatcherRule.dispatcher) {

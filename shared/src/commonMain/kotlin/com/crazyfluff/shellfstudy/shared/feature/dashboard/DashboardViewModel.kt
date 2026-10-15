@@ -465,10 +465,17 @@ class DashboardViewModel(
     }
 
     fun refresh() {
-        viewModelScope.launch { performForcedRefresh(forceFriendStatsRefresh = true) }
+        viewModelScope.launch { performForcedRefresh(forceSync = true, forceFriendStatsRefresh = true) }
     }
 
-    private suspend fun performForcedRefresh(forceFriendStatsRefresh: Boolean = false) {
+    /**
+     * [forceSync] is pull-to-refresh: every resource refetched regardless of age. A cold start passes
+     * false — it used to force too, which made every app launch refetch subjects and SRS systems past
+     * their one-day window and every level progression, though nothing had changed since the last
+     * run. It still takes the resume pass, so assignments are on the short window and the derived
+     * cards land level with the banner.
+     */
+    private suspend fun performForcedRefresh(forceSync: Boolean, forceFriendStatsRefresh: Boolean = false) {
         lastRefreshMark = timeSource.markNow()
         _dashboardData.update { it.copy(fetchState = DashboardFetch.InFlight) }
 
@@ -489,7 +496,7 @@ class DashboardViewModel(
         // same ways (offline, auth) and is what decides what the banner says. A failure only the
         // pass hit — one resource erroring — leaves that resource's cache as it was, and the
         // next pass retries it.
-        dashboardSyncCoordinator.sync(force = true)
+        if (forceSync) dashboardSyncCoordinator.sync(force = true) else dashboardSyncCoordinator.syncForResume()
 
         val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()
         val hasContent = _dashboardData.value.username != null
@@ -536,7 +543,7 @@ class DashboardViewModel(
 
             if (!hasCompletedInitialSync) {
                 hasCompletedInitialSync = true
-                performForcedRefresh()
+                performForcedRefresh(forceSync = false)
                 return@launch
             }
 
