@@ -7,7 +7,14 @@ import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 class FakeStrokeOrderRepository(
     private val strokesByCharacter: Map<Char, List<StrokeOrderStroke>> = emptyMap()
 ) : StrokeOrderRepository {
-    override suspend fun getStrokeOrder(character: Char): List<StrokeOrderStroke>? = strokesByCharacter[character]
+    /** How many lookups ran — each is a parse-backed map read on a real device. */
+    var lookups = 0
+        private set
+
+    override suspend fun getStrokeOrder(character: Char): List<StrokeOrderStroke>? {
+        lookups++
+        return strokesByCharacter[character]
+    }
 
     override suspend fun preload() = Unit
 }

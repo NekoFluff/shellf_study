@@ -112,6 +112,9 @@ class SubjectDetailViewModel(
      *  [goBack] can restore where the user left off. Never persisted beyond this ViewModel's lifetime. */
     private val scrollOffsets = mutableMapOf<Long, Int>()
 
+    /** Resolved stroke order per character, for this ViewModel's lifetime — see [strokeOrderFlow]. */
+    private val strokeOrderByCharacter = mutableMapOf<Char, StrokeOrderUiState>()
+
     private val _uiState = MutableStateFlow(SubjectDetailUiState())
     val uiState: StateFlow<SubjectDetailUiState> = _uiState.asStateFlow()
 
@@ -127,6 +130,10 @@ class SubjectDetailViewModel(
                         subjectRepository.observeSubjectDetail(id).map { detail -> id to detail }
                     }
                 }
+                // The subjects table is written by every library sync page and every related subject
+                // cached, and each write re-emits an identical detail. Without this, every one of them
+                // cancelled and restarted the related, stats and stroke-order loads below.
+                .distinctUntilChanged()
                 .flatMapLatest { (requestedId, detail) ->
                     val relatedIds = detail?.let {
                         it.componentSubjectIds + it.amalgamationSubjectIds +
@@ -233,10 +240,15 @@ class SubjectDetailViewModel(
     private fun strokeOrderFlow(detail: SubjectDetail?): Flow<StrokeOrderUiState> {
         val character = detail?.characters?.singleOrNull()
             ?: return flowOf(StrokeOrderUiState.Unavailable)
-        return flow {
+        // Keyed by character, so a detail that changed elsewhere (a synonym added, say) or a return
+        // to a subject already shown keeps its diagram instead of flashing Loading and restarting it.
+        val known = strokeOrderByCharacter[character]
+        return if (known != null) flowOf(known) else flow {
             emit(StrokeOrderUiState.Loading)
             val strokes = strokeOrderRepository.getStrokeOrder(character)
-            emit(strokes?.let { StrokeOrderUiState.Available(it) } ?: StrokeOrderUiState.Unavailable)
+            val resolved = strokes?.let { StrokeOrderUiState.Available(it) } ?: StrokeOrderUiState.Unavailable
+            strokeOrderByCharacter[character] = resolved
+            emit(resolved)
         }
     }
 }

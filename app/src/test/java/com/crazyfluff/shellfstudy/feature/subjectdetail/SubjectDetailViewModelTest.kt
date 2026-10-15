@@ -356,6 +356,23 @@ class SubjectDetailViewModelTest {
         }
     }
 
+    /** Every library sync page writes the subjects table, and each write re-emitted an identical
+     *  detail that restarted the related, stats and stroke-order loads — the diagram flashed Loading. */
+    @Test
+    fun `a write to an unrelated subject leaves the open detail and its stroke order alone`() = runTest(mainDispatcherRule.dispatcher) {
+        viewModel.uiState.test {
+            awaitNothingOpened()
+            viewModel.open(1)
+            awaitSettled(1)
+            val lookups = strokeOrderRepository.lookups
+
+            repositories.subjectDao.upsertAll(listOf(subjectEntity(id = 99, characters = "火", meaning = "Fire")))
+
+            expectNoEvents()
+            assertThat(strokeOrderRepository.lookups).isEqualTo(lookups)
+        }
+    }
+
     @Test
     fun `uiState has no stroke order for a radical with no matching character`() = runTest(mainDispatcherRule.dispatcher) {
         viewModel.uiState.test {
