@@ -34,6 +34,6 @@ fun initKoin() {
         if (!previous.online) koin.get<OutboxRepository>().requestSyncNow()
         // Back online, or off a metered network: either may be what an offline audio download
         // that stopped (or never started under "Wi-Fi only") was waiting for.
-        koin.get<CoroutineScope>(APPLICATION_SCOPE).launch { koin.get<OfflineAudioManager>().resume() }
+        koin.get<CoroutineScope>(APPLICATION_SCOPE).launch { koin.get<OfflineAudioManager>().resumeIfUnfinished() }
     }
 }

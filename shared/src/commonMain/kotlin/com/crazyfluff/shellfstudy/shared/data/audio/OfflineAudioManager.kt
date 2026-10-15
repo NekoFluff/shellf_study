@@ -109,11 +109,21 @@ class OfflineAudioManager(
         )
     }.distinctUntilChanged()
 
-    /** Every vocabulary subject's level and clips. Loaded on first use and after each sync — the
-     *  clips themselves change only when WaniKani adds or re-records some. */
+    /** Every vocabulary subject's level and clips. Loaded on first use and again when the user's level
+     *  changes — the clips themselves change only when WaniKani adds or re-records some, and decoding
+     *  every vocabulary item's clip list is far too costly to repeat on each dashboard refresh. */
     private val catalog = MutableStateFlow<List<SubjectAudioRow>?>(null)
     private val active = MutableStateFlow<ActiveDownload?>(null)
     private val runLock = Mutex()
+
+    /** True once a run has stored everything wanted, until something asks for more. While it holds,
+     *  a `/user` refresh or a network change has nothing to retry. In memory on purpose: a new process
+     *  gets one run to check what is on disk. */
+    private val downloadsSettled = MutableStateFlow(false)
+
+    /** Levels whose images have been put in the image cache by this process — re-prefetching a level on
+     *  every run cost a query and a cache lookup per image for nothing. */
+    private val prefetchedLevels = mutableSetOf<Int>()
 
     /** How many clips a complete download of each level holds, under the current voice choice. Its own
      *  flow so it is worked out when the catalog or the voices change, not on every progress tick. */
@@ -186,21 +196,36 @@ class OfflineAudioManager(
      *  when [OfflineAudioPreferences.autoDownloadCurrentLevel] is on), and gives any download that
      *  stopped for lack of a network another go now that one has evidently worked. */
     suspend fun onUserRefreshed(user: WaniKaniUser) {
+        var changed = false
         dataStore.edit { prefs ->
+            val levelChanged = prefs[CURRENT_LEVEL_KEY] != user.level ||
+                prefs[MAX_LEVEL_GRANTED_KEY] != user.maxLevelGranted
             prefs[CURRENT_LEVEL_KEY] = user.level
             prefs[MAX_LEVEL_GRANTED_KEY] = user.maxLevelGranted
-            if ((prefs[AUTO_DOWNLOAD_CURRENT_LEVEL_KEY] ?: true) && user.level <= user.maxLevelGranted) {
-                prefs[WANTED_LEVELS_KEY] = prefs[WANTED_LEVELS_KEY].orEmpty() + user.level.toString()
-            }
+            val wanted = prefs[WANTED_LEVELS_KEY].orEmpty()
+            val newlyWanted = (prefs[AUTO_DOWNLOAD_CURRENT_LEVEL_KEY] ?: true) &&
+                user.level <= user.maxLevelGranted && user.level.toString() !in wanted
+            if (newlyWanted) prefs[WANTED_LEVELS_KEY] = wanted + user.level.toString()
+            changed = levelChanged || newlyWanted
         }
-        refreshCatalog()
-        resume()
+        // This runs on every dashboard refresh, almost always with nothing new: same level, same
+        // wanted set, every download finished. Only a change (or a run that hasn't finished) is
+        // worth a catalog reload or a scheduled job.
+        if (changed) refreshCatalog()
+        if (changed) resume() else resumeIfUnfinished()
+    }
+
+    /** [resume], unless the last run already stored everything wanted — for nudges that only mean
+     *  "a network may be back", such as a `/user` fetch succeeding or the connection changing. */
+    suspend fun resumeIfUnfinished() {
+        if (!downloadsSettled.value) resume()
     }
 
     /** Asks the platform to run [runDownloads] if any wanted level is missing clips. */
     suspend fun resume() {
         val prefs = preferences.first()
         if (prefs.wantedLevels.isEmpty()) return
+        downloadsSettled.value = false
         scheduler.schedule(wifiOnly = prefs.wifiOnly)
     }
 
@@ -227,14 +252,18 @@ class OfflineAudioManager(
                     active.value = ActiveDownload(level, done, total)
                 }
                 if (outcome == AudioDownloadOutcome.NETWORK_FAILURE) return@withLock outcome
-                try {
-                    prefetchImages(subjectDao.getCharacterImageUrlsAtLevel(level))
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    // Best-effort, see prefetchImages.
+                if (level !in prefetchedLevels) {
+                    try {
+                        prefetchImages(subjectDao.getCharacterImageUrlsAtLevel(level))
+                        prefetchedLevels += level
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // Best-effort, see prefetchImages.
+                    }
                 }
             }
+            downloadsSettled.value = true
             AudioDownloadOutcome.COMPLETE
         } finally {
             active.value = null

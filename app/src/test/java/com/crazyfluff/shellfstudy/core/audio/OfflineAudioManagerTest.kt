@@ -37,6 +37,7 @@ class OfflineAudioManagerTest {
     private lateinit var server: MockWebServer
     private val subjectDao = FakeSubjectDao()
     private val scheduler = RecordingScheduler()
+    private var prefetches = 0
     private lateinit var manager: OfflineAudioManager
 
     private class RecordingScheduler : AudioDownloadScheduler {
@@ -63,7 +64,7 @@ class OfflineAudioManagerTest {
             library = library,
             subjectDao = subjectDao,
             scheduler = scheduler,
-            prefetchImages = {}
+            prefetchImages = { prefetches++ }
         )
     }
 
@@ -174,5 +175,59 @@ class OfflineAudioManagerTest {
         assertThat(manager.preferences.first().wantedLevels).isEmpty()
         assertThat(manager.preferences.first().currentLevel).isNull()
         assertThat(scheduler.cancels).isEqualTo(1)
+    }
+
+    /** The dashboard reports the user on every refresh, almost always unchanged. Each report used to
+     *  decode every vocabulary item's clip list and schedule a download job. */
+    @Test
+    fun `an unchanged user after a finished run reloads nothing and schedules nothing`() = runTest {
+        seedVocabulary(id = 1, level = 3)
+        val user = WaniKaniUser(id = "u", username = "u", level = 3)
+        manager.onUserRefreshed(user)
+        manager.runDownloads()
+        val loads = subjectDao.audioRowsLoads
+        val schedules = scheduler.scheduled.size
+
+        manager.onUserRefreshed(user)
+        manager.onUserRefreshed(user)
+
+        assertThat(subjectDao.audioRowsLoads).isEqualTo(loads)
+        assertThat(scheduler.scheduled).hasSize(schedules)
+    }
+
+    @Test
+    fun `an unchanged user still retries a run that has not finished`() = runTest {
+        val user = WaniKaniUser(id = "u", username = "u", level = 3)
+        manager.onUserRefreshed(user)
+        val schedules = scheduler.scheduled.size
+
+        manager.onUserRefreshed(user)
+
+        assertThat(scheduler.scheduled).hasSize(schedules + 1)
+    }
+
+    @Test
+    fun `reaching a new level reloads the catalog and schedules it`() = runTest {
+        manager.onUserRefreshed(WaniKaniUser(id = "u", username = "u", level = 3))
+        manager.runDownloads()
+        val loads = subjectDao.audioRowsLoads
+        val schedules = scheduler.scheduled.size
+
+        manager.onUserRefreshed(WaniKaniUser(id = "u", username = "u", level = 4))
+
+        assertThat(subjectDao.audioRowsLoads).isEqualTo(loads + 1)
+        assertThat(scheduler.scheduled).hasSize(schedules + 1)
+        assertThat(manager.preferences.first().wantedLevels).containsExactly(3, 4)
+    }
+
+    @Test
+    fun `a level's images are prefetched once, not on every run`() = runTest {
+        seedVocabulary(id = 1, level = 3)
+        manager.download(listOf(3))
+
+        manager.runDownloads()
+        manager.runDownloads()
+
+        assertThat(prefetches).isEqualTo(1)
     }
 }

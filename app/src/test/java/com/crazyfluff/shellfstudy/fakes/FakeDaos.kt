@@ -55,8 +55,12 @@ class FakeSubjectDao(private val writeLog: SyncWriteLog? = null) : SubjectDao {
         map.values.groupingBy { it.subjectType }.eachCount().map { (type, count) -> SubjectTypeCount(type, count) }
     }
 
+    /** How many times [getAudioRows] ran — it decodes every vocabulary item's clips on a real device. */
+    var audioRowsLoads = 0
+        private set
+
     override suspend fun getAudioRows(): List<SubjectAudioRow> =
-        subjects.value.values
+        subjects.value.values.also { audioRowsLoads++ }
             .filter { it.subjectType == "vocabulary" || it.subjectType == "kana_vocabulary" }
             .map { SubjectAudioRow(it.level, it.pronunciationAudios) }
 
