@@ -132,7 +132,7 @@ fun buildTestRepositories(
     val syncTransactionRunner = RecordingSyncTransactionRunner()
     val syncOrchestrator = SyncOrchestrator(
         syncTransactionRunner, subjectRepository, assignmentRepository, statsRepository,
-        studyMaterialRepository, syncStateDao
+        studyMaterialRepository, syncStateDao, defaultDispatcher
     )
 
     return TestRepositories(

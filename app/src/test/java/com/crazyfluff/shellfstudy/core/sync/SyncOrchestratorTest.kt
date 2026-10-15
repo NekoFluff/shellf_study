@@ -2,11 +2,13 @@ package com.crazyfluff.shellfstudy.core.sync
 
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.database.SyncStateEntity
+import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 import com.crazyfluff.shellfstudy.fakes.waniKaniCollectionDispatcher
 import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.emptyResponse
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
@@ -17,6 +19,8 @@ import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.CoroutineContext
 
 /**
  * syncAll() fans the four independent resources out with `async` after the two sequential ones —
@@ -211,6 +215,33 @@ class SyncOrchestratorTest {
         repositories.syncOrchestrator.syncAll(force = false)
 
         assertThat(repositories.syncTransactionRunner.transactionCount).isEqualTo(afterFirstPass)
+    }
+
+    /**
+     * The dashboard and review screen start a pass from `viewModelScope` (the main thread), and Ktor
+     * decodes response bodies in the caller's context — so the pass itself must hop to its own
+     * dispatcher, or a first sync parses thousands of subjects on the UI thread.
+     */
+    @Test
+    fun `a pass runs on the orchestrator's dispatcher rather than the caller's`() = runTest {
+        val dispatcher = CountingDispatcher()
+        val orchestrator = SyncOrchestrator(
+            repositories.syncTransactionRunner, repositories.subjectRepository, repositories.assignmentRepository,
+            repositories.statsRepository, repositories.studyMaterialRepository, repositories.syncStateDao, dispatcher
+        )
+
+        val result = orchestrator.syncAll(force = true)
+
+        assertThat(result).isEqualTo(ApiResult.Success(Unit))
+        assertThat(dispatcher.dispatches.get()).isGreaterThan(0)
+    }
+
+    private class CountingDispatcher : CoroutineDispatcher() {
+        val dispatches = AtomicInteger()
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            dispatches.incrementAndGet()
+            Dispatchers.Default.dispatch(context, block)
+        }
     }
 
     /** Snapshot under the list's own lock — iterating a synchronizedList outside one is still unsafe. */

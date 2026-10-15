@@ -12,11 +12,14 @@ import com.crazyfluff.shellfstudy.shared.data.SyncResources
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.completeResourceSync
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * The single place that sequences a full sync pass across every repository — both the periodic
@@ -29,7 +32,8 @@ class SyncOrchestrator(
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
     private val studyMaterialRepository: StudyMaterialRepository,
-    private val syncStateDao: SyncStateDao
+    private val syncStateDao: SyncStateDao,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     // syncAll and fullRefresh have independent, legitimate entry points (periodic worker, dashboard
     // resume/pull-to-refresh, and a manual full-refresh button) that can otherwise overlap in time.
@@ -122,12 +126,19 @@ class SyncOrchestrator(
      * (subjects reference `spaced_repetition_system_id`). Within the persist they are written in that
      * same order, so a concurrent reader inside the transaction never observes an assignment whose
      * subject row does not exist yet.
+     *
+     * ## Why it switches dispatcher
+     *
+     * Ktor decodes a response body in the coroutine that asked for it, and the repositories map each
+     * page to entities in the same place. The dashboard and the review screen start a pass from
+     * `viewModelScope`, which is the main thread — so without the switch, a first sync's ~9,000
+     * subjects (and as many assignments and statistics) were parsed and mapped on the UI thread.
      */
     private suspend fun syncAllLocked(
         force: Boolean,
         resumeAssignments: Boolean,
         resources: Set<String> = ALL_RESOURCES
-    ): ApiResult<Unit> {
+    ): ApiResult<Unit> = withContext(defaultDispatcher) {
         // Each fetch is wrapped individually rather than letting the coroutineScope propagate the
         // first failure. `awaitAll` over bare `async` blocks aborts the whole scope on the first
         // throw, cancelling its siblings — so one failing resource would silently stop the others
@@ -175,7 +186,7 @@ class SyncOrchestrator(
 
         // A fetch failure is reported in preference to a write failure: it is the one the user can
         // act on (connectivity, token), and a failed write usually shares its cause.
-        return fetched.filterIsInstance<ApiResult.Error>().firstOrNull() ?: writeResult
+        fetched.filterIsInstance<ApiResult.Error>().firstOrNull() ?: writeResult
     }
 
     /**
