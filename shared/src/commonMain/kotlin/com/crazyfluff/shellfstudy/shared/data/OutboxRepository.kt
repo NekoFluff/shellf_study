@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
 
@@ -59,6 +60,10 @@ class OutboxRepository(
     fun requestSyncNow() {
         outboxSyncScheduler.requestImmediateSync()
     }
+
+    /** Whether anything is waiting to be sent — lets a caller skip [requestSyncNow] when there is
+     *  nothing to drain, since its REPLACE would otherwise cancel a drain already backing off. */
+    suspend fun hasPendingWork(): Boolean = observePendingCount().first() > 0
 
     fun observePendingCount(): Flow<Int> =
         combine(outboxDao.observePendingReviewSubmissionCount(), outboxDao.observePendingLessonStartCount()) { reviews, lessons ->

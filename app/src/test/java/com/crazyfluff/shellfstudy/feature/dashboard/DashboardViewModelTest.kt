@@ -67,7 +67,11 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TestTimeSource
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -146,7 +150,11 @@ class DashboardViewModelTest {
         mainDispatcherRule.dispatcher, settingsRepository
     )
 
-    private fun createViewModel(): DashboardViewModel {
+    /**
+     * [timeSource] backs the resume throttle. Left at [NoResumeThrottle], every resume is treated as
+     * long after the last refresh, which is what the tests written before the throttle assume.
+     */
+    private fun createViewModel(timeSource: TimeSource = NoResumeThrottle): DashboardViewModel {
         val json = Json { ignoreUnknownKeys = true }
         val friendRepository = FriendRepository(dataStore, json, FakeTokenCipher())
         val friendStatsRepository = FriendStatsRepository(
@@ -199,7 +207,8 @@ class DashboardViewModelTest {
                     dashboardSyncCoordinator = dashboardSyncCoordinator,
                     lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),
                     appForegroundTracker = appForegroundTracker,
-                    studyTimeRepository = buildStudyTimeRepository()
+                    studyTimeRepository = buildStudyTimeRepository(),
+                    timeSource = timeSource
                 )
             }
         }
@@ -273,7 +282,9 @@ class DashboardViewModelTest {
             assertThat(state.fetchState).isEqualTo(DashboardFetch.Idle)
             cancelAndIgnoreRemainingEvents()
         }
-        assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isAtLeast(1)
+        // Nothing is pending, so there is nothing to drain — and a REPLACE request would only cancel
+        // a drain already backing off.
+        assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isEqualTo(0)
     }
 
     @Test
@@ -350,7 +361,6 @@ class DashboardViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isAtLeast(1)
         val requests = generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.MILLISECONDS) }.toList()
         assertThat(requests.count { it.target.orEmpty().startsWith("/user") }).isAtLeast(1)
         assertThat(requests.count { it.target.orEmpty().startsWith("/summary") }).isAtLeast(1)
@@ -408,6 +418,54 @@ class DashboardViewModelTest {
     // depending on scheduling rather than on the behaviour, which is worse than no test — the first
     // version silently could not fail at all, because runTest's virtual clock never advances
     // Clock.System, so the window never elapsed.
+
+    @Test
+    fun `a resume with work in the outbox asks for it to be sent straight away`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        repositories.outboxDao.insertReviewSubmission(
+            com.crazyfluff.shellfstudy.shared.database.outbox.PendingReviewSubmissionEntity(
+                assignmentId = 1, subjectId = 1, incorrectMeaningAnswers = 0, incorrectReadingAnswers = 0,
+                gradedAt = "2026-01-01T00:00:00.000000Z"
+            )
+        )
+        val viewModel = createViewModel()
+
+        viewModel.onDashboardResumed()
+
+        assertThat(repositories.outboxSyncScheduler.immediateRequestCount).isEqualTo(1)
+    }
+
+    /**
+     * Every return to the dashboard — back from any screen, every foreground — calls
+     * onDashboardResumed, and each used to cost a sync pass plus a /user and /summary round trip.
+     * The throttle decision is made before any network call, so the throttled resume below starts
+     * none; the third resume, past the window, is the only one after the cold start that fetches.
+     */
+    @Test
+    fun `a resume soon after the last refresh fetches nothing, and one past the window does`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+        val timeSource = TestTimeSource()
+        val viewModel = createViewModel(timeSource)
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            viewModel.onDashboardResumed() // cold start
+            while (state.fetchState is DashboardFetch.InFlight || state.lastSyncedAtMillis == null) state = awaitItem()
+            val coldStartSyncedAt = state.lastSyncedAtMillis
+            generateSequence { server.takeRequest(0, TimeUnit.MILLISECONDS) }.toList()
+
+            timeSource += 10.seconds
+            viewModel.onDashboardResumed() // inside the window
+
+            timeSource += 30.seconds
+            viewModel.onDashboardResumed() // past it
+            while (state.lastSyncedAtMillis == coldStartSyncedAt) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val requests = generateSequence { server.takeRequest(0, TimeUnit.MILLISECONDS) }.toList()
+        assertThat(requests.count { it.target.orEmpty().startsWith("/user") }).isEqualTo(1)
+    }
 
     @Test
     fun `seeds cached username and counts before the network refresh resolves, then updates them once it does`() = runTest(mainDispatcherRule.dispatcher) {
@@ -1102,4 +1160,11 @@ class DashboardViewModelTest {
           }
         }
     """.trimIndent()
+}
+
+/** Every mark reads as infinitely old, so no resume is ever inside the refresh interval. */
+private object NoResumeThrottle : TimeSource {
+    override fun markNow(): TimeMark = object : TimeMark {
+        override fun elapsedNow(): Duration = Duration.INFINITE
+    }
 }

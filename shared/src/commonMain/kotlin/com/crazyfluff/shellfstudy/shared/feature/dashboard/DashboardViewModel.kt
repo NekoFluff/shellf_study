@@ -53,6 +53,9 @@ import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeOverview
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeRepository
 import kotlin.math.ceil
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 @Immutable
 data class DashboardUiState(
@@ -209,7 +212,8 @@ class DashboardViewModel(
     private val dashboardSyncCoordinator: DashboardSyncCoordinator,
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
     private val appForegroundTracker: AppForegroundTracker,
-    private val studyTimeRepository: StudyTimeRepository
+    private val studyTimeRepository: StudyTimeRepository,
+    private val timeSource: TimeSource = TimeSource.Monotonic
 ) : ViewModel() {
 
     private val _dashboardData = MutableStateFlow(DashboardUiState())
@@ -386,6 +390,9 @@ class DashboardViewModel(
 
     private var hasCompletedInitialSync = false
 
+    /** When the dashboard last fetched `/user` and `/summary` — see [onDashboardResumed]'s throttle. */
+    private var lastRefreshMark: TimeMark? = null
+
     init {
         viewModelScope.launch {
             seedFromCache()
@@ -409,7 +416,9 @@ class DashboardViewModel(
         // refresh is about to fetch anyway.
         viewModelScope.launch {
             outboxRepository.workDelivered.collect {
-                if (hasCompletedInitialSync) refreshAfterResume()
+                // Only the counts are out of date: the drain already reconciled each delivered
+                // assignment locally, so a sync pass here would find nothing to fetch.
+                if (hasCompletedInitialSync) refreshCounts()
             }
         }
     }
@@ -460,6 +469,7 @@ class DashboardViewModel(
     }
 
     private suspend fun performForcedRefresh(forceFriendStatsRefresh: Boolean = false) {
+        lastRefreshMark = timeSource.markNow()
         _dashboardData.update { it.copy(fetchState = DashboardFetch.InFlight) }
 
         // Non-blocking: friend stats refresh runs in the background and doesn't gate the main UI.
@@ -522,7 +532,7 @@ class DashboardViewModel(
 
     fun onDashboardResumed() {
         viewModelScope.launch {
-            outboxRepository.requestSyncNow()
+            if (outboxRepository.hasPendingWork()) outboxRepository.requestSyncNow()
 
             if (!hasCompletedInitialSync) {
                 hasCompletedInitialSync = true
@@ -530,15 +540,25 @@ class DashboardViewModel(
                 return@launch
             }
 
-            refreshAfterResume()
+            // Every return to the dashboard lands here — back from a screen, every foreground — and
+            // each used to cost a sync pass plus a /user and /summary round trip. Inside the window
+            // there is nothing new to fetch: assignments have the same 30 s resume window, and work
+            // delivered meanwhile refreshes the counts itself through workDelivered.
+            val last = lastRefreshMark
+            if (last != null && last.elapsedNow() < RESUME_REFRESH_INTERVAL) return@launch
+
+            lastRefreshMark = timeSource.markNow()
+            // One pass, with assignments on a short freshness window — see
+            // SyncOrchestrator.syncAllForResume.
+            dashboardSyncCoordinator.syncForResume()
+            refreshCounts()
         }
     }
 
-    private suspend fun refreshAfterResume() {
-        // One pass, with assignments on a short freshness window — see
-        // SyncOrchestrator.syncAllForResume.
-        dashboardSyncCoordinator.syncForResume()
-
+    /** `/user` and `/summary` into the banner — the resume path's second half, and on its own all a
+     *  delivered outbox needs. */
+    private suspend fun refreshCounts() {
+        lastRefreshMark = timeSource.markNow()
         val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()
 
         if (userResult is ApiResult.Error && userResult.isAuthError) {
@@ -588,6 +608,9 @@ class DashboardViewModel(
         viewModelScope.launch { lessonSessionController.abandon() }
     }
 }
+
+/** How long after one dashboard refresh a resume skips the next — see onDashboardResumed. */
+private val RESUME_REFRESH_INTERVAL = 30.seconds
 
 private fun buildCompletionProjection(totalItems: Int, itemsSeen: Int, dailyLessonGoal: Int): CompletionProjection {
     val remaining = (totalItems - itemsSeen).coerceAtLeast(0)
