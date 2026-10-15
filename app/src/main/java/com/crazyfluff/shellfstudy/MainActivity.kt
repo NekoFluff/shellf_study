@@ -10,6 +10,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazyfluff.shellfstudy.shared.designsystem.performance.JankStatsTracker
 import com.crazyfluff.shellfstudy.shared.ShellfStudyApp
+import com.crazyfluff.shellfstudy.shared.data.PitchAccentBundledSource
+import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
+import com.crazyfluff.shellfstudy.shared.di.APPLICATION_SCOPE
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import org.koin.android.ext.android.get
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
 
 class MainActivity : ComponentActivity() {
@@ -29,6 +35,7 @@ class MainActivity : ComponentActivity() {
             JankStatsTracker.enable()
         }
         pendingDestination = intent?.getStringExtra(NotificationDeepLink.EXTRA_DESTINATION)
+        preloadDictionaries()
         setContent {
             // The content is entirely ShellfStudyApp — the same composable iOS's MainViewController
             // uses. This method used to mirror it by hand, and the two drifted; see that function's
@@ -38,6 +45,23 @@ class MainActivity : ComponentActivity() {
                 onPendingDestinationConsumed = { pendingDestination = null }
             )
         }
+    }
+
+    /**
+     * Parses the bundled dictionaries ahead of first use: the ~8MB stroke-order one before the first
+     * subject detail sheet opens (a ~600ms parse otherwise paid inline, see StrokeOrderRepository), and
+     * the ~1MB pitch-accent one before the first reading answer is graded (see PitchAccentBundledSource).
+     *
+     * Here rather than in Application.onCreate, which also runs for every process started only to run
+     * a background worker — hourly sync, review notifications, the outbox — none of which read either.
+     * Both preloads are no-ops once loaded, so a recreated Activity costs nothing.
+     */
+    private fun preloadDictionaries() {
+        val applicationScope: CoroutineScope = get(APPLICATION_SCOPE)
+        val strokeOrderRepository: StrokeOrderRepository = get()
+        val pitchAccentBundledSource: PitchAccentBundledSource = get()
+        applicationScope.launch { strokeOrderRepository.preload() }
+        applicationScope.launch { pitchAccentBundledSource.preload() }
     }
 
     override fun onNewIntent(intent: Intent) {
