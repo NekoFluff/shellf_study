@@ -177,6 +177,19 @@ class StudyTimeScreenTest {
     }
 
     @Test
+    fun withNoBarSelectedShowsTheWindowTotals() {
+        setContent(loaded(someStudy))
+
+        scrollTo(StudyTimeTestTags.SELECTED_BAR)
+        composeTestRule.onNodeWithTag(StudyTimeTestTags.SELECTED_BAR).assertTextEquals("Last 7 days")
+        fun inColumn(tag: String, text: String) = hasText(text) and hasAnyAncestor(hasTestTag(tag))
+        composeTestRule.onNode(inColumn(StudyTimeTestTags.SELECTED_BAR_REVIEWS, "45m")).assertIsDisplayed()
+        composeTestRule.onNode(inColumn(StudyTimeTestTags.SELECTED_BAR_REVIEWS, "270 reviews")).assertIsDisplayed()
+        composeTestRule.onNode(inColumn(StudyTimeTestTags.SELECTED_BAR_LESSONS, "15m")).assertIsDisplayed()
+        composeTestRule.onNode(inColumn(StudyTimeTestTags.SELECTED_BAR_LESSONS, "5 lessons")).assertIsDisplayed()
+    }
+
+    @Test
     fun hidesTheStreakBeforeAnyStudyDay() {
         setContent(loaded(someStudy))
 

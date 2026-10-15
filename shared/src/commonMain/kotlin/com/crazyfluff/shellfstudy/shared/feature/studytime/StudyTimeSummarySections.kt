@@ -21,10 +21,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyItemCounts
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeBucket
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeOverview
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimePeriodStats
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeReport
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeSplit
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeWindow
 import com.crazyfluff.shellfstudy.shared.designsystem.components.PillSelector
 import kotlin.math.abs
@@ -117,7 +119,16 @@ internal fun HistoryCard(
         )
         Spacer(modifier = Modifier.height(12.dp))
         val selected = selectedBarIndex?.let { report.buckets.getOrNull(it) }
-        BarDetailPanel(selected, isDaily)
+        if (selected != null) {
+            BarDetailPanel(bucketDate(selected, isDaily), selected.split, selected.items, isSelection = true)
+        } else {
+            BarDetailPanel(
+                title = "Last ${windowLabel(window)}",
+                split = report.buckets.fold(StudyTimeSplit.ZERO) { sum, bucket -> sum + bucket.split },
+                items = report.buckets.fold(StudyItemCounts.ZERO) { sum, bucket -> sum + bucket.items },
+                isSelection = false
+            )
+        }
         Spacer(modifier = Modifier.height(12.dp))
         StudyTimeBarChart(
             buckets = report.buckets,
@@ -145,10 +156,10 @@ internal fun HistoryCard(
     }
 }
 
-/** The tapped bar: its date and total, then time and items for reviews and lessons side by side. Laid
- *  out the same with nothing tapped, so the chart under it doesn't jump on the first tap. */
+/** The tapped bar, or with nothing tapped the whole window: a title and total, then time and items for
+ *  reviews and lessons side by side. */
 @Composable
-private fun BarDetailPanel(bucket: StudyTimeBucket?, isDaily: Boolean) {
+private fun BarDetailPanel(title: String, split: StudyTimeSplit, items: StudyItemCounts, isSelection: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -158,45 +169,42 @@ private fun BarDetailPanel(bucket: StudyTimeBucket?, isDaily: Boolean) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = bucket?.let { bucketDate(it, isDaily) } ?: "Tap a bar for details",
+                text = title,
                 style = MaterialTheme.typography.labelLarge,
-                color = with(MaterialTheme.colorScheme) { if (bucket != null) onSurface else onSurfaceVariant },
+                color = with(MaterialTheme.colorScheme) { if (isSelection) onSurface else onSurfaceVariant },
                 modifier = Modifier.weight(1f).testTag(StudyTimeTestTags.SELECTED_BAR)
             )
-            Text(
-                text = bucket?.let { formatStudyDuration(it.split.totalMs) } ?: "",
-                style = MaterialTheme.typography.titleMedium
-            )
+            Text(text = formatStudyDuration(split.totalMs), style = MaterialTheme.typography.titleMedium)
         }
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BarDetailColumn(
                 color = reviewTimeColor(),
                 label = "Reviews",
-                ms = bucket?.split?.reviewMs,
-                count = bucket?.items?.reviews?.let { countLabel(it, "review") },
+                ms = split.reviewMs,
+                count = countLabel(items.reviews, "review"),
                 modifier = Modifier.weight(1f).testTag(StudyTimeTestTags.SELECTED_BAR_REVIEWS)
             )
             BarDetailColumn(
                 color = lessonTimeColor(),
                 label = "Lessons",
-                ms = bucket?.split?.lessonMs,
-                count = bucket?.items?.lessons?.let { countLabel(it, "lesson") },
+                ms = split.lessonMs,
+                count = countLabel(items.lessons, "lesson"),
                 modifier = Modifier.weight(1f).testTag(StudyTimeTestTags.SELECTED_BAR_LESSONS)
             )
         }
     }
 }
 
-/** A swatch and label over the time and item count, or dashes with nothing tapped. */
+/** A swatch and label over the time and item count. */
 @Composable
-private fun BarDetailColumn(color: Color, label: String, ms: Long?, count: String?, modifier: Modifier = Modifier) {
+private fun BarDetailColumn(color: Color, label: String, ms: Long, count: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
         ChartLegendItem(color, label)
         Spacer(modifier = Modifier.height(2.dp))
-        Text(text = ms?.let(::formatStudyDuration) ?: "–", style = MaterialTheme.typography.titleMedium)
+        Text(text = formatStudyDuration(ms), style = MaterialTheme.typography.titleMedium)
         Text(
-            text = count ?: " ",
+            text = count,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
