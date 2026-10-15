@@ -23,10 +23,10 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.todayIn
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
-private val STALENESS = 1.hours
+/** The same window as assignments, for the same reason — see [ASSIGNMENTS_STALENESS]. */
+private val STALENESS = ASSIGNMENTS_STALENESS
 
 /** Owns review statistics, level progressions, and the local study-activity log (which days had
  *  at least one review or lesson — drives the study streak and its daily reminder). */

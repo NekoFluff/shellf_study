@@ -36,11 +36,19 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
-internal val ASSIGNMENTS_STALENESS = 1.hours
+/**
+ * How stale assignments (and the other hourly resources) may be before a normal sync refetches them.
+ *
+ * Deliberately shorter than the periodic SyncWorker's hour. The window is measured from when the last
+ * fetch finished, and WorkManager runs the worker anywhere in the last five minutes of each hour, so an
+ * hour-long window made a wake that came even a minute early skip every fetch — roughly every other
+ * wake started the process, drained and re-evaluated notifications against data up to two hours old.
+ */
+internal val ASSIGNMENTS_STALENESS = 50.minutes
 
 /**
  * How stale assignments may be before the dashboard's resume path refetches them.
