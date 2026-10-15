@@ -102,15 +102,31 @@ class WaniKaniApi(
         httpClient.get(validatedPageUrl(url)).body()
 
     suspend fun getStudyMaterials(
-        updatedAfter: String? = null
+        updatedAfter: String? = null,
+        subjectIds: List<Long>? = null
     ): WkCollectionResponse<StudyMaterialData> =
         httpClient.get("${baseUrl}study_materials") {
             parameter("updated_after", updatedAfter)
+            parameterList("subject_ids", subjectIds)
         }.body()
 
     /** Follows a study_materials collection's `pages.next_url` — see [collectAllPages]. */
     suspend fun getStudyMaterialsPage(url: String): WkCollectionResponse<StudyMaterialData> =
         httpClient.get(validatedPageUrl(url)).body()
+
+    /** WaniKani allows one study material per subject; a second create for the same subject fails. */
+    suspend fun createStudyMaterial(request: StudyMaterialRequest): WkResourceItem<StudyMaterialData> =
+        httpClient.post("${baseUrl}study_materials") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.body()
+
+    /** A partial update: fields left null are omitted (`explicitNulls = false`) and stay as they are. */
+    suspend fun updateStudyMaterial(id: Long, request: StudyMaterialRequest): WkResourceItem<StudyMaterialData> =
+        httpClient.put("${baseUrl}study_materials/$id") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.body()
 
     // GET /v2/reviews is deliberately not implemented: it's deprecated and always returns an empty
     // array of data (confirmed against the docs) — WaniKani no longer stores individual review

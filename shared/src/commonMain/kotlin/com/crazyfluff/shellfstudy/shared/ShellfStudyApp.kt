@@ -10,6 +10,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import coil3.compose.setSingletonImageLoaderFactory
+import com.crazyfluff.shellfstudy.shared.data.UserSynonymsStore
+import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalUserSynonyms
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
@@ -61,6 +63,8 @@ fun ShellfStudyApp(
     // Provided here, at the root, so any reading's play button can dispatch without a callback
     // threaded down through every screen in between — see LocalPronunciationAudioPlayer.
     val audioPlayer: PronunciationAudioPlayer = koinInject()
+    // Same reasoning: every view of a subject's meaning can edit its synonyms — see LocalUserSynonyms.
+    val userSynonyms: UserSynonymsStore = koinInject()
     // AppSettings' defaults match SettingsRepository's DataStore defaults, so the first frame before
     // the flow's initial emission renders production defaults rather than everything switched off.
     val settingsRepository: SettingsRepository = koinInject()
@@ -83,6 +87,7 @@ fun ShellfStudyApp(
             LocalCompositionRecorder provides rememberCompositionRecorder(),
             LocalCompositionTimingEnabled provides rememberCompositionTimingEnabled(),
             LocalPronunciationAudioPlayer provides audioPlayer,
+            LocalUserSynonyms provides userSynonyms,
             LocalDisplaySettings provides displaySettings,
             LocalShareText provides shareText,
             LocalOpenSubjectDetail provides openSubjectDetail,

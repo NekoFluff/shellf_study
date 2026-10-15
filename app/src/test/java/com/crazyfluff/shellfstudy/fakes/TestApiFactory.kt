@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.AssignmentStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
+import com.crazyfluff.shellfstudy.shared.data.StudyMaterialRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.WaniKaniRepository
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
@@ -81,6 +82,7 @@ class TestRepositories(
     val assignmentStatsRepository: AssignmentStatsRepository,
     val pitchAccentRepository: PitchAccentRepository,
     val statsRepository: StatsRepository,
+    val studyMaterialRepository: StudyMaterialRepository,
     val waniKaniRepository: WaniKaniRepository,
     val syncOrchestrator: SyncOrchestrator,
     /** Exposed so sync tests can assert how a pass groups its writes — see RecordingSyncTransactionRunner. */
@@ -121,18 +123,22 @@ fun buildTestRepositories(
     val subjectRepository =
         SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository, defaultDispatcher)
     val assignmentRepository = AssignmentRepository(
-        api, assignmentDao, subjectDao, syncStateDao, srsSystemDao, studyMaterialDao, defaultDispatcher,
+        api, assignmentDao, subjectDao, syncStateDao, srsSystemDao, defaultDispatcher,
         pendingAssignmentIds = outboxDao::getPendingAssignmentIds
     )
     val statsRepository = StatsRepository(api, reviewStatisticDao, levelProgressionDao, studyActivityDao, syncStateDao, defaultDispatcher)
+    val studyMaterialRepository = StudyMaterialRepository(api, studyMaterialDao, syncStateDao)
     val waniKaniRepository = WaniKaniRepository(api)
     val syncTransactionRunner = RecordingSyncTransactionRunner()
-    val syncOrchestrator = SyncOrchestrator(syncTransactionRunner, subjectRepository, assignmentRepository, statsRepository, syncStateDao)
+    val syncOrchestrator = SyncOrchestrator(
+        syncTransactionRunner, subjectRepository, assignmentRepository, statsRepository,
+        studyMaterialRepository, syncStateDao
+    )
 
     return TestRepositories(
         api, subjectDao, assignmentDao, srsSystemDao, syncStateDao, studyActivityDao, outboxDao, outboxSyncScheduler,
         reviewStatisticDao, studyMaterialDao, levelProgressionDao, subjectRepository, assignmentRepository,
         AssignmentStatsRepository(assignmentDao, subjectDao, srsSystemDao, defaultDispatcher), pitchAccentRepository,
-        statsRepository, waniKaniRepository, syncOrchestrator, syncTransactionRunner, writeLog
+        statsRepository, studyMaterialRepository, waniKaniRepository, syncOrchestrator, syncTransactionRunner, writeLog
     )
 }

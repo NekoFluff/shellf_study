@@ -206,6 +206,17 @@ data class ReviewResultData(
 )
 
 @Serializable
+data class StudyMaterialRequest(@SerialName("study_material") val studyMaterial: StudyMaterialBody)
+
+/** [subjectId] only on create — WaniKani does not let an update move a material to another subject.
+ *  The notes are never sent, so an update leaves whatever the user wrote on the website alone. */
+@Serializable
+data class StudyMaterialBody(
+    @SerialName("subject_id") val subjectId: Long? = null,
+    @SerialName("meaning_synonyms") val meaningSynonyms: List<String>
+)
+
+@Serializable
 data class StartAssignmentRequest(val assignment: StartAssignmentBody = StartAssignmentBody())
 
 @Serializable

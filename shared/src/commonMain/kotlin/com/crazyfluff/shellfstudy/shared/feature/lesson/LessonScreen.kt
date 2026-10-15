@@ -542,7 +542,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonStudyContent(
                 SubjectMeaningAnswer(
                     meanings = item.meanings,
                     auxiliaryMeanings = item.auxiliaryMeanings,
-                    resetKey = item.subjectId
+                    resetKey = item.subjectId,
+                    subjectId = item.subjectId
                 )
                 SubjectReadingAnswer(
                     subjectType = item.subjectType,

@@ -20,6 +20,8 @@ import com.crazyfluff.shellfstudy.shared.data.PitchAccentRepository
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
+import com.crazyfluff.shellfstudy.shared.data.StudyMaterialRepository
+import com.crazyfluff.shellfstudy.shared.data.UserSynonymsStore
 import com.crazyfluff.shellfstudy.shared.data.StrokeOrderRepository
 import com.crazyfluff.shellfstudy.shared.data.SubjectRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
@@ -117,10 +119,12 @@ val repositoryModule = module {
             subjectDao = get(),
             syncStateDao = get(),
             srsSystemDao = get(),
-            studyMaterialDao = get(),
             pendingAssignmentIds = { get<OutboxDao>().getPendingAssignmentIds() }
         )
     }
+
+    single { StudyMaterialRepository(api = get(), studyMaterialDao = get(), syncStateDao = get()) }
+    single<UserSynonymsStore> { get<StudyMaterialRepository>() }
 
     single { AssignmentStatsRepository(assignmentDao = get(), subjectDao = get(), srsSystemDao = get()) }
 
@@ -264,6 +268,7 @@ val syncOrchestrationModule = module {
             subjectRepository = get(),
             assignmentRepository = get(),
             statsRepository = get(),
+            studyMaterialRepository = get(),
             syncStateDao = get()
         )
     }
@@ -345,7 +350,8 @@ val viewModelModule = module {
             appForegroundTracker = get(),
             applicationScope = get(APPLICATION_SCOPE),
             syncOrchestrator = get(),
-            studyTimeRepository = get()
+            studyTimeRepository = get(),
+            userSynonymsStore = get()
         )
     }
 
@@ -362,7 +368,8 @@ val viewModelModule = module {
             appForegroundTracker = get(),
             applicationScope = get(APPLICATION_SCOPE),
             syncOrchestrator = get(),
-            studyTimeRepository = get()
+            studyTimeRepository = get(),
+            userSynonymsStore = get()
         )
     }
 }

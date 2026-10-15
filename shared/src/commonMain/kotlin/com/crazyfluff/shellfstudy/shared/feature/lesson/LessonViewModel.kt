@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.feature.lesson
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.shared.data.UserSynonymsStore
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
@@ -213,7 +214,8 @@ class LessonViewModel(
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope,
     private val syncOrchestrator: SyncOrchestrator,
-    private val studyTimeRepository: StudyTimeRepository
+    private val studyTimeRepository: StudyTimeRepository,
+    override val userSynonymsStore: UserSynonymsStore
 ) : QuizSessionViewModel<LessonItem, LessonUiState>(), LessonActions {
 
     override val _uiState = MutableStateFlow(LessonUiState())
@@ -285,6 +287,7 @@ class LessonViewModel(
     override var latestSettings = AppSettings()
 
     init {
+        trackUserSynonyms()
         loadOrResume()
         viewModelScope.launch {
             // Only kept warm for the ViewModel's own use (see latestSettings): the display flags it

@@ -155,6 +155,7 @@ class ArchitectureConventionsTest {
          */
         val APP_WIDE_LOCALS = listOf(
             "LocalPronunciationAudioPlayer",
+            "LocalUserSynonyms",
             "LocalDisplaySettings",
             "LocalShareText",
             "LocalOpenSubjectDetail",

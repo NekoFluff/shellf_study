@@ -203,7 +203,8 @@ private fun SubjectHeadline(
                     SubjectMeaningAnswer(
                         meanings = detail.meanings,
                         auxiliaryMeanings = detail.auxiliaryMeanings,
-                        resetKey = detail.subjectId
+                        resetKey = detail.subjectId,
+                        subjectId = detail.subjectId
                     )
                 }
                 if (showReading) {

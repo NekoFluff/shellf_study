@@ -39,7 +39,9 @@ fun SubjectMeaningAnswer(
     meanings: List<String>,
     auxiliaryMeanings: List<String>,
     resetKey: Any?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The subject whose user synonyms to show and edit under the meaning; null shows none. */
+    subjectId: Long? = null
 ) {
     if (meanings.isEmpty()) return
 
@@ -58,6 +60,9 @@ fun SubjectMeaningAnswer(
         )
         if (auxiliaryMeanings.isNotEmpty()) {
             AuxiliaryMeaningsText(auxiliaryMeanings, resetKey = resetKey)
+        }
+        if (subjectId != null) {
+            UserSynonymsSection(subjectId)
         }
     }
 }

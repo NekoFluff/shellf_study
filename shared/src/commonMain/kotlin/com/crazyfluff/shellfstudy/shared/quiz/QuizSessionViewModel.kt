@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
+import com.crazyfluff.shellfstudy.shared.data.UserSynonymsStore
 import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlin.concurrent.Volatile
 
 /**
  * The half of a quiz session that is the same for lessons and reviews: keeping the current question's
@@ -47,6 +50,32 @@ abstract class QuizSessionViewModel<
      * animation, which is why it is a field rather than a read.
      */
     protected abstract val latestSettings: AppSettings
+
+    /** Where the user's own synonyms come from and go to — see [trackUserSynonyms]. */
+    protected abstract val userSynonymsStore: UserSynonymsStore
+
+    /**
+     * The user's synonyms by subject id, followed live rather than baked into the session's items: a
+     * session snapshots its items when it starts, and a synonym added or removed since from this
+     * screen's detail sheet must count for the very next answer, or the retry after an undo. A field
+     * for the same reason as [latestSettings].
+     */
+    @Volatile
+    private var latestSynonyms: Map<Long, List<String>> = emptyMap()
+
+    /** Starts following [latestSynonyms]. Called from each subclass's `init`, once
+     *  [userSynonymsStore] is assigned — the base class's own initializer runs before it is. */
+    protected fun trackUserSynonyms() {
+        viewModelScope.launch { userSynonymsStore.observeAllSynonyms().collect { latestSynonyms = it } }
+    }
+
+    /** Everything besides [QuizDisplayItem.meanings] a meaning answer may be: WaniKani's whitelisted
+     *  alternates, then the user's own synonyms, which WaniKani accepts exactly and close-matched alike. */
+    protected fun acceptedAlternates(item: T): List<String> {
+        val synonyms = latestSynonyms[item.subjectId].orEmpty()
+        if (synonyms.isEmpty()) return item.auxiliaryMeanings
+        return (item.auxiliaryMeanings + synonyms).distinctBy { it.lowercase() }
+    }
 
     /** The grading guard, one per session — see [QuizGradingGuard] for why a second concurrent
      *  submission is dropped rather than queued. */
@@ -127,9 +156,10 @@ abstract class QuizSessionViewModel<
         val type = question.type
 
         gradingGuard.launchIfIdle {
-            val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
+            val alternates = acceptedAlternates(item)
+            val candidates = candidatesFor(item.meanings, alternates, item.readings, type)
             val outcome = evaluateAnswer(
-                question.answerInput, type, item.meanings, item.auxiliaryMeanings, item.readings,
+                question.answerInput, type, item.meanings, alternates, item.readings,
                 closeEnoughEnabled = latestSettings.closeEnoughAnswersEnabled,
                 blacklistedMeanings = item.blacklistedMeanings
             )
@@ -151,7 +181,7 @@ abstract class QuizSessionViewModel<
         if (question.grade != null) return
         val item = question.item
         val type = question.type
-        val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
+        val candidates = candidatesFor(item.meanings, acceptedAlternates(item), item.readings, type)
 
         gradingGuard.launchIfIdle {
             gradeAnswer(item, type, isCorrect = false, candidates, wasCloseMatch = false, matchedAnswer = null, isGiveUp = true)
@@ -169,7 +199,7 @@ abstract class QuizSessionViewModel<
         updateGrade { it.copy(answerRevealed = true) }
         val item = question.item
         val type = question.type
-        val candidates = candidatesFor(item.meanings, item.auxiliaryMeanings, item.readings, type)
+        val candidates = candidatesFor(item.meanings, acceptedAlternates(item), item.readings, type)
         publishReadingRevealEffects(item, type, candidates, latestSettings)
     }
 

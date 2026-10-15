@@ -210,7 +210,8 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
         repositories.syncOrchestrator,
         buildTestStudyTimeRepository(
             studyTimeDao, dataStore, backgroundScope, mainDispatcherRule.dispatcher, settingsRepository
-        )
+        ),
+        repositories.studyMaterialRepository
     )
 
     /** Waits for the session summary, which is where the last batch's questions lead directly. */

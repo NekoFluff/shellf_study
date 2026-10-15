@@ -14,8 +14,6 @@ import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
-import com.crazyfluff.shellfstudy.shared.database.StudyMaterialDao
-import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.SyncStateDao
@@ -23,7 +21,6 @@ import com.crazyfluff.shellfstudy.shared.network.AssignmentData
 import com.crazyfluff.shellfstudy.shared.network.ReviewResultData
 import com.crazyfluff.shellfstudy.shared.network.StartAssignmentBody
 import com.crazyfluff.shellfstudy.shared.network.StartAssignmentRequest
-import com.crazyfluff.shellfstudy.shared.network.StudyMaterialData
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.WkResourceItem
@@ -32,7 +29,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -88,8 +84,6 @@ class AssignmentRepository(
     private val subjectDao: SubjectDao,
     private val syncStateDao: SyncStateDao,
     private val srsSystemDao: SrsSystemDao,
-    /** The user's own meaning synonyms, merged into every item's accepted meanings. */
-    private val studyMaterialDao: StudyMaterialDao,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
     /** Assignments with outbox rows not yet sent — see the write in [fetchAssignments]. */
     private val pendingAssignmentIds: suspend () -> Collection<Long> = { emptyList() }
@@ -120,31 +114,6 @@ class AssignmentRepository(
                 ).map { it.toEntity() }
             },
             write = { rows -> assignmentDao.upsertAll(withoutPendingWork(rows)) }
-        )
-
-    suspend fun syncStudyMaterials(force: Boolean = false): ApiResult<Unit> = safeApiCall {
-        fetchStudyMaterials(force)?.let { completeResourceSync(syncStateDao, SyncResources.STUDY_MATERIALS, it) }
-    }
-
-    /**
-     * Fetches the user's study materials without writing them, for the same reason as
-     * [fetchAssignments]. Here rather than in a repository of its own because this one is their only
-     * reader: the synonyms exist to be graded, and the queue items are built here.
-     */
-    internal suspend fun fetchStudyMaterials(force: Boolean = false): ResourceSync<List<StudyMaterialEntity>>? =
-        fetchResourceSync(
-            syncStateDao = syncStateDao,
-            resource = SyncResources.STUDY_MATERIALS,
-            force = force,
-            staleness = ASSIGNMENTS_STALENESS,
-            countRows = { it.size },
-            fetch = { cursor ->
-                collectAllPages(
-                    firstPage = { api.getStudyMaterials(updatedAfter = cursor) },
-                    nextPage = { url -> api.getStudyMaterialsPage(url) }
-                ).map { it.toEntity() }
-            },
-            write = { rows -> studyMaterialDao.upsertAll(rows) }
         )
 
     /**
@@ -282,7 +251,9 @@ class AssignmentRepository(
             } else {
                 // Chunked: this is the unbounded one — every due assignment's subject id, which on an
                 // account with a long backlog is more bound variables than old SQLite accepts.
-                observeSubjectsAndSynonyms(assignments, ::buildReviewItems)
+                chunkedIds(assignments.map { it.subjectId }) { subjectDao.observeByIds(it) }.map { subjects ->
+                    buildReviewItems(assignments, subjects)
+                }
             }
         }.flowOn(defaultDispatcher)
 
@@ -293,29 +264,11 @@ class AssignmentRepository(
         if (assignmentIds.isEmpty()) return emptyList()
         val assignments = chunkedIdsOnce(assignmentIds.toList()) { assignmentDao.getByIds(it) }
         if (assignments.isEmpty()) return emptyList()
-        return observeSubjectsAndSynonyms(assignments, ::buildReviewItems).first()
+        val subjects = chunkedIds(assignments.map { it.subjectId }) { subjectDao.observeByIds(it) }.first()
+        return buildReviewItems(assignments, subjects)
     }
 
-    /** The subjects behind [assignments] and the user's synonyms for them, keyed by subject id,
-     *  re-emitting when either changes — a synonym added mid-session reaches the queue's items. */
-    private fun <T> observeSubjectsAndSynonyms(
-        assignments: List<AssignmentEntity>,
-        build: (List<AssignmentEntity>, List<SubjectEntity>, Map<Long, List<String>>) -> List<T>
-    ): Flow<List<T>> {
-        val subjectIds = assignments.map { it.subjectId }
-        return combine(
-            chunkedIds(subjectIds) { subjectDao.observeByIds(it) },
-            chunkedIds(subjectIds) { studyMaterialDao.observeBySubjectIds(it) }
-        ) { subjects, materials ->
-            build(assignments, subjects, materials.associate { it.subjectId to it.meaningSynonyms })
-        }
-    }
-
-    private fun buildReviewItems(
-        assignments: List<AssignmentEntity>,
-        subjects: List<SubjectEntity>,
-        synonymsBySubjectId: Map<Long, List<String>>
-    ): List<ReviewItem> {
+    private fun buildReviewItems(assignments: List<AssignmentEntity>, subjects: List<SubjectEntity>): List<ReviewItem> {
         val subjectsById = subjects.associateBy { it.id }
         return assignments.mapNotNull { assignment ->
             val subject = subjectsById[assignment.subjectId] ?: return@mapNotNull null
@@ -329,7 +282,7 @@ class AssignmentRepository(
                 srsStage = assignment.srsStage,
                 meanings = subject.acceptedMeanings(),
                 readings = subject.acceptedGradableReadings(),
-                auxiliaryMeanings = subject.acceptedAlternateMeanings(synonymsBySubjectId[subject.id]),
+                auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
                 blacklistedMeanings = subject.blacklistAuxiliaryMeanings(),
                 pronunciationAudios = subject.toPronunciationAudios(),
                 srsSystemId = subject.srsSystemId
@@ -347,7 +300,9 @@ class AssignmentRepository(
             if (assignments.isEmpty()) {
                 flowOf(emptyList())
             } else {
-                observeSubjectsAndSynonyms(assignments, ::buildLessonItems)
+                chunkedIds(assignments.map { it.subjectId }) { subjectDao.observeByIds(it) }.map { subjects ->
+                    buildLessonItems(assignments, subjects)
+                }
             }
         }.flowOn(defaultDispatcher)
 
@@ -358,14 +313,11 @@ class AssignmentRepository(
         if (assignmentIds.isEmpty()) return emptyList()
         val assignments = chunkedIdsOnce(assignmentIds.toList()) { assignmentDao.getByIds(it) }
         if (assignments.isEmpty()) return emptyList()
-        return observeSubjectsAndSynonyms(assignments, ::buildLessonItems).first()
+        val subjects = chunkedIds(assignments.map { it.subjectId }) { subjectDao.observeByIds(it) }.first()
+        return buildLessonItems(assignments, subjects)
     }
 
-    private fun buildLessonItems(
-        assignments: List<AssignmentEntity>,
-        subjects: List<SubjectEntity>,
-        synonymsBySubjectId: Map<Long, List<String>>
-    ): List<LessonItem> {
+    private fun buildLessonItems(assignments: List<AssignmentEntity>, subjects: List<SubjectEntity>): List<LessonItem> {
         val subjectsById = subjects.associateBy { it.id }
         return assignments.mapNotNull { assignment ->
             val subject = subjectsById[assignment.subjectId] ?: return@mapNotNull null
@@ -381,7 +333,7 @@ class AssignmentRepository(
                 readings = subject.acceptedGradableReadings(),
                 meaningMnemonic = subject.meaningMnemonic,
                 readingMnemonic = subject.readingMnemonic,
-                auxiliaryMeanings = subject.acceptedAlternateMeanings(synonymsBySubjectId[subject.id]),
+                auxiliaryMeanings = subject.whitelistAuxiliaryMeanings(),
                 blacklistedMeanings = subject.blacklistAuxiliaryMeanings(),
                 meaningHint = subject.meaningHint,
                 readingHint = subject.readingHint,
@@ -434,16 +386,6 @@ private fun SubjectEntity.acceptedGradableReadings(): List<String> =
 private fun SubjectEntity.whitelistAuxiliaryMeanings(): List<String> =
     auxiliaryMeanings.filter { it.type == "whitelist" }.map { it.meaning }
 
-/** Everything besides the primary meanings that grading accepts: WaniKani's whitelisted alternates,
- *  then the user's own synonyms, which WaniKani accepts exactly and close-matched just the same. A
- *  synonym that repeats an alternate is dropped so the reveal does not list it twice. */
-private fun SubjectEntity.acceptedAlternateMeanings(userSynonyms: List<String>?): List<String> {
-    val whitelisted = whitelistAuxiliaryMeanings()
-    if (userSynonyms.isNullOrEmpty()) return whitelisted
-    return (whitelisted + userSynonyms.map { it.trim() }.filter { it.isNotEmpty() })
-        .distinctBy { it.lowercase() }
-}
-
 /** WaniKani's blacklisted alternate meanings — decoys that grading refuses even as a close-enough
  *  typo of a real meaning (see CloseEnoughMatcher.match's `rejected`). */
 private fun SubjectEntity.blacklistAuxiliaryMeanings(): List<String> =
@@ -463,13 +405,6 @@ private fun AssignmentEntity.withStageTransition(newStage: Int, srsSystem: SrsSy
         burnedAt = burnedAt ?: if (newStage >= srsSystem.burningStagePosition) nowIso else null
     )
 }
-
-private fun WkResourceItem<StudyMaterialData>.toEntity(): StudyMaterialEntity = StudyMaterialEntity(
-    id = id,
-    subjectId = data.subjectId,
-    meaningSynonyms = data.meaningSynonyms,
-    hidden = data.hidden
-)
 
 private fun WkResourceItem<AssignmentData>.toEntity(): AssignmentEntity = AssignmentEntity(
     id = id,

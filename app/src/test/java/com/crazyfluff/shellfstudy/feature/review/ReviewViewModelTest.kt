@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.feature.review
 
+import com.crazyfluff.shellfstudy.fakes.FakeStudyMaterialServer
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewUiState
 import com.crazyfluff.shellfstudy.shared.feature.review.ReviewViewModel
 import androidx.datastore.core.DataStore
@@ -189,7 +190,8 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
         repositories.syncOrchestrator,
         buildTestStudyTimeRepository(
             studyTimeDao, dataStore, backgroundScope, mainDispatcherRule.dispatcher, settingsRepository
-        )
+        ),
+        repositories.studyMaterialRepository
     )
 
 
@@ -432,6 +434,43 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
             assertThat(persisted!!.pendingSubmissionAssignmentId).isEqualTo(101L)
         } else {
             assertThat(persisted!!.pendingSubmissionAssignmentId).isNull()
+        }
+    }
+
+    // --- user synonyms ---
+
+    /** [dispatch] plus WaniKani's study-material endpoints, kept as state. */
+    private fun dispatchWithStudyMaterials(wanikani: FakeStudyMaterialServer) {
+        server.dispatcher = waniKaniCollectionDispatcher { request ->
+            val path = request.target.orEmpty()
+            wanikani.stub(request) ?: when {
+                request.method == "POST" && path.startsWith("/reviews") -> jsonResponse(reviewResultJson())
+                path.startsWith("/assignments") -> jsonResponse(radicalAssignmentsJson())
+                path.startsWith("/subjects") -> jsonResponse(radicalSubjectsJson())
+                else -> null
+            }
+        }
+    }
+
+    @Test
+    fun `a synonym added after the session started counts for the next answer`() = runTest(mainDispatcherRule.dispatcher) {
+        val wanikani = FakeStudyMaterialServer()
+        dispatchWithStudyMaterials(wanikani)
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is ReviewUiState.Phase.Loading) state = awaitItem()
+
+            // As if from the detail sheet, after the queue's items were already built.
+            repositories.studyMaterialRepository.addSynonym(1, "Goblin")
+            viewModel.onAnswerInputChange("goblim")
+            viewModel.submitAnswer()
+            while (state.question?.feedback == null) state = awaitItem()
+            assertThat(state.question!!.feedback!!.isCorrect).isTrue()
+            assertThat(state.question!!.feedback!!.wasCloseMatch).isTrue()
+            assertThat(state.question!!.feedback!!.matchedAnswer).isEqualTo("Goblin")
+            cancelAndIgnoreRemainingEvents()
         }
     }
 

@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.ResourceSync
 import com.crazyfluff.shellfstudy.shared.data.StatsRepository
+import com.crazyfluff.shellfstudy.shared.data.StudyMaterialRepository
 import com.crazyfluff.shellfstudy.shared.data.safeApiCall
 import com.crazyfluff.shellfstudy.shared.data.ASSIGNMENTS_RESUME_STALENESS
 import com.crazyfluff.shellfstudy.shared.data.ASSIGNMENTS_STALENESS
@@ -27,6 +28,7 @@ class SyncOrchestrator(
     private val subjectRepository: SubjectRepository,
     private val assignmentRepository: AssignmentRepository,
     private val statsRepository: StatsRepository,
+    private val studyMaterialRepository: StudyMaterialRepository,
     private val syncStateDao: SyncStateDao
 ) {
     // syncAll and fullRefresh have independent, legitimate entry points (periodic worker, dashboard
@@ -143,7 +145,7 @@ class SyncOrchestrator(
                     staleness = if (resumeAssignments) ASSIGNMENTS_RESUME_STALENESS else ASSIGNMENTS_STALENESS
                 )
             },
-            ResourceFetch(SyncResources.STUDY_MATERIALS) { assignmentRepository.fetchStudyMaterials(force) },
+            ResourceFetch(SyncResources.STUDY_MATERIALS) { studyMaterialRepository.fetchStudyMaterials(force) },
             ResourceFetch(SyncResources.REVIEW_STATISTICS) { statsRepository.fetchReviewStatistics(force) },
             ResourceFetch(SyncResources.LEVEL_PROGRESSIONS) { statsRepository.fetchLevelProgressions(force) }
         ).filter { it.resource in resources }

@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.feature.review
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.shared.data.UserSynonymsStore
 import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.audio.playMatchingReading
 import com.crazyfluff.shellfstudy.shared.coroutines.runDurably
@@ -138,7 +139,8 @@ class ReviewViewModel(
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope,
     private val syncOrchestrator: SyncOrchestrator,
-    private val studyTimeRepository: StudyTimeRepository
+    private val studyTimeRepository: StudyTimeRepository,
+    override val userSynonymsStore: UserSynonymsStore
 ) : QuizSessionViewModel<ReviewItem, ReviewUiState>(), ReviewActions {
 
     override val _uiState = MutableStateFlow(ReviewUiState())
@@ -196,6 +198,7 @@ class ReviewViewModel(
     override var latestSettings = AppSettings()
 
     init {
+        trackUserSynonyms()
         loadOrResume()
         viewModelScope.launch {
             // Only kept warm for the ViewModel's own use (see latestSettings): the display flags it

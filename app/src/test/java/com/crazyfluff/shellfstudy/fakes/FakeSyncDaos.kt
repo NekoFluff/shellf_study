@@ -58,8 +58,17 @@ class FakeStudyMaterialDao(private val writeLog: SyncWriteLog? = null) : StudyMa
         materials.value = emptyMap()
     }
 
-    override fun observeBySubjectIds(subjectIds: List<Long>): Flow<List<StudyMaterialEntity>> =
-        materials.map { map -> map.values.filter { it.subjectId in subjectIds } }
+    override suspend fun deleteById(id: Long) {
+        materials.value = materials.value - id
+    }
+
+    override suspend fun getBySubjectId(subjectId: Long): StudyMaterialEntity? =
+        materials.value.values.firstOrNull { it.subjectId == subjectId }
+
+    override fun observeBySubjectId(subjectId: Long): Flow<StudyMaterialEntity?> =
+        materials.map { map -> map.values.firstOrNull { it.subjectId == subjectId } }
+
+    override fun observeAll(): Flow<List<StudyMaterialEntity>> = materials.map { it.values.toList() }
 
     /** Test-only: every stored row. */
     fun all(): List<StudyMaterialEntity> = materials.value.values.toList()
