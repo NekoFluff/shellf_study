@@ -1,8 +1,6 @@
 package com.crazyfluff.shellfstudy.core.audio
 
-import android.media.AudioAttributes
 import android.net.Uri
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -25,13 +23,11 @@ import java.io.File
  * ([com.crazyfluff.shellfstudy.shared.data.IosPronunciationAudioPlayer]) — this ExoPlayer-based
  * one stays Android-only.
  *
- * Audio focus is requested here rather than left to ExoPlayer's own automatic handling: that
- * feature only works for `USAGE_MEDIA`/`USAGE_GAME` — for this player's
- * `USAGE_ASSISTANCE_NAVIGATION_GUIDANCE` it silently never requests focus at all, which is why
- * other apps' audio was never being ducked. Requesting `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK`
- * ourselves, scoped tightly to each clip (requested right before [play], abandoned right after
- * each clip ends/fails or [stop] is called — never held between clips or for the life of the
- * screen), asks the OS to lower other apps' volume for exactly that window and nothing more.
+ * Audio focus is handled here (through [AudioFocusLease]) rather than left to ExoPlayer's own
+ * automatic handling: that feature only works for `USAGE_MEDIA`/`USAGE_GAME` — for this player's
+ * `USAGE_ASSISTANCE_NAVIGATION_GUIDANCE` it silently never requests focus at all. The lease is
+ * acquired right before each clip and released when it ends, fails or is stopped; it decides
+ * whether focus is needed at all and holds it across a quick run of clips.
  */
 class RealPronunciationAudioPlayer(
     private val exoPlayer: ExoPlayer,
@@ -41,21 +37,7 @@ class RealPronunciationAudioPlayer(
     private val _state = MutableStateFlow(PlaybackState.IDLE)
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
-    private val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
-        )
-        .setOnAudioFocusChangeListener { focusChange ->
-            if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
-                focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT
-            ) {
-                exoPlayer.pause()
-            }
-        }
-        .build()
+    private val focus = AudioFocusLease(audioManager, onLoss = ::stop)
 
     init {
         exoPlayer.addListener(object : Player.Listener {
@@ -86,14 +68,13 @@ class RealPronunciationAudioPlayer(
 
     private fun releaseFocus() {
         exoPlayer.stop()
-        audioManager.abandonAudioFocusRequest(focusRequest)
+        focus.release()
     }
 
     override fun play(audio: PronunciationAudio) {
         // A denied request (e.g. an active phone call holding exclusive focus) means the OS has
-        // decided this shouldn't play right now — previously ignored, so playback proceeded
-        // regardless with no ducking and no other indication the request was denied.
-        if (audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_FAILED) {
+        // decided this shouldn't play right now.
+        if (!focus.acquire()) {
             _state.value = PlaybackState.ERROR
             return
         }
