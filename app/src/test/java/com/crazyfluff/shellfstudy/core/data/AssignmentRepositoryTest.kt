@@ -133,6 +133,38 @@ class AssignmentRepositoryTest {
     }
 
     @Test
+    fun `observeReviewQueue grades a kanji taught by its nanori reading, but not an unaccepted one`() = runTest {
+        // Modelled on 叔, which WaniKani teaches by its nanori お; the accepted flags here are
+        // illustrative, chosen so only the accepted nanori should survive the filter.
+        repositories.subjectDao.upsertAll(
+            listOf(
+                SubjectEntity(
+                    id = 440,
+                    subjectType = "kanji",
+                    level = 3,
+                    slug = "叔",
+                    characters = "叔",
+                    meanings = listOf(MeaningData(meaning = "Uncle", primary = true)),
+                    readings = listOf(
+                        ReadingData(reading = "しゅく", primary = false, acceptedReading = false, type = "onyomi"),
+                        ReadingData(reading = "お", primary = true, acceptedReading = true, type = "nanori"),
+                        ReadingData(reading = "よし", primary = false, acceptedReading = false, type = "nanori")
+                    ),
+                    documentUrl = null,
+                    searchTarget = "叔 uncle お"
+                )
+            )
+        )
+        server.enqueue(jsonResponse(assignmentJson(id = 999, availableAt = PAST)))
+
+        repository.syncAssignments(force = true)
+
+        repository.observeReviewQueue().test {
+            assertThat(awaitItem().first().readings).containsExactly("お")
+        }
+    }
+
+    @Test
     fun `startAssignment posts to the start endpoint`() = runTest {
         server.enqueue(jsonResponse(startAssignmentResultJson(id = 777)))
 

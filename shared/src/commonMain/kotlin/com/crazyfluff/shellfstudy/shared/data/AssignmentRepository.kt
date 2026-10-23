@@ -383,10 +383,10 @@ private fun SubjectEntity.acceptedMeanings(): List<String> =
     meanings.filter { it.acceptedMeaning }.map { it.meaning }
 
 /** Readings gradable against the single "what is the reading?" quiz question — excludes any
- *  explicitly flagged not-accepted, and kanji nanori (name readings), which WaniKani shows for
- *  reference but never tests. */
+ *  explicitly flagged not-accepted. Reading type is deliberately not consulted: most nanori are
+ *  flagged not-accepted, but a few kanji (e.g. 叔, taught as お) are taught by their nanori. */
 private fun SubjectEntity.acceptedGradableReadings(): List<String> =
-    readings.filter { it.acceptedReading && it.type != "nanori" }.map { it.reading }
+    readings.filter { it.acceptedReading }.map { it.reading }
 
 /** WaniKani's own official alternate meanings (e.g. "1" alongside "one") that should be accepted
  *  just like a primary meaning — excludes blacklist entries, which are deliberately wrong-looking
