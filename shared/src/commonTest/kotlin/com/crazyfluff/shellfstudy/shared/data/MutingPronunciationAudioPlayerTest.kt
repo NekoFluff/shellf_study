@@ -17,6 +17,7 @@ class MutingPronunciationAudioPlayerTest {
         override val state = MutableStateFlow(PlaybackState.IDLE)
         val played = mutableListOf<PronunciationAudio>()
         var stopCount = 0
+        var focusHeld = false
 
         override fun play(audio: PronunciationAudio) {
             played += audio
@@ -26,6 +27,14 @@ class MutingPronunciationAudioPlayerTest {
         override fun stop() {
             stopCount++
             state.value = PlaybackState.IDLE
+        }
+
+        override fun holdFocus() {
+            focusHeld = true
+        }
+
+        override fun releaseFocus() {
+            focusHeld = false
         }
     }
 
@@ -80,4 +89,16 @@ class MutingPronunciationAudioPlayerTest {
 
             assertEquals(listOf(clip, clip), delegate.played)
         }
+
+    @Test
+    fun `focus passes through whether or not muted`() = runTest(UnconfinedTestDispatcher()) {
+        val delegate = RecordingPlayer()
+        val player = player(delegate, MutableStateFlow(true))
+
+        player.holdFocus()
+        assertEquals(true, delegate.focusHeld)
+
+        player.releaseFocus()
+        assertEquals(false, delegate.focusHeld)
+    }
 }

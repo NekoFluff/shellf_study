@@ -14,4 +14,12 @@ interface PronunciationAudioPlayer {
     /** Whether [audio] can play without the network — see
      *  [com.crazyfluff.shellfstudy.shared.audio.selectAudioFor], which prefers clips that can. */
     fun isAvailableOffline(audio: PronunciationAudio): Boolean = true
+
+    /** Called while a screen that plays a run of clips (reviews, lessons) is in front, so the
+     *  platform can lower other apps' audio once for the whole visit rather than per clip. No-op where
+     *  the platform handles that per clip (iOS). */
+    fun holdFocus() {}
+
+    /** Ends [holdFocus]. */
+    fun releaseFocus() {}
 }

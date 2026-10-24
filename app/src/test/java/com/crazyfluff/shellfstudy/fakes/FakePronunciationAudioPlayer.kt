@@ -11,6 +11,8 @@ class FakePronunciationAudioPlayer : PronunciationAudioPlayer {
     override val state: StateFlow<PlaybackState> = _state
 
     val playedAudios = mutableListOf<PronunciationAudio>()
+    var focusHeld = false
+        private set
 
     override fun play(audio: PronunciationAudio) {
         playedAudios.add(audio)
@@ -19,6 +21,14 @@ class FakePronunciationAudioPlayer : PronunciationAudioPlayer {
 
     override fun stop() {
         _state.value = PlaybackState.IDLE
+    }
+
+    override fun holdFocus() {
+        focusHeld = true
+    }
+
+    override fun releaseFocus() {
+        focusHeld = false
     }
 
     /** Test hook for reporting a state [play]/[stop] can't reach on their own — e.g. a failed load. */

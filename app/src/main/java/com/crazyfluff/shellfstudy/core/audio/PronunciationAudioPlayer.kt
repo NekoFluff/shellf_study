@@ -1,6 +1,8 @@
 package com.crazyfluff.shellfstudy.core.audio
 
 import android.net.Uri
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -23,11 +25,14 @@ import java.io.File
  * ([com.crazyfluff.shellfstudy.shared.data.IosPronunciationAudioPlayer]) — this ExoPlayer-based
  * one stays Android-only.
  *
- * Audio focus is handled here (through [AudioFocusLease]) rather than left to ExoPlayer's own
- * automatic handling: that feature only works for `USAGE_MEDIA`/`USAGE_GAME` — for this player's
- * `USAGE_ASSISTANCE_NAVIGATION_GUIDANCE` it silently never requests focus at all. The lease is
- * acquired right before each clip and released when it ends, fails or is stopped; it decides
- * whether focus is needed at all and holds it across a quick run of clips.
+ * Audio focus is never touched per clip. Every request tells the previous holder it lost focus and
+ * every abandon tells it focus is back, and a paused Spotify that still held focus would sometimes
+ * take that as a cue to start playing. Instead, review and lesson screens hold focus for as long as
+ * they're in front ([holdFocus]/[releaseFocus]), so another app hears at most one loss/gain pair
+ * per visit. The request isn't `CONTENT_TYPE_SPEECH`: for speech the OS skips automatic ducking and
+ * tells the other app to handle the loss itself, whereas without it the OS just lowers that app's
+ * volume, and the app doesn't need to react at all. Clips played elsewhere play without focus,
+ * over whatever else is playing. ExoPlayer's own focus handling is off (see AudioModule).
  */
 class RealPronunciationAudioPlayer(
     private val exoPlayer: ExoPlayer,
@@ -37,13 +42,26 @@ class RealPronunciationAudioPlayer(
     private val _state = MutableStateFlow(PlaybackState.IDLE)
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
-    private val focus = AudioFocusLease(audioManager, onLoss = ::stop)
+    private var holdsFocus = false
+
+    private val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+        .setAudioAttributes(
+            AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE).build()
+        )
+        .setOnAudioFocusChangeListener { focusChange ->
+            // Another app (or a call) took focus: it's theirs until the screen next resumes.
+            if (focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+                holdsFocus = false
+                stop()
+            }
+        }
+        .build()
 
     init {
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) {
-                    releaseFocus()
+                    exoPlayer.stop()
                     _state.value = PlaybackState.IDLE
                     return
                 }
@@ -60,21 +78,15 @@ class RealPronunciationAudioPlayer(
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                releaseFocus()
+                exoPlayer.stop()
                 _state.value = PlaybackState.ERROR
             }
         })
     }
 
-    private fun releaseFocus() {
-        exoPlayer.stop()
-        focus.release()
-    }
-
     override fun play(audio: PronunciationAudio) {
-        // A denied request (e.g. an active phone call holding exclusive focus) means the OS has
-        // decided this shouldn't play right now.
-        if (!focus.acquire()) {
+        // Not over a phone call — the role focus denial used to play.
+        if (audioManager.mode != AudioManager.MODE_NORMAL) {
             _state.value = PlaybackState.ERROR
             return
         }
@@ -84,7 +96,18 @@ class RealPronunciationAudioPlayer(
     }
 
     override fun stop() {
-        releaseFocus()
+        exoPlayer.stop()
         _state.value = PlaybackState.IDLE
+    }
+
+    override fun holdFocus() {
+        if (holdsFocus) return
+        holdsFocus = audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    override fun releaseFocus() {
+        if (!holdsFocus) return
+        holdsFocus = false
+        audioManager.abandonAudioFocusRequest(focusRequest)
     }
 }
