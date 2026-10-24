@@ -51,6 +51,28 @@ private val MIGRATION_11_12 = object : Migration(11, 12) {
 }
 
 /**
+ * Makes WaniKani's whitelisted auxiliary meanings searchable for subjects synced before they were:
+ * appends them to `searchTarget`, the column the search box matches. Without it they only land as each
+ * subject is next updated upstream, since the subject sync is incremental. A data-only migration — no
+ * schema change — reading the `auxiliaryMeanings` JSON column (`[{"meaning":…,"type":…}]`) in SQL, so
+ * the library isn't re-downloaded. `lower` only folds ASCII, which is all an English meaning needs.
+ *
+ * Not re-runnable like the DDL ones: a second pass would append the meanings again. Room runs each
+ * migration once, inside the version bump's transaction.
+ */
+private val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "UPDATE subjects SET searchTarget = searchTarget || (" +
+                "SELECT ' ' || group_concat(lower(json_extract(value, '$.meaning')), ' ') " +
+                "FROM json_each(subjects.auxiliaryMeanings) WHERE json_extract(value, '$.type') = 'whitelist') " +
+                "WHERE EXISTS (SELECT 1 FROM json_each(subjects.auxiliaryMeanings) " +
+                "WHERE json_extract(value, '$.type') = 'whitelist')"
+        )
+    }
+}
+
+/**
  * Schema migrations for [AppDatabase], newest last.
  *
  * [buildAppDatabase] still falls back to a destructive migration, but that fallback is a safety net
@@ -65,4 +87,5 @@ private val MIGRATION_11_12 = object : Migration(11, 12) {
  * failing. The list is public rather than internal only so that test, which lives in `:app` because
  * that is where an Android-side SQLite driver can run on the JVM, can apply the real list.
  */
-val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+val APP_DATABASE_MIGRATIONS: Array<Migration> =
+    arrayOf(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)

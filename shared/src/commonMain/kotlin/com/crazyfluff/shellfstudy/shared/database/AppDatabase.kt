@@ -19,7 +19,7 @@ import kotlinx.coroutines.Dispatchers
         StudyMaterialEntity::class,
         SyncStateEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

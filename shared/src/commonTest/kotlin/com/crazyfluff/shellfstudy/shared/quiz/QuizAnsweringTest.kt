@@ -16,17 +16,26 @@ class QuizAnsweringTest {
 
     @Test
     fun `an exact meaning names the answer it equals`() {
-        assertEquals(AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = false, matchedAnswer = "Rise"), meaning("rise"))
+        assertEquals(
+            AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = false, matchedAnswer = "Rise"),
+            meaning("rise")
+        )
     }
 
     @Test
     fun `a close meaning names the answer it was close to`() {
-        assertEquals(AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = true, matchedAnswer = "Ascend"), meaning("acsend"))
+        assertEquals(
+            AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = true, matchedAnswer = "Ascend"),
+            meaning("acsend")
+        )
     }
 
     @Test
     fun `a whitelisted auxiliary meaning is matched too`() {
-        assertEquals(AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = false, matchedAnswer = "Go Up"), meaning("go-up"))
+        assertEquals(
+            AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = false, matchedAnswer = "Go Up"),
+            meaning("go-up")
+        )
     }
 
     /** User synonyms reach grading as auxiliary meanings — AssignmentRepository appends them to the
@@ -67,7 +76,10 @@ class QuizAnsweringTest {
 
     @Test
     fun `close matching off grades a typo incorrect`() {
-        assertEquals(AnswerOutcome.Graded(isCorrect = false, wasCloseMatch = false), meaning("acsend", closeEnough = false))
+        assertEquals(
+            AnswerOutcome.Graded(isCorrect = false, wasCloseMatch = false),
+            meaning("acsend", closeEnough = false)
+        )
     }
 
     @Test
@@ -83,8 +95,12 @@ class QuizAnsweringTest {
     @Test
     fun `a reading must match exactly after romaji conversion`() {
         val readings = listOf("のぼる")
-        fun reading(input: String) = evaluateAnswer(input, QuestionType.READING, listOf("Ascend"), emptyList(), readings)
-        assertEquals(AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = false, matchedAnswer = "のぼる"), reading("noboru"))
+        fun reading(input: String) =
+            evaluateAnswer(input, QuestionType.READING, listOf("Ascend"), emptyList(), readings)
+        assertEquals(
+            AnswerOutcome.Graded(isCorrect = true, wasCloseMatch = false, matchedAnswer = "のぼる"),
+            reading("noboru")
+        )
         assertEquals(AnswerOutcome.Graded(isCorrect = false, wasCloseMatch = false), reading("nobori"))
         assertEquals(AnswerOutcome.TypeMismatch, reading("ascend"))
     }

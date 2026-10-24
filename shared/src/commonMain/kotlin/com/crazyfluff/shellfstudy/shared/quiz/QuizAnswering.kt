@@ -44,7 +44,11 @@ sealed interface AnswerOutcome {
 
     /** [matchedAnswer] is the accepted answer a correct input was taken as — the one a close match
      *  was forgiven against, or the one an exact answer equals. Null for a wrong answer. */
-    data class Graded(val isCorrect: Boolean, val wasCloseMatch: Boolean, val matchedAnswer: String? = null) : AnswerOutcome
+    data class Graded(
+        val isCorrect: Boolean,
+        val wasCloseMatch: Boolean,
+        val matchedAnswer: String? = null
+    ) : AnswerOutcome
 }
 
 fun evaluateAnswer(

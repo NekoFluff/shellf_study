@@ -450,7 +450,8 @@ class ReviewViewModel(
         val newRankChange = grade?.let { assignmentRepository.computeReviewRankChange(item, it)?.takeIf { rc -> rc.from != rc.to } }
 
         val answerGrade = QuizGrade.of(
-            isCorrect, candidates, wasCloseMatch, matchedAnswer, answerRevealed = revealedNow, rankChange = newRankChange
+            isCorrect, candidates, wasCloseMatch, matchedAnswer,
+            answerRevealed = revealedNow, rankChange = newRankChange
         )
         updateActive { active ->
             active.copy(

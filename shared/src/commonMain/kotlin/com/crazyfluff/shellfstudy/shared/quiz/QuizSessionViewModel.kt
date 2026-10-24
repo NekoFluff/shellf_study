@@ -184,7 +184,10 @@ abstract class QuizSessionViewModel<
         val candidates = candidatesFor(item.meanings, acceptedAlternates(item), item.readings, type)
 
         gradingGuard.launchIfIdle {
-            gradeAnswer(item, type, isCorrect = false, candidates, wasCloseMatch = false, matchedAnswer = null, isGiveUp = true)
+            gradeAnswer(
+                item, type, isCorrect = false, candidates,
+                wasCloseMatch = false, matchedAnswer = null, isGiveUp = true
+            )
         }
     }
 

@@ -94,7 +94,8 @@ class SubjectRepository(
                         hiddenAt = item.data.hiddenAt,
                         searchTarget = buildSearchTarget(
                             item.data.characters, item.data.slug, item.data.meanings.map { it.meaning },
-                            item.data.readings.map { it.reading }
+                            item.data.readings.map { it.reading },
+                            item.data.auxiliaryMeanings.filter { it.type == "whitelist" }.map { it.meaning }
                         ),
                         primaryReadingKey = primaryReadingKey(item.data.readings)
                     )
@@ -224,8 +225,16 @@ private fun phoneticallySimilarIds(subject: SubjectEntity, candidates: List<Subj
             .map { it.id }
     }
 
-private fun buildSearchTarget(characters: String?, slug: String, meanings: List<String>, readings: List<String>): String =
-    (listOfNotNull(characters) + slug + meanings + readings).joinToString(" ").lowercase()
+/** Whitelisted auxiliary meanings go last, which is where MIGRATION_12_13 appends them for rows
+ *  synced before they were searchable — so a backfilled row and a freshly synced one are identical. */
+private fun buildSearchTarget(
+    characters: String?,
+    slug: String,
+    meanings: List<String>,
+    readings: List<String>,
+    whitelistAuxiliaryMeanings: List<String>
+): String =
+    (listOfNotNull(characters) + slug + meanings + readings + whitelistAuxiliaryMeanings).joinToString(" ").lowercase()
 
 /** Escapes a raw search string for use inside [SubjectDao.observeSearch]'s `LIKE ... ESCAPE '\'`
  *  pattern, so a literal `%` or `_` typed by the user (e.g. searching for a romanization

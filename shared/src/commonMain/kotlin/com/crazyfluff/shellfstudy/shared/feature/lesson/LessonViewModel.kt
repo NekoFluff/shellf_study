@@ -962,7 +962,8 @@ class LessonViewModel(
         val revealedNow = isCorrect || isGiveUp || !requiresTapToRevealAnswer(settings, type)
 
         val answerGrade = QuizGrade.of(
-            isCorrect, candidates, wasCloseMatch, matchedAnswer, answerRevealed = revealedNow, rankChange = newRankChange
+            isCorrect, candidates, wasCloseMatch, matchedAnswer,
+            answerRevealed = revealedNow, rankChange = newRankChange
         )
         updateQuizPhase { phase ->
             phase.copy(
