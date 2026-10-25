@@ -957,6 +957,37 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `paging past the current level projects its fastest unlock and level-up`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatchByPath(
+            jsonResponse(userJson()),
+            jsonResponse(summaryJson()),
+            assignmentsResponse = jsonResponse(levelUpAssignmentsJson()),
+            subjectsResponse = jsonResponse(levelUpSubjectsJson(includeNextLevel = true))
+        )
+        val viewModel = createViewModel()
+        viewModel.onDashboardResumed()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.levelUpPath?.levelUpAt == null) state = awaitItem()
+            assertThat(state.projectedLevel).isNull()
+            val currentLevelUpAt = state.levelUpPath!!.levelUpAt!!
+
+            viewModel.onLevelProgressLevelChange(13)
+            while (state.projectedLevel == null) state = awaitItem()
+
+            val projected = state.projectedLevel!!
+            assertThat(projected.level).isEqualTo(13)
+            assertThat(projected.unlockAt).isEqualTo(currentLevelUpAt)
+            assertThat(projected.levelUpAt!! > projected.unlockAt).isTrue()
+
+            viewModel.onLevelProgressLevelChange(12)
+            while (state.projectedLevel != null) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `computes a completion projection from total subjects and items seen`() = runTest(mainDispatcherRule.dispatcher) {
         dispatchByPath(
             jsonResponse(userJson()),
@@ -1110,7 +1141,7 @@ class DashboardViewModelTest {
         }
     """.trimIndent()
 
-    private fun levelUpSubjectsJson(includeOtherLevel: Boolean = false) = """
+    private fun levelUpSubjectsJson(includeOtherLevel: Boolean = false, includeNextLevel: Boolean = false) = """
         {
           "object": "collection",
           "url": "https://api.wanikani.com/v2/subjects",
@@ -1142,6 +1173,17 @@ class DashboardViewModelTest {
                 "created_at": "2020-01-01T00:00:00.000000Z", "level": 5, "slug": "三", "characters": "三",
                 "meanings": [{"meaning": "Three", "primary": true, "accepted_meaning": true}],
                 "readings": [{"reading": "さん", "primary": true, "accepted_reading": true}]
+              }
+            }"""
+    }${
+        if (!includeNextLevel) "" else """,
+            {
+              "id": 4, "object": "kanji", "url": "https://api.wanikani.com/v2/subjects/4",
+              "data_updated_at": "2026-01-01T00:00:00.000000Z",
+              "data": {
+                "created_at": "2020-01-01T00:00:00.000000Z", "level": 13, "slug": "四", "characters": "四",
+                "meanings": [{"meaning": "Four", "primary": true, "accepted_meaning": true}],
+                "readings": [{"reading": "し", "primary": true, "accepted_reading": true}]
               }
             }"""
     }

@@ -2,9 +2,11 @@ package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpPath
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpStep
+import com.crazyfluff.shellfstudy.shared.data.model.ProjectedLevel
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStageCalculator
 import com.crazyfluff.shellfstudy.shared.database.LevelUpPathRow
+import com.crazyfluff.shellfstudy.shared.database.LevelUpProjectionRow
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
 import kotlin.time.Instant
 
@@ -29,6 +31,8 @@ private val GURU_STAGE = SrsStage.GURU_1.raw
  * 10:37 with a 4-hour interval comes due at 14:00, not 14:37.
  *
  * The level-up time is then the [LevelUpPath.requiredCount]-th earliest kanji — WaniKani's 90% rule.
+ *
+ * [projectFutureLevels] chains the same calculation past the current level.
  */
 object LevelUpPathCalculator {
 
@@ -59,6 +63,47 @@ object LevelUpPathCalculator {
             nextStep = nextStep(rows, pending, kanjiLeft, includeLessons = true),
             nextReviewStep = nextStep(rows, pending, kanjiLeft, includeLessons = false)
         )
+    }
+
+    /**
+     * Levels after the current one on the fastest path. Each unlocks the moment the level before it
+     * levels up, so it's [calculate] run from that moment over the level's radicals and kanji as fresh
+     * rows: every radical's lesson happens at unlock, and every kanji waits on its radicals at that
+     * level, as a locked kanji does today. Radicals from earlier levels count as already met.
+     *
+     * The chain starts at [current]'s level-up — or at its `computedAt` when the current level is
+     * already ready and only waiting on WaniKani — and stops after the first level whose level-up
+     * can't be worked out, since every level after it would be a guess. Empty when the current
+     * level's own level-up is unknown.
+     */
+    fun projectFutureLevels(
+        current: LevelUpPath,
+        currentLevel: Int,
+        rows: List<LevelUpProjectionRow>,
+        srsSystems: Map<Long, SrsSystemEntity>,
+        through: Int
+    ): List<ProjectedLevel> {
+        val currentIsReady = current.kanjiTotal > 0 && current.alreadyGuruCount >= current.requiredCount
+        var unlockAt = (if (currentIsReady) current.computedAt else current.levelUpAt) ?: return emptyList()
+        val rowsByLevel = rows.groupBy { it.level }
+        val projected = mutableListOf<ProjectedLevel>()
+        for (level in (currentLevel + 1)..through) {
+            val fresh = rowsByLevel[level].orEmpty().map { row ->
+                LevelUpPathRow(
+                    subjectId = row.subjectId,
+                    subjectType = row.subjectType,
+                    srsSystemId = row.srsSystemId,
+                    componentSubjectIds = row.componentSubjectIds,
+                    srsStage = 0,
+                    unlockedAt = null,
+                    availableAt = null
+                )
+            }
+            val levelUpAt = calculate(fresh, srsSystems, unlockAt).levelUpAt
+            projected += ProjectedLevel(level, unlockAt, levelUpAt, computedAt = current.computedAt)
+            unlockAt = levelUpAt ?: break
+        }
+        return projected
     }
 
     /**

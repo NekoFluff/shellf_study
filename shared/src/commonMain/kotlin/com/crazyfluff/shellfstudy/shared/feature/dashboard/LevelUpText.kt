@@ -10,12 +10,20 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
-private const val HOUR_MS = 3_600_000L
-private const val HOURS_PER_DAY = 24
+/** Within this many days a date reads as a weekday ("Thu"); further out it needs the month and day. */
+private const val WEEKDAY_HORIZON_DAYS = 6
 
 /** "Fastest level-up · Thu 3:00 PM (in 2d 6h)". */
 internal fun levelUpEtaCaption(levelUpAt: Instant, now: Instant, is24h: Boolean, zone: TimeZone): String =
-    "Fastest level-up · ${dayAndHour(levelUpAt, now, is24h, zone)} (${relativeEta(levelUpAt, now)})"
+    "Fastest level-up · ${dayAndHour(levelUpAt, now, is24h, zone)} (${relativeEta(levelUpAt, now, zone)})"
+
+/** "Unlocks · Mar 14, 2027 9:00 AM (in 1y 4mo)" — when a level the user hasn't reached opens up. */
+internal fun unlockEtaCaption(unlockAt: Instant, now: Instant, is24h: Boolean, zone: TimeZone): String =
+    "Unlocks · ${dayAndHour(unlockAt, now, is24h, zone)} (${relativeEta(unlockAt, now, zone)})"
+
+/** "Level takes 6d 21h" — from a level unlocking to its fastest level-up. */
+internal fun levelDurationCaption(unlockAt: Instant, levelUpAt: Instant, zone: TimeZone): String =
+    "Level takes ${durationText(unlockAt, levelUpAt, zone)}"
 
 /** "12 kanji left to Guru". */
 internal fun kanjiLeftCaption(kanjiLeft: Int): String = "$kanjiLeft kanji left to Guru"
@@ -42,28 +50,22 @@ private fun countsPhrase(kanji: Int, radicals: Int): String? = listOfNotNull(
     "$radicals ${if (radicals == 1) "radical" else "radicals"}".takeIf { radicals > 0 }
 ).joinToString(" · ").ifEmpty { null }
 
-/** "in 2d 6h", "in 5h", "in under 1h" — whole hours, rounded down. */
-internal fun relativeEta(target: Instant, now: Instant): String {
-    val hours = ((target - now).inWholeMilliseconds / HOUR_MS).coerceAtLeast(0)
-    val days = hours / HOURS_PER_DAY
-    val remainder = hours % HOURS_PER_DAY
-    return when {
-        hours == 0L -> "in under 1h"
-        days == 0L -> "in ${remainder}h"
-        remainder == 0L -> "in ${days}d"
-        else -> "in ${days}d ${remainder}h"
-    }
-}
+/** "in 2d 6h", "in 5h", "in under 1h", "in 1y 4mo" — see [durationText]. */
+internal fun relativeEta(target: Instant, now: Instant, zone: TimeZone): String = "in ${durationText(now, target, zone)}"
 
-/** "Today 3:00 PM", "Tomorrow 3:00 PM", "Thu 3:00 PM". A weekday name for today would read as next
- *  week, hence the two special cases. */
+/** "Today 3:00 PM", "Tomorrow 3:00 PM", "Thu 3:00 PM" within the coming week; further out "Mar 14
+ *  3:00 PM", with the year added ("Mar 14, 2027 3:00 PM") once it isn't this one. A weekday name
+ *  for today would read as next week, hence the two special cases. */
 private fun dayAndHour(at: Instant, now: Instant, is24h: Boolean, zone: TimeZone): String {
     val local = at.toLocalDateTime(zone)
     val today: LocalDate = now.toLocalDateTime(zone).date
-    val day = when (local.date) {
-        today -> "Today"
-        today.plus(DatePeriod(days = 1)) -> "Tomorrow"
-        else -> shortDayName(local.date.dayOfWeek)
+    val date = local.date
+    val day = when {
+        date == today -> "Today"
+        date == today.plus(DatePeriod(days = 1)) -> "Tomorrow"
+        date <= today.plus(DatePeriod(days = WEEKDAY_HORIZON_DAYS)) -> shortDayName(date.dayOfWeek)
+        date.year == today.year -> "${shortMonthName(date.month)} ${date.day}"
+        else -> "${shortMonthName(date.month)} ${date.day}, ${date.year}"
     }
     return "$day ${formatHour(local.hour, is24h)}"
 }

@@ -72,6 +72,22 @@ data class LevelUpPath(
     }
 }
 
+/**
+ * A level the user hasn't reached yet, on the fastest path: it unlocks the moment the level before it
+ * levels up, and levels up once 90% of its kanji could reach Guru from there — see
+ * [com.crazyfluff.shellfstudy.shared.data.LevelUpPathCalculator.projectFutureLevels].
+ */
+@Immutable
+data class ProjectedLevel(
+    val level: Int,
+    val unlockAt: Instant,
+    /** Null when too few of the level's kanji have a known path (an SRS system isn't cached). */
+    val levelUpAt: Instant?,
+    /** The real `now` the projection was worked out from — relative times count from here, not from
+     *  [unlockAt]. */
+    val computedAt: Instant
+)
+
 /** The next lesson or review session for the current level's radicals and kanji below Guru. [at] is
  *  when the session became available, so it's in the past for an overdue review or a lesson waiting to
  *  be done, and stays put however often the path is recomputed. */

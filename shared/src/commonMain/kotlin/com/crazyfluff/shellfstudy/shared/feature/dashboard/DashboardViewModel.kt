@@ -25,7 +25,10 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpPath
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.shared.data.model.ProjectedLevel
+import com.crazyfluff.shellfstudy.shared.data.model.WaniKaniUser
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
+import com.crazyfluff.shellfstudy.shared.network.MAX_WANIKANI_LEVEL
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
 import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
@@ -62,6 +65,8 @@ data class DashboardUiState(
     val fetchState: DashboardFetch = DashboardFetch.InFlight,
     val username: String? = null,
     val level: Int? = null,
+    /** How far the Level Progress card can page — the subscription's cap. */
+    val maxLevelGranted: Int = MAX_WANIKANI_LEVEL,
     val lessonCount: Int = 0,
     val reviewCount: Int = 0,
     val pendingSyncCount: Int = 0,
@@ -77,6 +82,8 @@ data class DashboardUiState(
     val daysOnCurrentLevel: Int? = null,
     val reviewForecast: ReviewForecast? = null,
     val levelProgress: LevelProgress? = null,
+    /** The paged-to level's fastest unlock and level-up, when it's past [level]. */
+    val projectedLevel: ProjectedLevel? = null,
     val itemSpread: ItemSpread? = null,
     val completionProjection: CompletionProjection? = null,
     val leaderboard: Leaderboard? = null,
@@ -179,7 +186,8 @@ private data class ProgressStatsState(
 private data class LevelDependentState(
     val levelUpProgress: LevelUpProgress? = null,
     val levelUpPath: LevelUpPath? = null,
-    val levelProgress: LevelProgress? = null
+    val levelProgress: LevelProgress? = null,
+    val projectedLevel: ProjectedLevel? = null
 )
 
 /** Locally-known due counts, reactive to Room writes — see their use in [DashboardViewModel.uiState]
@@ -287,9 +295,14 @@ class DashboardViewModel(
                 assignmentStatsRepository.observeLevelUpProgress(level),
                 assignmentStatsRepository.observeLevelUpPath(level),
                 selectedProgressLevel.map { it ?: level }.distinctUntilChanged()
-                    .flatMapLatest { pagedLevel -> assignmentStatsRepository.observeLevelProgress(pagedLevel) }
-            ) { levelUp, levelUpPath, levelProgress ->
-                LevelDependentState(levelUp, levelUpPath, levelProgress)
+                    .flatMapLatest { pagedLevel ->
+                        combine(
+                            assignmentStatsRepository.observeLevelProgress(pagedLevel),
+                            assignmentStatsRepository.observeProjectedLevel(level, pagedLevel)
+                        ) { levelProgress, projectedLevel -> levelProgress to projectedLevel }
+                    }
+            ) { levelUp, levelUpPath, (levelProgress, projectedLevel) ->
+                LevelDependentState(levelUp, levelUpPath, levelProgress, projectedLevel)
             }
         }
     }
@@ -356,7 +369,8 @@ class DashboardViewModel(
                 completionProjection = progress.completionProjection,
                 levelUpProgress = levelDependent.levelUpProgress,
                 levelUpPath = levelDependent.levelUpPath,
-                levelProgress = levelDependent.levelProgress
+                levelProgress = levelDependent.levelProgress,
+                projectedLevel = levelDependent.projectedLevel
             )
         },
         leaderboardFlow,
@@ -530,6 +544,7 @@ class DashboardViewModel(
                 fetchState = DashboardFetch.Idle,
                 username = user.username,
                 level = user.level,
+                maxLevelGranted = user.maxLevelGranted,
                 lessonCount = summary.lessonCount,
                 reviewCount = summary.reviewCount,
                 lastSyncedAtMillis = syncedAtMillis
@@ -586,7 +601,7 @@ class DashboardViewModel(
             val resolvedLevel = user?.level ?: it.level
             val resolvedLessonCount = summary?.lessonCount ?: it.lessonCount
             val resolvedReviewCount = summary?.reviewCount ?: it.reviewCount
-            it.copy(
+            it.withMaxLevelFrom(user).copy(
                 username = resolvedUsername,
                 level = resolvedLevel,
                 lessonCount = resolvedLessonCount,
@@ -631,3 +646,7 @@ private fun buildCompletionProjection(totalItems: Int, itemsSeen: Int, dailyLess
             .plus(daysRemaining, DateTimeUnit.DAY)
     )
 }
+
+/** [user]'s subscription cap, or this state's own when the fetch came back empty. */
+private fun DashboardUiState.withMaxLevelFrom(user: WaniKaniUser?): DashboardUiState =
+    if (user == null) this else copy(maxLevelGranted = user.maxLevelGranted)

@@ -52,6 +52,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LevelItem
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpPath
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.shared.data.model.ProjectedLevel
 import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectTypeProgress
 import com.crazyfluff.shellfstudy.shared.designsystem.components.SegmentedBar
@@ -78,14 +79,22 @@ object LevelProgressTestTags {
     const val LEVEL_UP_KANJI_LEFT = "level_progress_level_up_kanji_left"
     const val LEVEL_UP_LESSONS = "level_progress_level_up_lessons"
     const val LEVEL_UP_REVIEWS = "level_progress_level_up_reviews"
+    const val PROJECTED_UNLOCK = "level_progress_projected_unlock"
+    const val PROJECTED_LEVEL_UP = "level_progress_projected_level_up"
+    const val PROJECTED_DURATION = "level_progress_projected_duration"
 }
 
 @Composable
 fun LevelProgressCard(
     progress: LevelProgress?,
+    /** The level the user is on — the one the level-up signals belong to. */
+    currentLevel: Int? = null,
+    /** The furthest level the arrows page to (the subscription's cap); null for no cap. */
     maxLevel: Int? = null,
     levelUpProgress: LevelUpProgress? = null,
     levelUpPath: LevelUpPath? = null,
+    /** The paged-to level's fastest unlock and level-up, when it's a level the user hasn't reached. */
+    projectedLevel: ProjectedLevel? = null,
     onLevelChange: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -93,7 +102,7 @@ fun LevelProgressCard(
     var expanded by remember { mutableStateOf(false) }
     // Level-up is a current-level-only concept: a past or future level paged to via the arrows
     // below keeps its lesson order. Once the level is ready there's no date left to sort toward.
-    val isCurrentLevel = progress.level == maxLevel
+    val isCurrentLevel = progress.level == currentLevel
     val guruTimes = levelUpPath?.takeIf { isCurrentLevel && it.levelUpAt != null }?.guruAtBySubject.orEmpty()
 
     // Deliberately not a whole-card onClick: with the level-arrow IconButtons already living
@@ -151,6 +160,7 @@ fun LevelProgressCard(
                 levelUpPath.takeIf { isCurrentLevel },
                 levelUpReady = levelUpProgress?.isLevelUpReady == true
             )
+            ProjectedLevelLines(projectedLevel?.takeIf { it.level == progress.level })
         }
     }
 }
@@ -301,6 +311,29 @@ private fun LevelUpEtaLines(path: LevelUpPath?, levelUpReady: Boolean) {
     path.nextStep?.let(::lessonsCaption)?.let { NextStepLine(it, LevelProgressTestTags.LEVEL_UP_LESSONS) }
     path.nextReviewStep?.let { reviewsCaption(it, path.computedAt, is24h, zone) }
         ?.let { NextStepLine(it, LevelProgressTestTags.LEVEL_UP_REVIEWS) }
+}
+
+/** A future level on the fastest path: "Unlocks · Mar 14, 2027 9:00 AM (in 1y 4mo)", "Fastest
+ *  level-up · Mar 21, 2027 6:00 AM (in 1y 5mo)" and "Level takes 6d 21h". Relative times count from
+ *  the real now, not from the projected unlock. */
+@Composable
+private fun ProjectedLevelLines(projected: ProjectedLevel?) {
+    if (projected == null) return
+    val is24h = rememberIs24HourClock()
+    val zone = TimeZone.currentSystemDefault()
+    val now = projected.computedAt
+    NextStepLine(unlockEtaCaption(projected.unlockAt, now, is24h, zone), LevelProgressTestTags.PROJECTED_UNLOCK)
+    val levelUpAt = projected.levelUpAt ?: return
+    Text(
+        text = levelUpEtaCaption(levelUpAt, now, is24h, zone),
+        style = MaterialTheme.typography.bodySmall,
+        color = srsStageColor(SrsStage.GURU_1),
+        modifier = Modifier.testTag(LevelProgressTestTags.PROJECTED_LEVEL_UP)
+    )
+    NextStepLine(
+        levelDurationCaption(projected.unlockAt, levelUpAt, zone),
+        LevelProgressTestTags.PROJECTED_DURATION
+    )
 }
 
 @Composable

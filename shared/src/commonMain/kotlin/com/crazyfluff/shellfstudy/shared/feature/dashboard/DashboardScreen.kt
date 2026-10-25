@@ -534,9 +534,11 @@ private fun LazyListScope.dashboardItems(
                     TimedComposition("levelProgressCard") {
                         LevelProgressCard(
                             progress = uiState.levelProgress,
-                            maxLevel = uiState.level,
+                            currentLevel = uiState.level,
+                            maxLevel = uiState.maxLevelGranted,
                             levelUpProgress = uiState.levelUpProgress,
                             levelUpPath = uiState.levelUpPath,
+                            projectedLevel = uiState.projectedLevel,
                             onLevelChange = callbacks.onLevelProgressLevelChange,
                             modifier = Modifier.fillMaxWidth()
                         )

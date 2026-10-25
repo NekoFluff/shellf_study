@@ -18,6 +18,8 @@ import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpPath
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpStep
+import com.crazyfluff.shellfstudy.shared.data.model.ProjectedLevel
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.getBoundsInRoot
 import com.google.common.truth.Truth.assertThat
@@ -141,7 +143,7 @@ class LevelProgressCardTest {
     fun nextLevelButton_invokesOnLevelChangeWithLevelPlusOne() {
         var requestedLevel: Int? = null
         composeTestRule.setContent {
-            LevelProgressCard(progress = sampleProgress, maxLevel = 20, onLevelChange = { requestedLevel = it })
+            LevelProgressCard(progress = sampleProgress, currentLevel = 20, onLevelChange = { requestedLevel = it })
         }
 
         composeTestRule.onNodeWithTag(LevelProgressTestTags.NEXT_LEVEL_BUTTON).performClick()
@@ -164,10 +166,19 @@ class LevelProgressCardTest {
     @Test
     fun nextLevelButton_disabledAtMaxLevel() {
         composeTestRule.setContent {
-            LevelProgressCard(progress = sampleProgress, maxLevel = 12, onLevelChange = {})
+            LevelProgressCard(progress = sampleProgress, currentLevel = 10, maxLevel = 12, onLevelChange = {})
         }
 
         composeTestRule.onNodeWithTag(LevelProgressTestTags.NEXT_LEVEL_BUTTON).assertIsNotEnabled()
+    }
+
+    @Test
+    fun nextLevelButton_enabledPastTheCurrentLevelUpToTheCap() {
+        composeTestRule.setContent {
+            LevelProgressCard(progress = sampleProgress, currentLevel = 12, maxLevel = 60, onLevelChange = {})
+        }
+
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.NEXT_LEVEL_BUTTON).assertIsEnabled()
     }
 
     @Test
@@ -184,7 +195,7 @@ class LevelProgressCardTest {
         composeTestRule.setContent {
             LevelProgressCard(
                 progress = sampleProgress,
-                maxLevel = 12,
+                currentLevel = 12,
                 levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 18, kanjiTotal = 25)
             )
         }
@@ -198,7 +209,7 @@ class LevelProgressCardTest {
         composeTestRule.setContent {
             LevelProgressCard(
                 progress = sampleProgress,
-                maxLevel = 12,
+                currentLevel = 12,
                 levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 23, kanjiTotal = 25)
             )
         }
@@ -212,7 +223,7 @@ class LevelProgressCardTest {
         composeTestRule.setContent {
             LevelProgressCard(
                 progress = sampleProgress,
-                maxLevel = 20,
+                currentLevel = 20,
                 levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 18, kanjiTotal = 25)
             )
         }
@@ -224,7 +235,7 @@ class LevelProgressCardTest {
     @Test
     fun hidesLevelUpSignals_whenLevelUpProgressNull() {
         composeTestRule.setContent {
-            LevelProgressCard(progress = sampleProgress, maxLevel = 12, levelUpProgress = null)
+            LevelProgressCard(progress = sampleProgress, currentLevel = 12, levelUpProgress = null)
         }
 
         composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_INDICATOR).assertCountEquals(0)
@@ -332,7 +343,7 @@ class LevelProgressCardTest {
         composeTestRule.setContent {
             LevelProgressCard(
                 progress = progressWithUnpassedRadical,
-                maxLevel = 12,
+                currentLevel = 12,
                 levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = guruCount, kanjiTotal = 25),
                 levelUpPath = path
             )
@@ -368,7 +379,7 @@ class LevelProgressCardTest {
         composeTestRule.setContent {
             LevelProgressCard(
                 progress = progressWithUnpassedRadical,
-                maxLevel = 20,
+                currentLevel = 20,
                 levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 18, kanjiTotal = 25),
                 levelUpPath = samplePath
             )
@@ -406,5 +417,51 @@ class LevelProgressCardTest {
         chips[17].assert(hasTestTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + kanjiId(18)))
         chips[18].assert(hasTestTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + kanjiId(25)))
         chips[24].assert(hasTestTag(LevelProgressTestTags.ITEM_CHIP_PREFIX + kanjiId(19)))
+    }
+
+    @Test
+    fun futureLevel_showsProjectedUnlockLevelUpAndDuration_butNoCurrentLevelLines() {
+        val unlockAt = pathComputedAt + (24 * 9).hours
+        composeTestRule.setContent {
+            LevelProgressCard(
+                progress = sampleProgress.copy(level = 14),
+                currentLevel = 12,
+                maxLevel = 60,
+                levelUpProgress = LevelUpProgress(kanjiGuruedOrHigher = 18, kanjiTotal = 25),
+                levelUpPath = samplePath,
+                projectedLevel = ProjectedLevel(
+                    level = 14,
+                    unlockAt = unlockAt,
+                    levelUpAt = unlockAt + (24 * 6 + 21).hours,
+                    computedAt = pathComputedAt
+                )
+            )
+        }
+
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.PROJECTED_UNLOCK).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Unlocks · ", substring = true).assertCountEquals(1)
+        composeTestRule.onAllNodesWithText("(in 9d)", substring = true).assertCountEquals(1)
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.PROJECTED_LEVEL_UP).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("(in 2w 1d)", substring = true).assertCountEquals(1)
+        composeTestRule.onAllNodesWithText("Level takes 6d 21h").assertCountEquals(1)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_ETA).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_KANJI_LEFT).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_LESSONS).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.LEVEL_UP_REVIEWS).assertCountEquals(0)
+    }
+
+    @Test
+    fun futureLevel_withUnknownLevelUp_showsOnlyTheUnlock() {
+        composeTestRule.setContent {
+            LevelProgressCard(
+                progress = sampleProgress.copy(level = 13),
+                currentLevel = 12,
+                projectedLevel = ProjectedLevel(13, pathComputedAt + 50.hours, levelUpAt = null, pathComputedAt)
+            )
+        }
+
+        composeTestRule.onNodeWithTag(LevelProgressTestTags.PROJECTED_UNLOCK).assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.PROJECTED_LEVEL_UP).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(LevelProgressTestTags.PROJECTED_DURATION).assertCountEquals(0)
     }
 }

@@ -86,6 +86,17 @@ data class LevelUpPathRow(
     val availableAt: String?
 )
 
+/** One radical or kanji at a level the user hasn't reached yet — the input to projecting that level's
+ *  fastest level-up (see `LevelUpPathCalculator.projectFutureLevels`). No assignment columns: WaniKani
+ *  only creates assignments as a level unlocks, so a future level is projected from scratch. */
+data class LevelUpProjectionRow(
+    val level: Int,
+    val subjectId: Long,
+    val subjectType: String,
+    val srsSystemId: Long,
+    val componentSubjectIds: List<Long>
+)
+
 /** The three columns the review forecast buckets — see [AssignmentDao.observeUpcoming]. Deliberately
  *  not an [AssignmentEntity]: that would decode eleven more columns per upcoming assignment, none of
  *  which the forecast reads. On a maxed-out account the upcoming set runs to a few thousand rows, so
@@ -229,4 +240,17 @@ interface AssignmentDao {
         """
     )
     fun observeLevelUpPathRows(level: Int): Flow<List<LevelUpPathRow>>
+
+    /** Every radical and kanji from [fromLevel] to [toLevel], with no assignment state — the input to
+     *  projecting levels the user hasn't reached yet. */
+    @Query(
+        """
+        SELECT s.level as level, s.id as subjectId, s.subjectType as subjectType,
+               s.srsSystemId as srsSystemId, s.componentSubjectIds as componentSubjectIds
+        FROM subjects s
+        WHERE s.level BETWEEN :fromLevel AND :toLevel AND s.subjectType IN ('radical', 'kanji')
+            AND s.hiddenAt IS NULL
+        """
+    )
+    fun observeLevelUpProjectionRows(fromLevel: Int, toLevel: Int): Flow<List<LevelUpProjectionRow>>
 }

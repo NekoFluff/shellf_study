@@ -22,11 +22,11 @@ class LevelUpTextTest {
 
     @Test
     fun relativeEtaRoundsDownToWholeHoursAndNeverGoesNegative() {
-        assertEquals("in under 1h", relativeEta(now + 59.minutes, now))
-        assertEquals("in 5h", relativeEta(now + 5.hours + 59.minutes, now))
-        assertEquals("in 1d", relativeEta(now + 1.days, now))
-        assertEquals("in 2d 6h", relativeEta(now + 2.days + 6.hours, now))
-        assertEquals("in under 1h", relativeEta(now - 3.hours, now))
+        assertEquals("in under 1h", relativeEta(now + 59.minutes, now, utc))
+        assertEquals("in 5h", relativeEta(now + 5.hours + 59.minutes, now, utc))
+        assertEquals("in 1d", relativeEta(now + 1.days, now, utc))
+        assertEquals("in 2d 6h", relativeEta(now + 2.days + 6.hours, now, utc))
+        assertEquals("in under 1h", relativeEta(now - 3.hours, now, utc))
     }
 
     @Test
@@ -42,6 +42,51 @@ class LevelUpTextTest {
         assertEquals(
             "Fastest level-up · Wed 20:00 (in 3d 9h)",
             levelUpEtaCaption(Instant.parse("2026-10-07T20:00:00Z"), now, is24h = true, zone = utc)
+        )
+    }
+
+    @Test
+    fun durationReadsInTheTwoLargestUnitsThatFitItsSize() {
+        fun span(to: String) = durationText(Instant.parse("2026-10-04T10:00:00Z"), Instant.parse(to), utc)
+
+        assertEquals("13d 23h", span("2026-10-18T09:00:00Z"))
+        assertEquals("2w", span("2026-10-18T10:00:00Z"))
+        assertEquals("8w 2d", span("2026-12-01T10:00:00Z"))
+        // An hour short of two calendar months.
+        assertEquals("8w 4d", span("2026-12-04T09:00:00Z"))
+        assertEquals("2mo", span("2026-12-04T10:00:00Z"))
+        assertEquals("11mo 29d", span("2027-10-03T10:00:00Z"))
+        assertEquals("1y", span("2027-10-04T10:00:00Z"))
+        assertEquals("1y 4mo", span("2028-02-20T10:00:00Z"))
+        // Level 5 to level 60 at about a week a level.
+        assertEquals("7y 6mo", span("2034-04-10T10:00:00Z"))
+    }
+
+    @Test
+    fun etaCaptionGivesTheMonthAndDayPastTheComingWeekAndTheYearOnceItChanges() {
+        assertEquals(
+            "Fastest level-up · Sat 20:00 (in 6d 9h)",
+            levelUpEtaCaption(Instant.parse("2026-10-10T20:00:00Z"), now, is24h = true, zone = utc)
+        )
+        assertEquals(
+            "Fastest level-up · Oct 11 20:00 (in 7d 9h)",
+            levelUpEtaCaption(Instant.parse("2026-10-11T20:00:00Z"), now, is24h = true, zone = utc)
+        )
+        assertEquals(
+            "Unlocks · Mar 14, 2028 9:00 AM (in 1y 5mo)",
+            unlockEtaCaption(Instant.parse("2028-03-14T09:00:00Z"), now, is24h = false, zone = utc)
+        )
+    }
+
+    @Test
+    fun levelDurationCaptionSaysHowLongTheLevelTakes() {
+        assertEquals(
+            "Level takes 6d 21h",
+            levelDurationCaption(
+                Instant.parse("2027-03-14T09:00:00Z"),
+                Instant.parse("2027-03-21T06:00:00Z"),
+                utc
+            )
         )
     }
 

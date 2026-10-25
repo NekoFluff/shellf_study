@@ -5,6 +5,7 @@ import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.UpcomingAssignmentRow
 import com.crazyfluff.shellfstudy.shared.database.KanjiLevelUpRow
 import com.crazyfluff.shellfstudy.shared.database.LevelUpPathRow
+import com.crazyfluff.shellfstudy.shared.database.LevelUpProjectionRow
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressItemRow
 import com.crazyfluff.shellfstudy.shared.database.SrsStageTypeCount
 import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
@@ -197,6 +198,15 @@ class FakeAssignmentDao(
                 )
             }
     }
+
+    override fun observeLevelUpProjectionRows(fromLevel: Int, toLevel: Int): Flow<List<LevelUpProjectionRow>> =
+        assignments.map {
+            (fromLevel..toLevel).flatMap { level ->
+                subjectsAtLevel(level)
+                    .filter { it.subjectType == "radical" || it.subjectType == "kanji" }
+                    .map { LevelUpProjectionRow(level, it.id, it.subjectType, it.srsSystemId, it.componentSubjectIds) }
+            }
+        }
 
     override fun observeAllStartedTimestamps(): Flow<List<String>> = assignments.map { map ->
         map.values.mapNotNull { if (!it.hidden) it.startedAt else null }

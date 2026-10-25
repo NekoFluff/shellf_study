@@ -7,6 +7,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LevelItem
 import com.crazyfluff.shellfstudy.shared.data.model.LevelProgress
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpPath
 import com.crazyfluff.shellfstudy.shared.data.model.LevelUpProgress
+import com.crazyfluff.shellfstudy.shared.data.model.ProjectedLevel
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecast
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastBucket
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
@@ -24,6 +25,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.LocalDate
@@ -254,4 +256,27 @@ class AssignmentStatsRepository(
         ) { now, rows, systems ->
             LevelUpPathCalculator.calculate(rows, systems.associateBy { it.id }, now)
         }.flowOn(defaultDispatcher)
+
+    /**
+     * [targetLevel] on the fastest path, projected forward from [currentLevel]'s fastest level-up —
+     * see [LevelUpPathCalculator.projectFutureLevels]. Moves with [observeLevelUpPath], so it slides
+     * later each hour the current level's next step is left undone. Null for a level the user has
+     * already reached, or one the chain can't get to.
+     */
+    fun observeProjectedLevel(currentLevel: Int, targetLevel: Int): Flow<ProjectedLevel?> {
+        if (targetLevel <= currentLevel) return flowOf(null)
+        return combine(
+            observeLevelUpPath(currentLevel),
+            assignmentDao.observeLevelUpProjectionRows(currentLevel + 1, targetLevel),
+            srsSystemDao.observeAll()
+        ) { current, rows, systems ->
+            LevelUpPathCalculator.projectFutureLevels(
+                current = current,
+                currentLevel = currentLevel,
+                rows = rows,
+                srsSystems = systems.associateBy { it.id },
+                through = targetLevel
+            ).lastOrNull()?.takeIf { it.level == targetLevel }
+        }.flowOn(defaultDispatcher)
+    }
 }
