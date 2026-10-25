@@ -92,8 +92,28 @@ interface SubjectDao {
      * `SCAN subjects` again, 2,257 pages). With the search debounced to at most one query per 200 ms
      * of typing (see `SearchViewModel.QUERY_DEBOUNCE_MILLIS`) on Room's own dispatcher, the saving is
      * not worth a migration plus a reordering. An FTS table was rejected as well: it matches tokens
-     * and prefixes where this search box matches any substring. */
-    @Query("SELECT * FROM subjects WHERE searchTarget LIKE '%' || :query || '%' ESCAPE '\\' LIMIT 200")
+     * and prefixes where this search box matches any substring.
+     *
+     * The user's own meaning synonyms match too. They live in `study_materials` rather than in
+     * `searchTarget`, because they change on their own sync and from this device's edits, and baking
+     * them into the subject row would mean rewriting it on every synonym change. Matching each
+     * synonym through `json_each` rather than the raw JSON text keeps a query from matching across
+     * the quotes and commas between them. The `EXISTS` costs one lookup on the unique `subjectId`
+     * index per scanned row, which is cheap next to the scan itself, and naming the table here makes
+     * Room re-run the search when a synonym is added or removed. `lower` only folds ASCII, which is
+     * all an English synonym needs; the caller lowercases [query]. */
+    @Query(
+        """
+        SELECT * FROM subjects
+        WHERE searchTarget LIKE '%' || :query || '%' ESCAPE '\'
+            OR EXISTS (
+                SELECT 1 FROM study_materials, json_each(study_materials.meaningSynonyms) AS synonym
+                WHERE study_materials.subjectId = subjects.id
+                    AND lower(synonym.value) LIKE '%' || :query || '%' ESCAPE '\'
+            )
+        LIMIT 200
+        """
+    )
     fun observeSearch(query: String): Flow<List<SubjectEntity>>
 
     /** Every subject whose primary reading is one of [readingKeys], lowest level first — the

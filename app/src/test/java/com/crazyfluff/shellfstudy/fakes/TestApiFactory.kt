@@ -108,7 +108,8 @@ fun buildTestRepositories(
     // Shared across every bulk-write DAO so a test can assert how many write operations a sync pass
     // issued, not just what ended up stored — see SyncWriteLog.
     val writeLog = SyncWriteLog()
-    val subjectDao = FakeSubjectDao(writeLog)
+    val studyMaterialDao = FakeStudyMaterialDao(writeLog)
+    val subjectDao = FakeSubjectDao(writeLog, studyMaterials = studyMaterialDao.observeAll())
     val assignmentDao = FakeAssignmentDao(subjectsAtLevel = subjectDao::subjectsAtLevel, writeLog = writeLog)
     val srsSystemDao = FakeSrsSystemDao(writeLog).apply { seed(DEFAULT_TEST_SRS_SYSTEM) }
     val syncStateDao = FakeSyncStateDao()
@@ -116,7 +117,6 @@ fun buildTestRepositories(
     val outboxDao = FakeOutboxDao()
     val outboxSyncScheduler = FakeOutboxSyncScheduler()
     val reviewStatisticDao = FakeReviewStatisticDao(writeLog)
-    val studyMaterialDao = FakeStudyMaterialDao(writeLog)
     val levelProgressionDao = FakeLevelProgressionDao(writeLog)
 
     val pitchAccentRepository = PitchAccentRepository(FakePitchAccentBundledSource(pitchAccentEntries))

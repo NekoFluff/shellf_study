@@ -1,10 +1,12 @@
 package com.crazyfluff.shellfstudy.core.database
 
 import androidx.room.Room
+import app.cash.turbine.test
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.crazyfluff.shellfstudy.shared.database.AppDatabase
+import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.buildAppDatabase
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
@@ -63,6 +65,34 @@ class SubjectSearchQueryTest {
         assertThat(db.search("back\\\\slash")).containsExactly(1L)
     }
 
+    @Test
+    fun `a user synonym finds its subject, case-insensitively`() = withDatabase { db ->
+        seed(db, "water", "fire")
+        db.studyMaterialDao().upsertAll(listOf(material(subjectId = 2, "Blaze", "Inferno")))
+
+        assertThat(db.search("infer")).containsExactly(2L)
+        assertThat(db.search("blaze")).containsExactly(2L)
+    }
+
+    /** Each synonym is matched on its own, not the stored JSON, so the `","` between two can't match. */
+    @Test
+    fun `a query spanning two synonyms matches neither`() = withDatabase { db ->
+        seed(db, "fire")
+        db.studyMaterialDao().upsertAll(listOf(material(subjectId = 1, "blaze", "inferno")))
+
+        assertThat(db.search("ze\",\"in")).isEmpty()
+    }
+
+    @Test
+    fun `the search re-runs when a synonym is added`() = withDatabase { db ->
+        seed(db, "fire")
+        db.subjectDao().observeSearch("blaze").test {
+            assertThat(awaitItem()).isEmpty()
+            db.studyMaterialDao().upsertAll(listOf(material(subjectId = 1, "blaze")))
+            assertThat(awaitItem().map { it.id }).containsExactly(1L)
+        }
+    }
+
     /** The same escaping the repository applies, on the same query string the DAO is annotated with. */
     private suspend fun AppDatabase.search(query: String): List<Long> =
         subjectDao().observeSearch(query).first().map { it.id }
@@ -83,6 +113,9 @@ class SubjectSearchQueryTest {
         // Real searchTargets are a lowercase concat of characters, slug, meanings and readings.
         searchTarget = "水 test-$id $meaning みず".lowercase()
     )
+
+    private fun material(subjectId: Long, vararg synonyms: String) =
+        StudyMaterialEntity(id = subjectId, subjectId = subjectId, meaningSynonyms = synonyms.toList(), hidden = false)
 
     private fun withDatabase(block: suspend (AppDatabase) -> Unit) = runTest {
         val dbFile = tempFolder.newFile("search-test.db")

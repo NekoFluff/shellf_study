@@ -79,6 +79,37 @@ class AppDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `migration 12 to 13 appends whitelisted auxiliary meanings to the search target`() {
+        withDatabase { connection ->
+            connection.execSQL(
+                "CREATE TABLE `subjects` (`id` INTEGER NOT NULL, `auxiliaryMeanings` TEXT NOT NULL, " +
+                    "`searchTarget` TEXT NOT NULL, PRIMARY KEY(`id`))"
+            )
+            val columns = "subjects (id, auxiliaryMeanings, searchTarget)"
+            connection.execSQL(
+                "INSERT INTO $columns VALUES (1, '[{\"meaning\":\"Uno\",\"type\":\"whitelist\"}," +
+                    "{\"meaning\":\"First\",\"type\":\"blacklist\"},{\"meaning\":\"Ichi\",\"type\":\"whitelist\"}]', " +
+                    "'一 一 one いち')"
+            )
+            connection.execSQL(
+                "INSERT INTO $columns VALUES (2, '[{\"meaning\":\"Decoy\",\"type\":\"blacklist\"}]', '二 two')"
+            )
+            connection.execSQL("INSERT INTO $columns VALUES (3, '[]', '三 three')")
+
+            migrationFrom(12).migrate(connection)
+
+            val statement = connection.prepare("SELECT searchTarget FROM subjects ORDER BY id")
+            val targets = try {
+                buildList { while (statement.step()) add(statement.getText(0)) }
+            } finally {
+                statement.close()
+            }
+            // Matches what SubjectRepository's buildSearchTarget writes for a freshly synced subject.
+            assertThat(targets).containsExactly("一 一 one いち uno ichi", "二 two", "三 three").inOrder()
+        }
+    }
+
     /**
      * Room refuses to open a database whose version no migration covers, and the destructive fallback
      * then wipes it — so a gap in this list is a silent full re-download for whoever is on the older

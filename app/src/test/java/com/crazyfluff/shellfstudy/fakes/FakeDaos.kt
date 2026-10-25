@@ -7,6 +7,7 @@ import com.crazyfluff.shellfstudy.shared.database.KanjiLevelUpRow
 import com.crazyfluff.shellfstudy.shared.database.LevelUpPathRow
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressItemRow
 import com.crazyfluff.shellfstudy.shared.database.SrsStageTypeCount
+import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.database.SubjectAudioRow
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
@@ -16,10 +17,17 @@ import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsDao
 import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /** In-memory stand-in for [SubjectDao] used by repository/ViewModel unit tests. */
-class FakeSubjectDao(private val writeLog: SyncWriteLog? = null) : SubjectDao {
+/** [studyMaterials] stands in for the `study_materials` table the real search query also matches
+ *  synonyms in; a DAO built without one searches subjects alone. */
+class FakeSubjectDao(
+    private val writeLog: SyncWriteLog? = null,
+    private val studyMaterials: Flow<List<StudyMaterialEntity>> = flowOf(emptyList())
+) : SubjectDao {
     private val subjects = MutableStateFlow<Map<Long, SubjectEntity>>(emptyMap())
 
     override suspend fun upsertAll(subjects: List<SubjectEntity>) {
@@ -38,7 +46,15 @@ class FakeSubjectDao(private val writeLog: SyncWriteLog? = null) : SubjectDao {
     // instead of searching for the escape backslashes themselves.
     override fun observeSearch(query: String): Flow<List<SubjectEntity>> {
         val unescaped = query.replace("\\_", "_").replace("\\%", "%").replace("\\\\", "\\")
-        return subjects.map { map -> map.values.filter { it.searchTarget.contains(unescaped, ignoreCase = true) }.take(200) }
+        return combine(subjects, studyMaterials) { map, materials ->
+            val synonymMatches = materials
+                .filter { material -> material.meaningSynonyms.any { it.contains(unescaped, ignoreCase = true) } }
+                .map { it.subjectId }
+                .toSet()
+            map.values
+                .filter { it.searchTarget.contains(unescaped, ignoreCase = true) || it.id in synonymMatches }
+                .take(200)
+        }
     }
 
     override fun observeByPrimaryReadingKeys(readingKeys: List<String>): Flow<List<SubjectReadingKeyRow>> =

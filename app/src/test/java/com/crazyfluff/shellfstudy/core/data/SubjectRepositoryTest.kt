@@ -4,6 +4,7 @@ import com.crazyfluff.shellfstudy.shared.data.ApiResult
 
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.shared.data.model.PitchAccent
+import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.PitchAccentUiState
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
@@ -12,6 +13,7 @@ import com.crazyfluff.shellfstudy.fakes.TestRepositories
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
 import com.crazyfluff.shellfstudy.fakes.jsonResponse
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockWebServer
 import org.junit.After
@@ -129,6 +131,47 @@ class SubjectRepositoryTest {
             val results = awaitItem()
             assertThat(results).hasSize(1)
             assertThat(results.first().characters).isEqualTo("水")
+        }
+    }
+
+    /** Whitelisted auxiliary meanings are answers grading accepts, so search finds them too; a
+     *  blacklisted one is a decoy and stays unsearchable. */
+    @Test
+    fun `observeSearch finds a subject by a whitelisted auxiliary meaning but not a blacklisted one`() = runTest {
+        server.enqueue(
+            jsonResponse(
+                """
+                {"object":"collection","url":"https://api.wanikani.com/v2/subjects","total_count":1,"data":[
+                  {"id":440,"object":"kanji","url":"https://api.wanikani.com/v2/subjects/440",
+                   "data_updated_at":"2026-01-01T00:00:00.000000Z",
+                   "data":{"created_at":"2020-01-01T00:00:00.000000Z","level":1,"slug":"一","characters":"一",
+                     "meanings":[{"meaning":"One","primary":true,"accepted_answer":true}],
+                     "auxiliary_meanings":[{"meaning":"Uno","type":"whitelist"},{"meaning":"First","type":"blacklist"}]}}
+                ]}
+                """.trimIndent()
+            )
+        )
+        repository.syncSubjects(force = true)
+
+        repository.observeSearch("uno").test {
+            assertThat(awaitItem().map { it.characters }).containsExactly("一")
+        }
+        repository.observeSearch("first").test {
+            assertThat(awaitItem()).isEmpty()
+        }
+    }
+
+    @Test
+    fun `observeSearch finds a subject by the user's own synonym`() = runTest {
+        server.enqueue(jsonResponse(SUBJECTS_JSON))
+        repository.syncSubjects(force = true)
+        val water = repositories.subjectDao.observeSearch("water").first().single()
+        repositories.studyMaterialDao.upsertAll(
+            listOf(StudyMaterialEntity(id = 1, subjectId = water.id, meaningSynonyms = listOf("Aqua"), hidden = false))
+        )
+
+        repository.observeSearch("aqua").test {
+            assertThat(awaitItem().map { it.characters }).containsExactly("水")
         }
     }
 
