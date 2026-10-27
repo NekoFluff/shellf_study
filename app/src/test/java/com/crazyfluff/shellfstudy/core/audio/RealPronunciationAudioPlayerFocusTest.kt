@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.audio
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioManager
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.test.core.app.ApplicationProvider
@@ -14,9 +15,8 @@ import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
 
 /**
- * Every focus request and abandon notifies the app that held focus before — a paused Spotify among
- * them, which used to wake into playing. Focus now moves only when a quiz screen resumes or pauses,
- * never per clip.
+ * Focus is held for exactly as long as a clip plays: requested right before it, abandoned when it
+ * ends, fails or is stopped.
  */
 @RunWith(AndroidJUnit4::class)
 class RealPronunciationAudioPlayerFocusTest {
@@ -41,56 +41,74 @@ class RealPronunciationAudioPlayerFocusTest {
     fun tearDown() = exoPlayer.release()
 
     @Test
-    fun `playing clips never touches focus`() {
-        repeat(5) { player.play(clip) }
-        player.stop()
+    fun `a clip requests transient may-duck focus, without speech content type`() {
+        player.play(clip)
 
-        assertThat(shadowAudioManager.lastAudioFocusRequest).isNull()
-        assertThat(shadowAudioManager.lastAbandonedAudioFocusRequest).isNull()
-    }
-
-    @Test
-    fun `holding focus requests it once and releasing abandons it`() {
-        player.holdFocus()
         val request = shadowAudioManager.lastAudioFocusRequest
         assertThat(request).isNotNull()
         assertThat(request.durationHint).isEqualTo(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+        assertThat(request.audioFocusRequest.audioAttributes.contentType)
+            .isEqualTo(AudioAttributes.CONTENT_TYPE_UNKNOWN)
+    }
 
-        player.holdFocus()
-        assertThat(shadowAudioManager.lastAudioFocusRequest).isSameInstanceAs(request)
+    @Test
+    fun `stopping the clip abandons focus`() {
+        player.play(clip)
+        assertThat(shadowAudioManager.lastAbandonedAudioFocusRequest).isNull()
 
-        player.releaseFocus()
+        player.stop()
+
         assertThat(shadowAudioManager.lastAbandonedAudioFocusRequest).isNotNull()
     }
 
     @Test
-    fun `releasing without holding does not abandon`() {
-        player.releaseFocus()
+    fun `replacing a playing clip keeps its focus`() {
+        player.play(clip)
+        val first = shadowAudioManager.lastAudioFocusRequest
 
+        player.play(clip)
+
+        assertThat(shadowAudioManager.lastAudioFocusRequest).isSameInstanceAs(first)
         assertThat(shadowAudioManager.lastAbandonedAudioFocusRequest).isNull()
     }
 
     @Test
-    fun `losing focus stops the clip and the next hold asks again`() {
-        player.holdFocus()
+    fun `each clip after the last ended asks again`() {
+        player.play(clip)
         val first = shadowAudioManager.lastAudioFocusRequest
+        player.stop()
+
         player.play(clip)
 
-        first.listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
-        assertThat(player.state.value).isEqualTo(PlaybackState.IDLE)
-
-        player.releaseFocus()
-        assertThat(shadowAudioManager.lastAbandonedAudioFocusRequest).isNull()
-        player.holdFocus()
         assertThat(shadowAudioManager.lastAudioFocusRequest).isNotSameInstanceAs(first)
     }
 
     @Test
-    fun `a clip during a call is refused`() {
-        audioManager.mode = AudioManager.MODE_IN_CALL
+    fun `stopping with no clip playing does not abandon`() {
+        player.stop()
+
+        assertThat(shadowAudioManager.lastAbandonedAudioFocusRequest).isNull()
+    }
+
+    @Test
+    fun `losing focus stops the clip and abandons`() {
+        player.play(clip)
+
+        shadowAudioManager.lastAudioFocusRequest.listener
+            .onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
+
+        assertThat(player.state.value).isEqualTo(PlaybackState.IDLE)
+        assertThat(shadowAudioManager.lastAbandonedAudioFocusRequest).isNotNull()
+    }
+
+    @Test
+    fun `denied focus - a phone call - refuses the clip`() {
+        shadowAudioManager.setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_FAILED)
 
         player.play(clip)
 
         assertThat(player.state.value).isEqualTo(PlaybackState.ERROR)
+        player.stop()
+        assertThat(shadowAudioManager.lastAbandonedAudioFocusRequest).isNull()
     }
 }

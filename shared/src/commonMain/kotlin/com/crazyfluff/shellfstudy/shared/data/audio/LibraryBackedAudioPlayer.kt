@@ -70,8 +70,4 @@ class LibraryBackedAudioPlayer(
     }
 
     override fun isAvailableOffline(audio: PronunciationAudio): Boolean = library.localPath(audio) != null
-
-    override fun holdFocus() = localPlayer.holdFocus()
-
-    override fun releaseFocus() = localPlayer.releaseFocus()
 }

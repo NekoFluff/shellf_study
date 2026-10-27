@@ -171,29 +171,6 @@ class ReviewScreenTest {
             }
         }
     }
-    @Test
-    fun holdsAudioFocusWhileShown_andReleasesItWhenLeft() {
-        val player = FakePronunciationAudioPlayer()
-        var shown by mutableStateOf(true)
-        composeTestRule.setContent {
-            CompositionLocalProvider(LocalPronunciationAudioPlayer provides player) {
-                if (shown) {
-                    ReviewScreen(
-                        uiState = activeState(totalCount = 1, remainingCount = 1),
-                        actions = RecordingReviewActions(),
-                        onSessionComplete = {},
-                        onBack = {}
-                    )
-                }
-            }
-        }
-        composeTestRule.waitForIdle()
-        assertThat(player.focusHeld).isTrue()
-
-        shown = false
-        composeTestRule.waitForIdle()
-        assertThat(player.focusHeld).isFalse()
-    }
 
     @Test
     fun showsCharacterAndQuestionLabel_forMeaningQuestion() {

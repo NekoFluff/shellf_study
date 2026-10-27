@@ -22,12 +22,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.crazyfluff.shellfstudy.shared.designsystem.components.DropdownMenu
 import com.crazyfluff.shellfstudy.shared.designsystem.components.AbandonSessionMenuItem
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
-import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.LocalPronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 
@@ -43,9 +41,7 @@ data class QuizScreenChromeTestTags(
 /**
  * The frame both quiz screens share: a top bar with back, search and a session menu ending in
  * "Abandon session" (with its confirmation), the subject search overlay, and a slot for the screen's
- * answer-details sheet. While the screen is resumed it holds audio focus, so other apps' audio is
- * lowered once for the visit rather than per clip (see
- * [com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer.holdFocus]).
+ * answer-details sheet.
  *
  * Everything sits in one Box so the sheet's handle overlays the true bottom of the screen and picks up
  * real navigation-bar insets, rather than being laid out under the system gesture area. The search
@@ -71,12 +67,6 @@ fun QuizScreenScaffold(
     var menuExpanded by remember { mutableStateOf(false) }
     var showAbandonConfirm by remember { mutableStateOf(false) }
     var isSearchActive by remember { mutableStateOf(false) }
-
-    val player = LocalPronunciationAudioPlayer.current
-    LifecycleResumeEffect(player) {
-        player?.holdFocus()
-        onPauseOrDispose { player?.releaseFocus() }
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(

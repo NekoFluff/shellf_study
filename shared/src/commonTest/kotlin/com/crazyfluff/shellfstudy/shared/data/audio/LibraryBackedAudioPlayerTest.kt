@@ -30,19 +30,12 @@ import okio.FileSystem
 private class RecordingLocalPlayer : PronunciationAudioPlayer {
     val played = mutableListOf<String>()
     var stops = 0
-    var focusHeld = false
     override val state = MutableStateFlow(PlaybackState.IDLE)
     override fun play(audio: PronunciationAudio) {
         played += audio.url
     }
     override fun stop() {
         stops++
-    }
-    override fun holdFocus() {
-        focusHeld = true
-    }
-    override fun releaseFocus() {
-        focusHeld = false
     }
 }
 
@@ -154,17 +147,5 @@ class LibraryBackedAudioPlayerTest {
         advanceUntilIdle()
 
         assertEquals(listOf(library.localPath(clip("b"))), local.played)
-    }
-
-    @Test
-    fun `focus passes through to the platform player`() = runTest {
-        val local = RecordingLocalPlayer()
-        val (player, _) = player(local)
-
-        player.holdFocus()
-        assertTrue(local.focusHeld)
-
-        player.releaseFocus()
-        assertFalse(local.focusHeld)
     }
 }
