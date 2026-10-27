@@ -231,6 +231,25 @@ data class LessonItem(
 ) : QuizDisplayItem
 
 /** A subject as shown in search results. [srsStage] is null if no assignment exists yet. */
+/** The search overlay's filters. [types] holds the type chips that are on — empty means any type —
+ *  where [SubjectType.VOCABULARY] stands for kana-only vocabulary as well, since the overlay offers
+ *  one chip for both. [unlockedOnly] hides subjects the user has no assignment for yet. */
+@Immutable
+data class SearchFilters(
+    val types: Set<SubjectType> = emptySet(),
+    val unlockedOnly: Boolean = false
+)
+
+/** One context sentence matching a search, with the subject it illustrates. */
+@Immutable
+data class SentenceSearchResult(
+    val subjectId: Long,
+    val subjectType: SubjectType,
+    val characters: String?,
+    val japanese: String,
+    val english: String
+)
+
 data class SubjectSummary(
     val subjectId: Long,
     val subjectType: SubjectType,

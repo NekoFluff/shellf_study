@@ -67,6 +67,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.kanjiColor
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.radicalColor
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationDeepLink
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchActions
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
@@ -121,7 +122,7 @@ data class DashboardCallbacks(
     val onAbandonReviewSession: () -> Unit,
     val onAbandonLessonSession: () -> Unit,
     val onToggleAudioMuted: () -> Unit,
-    val onSearchQueryChange: (String) -> Unit,
+    val searchActions: SearchActions,
     val onLevelProgressLevelChange: (Int) -> Unit,
     val onLeaderboardMetricChange: (LeaderboardMetric) -> Unit,
     val onLeaderboardWindowChange: (LeaderboardWindow) -> Unit,
@@ -282,7 +283,11 @@ private fun rememberDashboardCallbacks(
         onAbandonReviewSession = viewModel::abandonReviewSession,
         onAbandonLessonSession = viewModel::abandonLessonSession,
         onToggleAudioMuted = viewModel::toggleAudioMuted,
-        onSearchQueryChange = searchViewModel::onQueryChange,
+        searchActions = SearchActions(
+            onQueryChange = searchViewModel::onQueryChange,
+            onFiltersChange = searchViewModel::onFiltersChange,
+            onTabChange = searchViewModel::onTabChange
+        ),
         onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
         onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange,
         onLeaderboardWindowChange = viewModel::onLeaderboardWindowChange,
@@ -337,7 +342,7 @@ fun DashboardScreen(
             active = isSearchActive,
             onActiveChange = { isSearchActive = it },
             uiState = searchUiState,
-            onQueryChange = callbacks.onSearchQueryChange,
+            actions = callbacks.searchActions,
             modifier = Modifier.fillMaxSize(),
         )
         abandonConfirm?.let { kind ->

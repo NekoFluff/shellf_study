@@ -26,6 +26,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.components.DropdownMenu
 import com.crazyfluff.shellfstudy.shared.designsystem.components.AbandonSessionMenuItem
 import com.crazyfluff.shellfstudy.shared.designsystem.components.CompactTopBar
 import com.crazyfluff.shellfstudy.shared.designsystem.dialog.ConfirmationDialog
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchActions
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 
@@ -58,7 +59,7 @@ fun QuizScreenScaffold(
     abandonDialogText: String,
     onAbandon: () -> Unit,
     searchUiState: SearchUiState,
-    onSearchQueryChange: (String) -> Unit,
+    searchActions: SearchActions,
     testTags: QuizScreenChromeTestTags,
     extraMenuItems: @Composable ColumnScope.(closeMenu: () -> Unit) -> Unit = {},
     detailSheet: @Composable BoxScope.(isSearchActive: Boolean) -> Unit = {},
@@ -130,7 +131,7 @@ fun QuizScreenScaffold(
             active = isSearchActive,
             onActiveChange = { isSearchActive = it },
             uiState = searchUiState,
-            onQueryChange = onSearchQueryChange,
+            actions = searchActions,
             modifier = Modifier.fillMaxSize(),
         )
     }

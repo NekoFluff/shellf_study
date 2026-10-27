@@ -36,8 +36,10 @@ import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailReveal
 import com.crazyfluff.shellfstudy.shared.quiz.QuestionType
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchActions
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
+import com.crazyfluff.shellfstudy.shared.feature.search.rememberSearchActions
 import com.crazyfluff.shellfstudy.shared.feature.quiz.QuizScreenChromeTestTags
 import com.crazyfluff.shellfstudy.shared.feature.quiz.QuizScreenScaffold
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
@@ -138,7 +140,7 @@ fun ReviewRoute(
         onSessionComplete = onSessionComplete,
         onBack = onBack,
         searchUiState = searchUiState,
-        onSearchQueryChange = searchViewModel::onQueryChange
+        searchActions = rememberSearchActions(searchViewModel)
     )
 }
 
@@ -149,7 +151,7 @@ fun ReviewScreen(
     onSessionComplete: () -> Unit,
     onBack: () -> Unit,
     searchUiState: SearchUiState = SearchUiState(),
-    onSearchQueryChange: (String) -> Unit = {}
+    searchActions: SearchActions = SearchActions.Inert
 ) {
     val activePhase = uiState.phase as? ReviewUiState.Phase.Active
 
@@ -168,7 +170,7 @@ fun ReviewScreen(
         abandonDialogText = "Progress on items you haven't finished yet will be lost. This won't affect items you've already submitted.",
         onAbandon = actions::abandonSession,
         searchUiState = searchUiState,
-        onSearchQueryChange = onSearchQueryChange,
+        searchActions = searchActions,
         testTags = QuizScreenChromeTestTags(
             backButton = ReviewScreenTestTags.BACK_BUTTON,
             searchButton = ReviewScreenTestTags.SEARCH_BUTTON,

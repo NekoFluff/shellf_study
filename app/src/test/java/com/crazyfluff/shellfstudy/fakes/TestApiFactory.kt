@@ -111,6 +111,7 @@ fun buildTestRepositories(
     val studyMaterialDao = FakeStudyMaterialDao(writeLog)
     val subjectDao = FakeSubjectDao(writeLog, studyMaterials = studyMaterialDao.observeAll())
     val assignmentDao = FakeAssignmentDao(subjectsAtLevel = subjectDao::subjectsAtLevel, writeLog = writeLog)
+    subjectDao.unlockedSubjectIds = assignmentDao.observeVisibleSubjectIds()
     val srsSystemDao = FakeSrsSystemDao(writeLog).apply { seed(DEFAULT_TEST_SRS_SYSTEM) }
     val syncStateDao = FakeSyncStateDao()
     val studyActivityDao = FakeStudyActivityDao()

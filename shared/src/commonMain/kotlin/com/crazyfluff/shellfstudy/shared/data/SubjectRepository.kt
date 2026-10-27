@@ -1,6 +1,8 @@
 package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
+import com.crazyfluff.shellfstudy.shared.data.model.SearchFilters
+import com.crazyfluff.shellfstudy.shared.data.model.SentenceSearchResult
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.model.toPronunciationAudios
@@ -141,8 +143,26 @@ class SubjectRepository(
             write = { srsSystemDao.upsertAll(it) }
         )
 
-    fun observeSearch(query: String): Flow<List<SubjectSummary>> =
-        subjectDao.observeSearch(escapeLikeWildcards(query.lowercase())).map { entities -> entities.map { it.toSubjectSummary() } }
+    fun observeSearch(query: String, filters: SearchFilters = SearchFilters()): Flow<List<SubjectSummary>> =
+        subjectDao.observeSearch(query.toLikePattern(), filters.wkTypeStrings(), filters.unlockedOnly)
+            .map { entities -> entities.map { it.toSubjectSummary() } }
+
+    fun observeSentenceSearch(
+        query: String,
+        filters: SearchFilters = SearchFilters()
+    ): Flow<List<SentenceSearchResult>> =
+        subjectDao.observeSentenceSearch(query.toLikePattern(), filters.wkTypeStrings(), filters.unlockedOnly)
+            .map { rows ->
+                rows.map {
+                    SentenceSearchResult(
+                        subjectId = it.subjectId,
+                        subjectType = SubjectType.fromWkString(it.subjectType),
+                        characters = it.characters,
+                        japanese = it.japanese,
+                        english = it.english
+                    )
+                }
+            }
 
     fun observeTotalSubjectCount(): Flow<Int> = subjectDao.observeTotalCount()
 
@@ -236,6 +256,19 @@ private fun buildSearchTarget(
 ): String =
     (listOfNotNull(characters) + slug + meanings + readings + whitelistAuxiliaryMeanings).joinToString(" ").lowercase()
 
+/** The wk type strings [SubjectDao.observeSearch] keeps for these filters — every type when no chip
+ *  is on, and kana-only vocabulary alongside vocabulary, which the overlay shows as one chip. */
+internal fun SearchFilters.wkTypeStrings(): List<String> {
+    val chosen = types.ifEmpty { setOf(SubjectType.RADICAL, SubjectType.KANJI, SubjectType.VOCABULARY) }
+    return chosen.flatMap { type ->
+        when (type) {
+            SubjectType.RADICAL -> listOf("radical")
+            SubjectType.KANJI -> listOf("kanji")
+            SubjectType.VOCABULARY, SubjectType.KANA_VOCABULARY -> listOf("vocabulary", "kana_vocabulary")
+        }
+    }.distinct()
+}
+
 /** Escapes a raw search string for use inside [SubjectDao.observeSearch]'s `LIKE ... ESCAPE '\'`
  *  pattern, so a literal `%` or `_` typed by the user (e.g. searching for a romanization
  *  containing an underscore) matches that literal character instead of being treated as a SQL
@@ -245,6 +278,9 @@ private fun buildSearchTarget(
  *  through real SQLite. */
 internal fun escapeLikeWildcards(query: String): String =
     query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+/** A raw search string as the search queries take it: lowercased, then wildcard-escaped. */
+private fun String.toLikePattern(): String = escapeLikeWildcards(lowercase())
 
 /** Katakana-normalized primary reading, for exact-match "phonetically similar" lookups — falls back
  *  to the first reading if none is marked primary, and to "" if there are no readings at all. */

@@ -110,8 +110,10 @@ import com.crazyfluff.shellfstudy.shared.quiz.toSessionAnswerRow
 import com.crazyfluff.shellfstudy.shared.quiz.toSessionMissedItemRow
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.toDetailQuestionType
 import com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail.DetailRevealMode
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchActions
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
+import com.crazyfluff.shellfstudy.shared.feature.search.rememberSearchActions
 import com.crazyfluff.shellfstudy.shared.feature.quiz.QuizScreenChromeTestTags
 import com.crazyfluff.shellfstudy.shared.feature.quiz.QuizScreenScaffold
 import com.crazyfluff.shellfstudy.shared.feature.subjectdetail.SubjectDetailSheet
@@ -235,7 +237,7 @@ fun LessonRoute(
         onSessionComplete = onSessionComplete,
         onBack = onBack,
         searchUiState = searchUiState,
-        onSearchQueryChange = searchViewModel::onQueryChange
+        searchActions = rememberSearchActions(searchViewModel)
     )
 }
 
@@ -246,7 +248,7 @@ fun LessonScreen(
     onSessionComplete: () -> Unit,
     onBack: () -> Unit,
     searchUiState: SearchUiState = SearchUiState(),
-    onSearchQueryChange: (String) -> Unit = {}
+    searchActions: SearchActions = SearchActions.Inert
 ) {
     // A session only exists to abandon once the user has committed to a lesson session — the SELECT
     // phase hasn't persisted anything yet (see LessonSessionRepository), so there's nothing there
@@ -264,7 +266,7 @@ fun LessonScreen(
         abandonDialogText = "Finished batches are kept. Lessons in the batch you're on that you haven't finished, and every batch after it, are dropped from this session — they stay available to study later.",
         onAbandon = actions::abandonSession,
         searchUiState = searchUiState,
-        onSearchQueryChange = onSearchQueryChange,
+        searchActions = searchActions,
         testTags = QuizScreenChromeTestTags(
             backButton = LessonScreenTestTags.BACK_BUTTON,
             searchButton = LessonScreenTestTags.SEARCH_BUTTON,

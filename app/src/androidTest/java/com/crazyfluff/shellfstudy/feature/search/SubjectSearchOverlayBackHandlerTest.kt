@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.espresso.Espresso
 import androidx.test.espresso.NoActivityResumedException
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchActions
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import org.junit.Rule
@@ -29,7 +30,7 @@ class SubjectSearchOverlayBackHandlerTest {
                 active = active,
                 onActiveChange = { active = it },
                 uiState = SearchUiState(),
-                onQueryChange = {}
+                actions = SearchActions.Inert
             )
         }
 

@@ -31,23 +31,35 @@ fun <T> PillSelector(
 ) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { option ->
-            val isSelected = option == selected
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelect(option) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                // No border when selected: the filled container is the selection signal, and a
-                // border on top of it reads as a second, disagreeing one.
-                border = if (isSelected) {
-                    null
-                } else {
-                    FilterChipDefaults.filterChipBorder(enabled = true, selected = false)
-                },
-                label = { Text(text = label(option), style = MaterialTheme.typography.labelSmall) }
-            )
+            Pill(selected = option == selected, onClick = { onSelect(option) }, text = label(option))
         }
     }
+}
+
+/** One chip in [PillSelector]'s style, for rows that toggle chips independently (the search filters)
+ *  rather than picking exactly one. */
+@Composable
+fun Pill(
+    selected: Boolean,
+    onClick: () -> Unit,
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+        ),
+        // No border when selected: the filled container is the selection signal, and a
+        // border on top of it reads as a second, disagreeing one.
+        border = if (selected) {
+            null
+        } else {
+            FilterChipDefaults.filterChipBorder(enabled = true, selected = false)
+        },
+        label = { Text(text = text, style = MaterialTheme.typography.labelSmall) },
+        modifier = modifier
+    )
 }

@@ -7,6 +7,7 @@ import com.crazyfluff.shellfstudy.shared.database.KanjiLevelUpRow
 import com.crazyfluff.shellfstudy.shared.database.LevelUpPathRow
 import com.crazyfluff.shellfstudy.shared.database.LevelUpProjectionRow
 import com.crazyfluff.shellfstudy.shared.database.LevelProgressItemRow
+import com.crazyfluff.shellfstudy.shared.database.SentenceMatchRow
 import com.crazyfluff.shellfstudy.shared.database.SrsStageTypeCount
 import com.crazyfluff.shellfstudy.shared.database.StudyMaterialEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
@@ -31,6 +32,10 @@ class FakeSubjectDao(
 ) : SubjectDao {
     private val subjects = MutableStateFlow<Map<Long, SubjectEntity>>(emptyMap())
 
+    /** Stands in for the `assignments` table the "Unlocked" filter checks; wired to a
+     *  [FakeAssignmentDao] by `buildTestRepositories`, which is built after this DAO. */
+    var unlockedSubjectIds: Flow<Set<Long>> = flowOf(emptySet())
+
     override suspend fun upsertAll(subjects: List<SubjectEntity>) {
         writeLog?.record("subjects", subjects.size)
         this.subjects.value = this.subjects.value + subjects.associateBy { it.id }
@@ -45,18 +50,44 @@ class FakeSubjectDao(
     // for `LIKE ... ESCAPE '\'`, matching those characters literally instead of as SQL wildcards —
     // unescape first so this fake's plain `contains` mirrors that same literal-match behavior
     // instead of searching for the escape backslashes themselves.
-    override fun observeSearch(query: String): Flow<List<SubjectEntity>> {
-        val unescaped = query.replace("\\_", "_").replace("\\%", "%").replace("\\\\", "\\")
-        return combine(subjects, studyMaterials) { map, materials ->
+    override fun observeSearch(
+        query: String,
+        subjectTypes: List<String>,
+        unlockedOnly: Boolean
+    ): Flow<List<SubjectEntity>> {
+        val unescaped = unescapeLike(query)
+        return combine(subjects, studyMaterials, unlockedSubjectIds) { map, materials, unlocked ->
             val synonymMatches = materials
                 .filter { material -> material.meaningSynonyms.any { it.contains(unescaped, ignoreCase = true) } }
                 .map { it.subjectId }
                 .toSet()
             map.values
                 .filter { it.searchTarget.contains(unescaped, ignoreCase = true) || it.id in synonymMatches }
+                .filter { it.subjectType in subjectTypes && (!unlockedOnly || it.id in unlocked) }
                 .take(200)
         }
     }
+
+    override fun observeSentenceSearch(
+        query: String,
+        subjectTypes: List<String>,
+        unlockedOnly: Boolean
+    ): Flow<List<SentenceMatchRow>> {
+        val unescaped = unescapeLike(query)
+        return combine(subjects, unlockedSubjectIds) { map, unlocked ->
+            map.values
+                .filter { it.subjectType in subjectTypes && (!unlockedOnly || it.id in unlocked) }
+                .sortedWith(compareBy({ it.level }, { it.id }))
+                .flatMap { subject ->
+                    subject.contextSentences
+                        .filter { it.ja.contains(unescaped) || it.en.contains(unescaped, ignoreCase = true) }
+                        .map { SentenceMatchRow(subject.id, subject.subjectType, subject.characters, it.ja, it.en) }
+                }
+                .take(200)
+        }
+    }
+
+    private fun unescapeLike(query: String) = query.replace("\\_", "_").replace("\\%", "%").replace("\\\\", "\\")
 
     override fun observeByPrimaryReadingKeys(readingKeys: List<String>): Flow<List<SubjectReadingKeyRow>> =
         subjects.map { map ->
@@ -108,6 +139,10 @@ class FakeAssignmentDao(
     }
 
     override suspend fun getById(id: Long): AssignmentEntity? = assignments.value[id]
+
+    /** Subjects with a visible assignment — what the real search's "Unlocked" `EXISTS` matches. */
+    fun observeVisibleSubjectIds(): Flow<Set<Long>> =
+        assignments.map { map -> map.values.filter { !it.hidden }.map { it.subjectId }.toSet() }
 
     override suspend fun getByIds(ids: List<Long>): List<AssignmentEntity> =
         ids.mapNotNull { assignments.value[it] }

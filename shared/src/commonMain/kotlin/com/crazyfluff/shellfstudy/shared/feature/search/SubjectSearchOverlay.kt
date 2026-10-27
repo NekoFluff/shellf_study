@@ -66,6 +66,18 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import com.crazyfluff.shellfstudy.shared.data.model.SearchFilters
+import com.crazyfluff.shellfstudy.shared.data.model.SentenceSearchResult
+import com.crazyfluff.shellfstudy.shared.designsystem.components.Pill
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.designsystem.PlatformBackHandler
 import com.crazyfluff.shellfstudy.shared.designsystem.text.rememberPushUpTextFieldState
@@ -80,6 +92,11 @@ object SearchOverlayTestTags {
     const val EMPTY_STATE = "search_empty_state"
     const val NO_RESULTS = "search_no_results"
     const val RESULT_ROW_PREFIX = "search_result_"
+    const val SENTENCE_ROW_PREFIX = "search_sentence_"
+    const val TYPE_CHIP_PREFIX = "search_type_chip_"
+    const val UNLOCKED_ONLY_CHIP = "search_unlocked_only_chip"
+    const val TAB_SUBJECTS = "search_tab_subjects"
+    const val TAB_SENTENCES = "search_tab_sentences"
 }
 
 /**
@@ -91,9 +108,10 @@ fun SubjectSearchOverlay(
     active: Boolean,
     onActiveChange: (Boolean) -> Unit,
     uiState: SearchUiState,
-    onQueryChange: (String) -> Unit,
+    actions: SearchActions,
     modifier: Modifier = Modifier
 ) {
+    val onQueryChange = actions.onQueryChange
     val queryFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val openSubjectDetail = LocalOpenSubjectDetail.current
@@ -219,100 +237,230 @@ fun SubjectSearchOverlay(
                     }
                 }
 
-                when {
-                    uiState.query.isBlank() -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(horizontal = 32.dp, vertical = 48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = "Search every radical, kanji, and vocabulary word in the WaniKani library.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.testTag(SearchOverlayTestTags.EMPTY_STATE)
-                                )
-                            }
-                        }
-                    }
+                SearchFilterRow(filters = uiState.filters, onFiltersChange = actions.onFiltersChange)
 
-                    uiState.isSyncing && uiState.results.isEmpty() -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(vertical = 48.dp)
-                            ) {
-                                CircularProgressIndicator()
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "Still syncing your subject library…",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                if (uiState.query.isBlank()) {
+                    SearchMessage(
+                        icon = Icons.Default.Search,
+                        text = "Search every radical, kanji, vocabulary word and example sentence " +
+                            "in the WaniKani library.",
+                        testTag = SearchOverlayTestTags.EMPTY_STATE
+                    )
+                } else {
+                    SearchTabRow(uiState = uiState, onTabChange = actions.onTabChange)
+                    val onOpenSubject: (Long) -> Unit = { subjectId ->
+                        focusManager.clearFocus()
+                        openSubjectDetail(subjectId)
                     }
-
-                    uiState.results.isEmpty() -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(horizontal = 32.dp, vertical = 48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                    modifier = Modifier.size(40.dp)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "No matches found.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.testTag(SearchOverlayTestTags.NO_RESULTS)
-                                )
-                            }
-                        }
-                    }
-
-                    else -> {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            LazyColumn(modifier = Modifier.weight(1f)) {
-                                items(uiState.results, key = { it.subjectId }) { subject ->
-                                    SubjectResultRow(subject) { subjectId ->
-                                        focusManager.clearFocus()
-                                        openSubjectDetail(subjectId)
-                                    }
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                }
-                            }
-                            if (uiState.totalMatchCount > uiState.results.size) {
-                                Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
-                                    Text(
-                                        text = "Showing ${uiState.results.size} of ${uiState.totalMatchCount} — refine your search.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(12.dp)
-                                    )
-                                }
-                            }
-                        }
+                    when (uiState.tab) {
+                        SearchTab.SUBJECTS -> SearchResultList(
+                            items = uiState.results,
+                            totalCount = uiState.totalMatchCount,
+                            isSyncing = uiState.isSyncing,
+                            noResultsText = "No matches found.",
+                            key = { it.subjectId }
+                        ) { subject -> SubjectResultRow(subject, onOpenSubject) }
+                        SearchTab.SENTENCES -> SearchResultList(
+                            items = uiState.sentenceResults,
+                            totalCount = uiState.sentenceTotalCount,
+                            isSyncing = uiState.isSyncing,
+                            noResultsText = "No example sentences match.",
+                            key = null
+                        ) { sentence -> SentenceResultRow(sentence, uiState.query.trim(), onOpenSubject) }
                     }
                 }
             }
         }
+    }
+}
+
+/** The type chips (none on means any type) and the "Unlocked" chip, scrolling sideways when the
+ *  row outgrows a narrow screen. */
+@Composable
+private fun SearchFilterRow(filters: SearchFilters, onFiltersChange: (SearchFilters) -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp)
+    ) {
+        FilterTypes.forEach { type ->
+            val selected = type in filters.types
+            Pill(
+                selected = selected,
+                onClick = {
+                    val types = if (selected) filters.types - type else filters.types + type
+                    onFiltersChange(filters.copy(types = types))
+                },
+                text = subjectTypeLabel(type),
+                modifier = Modifier.testTag(SearchOverlayTestTags.TYPE_CHIP_PREFIX + type.name)
+            )
+        }
+        Pill(
+            selected = filters.unlockedOnly,
+            onClick = { onFiltersChange(filters.copy(unlockedOnly = !filters.unlockedOnly)) },
+            text = "Unlocked",
+            modifier = Modifier.testTag(SearchOverlayTestTags.UNLOCKED_ONLY_CHIP)
+        )
+    }
+}
+
+/** Kana-only vocabulary rides along with the Vocabulary chip — see [SearchFilters.types]. */
+private val FilterTypes = listOf(SubjectType.RADICAL, SubjectType.KANJI, SubjectType.VOCABULARY)
+
+@Composable
+private fun SearchTabRow(uiState: SearchUiState, onTabChange: (SearchTab) -> Unit) {
+    PrimaryTabRow(selectedTabIndex = uiState.tab.ordinal, containerColor = MaterialTheme.colorScheme.surface) {
+        Tab(
+            selected = uiState.tab == SearchTab.SUBJECTS,
+            onClick = { onTabChange(SearchTab.SUBJECTS) },
+            text = { Text("Subjects (${uiState.totalMatchCount})") },
+            modifier = Modifier.testTag(SearchOverlayTestTags.TAB_SUBJECTS)
+        )
+        Tab(
+            selected = uiState.tab == SearchTab.SENTENCES,
+            onClick = { onTabChange(SearchTab.SENTENCES) },
+            text = { Text("Sentences (${uiState.sentenceTotalCount})") },
+            modifier = Modifier.testTag(SearchOverlayTestTags.TAB_SENTENCES)
+        )
+    }
+}
+
+/** One tab's results — a syncing spinner or "no matches" when there are none, otherwise the list,
+ *  with a footer when [totalCount] is more than the capped [items] shown. */
+@Composable
+private fun <T> SearchResultList(
+    items: List<T>,
+    totalCount: Int,
+    isSyncing: Boolean,
+    noResultsText: String,
+    key: ((T) -> Any)?,
+    row: @Composable (T) -> Unit
+) {
+    when {
+        isSyncing && items.isEmpty() -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(vertical = 48.dp)
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Still syncing your subject library…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        items.isEmpty() -> SearchMessage(
+            icon = Icons.Default.Close,
+            text = noResultsText,
+            testTag = SearchOverlayTestTags.NO_RESULTS
+        )
+
+        else -> {
+            Column(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(items, key = key) { item ->
+                        row(item)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    }
+                }
+                if (totalCount > items.size) {
+                    Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
+                        Text(
+                            text = "Showing ${items.size} of $totalCount — refine your search.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchMessage(icon: ImageVector, text: String, testTag: String) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 32.dp, vertical = 48.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.size(44.dp)
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag(testTag)
+            )
+        }
+    }
+}
+
+/** A matching context sentence: the Japanese with the match highlighted, the English below it
+ *  (highlighted too, case-insensitively), and the word it illustrates. */
+@Composable
+private fun SentenceResultRow(sentence: SentenceSearchResult, query: String, onClick: (Long) -> Unit) {
+    val japaneseFontFamily = LocalJapaneseFontFamily.current
+    val highlight = SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick(sentence.subjectId) }
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .testTag(SearchOverlayTestTags.SENTENCE_ROW_PREFIX + sentence.subjectId)
+    ) {
+        Text(
+            text = highlightMatches(sentence.japanese, query, highlight),
+            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = japaneseFontFamily)
+        )
+        Text(
+            text = highlightMatches(sentence.english, query, highlight),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+        Text(
+            text = buildAnnotatedString {
+                sentence.characters?.let {
+                    withStyle(SpanStyle(color = subjectColor(sentence.subjectType), fontFamily = japaneseFontFamily)) {
+                        append(it)
+                    }
+                    append(" · ")
+                }
+                append(subjectTypeLabel(sentence.subjectType))
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+/** [text] with every case-insensitive occurrence of [query] in [style] — the same matching the
+ *  sentence search itself does, so the span shown is the one that matched. */
+fun highlightMatches(text: String, query: String, style: SpanStyle): AnnotatedString = buildAnnotatedString {
+    append(text)
+    if (query.isEmpty()) return@buildAnnotatedString
+    var from = text.indexOf(query, ignoreCase = true)
+    while (from >= 0) {
+        addStyle(style, from, from + query.length)
+        from = text.indexOf(query, startIndex = from + query.length, ignoreCase = true)
     }
 }
 

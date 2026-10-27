@@ -16,8 +16,16 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontWeight
+import com.crazyfluff.shellfstudy.shared.data.model.SearchFilters
+import com.crazyfluff.shellfstudy.shared.data.model.SentenceSearchResult
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchTab
+import com.crazyfluff.shellfstudy.shared.feature.search.highlightMatches
+import com.google.common.truth.Truth.assertThat
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchActions
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SubjectSearchOverlay
 import com.crazyfluff.shellfstudy.shared.network.SubjectType
@@ -44,6 +52,14 @@ class SubjectSearchOverlayTest {
         readings = listOf("みず")
     )
 
+    private val sampleSentence = SentenceSearchResult(
+        subjectId = 2467,
+        subjectType = SubjectType.VOCABULARY,
+        characters = "水",
+        japanese = "水を飲みます。",
+        english = "I drink water."
+    )
+
     @Test
     fun inactive_rendersNothing() {
         composeTestRule.setContent {
@@ -51,7 +67,7 @@ class SubjectSearchOverlayTest {
                 active = false,
                 onActiveChange = {},
                 uiState = SearchUiState(),
-                onQueryChange = {},
+                actions = SearchActions.Inert,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -66,7 +82,7 @@ class SubjectSearchOverlayTest {
                 active = true,
                 onActiveChange = {},
                 uiState = SearchUiState(),
-                onQueryChange = {},
+                actions = SearchActions.Inert,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -82,7 +98,7 @@ class SubjectSearchOverlayTest {
                 active = true,
                 onActiveChange = {},
                 uiState = SearchUiState(),
-                onQueryChange = { typed = it },
+                actions = SearchActions.Inert.copy(onQueryChange = { typed = it }),
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -101,7 +117,7 @@ class SubjectSearchOverlayTest {
                 active = true,
                 onActiveChange = {},
                 uiState = SearchUiState(query = ""),
-                onQueryChange = {},
+                actions = SearchActions.Inert,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -119,7 +135,7 @@ class SubjectSearchOverlayTest {
                 active = true,
                 onActiveChange = {},
                 uiState = SearchUiState(query = "xyz", results = emptyList()),
-                onQueryChange = {},
+                actions = SearchActions.Inert,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -134,7 +150,7 @@ class SubjectSearchOverlayTest {
                 active = true,
                 onActiveChange = {},
                 uiState = SearchUiState(query = "water", results = listOf(sampleResult)),
-                onQueryChange = {},
+                actions = SearchActions.Inert,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -161,7 +177,7 @@ class SubjectSearchOverlayTest {
                 active = true,
                 onActiveChange = {},
                 uiState = SearchUiState(query = "death star", results = listOf(glyphLessRadical)),
-                onQueryChange = {},
+                actions = SearchActions.Inert,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -180,7 +196,7 @@ class SubjectSearchOverlayTest {
                 active = active,
                 onActiveChange = { active = it },
                 uiState = SearchUiState(),
-                onQueryChange = {},
+                actions = SearchActions.Inert,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -198,7 +214,7 @@ class SubjectSearchOverlayTest {
                 active = active,
                 onActiveChange = { active = it },
                 uiState = SearchUiState(query = query),
-                onQueryChange = { query = it },
+                actions = SearchActions.Inert.copy(onQueryChange = { query = it }),
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -216,7 +232,7 @@ class SubjectSearchOverlayTest {
                 active = true,
                 onActiveChange = {},
                 uiState = SearchUiState(query = "water", results = listOf(sampleResult)),
-                onQueryChange = {},
+                actions = SearchActions.Inert,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -226,5 +242,153 @@ class SubjectSearchOverlayTest {
         composeTestRule.onNodeWithTag(SearchOverlayTestTags.RESULT_ROW_PREFIX + "440").performClick()
 
         composeTestRule.onNodeWithTag(SearchOverlayTestTags.QUERY_FIELD).assertIsNotFocused()
+    }
+
+    @Test
+    fun typeChip_togglesThatTypeInTheFilters() {
+        var filters by mutableStateOf(SearchFilters())
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(filters = filters),
+                actions = SearchActions.Inert.copy(onFiltersChange = { filters = it }),
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.TYPE_CHIP_PREFIX + "KANJI").performClick()
+        composeTestRule.waitForIdle()
+        assertThat(filters.types).containsExactly(SubjectType.KANJI)
+
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.TYPE_CHIP_PREFIX + "KANJI").performClick()
+        composeTestRule.waitForIdle()
+        assertThat(filters.types).isEmpty()
+    }
+
+    @Test
+    fun unlockedOnlyChip_togglesTheFilter() {
+        var filters by mutableStateOf(SearchFilters())
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(filters = filters),
+                actions = SearchActions.Inert.copy(onFiltersChange = { filters = it }),
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.UNLOCKED_ONLY_CHIP).performClick()
+        composeTestRule.waitForIdle()
+        assertThat(filters.unlockedOnly).isTrue()
+    }
+
+    @Test
+    fun tabs_showEachTabsCount_andSwitchTabs() {
+        var tab: SearchTab? = null
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(
+                    query = "water",
+                    results = listOf(sampleResult),
+                    totalMatchCount = 1,
+                    sentenceResults = listOf(sampleSentence),
+                    sentenceTotalCount = 1
+                ),
+                actions = SearchActions.Inert.copy(onTabChange = { tab = it }),
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithText("Subjects (1)").assertExists()
+        composeTestRule.onNodeWithText("Sentences (1)").assertExists()
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.TAB_SENTENCES).performClick()
+        assertThat(tab).isEqualTo(SearchTab.SENTENCES)
+    }
+
+    @Test
+    fun blankQuery_hidesTheTabs() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = ""),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(SearchOverlayTestTags.TAB_SENTENCES).assertCountEquals(0)
+    }
+
+    @Test
+    fun sentencesTab_showsSentenceRows_notSubjectRows() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(
+                    query = "water",
+                    tab = SearchTab.SENTENCES,
+                    results = listOf(sampleResult),
+                    sentenceResults = listOf(sampleSentence),
+                    sentenceTotalCount = 1
+                ),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.SENTENCE_ROW_PREFIX + "2467").assertExists()
+        composeTestRule.onNodeWithText("I drink water.").assertExists()
+        composeTestRule.onAllNodesWithTag(SearchOverlayTestTags.RESULT_ROW_PREFIX + "440").assertCountEquals(0)
+    }
+
+    @Test
+    fun sentencesTabWithNoMatches_showsItsOwnNoResultsMessage() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = "water", tab = SearchTab.SENTENCES, results = listOf(sampleResult)),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithText("No example sentences match.").assertExists()
+    }
+
+    @Test
+    fun selectingSentence_clearsFocusFromQueryField() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(
+                    query = "water",
+                    tab = SearchTab.SENTENCES,
+                    sentenceResults = listOf(sampleSentence)
+                ),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.QUERY_FIELD).assertIsFocused()
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.SENTENCE_ROW_PREFIX + "2467").performClick()
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.QUERY_FIELD).assertIsNotFocused()
+    }
+
+    @Test
+    fun highlightMatches_stylesEveryCaseInsensitiveOccurrence() {
+        val style = SpanStyle(fontWeight = FontWeight.Bold)
+        val highlighted = highlightMatches("Water, water everywhere", "water", style)
+
+        assertThat(highlighted.spanStyles.map { it.start to it.end }).containsExactly(0 to 5, 7 to 12).inOrder()
+        assertThat(highlightMatches("水", "", style).spanStyles).isEmpty()
     }
 }

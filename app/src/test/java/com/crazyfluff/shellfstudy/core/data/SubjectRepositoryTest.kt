@@ -165,9 +165,16 @@ class SubjectRepositoryTest {
     fun `observeSearch finds a subject by the user's own synonym`() = runTest {
         server.enqueue(jsonResponse(SUBJECTS_JSON))
         repository.syncSubjects(force = true)
-        val water = repositories.subjectDao.observeSearch("water").first().single()
+        val water = repository.observeSearch("water").first().single()
         repositories.studyMaterialDao.upsertAll(
-            listOf(StudyMaterialEntity(id = 1, subjectId = water.id, meaningSynonyms = listOf("Aqua"), hidden = false))
+            listOf(
+                StudyMaterialEntity(
+                    id = 1,
+                    subjectId = water.subjectId,
+                    meaningSynonyms = listOf("Aqua"),
+                    hidden = false
+                )
+            )
         )
 
         repository.observeSearch("aqua").test {

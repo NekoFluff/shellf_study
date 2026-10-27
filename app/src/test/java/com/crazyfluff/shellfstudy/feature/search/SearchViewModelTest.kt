@@ -2,8 +2,13 @@ package com.crazyfluff.shellfstudy.feature.search
 
 import app.cash.turbine.test
 import com.crazyfluff.shellfstudy.MainDispatcherRule
+import com.crazyfluff.shellfstudy.shared.data.model.SearchFilters
+import com.crazyfluff.shellfstudy.shared.feature.search.SearchTab
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchViewModel
+import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
+import com.crazyfluff.shellfstudy.shared.network.ContextSentenceData
+import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import com.crazyfluff.shellfstudy.shared.network.MeaningData
 import com.crazyfluff.shellfstudy.shared.network.ReadingData
 import com.crazyfluff.shellfstudy.fakes.buildTestRepositories
@@ -124,18 +129,145 @@ class SearchViewModelTest {
         }
     }
 
-    private suspend fun seedSubject(id: Long, characters: String, meaning: String, reading: String) {
+    @Test
+    fun `type filter narrows results, and the vocabulary chip covers kana-only vocabulary`() = runTest(mainDispatcherRule.dispatcher) {
+        seedSubject(id = 1, characters = "水", meaning = "Water", reading = "すい", type = "kanji")
+        seedSubject(id = 2, characters = "水", meaning = "Water", reading = "みず", type = "vocabulary")
+        seedSubject(id = 3, characters = "ウォーター", meaning = "Water", reading = "うぉーたー", type = "kana_vocabulary")
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onQueryChange("water")
+            awaitItem()
+            assertThat(awaitItem().results.map { it.subjectId }).containsExactly(1L, 2L, 3L)
+
+            viewModel.onFiltersChange(SearchFilters(types = setOf(SubjectType.VOCABULARY)))
+            awaitItem() // filters update first, with the previous results
+            assertThat(awaitItem().results.map { it.subjectId }).containsExactly(2L, 3L)
+
+            viewModel.onFiltersChange(SearchFilters(types = setOf(SubjectType.KANJI)))
+            awaitItem()
+            assertThat(awaitItem().results.map { it.subjectId }).containsExactly(1L)
+        }
+    }
+
+    @Test
+    fun `unlocked only hides subjects without a visible assignment`() = runTest(mainDispatcherRule.dispatcher) {
+        seedSubject(id = 1, characters = "水", meaning = "Water", reading = "みず")
+        seedSubject(id = 2, characters = "氷", meaning = "Ice water", reading = "こおり")
+        repositories.assignmentDao.upsertAll(
+            listOf(
+                AssignmentEntity(
+                    id = 10, subjectId = 1, subjectType = "kanji", srsStage = 1,
+                    createdAt = "2026-01-01T00:00:00.000000Z", hidden = false
+                )
+            )
+        )
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onFiltersChange(SearchFilters(unlockedOnly = true))
+            awaitItem()
+            viewModel.onQueryChange("water")
+            awaitItem()
+
+            assertThat(awaitItem().results.map { it.subjectId }).containsExactly(1L)
+        }
+    }
+
+    @Test
+    fun `sentences are searched alongside subjects, with their own count`() = runTest(mainDispatcherRule.dispatcher) {
+        seedSubject(
+            id = 1, characters = "水", meaning = "Water", reading = "みず", type = "vocabulary",
+            sentences = listOf(
+                ContextSentenceData(en = "I drink water.", ja = "水を飲みます。"),
+                ContextSentenceData(en = "The water is cold.", ja = "水は冷たい。")
+            )
+        )
+        seedSubject(
+            id = 2, characters = "火", meaning = "Fire", reading = "ひ", type = "vocabulary",
+            sentences = listOf(ContextSentenceData(en = "Fire and water.", ja = "火と水。"))
+        )
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onQueryChange("water")
+            awaitItem()
+
+            val state = awaitItem()
+            assertThat(state.results.map { it.subjectId }).containsExactly(1L)
+            assertThat(state.sentenceResults.map { it.english })
+                .containsExactly("I drink water.", "The water is cold.", "Fire and water.")
+            assertThat(state.sentenceTotalCount).isEqualTo(3)
+            assertThat(state.sentenceResults.last().characters).isEqualTo("火")
+        }
+    }
+
+    @Test
+    fun `clearing the query clears sentence results too`() = runTest(mainDispatcherRule.dispatcher) {
+        seedSubject(
+            id = 1, characters = "水", meaning = "Water", reading = "みず", type = "vocabulary",
+            sentences = listOf(ContextSentenceData(en = "I drink water.", ja = "水を飲みます。"))
+        )
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onQueryChange("drink")
+            awaitItem()
+            assertThat(awaitItem().sentenceResults).hasSize(1)
+
+            viewModel.onQueryChange("")
+            awaitItem()
+            val cleared = awaitItem()
+            assertThat(cleared.sentenceResults).isEmpty()
+            assertThat(cleared.sentenceTotalCount).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `switching tabs keeps the query and results`() = runTest(mainDispatcherRule.dispatcher) {
+        seedSubject(id = 1, characters = "水", meaning = "Water", reading = "みず")
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onQueryChange("water")
+            awaitItem()
+            awaitItem()
+
+            viewModel.onTabChange(SearchTab.SENTENCES)
+            val state = awaitItem()
+            assertThat(state.tab).isEqualTo(SearchTab.SENTENCES)
+            assertThat(state.query).isEqualTo("water")
+            assertThat(state.results).hasSize(1)
+            expectNoEvents()
+        }
+    }
+
+    private suspend fun seedSubject(
+        id: Long,
+        characters: String,
+        meaning: String,
+        reading: String,
+        type: String = "kanji",
+        sentences: List<ContextSentenceData> = emptyList()
+    ) {
         subjectDao.upsertAll(
             listOf(
                 SubjectEntity(
                     id = id,
-                    subjectType = "kanji",
+                    subjectType = type,
                     level = 3,
                     slug = characters,
                     characters = characters,
                     meanings = listOf(MeaningData(meaning = meaning, primary = true)),
                     readings = listOf(ReadingData(reading = reading, primary = true)),
                     documentUrl = null,
+                    contextSentences = sentences,
                     searchTarget = "$characters $meaning $reading".lowercase()
                 )
             )
