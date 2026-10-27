@@ -54,16 +54,6 @@ data class SubjectReadingKeyRow(val id: Long, val subjectType: String, val prima
  *  kept to the two columns it needs rather than whole subjects. */
 data class SubjectAudioRow(val level: Int, val pronunciationAudios: List<PronunciationAudioData>)
 
-/** One context sentence matching a search, with the subject it belongs to — the search overlay's
- *  Sentences tab row, kept to what that row shows rather than whole subjects. */
-data class SentenceMatchRow(
-    val subjectId: Long,
-    val subjectType: String,
-    val characters: String?,
-    val japanese: String,
-    val english: String
-)
-
 /** One subject type's total subject count — the item-spread "locked" type-breakdown source. */
 data class SubjectTypeCount(val subjectType: String, val count: Int)
 
@@ -113,11 +103,10 @@ interface SubjectDao {
      * Room re-run the search when a synonym is added or removed. `lower` only folds ASCII, which is
      * all an English synonym needs; the caller lowercases [query].
      *
-     * The search overlay's filters narrow the same scan rather than running a query of their own:
-     * [subjectTypes] lists the wk type strings to keep (the caller passes all four for "any type"),
-     * and [unlockedOnly] keeps subjects with a visible assignment — WaniKani only creates one when
-     * the subject unlocks. Its `EXISTS` is one lookup on the `subjectId` index per scanned row, like
-     * the synonym one, and naming `assignments` makes the search re-run as items unlock. */
+     * [subjectTypes] lists the wk type strings to keep (the caller passes all four for "any type").
+     * This query deliberately doesn't name `assignments`: Room re-runs a query whenever a table it
+     * names is written, so naming it would re-run the search on every review submission while the
+     * overlay is open. [observeUnlockedSearch] is the variant that does. */
     @Query(
         """
         SELECT * FROM subjects
@@ -130,43 +119,33 @@ interface SubjectDao {
                 )
             )
             AND subjectType IN (:subjectTypes)
-            AND (:unlockedOnly = 0 OR EXISTS (
-                SELECT 1 FROM assignments WHERE assignments.subjectId = subjects.id AND assignments.hidden = 0
-            ))
         LIMIT 200
         """
     )
-    fun observeSearch(query: String, subjectTypes: List<String>, unlockedOnly: Boolean): Flow<List<SubjectEntity>>
+    fun observeSearch(query: String, subjectTypes: List<String>): Flow<List<SubjectEntity>>
 
-    /** Every context sentence containing [query], in Japanese or (case-insensitively) in English, with
-     *  the subject it belongs to — the search overlay's Sentences tab. [query] is pre-escaped and
-     *  lowercased exactly as for [observeSearch], and the type/unlocked filters mean the same. Each
-     *  sentence is unpacked through `json_each`, so a query can't match across the JSON between two
-     *  sentences or between a sentence's `en` and `ja`. Only vocabulary has sentences, so this scans
-     *  the same table [observeSearch] does with one `json_each` per row; lowest level first, so the
-     *  sentences a learner can read come before the ones they can't yet. */
+    /** [observeSearch], kept to subjects with a visible assignment — the "Unlocked" filter. WaniKani
+     *  only creates an assignment when its subject unlocks. The `EXISTS` is one lookup on the
+     *  `subjectId` index per scanned row, like the synonym one. */
     @Query(
         """
-        SELECT subjects.id AS subjectId, subjects.subjectType AS subjectType, subjects.characters AS characters,
-            json_extract(sentence.value, '$.ja') AS japanese, json_extract(sentence.value, '$.en') AS english
-        FROM subjects, json_each(subjects.contextSentences) AS sentence
+        SELECT * FROM subjects
         WHERE (
-                json_extract(sentence.value, '$.ja') LIKE '%' || :query || '%' ESCAPE '\'
-                OR lower(json_extract(sentence.value, '$.en')) LIKE '%' || :query || '%' ESCAPE '\'
+                searchTarget LIKE '%' || :query || '%' ESCAPE '\'
+                OR EXISTS (
+                    SELECT 1 FROM study_materials, json_each(study_materials.meaningSynonyms) AS synonym
+                    WHERE study_materials.subjectId = subjects.id
+                        AND lower(synonym.value) LIKE '%' || :query || '%' ESCAPE '\'
+                )
             )
-            AND subjects.subjectType IN (:subjectTypes)
-            AND (:unlockedOnly = 0 OR EXISTS (
+            AND subjectType IN (:subjectTypes)
+            AND EXISTS (
                 SELECT 1 FROM assignments WHERE assignments.subjectId = subjects.id AND assignments.hidden = 0
-            ))
-        ORDER BY subjects.level, subjects.id, sentence.key
+            )
         LIMIT 200
         """
     )
-    fun observeSentenceSearch(
-        query: String,
-        subjectTypes: List<String>,
-        unlockedOnly: Boolean
-    ): Flow<List<SentenceMatchRow>>
+    fun observeUnlockedSearch(query: String, subjectTypes: List<String>): Flow<List<SubjectEntity>>
 
     /** Every subject whose primary reading is one of [readingKeys], lowest level first — the
      *  candidates for the "Phonetically similar" section. Which of them count as similar to a given

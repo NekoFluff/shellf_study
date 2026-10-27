@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -54,8 +55,8 @@ class SubjectSearchOverlayTest {
 
     private val sampleSentence = SentenceSearchResult(
         subjectId = 2467,
-        subjectType = SubjectType.VOCABULARY,
         characters = "水",
+        level = 3,
         japanese = "水を飲みます。",
         english = "I drink water."
     )
@@ -353,7 +354,12 @@ class SubjectSearchOverlayTest {
             SubjectSearchOverlay(
                 active = true,
                 onActiveChange = {},
-                uiState = SearchUiState(query = "water", tab = SearchTab.SENTENCES, results = listOf(sampleResult)),
+                uiState = SearchUiState(
+                    query = "water",
+                    tab = SearchTab.SENTENCES,
+                    results = listOf(sampleResult),
+                    sentenceTotalCount = 0
+                ),
                 actions = SearchActions.Inert,
                 modifier = Modifier.fillMaxSize()
             )
@@ -390,5 +396,103 @@ class SubjectSearchOverlayTest {
 
         assertThat(highlighted.spanStyles.map { it.start to it.end }).containsExactly(0 to 5, 7 to 12).inOrder()
         assertThat(highlightMatches("水", "", style).spanStyles).isEmpty()
+    }
+
+    @Test
+    fun sentencesTab_hidesTheTypeChips_butKeepsUnlocked() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = "water", tab = SearchTab.SENTENCES, sentenceTotalCount = 0),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(SearchOverlayTestTags.TYPE_CHIP_PREFIX + "KANJI").assertCountEquals(0)
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.UNLOCKED_ONLY_CHIP).assertExists()
+    }
+
+    @Test
+    fun sentenceRow_showsTheWordsLevel_notItsType() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(
+                    query = "water",
+                    tab = SearchTab.SENTENCES,
+                    sentenceResults = listOf(sampleSentence),
+                    sentenceTotalCount = 1
+                ),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithText("水 · Level 3").assertExists()
+        composeTestRule.onAllNodesWithText("Vocabulary", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun sentencesTabLabel_hasNoCountUntilSearched() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = "water", results = listOf(sampleResult), totalMatchCount = 1),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithText("Sentences").assertExists()
+    }
+
+    @Test
+    fun runningSearch_showsTheProgressBar_overThePreviousResults() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = "water", results = listOf(sampleResult), isSearchingSubjects = true),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.SEARCH_PROGRESS).assertExists()
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.RESULT_ROW_PREFIX + "440").assertExists()
+    }
+
+    @Test
+    fun finishedSearch_hidesTheProgressBar() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = "water", results = listOf(sampleResult)),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(SearchOverlayTestTags.SEARCH_PROGRESS).assertCountEquals(0)
+    }
+
+    @Test
+    fun runningSearchWithNoResultsYet_doesNotClaimNoMatches() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = "water", isSearchingSubjects = true),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(SearchOverlayTestTags.NO_RESULTS).assertCountEquals(0)
     }
 }

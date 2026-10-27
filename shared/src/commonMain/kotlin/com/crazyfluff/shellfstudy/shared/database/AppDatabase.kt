@@ -5,7 +5,9 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverters
+import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.SQLiteDriver
+import androidx.sqlite.execSQL
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 
@@ -17,9 +19,10 @@ import kotlinx.coroutines.Dispatchers
         ReviewStatisticEntity::class,
         LevelProgressionEntity::class,
         StudyMaterialEntity::class,
-        SyncStateEntity::class
+        SyncStateEntity::class,
+        ContextSentenceEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -32,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun levelProgressionDao(): LevelProgressionDao
     abstract fun syncStateDao(): SyncStateDao
     abstract fun studyMaterialDao(): StudyMaterialDao
+    abstract fun contextSentenceDao(): ContextSentenceDao
 }
 
 @Suppress("KotlinNoActualForExpect")
@@ -63,4 +67,14 @@ fun buildAppDatabase(
         // the last resort rather than the normal path it used to be.
         .addMigrations(*APP_DATABASE_MIGRATIONS)
         .fallbackToDestructiveMigration(dropAllTables = true)
+        // Room creates tables but not triggers, so `context_sentences`' triggers are installed on every
+        // open: that covers a fresh install and a destructive rebuild as well as the migration, and
+        // `IF NOT EXISTS` makes it a no-op the rest of the time.
+        .addCallback(
+            object : RoomDatabase.Callback() {
+                override fun onOpen(connection: SQLiteConnection) {
+                    CONTEXT_SENTENCE_TRIGGERS.forEach { connection.execSQL(it) }
+                }
+            }
+        )
         .build()

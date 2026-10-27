@@ -112,6 +112,7 @@ fun buildTestRepositories(
     val subjectDao = FakeSubjectDao(writeLog, studyMaterials = studyMaterialDao.observeAll())
     val assignmentDao = FakeAssignmentDao(subjectsAtLevel = subjectDao::subjectsAtLevel, writeLog = writeLog)
     subjectDao.unlockedSubjectIds = assignmentDao.observeVisibleSubjectIds()
+    val contextSentenceDao = FakeContextSentenceDao(subjectDao, assignmentDao.observeVisibleSubjectIds())
     val srsSystemDao = FakeSrsSystemDao(writeLog).apply { seed(DEFAULT_TEST_SRS_SYSTEM) }
     val syncStateDao = FakeSyncStateDao()
     val studyActivityDao = FakeStudyActivityDao()
@@ -122,7 +123,9 @@ fun buildTestRepositories(
 
     val pitchAccentRepository = PitchAccentRepository(FakePitchAccentBundledSource(pitchAccentEntries))
     val subjectRepository =
-        SubjectRepository(api, subjectDao, srsSystemDao, syncStateDao, pitchAccentRepository, defaultDispatcher)
+        SubjectRepository(
+            api, subjectDao, contextSentenceDao, srsSystemDao, syncStateDao, pitchAccentRepository, defaultDispatcher
+        )
     val assignmentRepository = AssignmentRepository(
         api, assignmentDao, subjectDao, syncStateDao, srsSystemDao, defaultDispatcher,
         pendingAssignmentIds = outboxDao::getPendingAssignmentIds

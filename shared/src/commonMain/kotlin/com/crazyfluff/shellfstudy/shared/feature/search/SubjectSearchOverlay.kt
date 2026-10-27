@@ -71,9 +71,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -102,6 +104,7 @@ object SearchOverlayTestTags {
     const val UNLOCKED_ONLY_CHIP = "search_unlocked_only_chip"
     const val TAB_SUBJECTS = "search_tab_subjects"
     const val TAB_SENTENCES = "search_tab_sentences"
+    const val SEARCH_PROGRESS = "search_progress"
 }
 
 /**
@@ -249,7 +252,12 @@ fun SubjectSearchOverlay(
                     }
                 }
 
-                SearchFilterRow(filters = uiState.filters, onFiltersChange = actions.onFiltersChange)
+                SearchFilterRow(
+                    filters = uiState.filters,
+                    // Every sentence is vocabulary's, so the type chips only mean something on Subjects.
+                    showTypeChips = uiState.query.isBlank() || uiState.tab == SearchTab.SUBJECTS,
+                    onFiltersChange = actions.onFiltersChange
+                )
 
                 if (uiState.query.isBlank()) {
                     SearchMessage(
@@ -259,37 +267,92 @@ fun SubjectSearchOverlay(
                         testTag = SearchOverlayTestTags.EMPTY_STATE
                     )
                 } else {
-                    SearchTabRow(uiState = uiState, onTabChange = actions.onTabChange)
-                    val onOpenSubject: (Long) -> Unit = { subjectId ->
-                        focusManager.clearFocus()
-                        openSubjectDetail(subjectId)
-                    }
-                    when (uiState.tab) {
-                        SearchTab.SUBJECTS -> SearchResultList(
-                            items = uiState.results,
-                            totalCount = uiState.totalMatchCount,
-                            isSyncing = uiState.isSyncing,
-                            noResultsText = "No matches found.",
-                            key = { it.subjectId }
-                        ) { subject -> SubjectResultRow(subject, onOpenSubject) }
-                        SearchTab.SENTENCES -> SearchResultList(
-                            items = uiState.sentenceResults,
-                            totalCount = uiState.sentenceTotalCount,
-                            isSyncing = uiState.isSyncing,
-                            noResultsText = "No example sentences match.",
-                            key = null
-                        ) { sentence -> SentenceResultRow(sentence, uiState.query.trim(), onOpenSubject) }
-                    }
+                    SearchResults(
+                        uiState = uiState,
+                        onTabChange = actions.onTabChange,
+                        onOpenSubject = { subjectId ->
+                            focusManager.clearFocus()
+                            openSubjectDetail(subjectId)
+                        }
+                    )
                 }
             }
         }
     }
 }
 
-/** The type chips (none on means any type) and the "Unlocked" chip, scrolling sideways when the
- *  row outgrows a narrow screen. */
+/** The tabs, the progress bar under them, and the selected tab's results — shown once there's a query. */
 @Composable
-private fun SearchFilterRow(filters: SearchFilters, onFiltersChange: (SearchFilters) -> Unit) {
+private fun SearchResults(
+    uiState: SearchUiState,
+    onTabChange: (SearchTab) -> Unit,
+    onOpenSubject: (Long) -> Unit
+) {
+    SearchTabRow(uiState = uiState, onTabChange = onTabChange)
+    val isSearching = when (uiState.tab) {
+        SearchTab.SUBJECTS -> uiState.isSearchingSubjects
+        SearchTab.SENTENCES -> uiState.isSearchingSentences
+    }
+    val showSearching = rememberDelayedSearching(isSearching)
+    // Space is held for the bar either way, so the list doesn't jump when it appears.
+    Box(modifier = Modifier.fillMaxWidth().height(SearchProgressHeight)) {
+        if (showSearching) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxSize().testTag(SearchOverlayTestTags.SEARCH_PROGRESS)
+            )
+        }
+    }
+    when (uiState.tab) {
+        SearchTab.SUBJECTS -> SearchResultList(
+            items = uiState.results,
+            totalCount = uiState.totalMatchCount,
+            isSyncing = uiState.isSyncing,
+            isSearching = isSearching,
+            showSearching = showSearching,
+            noResultsText = "No matches found.",
+            key = { it.subjectId }
+        ) { subject -> SubjectResultRow(subject, onOpenSubject) }
+        SearchTab.SENTENCES -> SearchResultList(
+            items = uiState.sentenceResults,
+            totalCount = uiState.sentenceTotalCount ?: 0,
+            isSyncing = uiState.isSyncing,
+            isSearching = isSearching || uiState.sentenceTotalCount == null,
+            showSearching = showSearching,
+            noResultsText = "No example sentences match.",
+            key = null
+        ) { sentence -> SentenceResultRow(sentence, uiState.query.trim(), onOpenSubject) }
+    }
+}
+
+/** How long a search runs before the progress bar shows — most finish sooner, and a bar that flashes on
+ *  for a few frames on every keystroke reads as jank rather than progress. */
+private const val SEARCH_PROGRESS_DELAY_MILLIS = 150L
+private val SearchProgressHeight = 2.dp
+
+/** [isSearching], but only turning true once a search has run for [SEARCH_PROGRESS_DELAY_MILLIS]. */
+@Composable
+private fun rememberDelayedSearching(isSearching: Boolean): Boolean {
+    var show by remember { mutableStateOf(false) }
+    LaunchedEffect(isSearching) {
+        if (isSearching) {
+            delay(SEARCH_PROGRESS_DELAY_MILLIS)
+            show = true
+        } else {
+            show = false
+        }
+    }
+    return show && isSearching
+}
+
+/** The type chips (none on means any type) and the "Unlocked" chip, scrolling sideways when the
+ *  row outgrows a narrow screen. The type chips are left out on the Sentences tab, which they don't
+ *  affect; their selection is kept for when the Subjects tab is back. */
+@Composable
+private fun SearchFilterRow(
+    filters: SearchFilters,
+    showTypeChips: Boolean,
+    onFiltersChange: (SearchFilters) -> Unit
+) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
@@ -297,7 +360,7 @@ private fun SearchFilterRow(filters: SearchFilters, onFiltersChange: (SearchFilt
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
     ) {
-        FilterTypes.forEach { type ->
+        if (showTypeChips) FilterTypes.forEach { type ->
             val selected = type in filters.types
             Pill(
                 selected = selected,
@@ -333,40 +396,48 @@ private fun SearchTabRow(uiState: SearchUiState, onTabChange: (SearchTab) -> Uni
         Tab(
             selected = uiState.tab == SearchTab.SENTENCES,
             onClick = { onTabChange(SearchTab.SENTENCES) },
-            text = { Text("Sentences (${uiState.sentenceTotalCount})") },
+            text = { Text(uiState.sentenceTotalCount?.let { "Sentences ($it)" } ?: "Sentences") },
             modifier = Modifier.testTag(SearchOverlayTestTags.TAB_SENTENCES)
         )
     }
 }
 
-/** One tab's results — a syncing spinner or "no matches" when there are none, otherwise the list,
- *  with a footer when [totalCount] is more than the capped [items] shown. */
+/** One tab's results — with none yet, a spinner while syncing or searching ([showSearching] is the
+ *  delayed flag, so a quick search shows nothing rather than flashing) and "no matches" only once a
+ *  search has finished; otherwise the list, with a footer when [totalCount] is more than the capped
+ *  [items] shown. While a new search runs the previous results stay up, under the progress bar. */
 @Composable
 private fun <T> SearchResultList(
     items: List<T>,
     totalCount: Int,
     isSyncing: Boolean,
+    isSearching: Boolean,
+    showSearching: Boolean,
     noResultsText: String,
     key: ((T) -> Any)?,
     row: @Composable (T) -> Unit
 ) {
     when {
-        isSyncing && items.isEmpty() -> {
+        items.isEmpty() && (isSyncing || showSearching) -> {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(vertical = 48.dp)
                 ) {
                     CircularProgressIndicator()
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Still syncing your subject library…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (isSyncing) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Still syncing your subject library…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
+
+        items.isEmpty() && isSearching -> Unit
 
         items.isEmpty() -> SearchMessage(
             icon = Icons.Default.Close,
@@ -425,7 +496,8 @@ private fun SearchMessage(icon: ImageVector, text: String, testTag: String) {
 }
 
 /** A matching context sentence: the Japanese with the match highlighted, the English below it
- *  (highlighted too, case-insensitively), and the word it illustrates. */
+ *  (highlighted too, case-insensitively), and the word it illustrates with its level — not its type,
+ *  since every sentence is vocabulary's. */
 @Composable
 private fun SentenceResultRow(sentence: SentenceSearchResult, query: String, onClick: (Long) -> Unit) {
     val japaneseFontFamily = LocalJapaneseFontFamily.current
@@ -450,12 +522,12 @@ private fun SentenceResultRow(sentence: SentenceSearchResult, query: String, onC
         Text(
             text = buildAnnotatedString {
                 sentence.characters?.let {
-                    withStyle(SpanStyle(color = subjectColor(sentence.subjectType), fontFamily = japaneseFontFamily)) {
+                    withStyle(SpanStyle(color = subjectColor(SubjectType.VOCABULARY), fontFamily = japaneseFontFamily)) {
                         append(it)
                     }
                     append(" · ")
                 }
-                append(subjectTypeLabel(sentence.subjectType))
+                append("Level ${sentence.level}")
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

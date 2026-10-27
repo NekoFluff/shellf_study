@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.fakes
 
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
+import com.crazyfluff.shellfstudy.shared.database.ContextSentenceDao
 import com.crazyfluff.shellfstudy.shared.database.AssignmentEntity
 import com.crazyfluff.shellfstudy.shared.database.UpcomingAssignmentRow
 import com.crazyfluff.shellfstudy.shared.database.KanjiLevelUpRow
@@ -46,15 +47,13 @@ class FakeSubjectDao(
 
     override suspend fun getById(id: Long): SubjectEntity? = subjects.value[id]
 
-    // The real DAO's query takes a caller-pre-escaped string (backslash-escaped %, _ and \) meant
-    // for `LIKE ... ESCAPE '\'`, matching those characters literally instead of as SQL wildcards —
-    // unescape first so this fake's plain `contains` mirrors that same literal-match behavior
-    // instead of searching for the escape backslashes themselves.
-    override fun observeSearch(
-        query: String,
-        subjectTypes: List<String>,
-        unlockedOnly: Boolean
-    ): Flow<List<SubjectEntity>> {
+    override fun observeSearch(query: String, subjectTypes: List<String>): Flow<List<SubjectEntity>> =
+        search(query, subjectTypes, unlockedOnly = false)
+
+    override fun observeUnlockedSearch(query: String, subjectTypes: List<String>): Flow<List<SubjectEntity>> =
+        search(query, subjectTypes, unlockedOnly = true)
+
+    private fun search(query: String, subjectTypes: List<String>, unlockedOnly: Boolean): Flow<List<SubjectEntity>> {
         val unescaped = unescapeLike(query)
         return combine(subjects, studyMaterials, unlockedSubjectIds) { map, materials, unlocked ->
             val synonymMatches = materials
@@ -68,26 +67,9 @@ class FakeSubjectDao(
         }
     }
 
-    override fun observeSentenceSearch(
-        query: String,
-        subjectTypes: List<String>,
-        unlockedOnly: Boolean
-    ): Flow<List<SentenceMatchRow>> {
-        val unescaped = unescapeLike(query)
-        return combine(subjects, unlockedSubjectIds) { map, unlocked ->
-            map.values
-                .filter { it.subjectType in subjectTypes && (!unlockedOnly || it.id in unlocked) }
-                .sortedWith(compareBy({ it.level }, { it.id }))
-                .flatMap { subject ->
-                    subject.contextSentences
-                        .filter { it.ja.contains(unescaped) || it.en.contains(unescaped, ignoreCase = true) }
-                        .map { SentenceMatchRow(subject.id, subject.subjectType, subject.characters, it.ja, it.en) }
-                }
-                .take(200)
-        }
-    }
-
-    private fun unescapeLike(query: String) = query.replace("\\_", "_").replace("\\%", "%").replace("\\\\", "\\")
+    /** Every stored subject — what [FakeContextSentenceDao] derives its sentences from, as the real
+     *  `context_sentences` table is derived from `subjects` by triggers. */
+    fun observeAll(): Flow<Collection<SubjectEntity>> = subjects.map { it.values }
 
     override fun observeByPrimaryReadingKeys(readingKeys: List<String>): Flow<List<SubjectReadingKeyRow>> =
         subjects.map { map ->
@@ -273,3 +255,34 @@ class FakeFriendStatsDao : FriendStatsDao {
         entities.value = entities.value - id
     }
 }
+
+/** In-memory stand-in for [ContextSentenceDao], reading the sentences straight off [subjectDao]'s
+ *  subjects — the real table is kept in step with `subjects` by triggers, so the two can't differ. */
+class FakeContextSentenceDao(
+    private val subjectDao: FakeSubjectDao,
+    private val unlockedSubjectIds: Flow<Set<Long>> = flowOf(emptySet())
+) : ContextSentenceDao {
+    override fun observeSearch(query: String): Flow<List<SentenceMatchRow>> = search(query, unlockedOnly = false)
+
+    override fun observeUnlockedSearch(query: String): Flow<List<SentenceMatchRow>> = search(query, unlockedOnly = true)
+
+    // The real query takes the lowercased query as-is (`instr`, no wildcards), so no unescaping here.
+    private fun search(query: String, unlockedOnly: Boolean): Flow<List<SentenceMatchRow>> =
+        combine(subjectDao.observeAll(), unlockedSubjectIds) { subjects, unlocked ->
+            subjects
+                .filter { !unlockedOnly || it.id in unlocked }
+                .sortedWith(compareBy({ it.level }, { it.id }))
+                .flatMap { subject ->
+                    subject.contextSentences
+                        .filter { it.ja.contains(query) || it.en.contains(query, ignoreCase = true) }
+                        .map { SentenceMatchRow(subject.id, subject.characters, subject.level, it.ja, it.en) }
+                }
+                .take(200)
+        }
+}
+
+// The real subject queries take a caller-pre-escaped string (backslash-escaped %, _ and \) meant for
+// `LIKE ... ESCAPE '\'`, matching those characters literally instead of as SQL wildcards — unescape
+// first so the fake's plain `contains` mirrors that same literal-match behavior instead of searching
+// for the escape backslashes themselves.
+private fun unescapeLike(query: String) = query.replace("\\_", "_").replace("\\%", "%").replace("\\\\", "\\")

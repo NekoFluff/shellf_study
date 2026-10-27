@@ -73,6 +73,27 @@ private val MIGRATION_12_13 = object : Migration(12, 13) {
 }
 
 /**
+ * Adds `context_sentences`, the Sentences tab's search table (see [ContextSentenceEntity]), fills it
+ * from the subjects already stored, and installs the triggers that keep it current. The backfill
+ * reads the `contextSentences` JSON column in SQL, so the library isn't re-downloaded.
+ */
+internal val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `context_sentences` (`subjectId` INTEGER NOT NULL, " +
+                "`position` INTEGER NOT NULL, `level` INTEGER NOT NULL, `japanese` TEXT NOT NULL, " +
+                "`english` TEXT NOT NULL, `englishLower` TEXT NOT NULL, PRIMARY KEY(`subjectId`, `position`))"
+        )
+        connection.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_context_sentences_level_subjectId_position` " +
+                "ON `context_sentences` (`level`, `subjectId`, `position`)"
+        )
+        connection.execSQL(BACKFILL_CONTEXT_SENTENCES)
+        CONTEXT_SENTENCE_TRIGGERS.forEach { connection.execSQL(it) }
+    }
+}
+
+/**
  * Schema migrations for [AppDatabase], newest last.
  *
  * [buildAppDatabase] still falls back to a destructive migration, but that fallback is a safety net
@@ -88,4 +109,4 @@ private val MIGRATION_12_13 = object : Migration(12, 13) {
  * that is where an Android-side SQLite driver can run on the JVM, can apply the real list.
  */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
-    arrayOf(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+    arrayOf(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)

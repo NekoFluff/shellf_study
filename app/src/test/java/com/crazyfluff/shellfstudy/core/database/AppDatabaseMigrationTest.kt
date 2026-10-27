@@ -110,6 +110,41 @@ class AppDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `migration 13 to 14 backfills context sentences and keeps them in step with later writes`() {
+        withDatabase { connection ->
+            connection.execSQL(
+                "CREATE TABLE `subjects` (`id` INTEGER NOT NULL, `level` INTEGER NOT NULL, " +
+                    "`contextSentences` TEXT NOT NULL, PRIMARY KEY(`id`))"
+            )
+            connection.execSQL(
+                "INSERT INTO subjects VALUES (1, 3, '[{\"en\":\"I drink Water.\",\"ja\":\"水を飲む。\"}," +
+                    "{\"en\":\"Cold.\",\"ja\":\"冷たい。\"}]')"
+            )
+            connection.execSQL("INSERT INTO subjects VALUES (2, 1, '[]')")
+
+            migrationFrom(13).migrate(connection)
+
+            assertThat(connection.sentenceRows()).containsExactly(
+                "1|0|3|水を飲む。|I drink Water.|i drink water.",
+                "1|1|3|冷たい。|Cold.|cold."
+            ).inOrder()
+            assertThat(connection.indexNames("context_sentences"))
+                .contains("index_context_sentences_level_subjectId_position")
+
+            // The triggers it installs: a REPLACE swaps the sentences, a delete drops them.
+            connection.execSQL("INSERT OR REPLACE INTO subjects VALUES (1, 4, '[{\"en\":\"New.\",\"ja\":\"新。\"}]')")
+            connection.execSQL("INSERT INTO subjects VALUES (3, 2, '[{\"en\":\"Three.\",\"ja\":\"三。\"}]')")
+            assertThat(connection.sentenceRows()).containsExactly(
+                "1|0|4|新。|New.|new.",
+                "3|0|2|三。|Three.|three."
+            ).inOrder()
+
+            connection.execSQL("DELETE FROM subjects WHERE id = 3")
+            assertThat(connection.sentenceRows()).containsExactly("1|0|4|新。|New.|new.")
+        }
+    }
+
     /**
      * Room refuses to open a database whose version no migration covers, and the destructive fallback
      * then wipes it — so a gap in this list is a silent full re-download for whoever is on the older
@@ -137,6 +172,18 @@ class AppDatabaseMigrationTest {
             block(connection)
         } finally {
             connection.close()
+        }
+    }
+
+    private fun SQLiteConnection.sentenceRows(): List<String> {
+        val statement = prepare(
+            "SELECT subjectId || '|' || position || '|' || level || '|' || japanese || '|' || english || '|' || " +
+                "englishLower FROM context_sentences ORDER BY subjectId, position"
+        )
+        return try {
+            buildList { while (statement.step()) add(statement.getText(0)) }
+        } finally {
+            statement.close()
         }
     }
 

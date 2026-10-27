@@ -89,14 +89,13 @@ class SubjectSearchQueryTest {
     @Test
     fun `the search re-runs when a synonym is added`() = withDatabase { db ->
         seed(db, "fire")
-        db.subjectDao().observeSearch("blaze", ALL_TYPES, unlockedOnly = false).test {
+        db.subjectDao().observeSearch("blaze", ALL_TYPES).test {
             assertThat(awaitItem()).isEmpty()
             db.studyMaterialDao().upsertAll(listOf(material(subjectId = 1, "blaze")))
             assertThat(awaitItem().map { it.id }).containsExactly(1L)
         }
     }
 
-    /** The same escaping the repository applies, on the same query string the DAO is annotated with. */
     @Test
     fun `the type filter keeps only the listed types`() = withDatabase { db ->
         db.subjectDao().upsertAll(
@@ -159,24 +158,71 @@ class SubjectSearchQueryTest {
         assertThat(db.sentenceSearch("\",\"ja\":\"")).isEmpty()
     }
 
+    /** `instr` has no wildcards, so a typed `%` or `_` matches only itself, with no escaping. */
     @Test
-    fun `sentence search honours the escaped percent and the filters`() = withDatabase { db ->
+    fun `sentence search matches a typed percent literally, and honours the unlocked filter`() = withDatabase { db ->
         db.subjectDao().upsertAll(
             listOf(
                 subject(1, "a", sentences = listOf(ContextSentenceData(en = "100% sure.", ja = "絶対。"))),
+                subject(2, "b", sentences = listOf(ContextSentenceData(en = "100 times sure.", ja = "百回。")))
+            )
+        )
+        db.assignmentDao().upsertAll(
+            listOf(assignment(id = 10, subjectId = 2), assignment(id = 11, subjectId = 1, hidden = true))
+        )
+
+        assertThat(db.sentenceSearch("100% sure").map { it.subjectId }).containsExactly(1L)
+        assertThat(db.sentenceSearch("100_times").map { it.subjectId }).isEmpty()
+        assertThat(db.sentenceSearch("sure", unlockedOnly = true).map { it.subjectId }).containsExactly(2L)
+    }
+
+    @Test
+    fun `sentences come lowest level first, carrying their subject's level and characters`() = withDatabase { db ->
+        db.subjectDao().upsertAll(
+            listOf(
+                subject(1, "a", level = 9, sentences = listOf(ContextSentenceData(en = "Late water.", ja = "水。"))),
+                subject(2, "b", level = 2, sentences = listOf(ContextSentenceData(en = "Early water.", ja = "水。")))
+            )
+        )
+
+        val rows = db.sentenceSearch("water")
+        assertThat(rows.map { it.level to it.english })
+            .containsExactly(2 to "Early water.", 9 to "Late water.")
+            .inOrder()
+        assertThat(rows.first().characters).isEqualTo("水")
+    }
+
+    /** Room writes subjects with INSERT OR REPLACE; the trigger has to drop the old sentences itself. */
+    @Test
+    fun `re-syncing a subject replaces its sentences rather than adding to them`() = withDatabase { db ->
+        db.subjectDao().upsertAll(
+            listOf(
                 subject(
-                    2,
-                    "b",
-                    sentences = listOf(ContextSentenceData(en = "100 times sure.", ja = "百回。")),
-                    type = "kanji"
+                    1,
+                    "a",
+                    sentences = listOf(
+                        ContextSentenceData(en = "Old water.", ja = "水。"),
+                        ContextSentenceData(en = "Gone water.", ja = "水。")
+                    )
                 )
             )
         )
-        db.assignmentDao().upsertAll(listOf(assignment(id = 10, subjectId = 2)))
+        db.subjectDao().upsertAll(
+            listOf(subject(1, "a", level = 4, sentences = listOf(ContextSentenceData(en = "New water.", ja = "水。"))))
+        )
 
-        assertThat(db.sentenceSearch("100\\% sure").map { it.subjectId }).containsExactly(1L)
-        assertThat(db.sentenceSearch("sure", types = listOf("kanji")).map { it.subjectId }).containsExactly(2L)
-        assertThat(db.sentenceSearch("sure", unlockedOnly = true).map { it.subjectId }).containsExactly(2L)
+        assertThat(db.sentenceSearch("water").map { it.level to it.english }).containsExactly(4 to "New water.")
+    }
+
+    @Test
+    fun `the sentence search re-runs when a subject is synced`() = withDatabase { db ->
+        db.contextSentenceDao().observeSearch("water").test {
+            assertThat(awaitItem()).isEmpty()
+            db.subjectDao().upsertAll(
+                listOf(subject(1, "a", sentences = listOf(ContextSentenceData(en = "Water.", ja = "水。"))))
+            )
+            assertThat(awaitItem().map { it.english }).containsExactly("Water.")
+        }
     }
 
     /** The same escaping the repository applies, on the same query string the DAO is annotated with. */
@@ -184,13 +230,26 @@ class SubjectSearchQueryTest {
         query: String,
         types: List<String> = ALL_TYPES,
         unlockedOnly: Boolean = false
-    ): List<Long> = subjectDao().observeSearch(query, types, unlockedOnly).first().map { it.id }
+    ): List<Long> {
+        val results = if (unlockedOnly) {
+            subjectDao().observeUnlockedSearch(query, types)
+        } else {
+            subjectDao().observeSearch(query, types)
+        }
+        return results.first().map { it.id }
+    }
 
     private suspend fun AppDatabase.sentenceSearch(
         query: String,
-        types: List<String> = ALL_TYPES,
         unlockedOnly: Boolean = false
-    ): List<SentenceMatchRow> = subjectDao().observeSentenceSearch(query, types, unlockedOnly).first()
+    ): List<SentenceMatchRow> {
+        val results = if (unlockedOnly) {
+            contextSentenceDao().observeUnlockedSearch(query)
+        } else {
+            contextSentenceDao().observeSearch(query)
+        }
+        return results.first()
+    }
 
     private suspend fun seed(db: AppDatabase, vararg meanings: String) {
         db.subjectDao().upsertAll(meanings.mapIndexed { index, meaning -> subject(index + 1L, meaning) })
@@ -200,11 +259,12 @@ class SubjectSearchQueryTest {
         id: Long,
         meaning: String,
         type: String = "vocabulary",
+        level: Int = 1,
         sentences: List<ContextSentenceData> = emptyList()
     ) = SubjectEntity(
         id = id,
         subjectType = type,
-        level = 1,
+        level = level,
         slug = "test-$id",
         characters = "水",
         meanings = listOf(MeaningData(meaning = meaning, primary = true)),

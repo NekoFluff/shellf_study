@@ -6,6 +6,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SentenceSearchResult
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.data.model.toPronunciationAudios
+import com.crazyfluff.shellfstudy.shared.database.ContextSentenceDao
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemDao
 import com.crazyfluff.shellfstudy.shared.database.SrsSystemEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectDao
@@ -37,6 +38,7 @@ private val SUBJECTS_STALENESS = 1.days
 class SubjectRepository(
     private val api: WaniKaniApi,
     private val subjectDao: SubjectDao,
+    private val contextSentenceDao: ContextSentenceDao,
     private val srsSystemDao: SrsSystemDao,
     private val syncStateDao: SyncStateDao,
     private val pitchAccentRepository: PitchAccentRepository,
@@ -143,26 +145,40 @@ class SubjectRepository(
             write = { srsSystemDao.upsertAll(it) }
         )
 
-    fun observeSearch(query: String, filters: SearchFilters = SearchFilters()): Flow<List<SubjectSummary>> =
-        subjectDao.observeSearch(query.toLikePattern(), filters.wkTypeStrings(), filters.unlockedOnly)
-            .map { entities -> entities.map { it.toSubjectSummary() } }
+    /** Only the "Unlocked" variant names `assignments` — see [SubjectDao.observeSearch] for why. */
+    fun observeSearch(query: String, filters: SearchFilters = SearchFilters()): Flow<List<SubjectSummary>> {
+        val pattern = query.toLikePattern()
+        val types = filters.wkTypeStrings()
+        val entities = if (filters.unlockedOnly) {
+            subjectDao.observeUnlockedSearch(pattern, types)
+        } else {
+            subjectDao.observeSearch(pattern, types)
+        }
+        return entities.map { list -> list.map { it.toSubjectSummary() } }
+    }
 
-    fun observeSentenceSearch(
-        query: String,
-        filters: SearchFilters = SearchFilters()
-    ): Flow<List<SentenceSearchResult>> =
-        subjectDao.observeSentenceSearch(query.toLikePattern(), filters.wkTypeStrings(), filters.unlockedOnly)
-            .map { rows ->
-                rows.map {
-                    SentenceSearchResult(
-                        subjectId = it.subjectId,
-                        subjectType = SubjectType.fromWkString(it.subjectType),
-                        characters = it.characters,
-                        japanese = it.japanese,
-                        english = it.english
-                    )
-                }
+    /** Context sentences containing [query]. Only vocabulary has sentences, so the type filter doesn't
+     *  apply here — only [unlockedOnly] does. */
+    fun observeSentenceSearch(query: String, unlockedOnly: Boolean = false): Flow<List<SentenceSearchResult>> {
+        // Lowercased but not escaped: the sentence queries use `instr`, which has no wildcards.
+        val lowered = query.lowercase()
+        val rows = if (unlockedOnly) {
+            contextSentenceDao.observeUnlockedSearch(lowered)
+        } else {
+            contextSentenceDao.observeSearch(lowered)
+        }
+        return rows.map { list ->
+            list.map {
+                SentenceSearchResult(
+                    subjectId = it.subjectId,
+                    characters = it.characters,
+                    level = it.level,
+                    japanese = it.japanese,
+                    english = it.english
+                )
             }
+        }
+    }
 
     fun observeTotalSubjectCount(): Flow<Int> = subjectDao.observeTotalCount()
 

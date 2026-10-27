@@ -106,6 +106,7 @@ val repositoryModule = module {
         SubjectRepository(
             api = get(),
             subjectDao = get(),
+            contextSentenceDao = get(),
             srsSystemDao = get(),
             syncStateDao = get(),
             pitchAccentRepository = get()
