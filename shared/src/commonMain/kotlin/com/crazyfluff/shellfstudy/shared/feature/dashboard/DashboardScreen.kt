@@ -286,7 +286,8 @@ private fun rememberDashboardCallbacks(
         searchActions = SearchActions(
             onQueryChange = searchViewModel::onQueryChange,
             onFiltersChange = searchViewModel::onFiltersChange,
-            onTabChange = searchViewModel::onTabChange
+            onTabChange = searchViewModel::onTabChange,
+            onLoadMore = searchViewModel::onLoadMore
         ),
         onLevelProgressLevelChange = viewModel::onLevelProgressLevelChange,
         onLeaderboardMetricChange = viewModel::onLeaderboardMetricChange,

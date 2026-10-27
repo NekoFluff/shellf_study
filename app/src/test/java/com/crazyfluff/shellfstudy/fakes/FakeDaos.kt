@@ -15,6 +15,7 @@ import com.crazyfluff.shellfstudy.shared.database.SubjectDao
 import com.crazyfluff.shellfstudy.shared.database.SubjectAudioRow
 import com.crazyfluff.shellfstudy.shared.database.SubjectEntity
 import com.crazyfluff.shellfstudy.shared.database.SubjectReadingKeyRow
+import com.crazyfluff.shellfstudy.shared.database.SubjectSearchRow
 import com.crazyfluff.shellfstudy.shared.database.SubjectTypeCount
 import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsDao
 import com.crazyfluff.shellfstudy.shared.database.friends.FriendStatsEntity
@@ -47,23 +48,48 @@ class FakeSubjectDao(
 
     override suspend fun getById(id: Long): SubjectEntity? = subjects.value[id]
 
-    override fun observeSearch(query: String, subjectTypes: List<String>): Flow<List<SubjectEntity>> =
-        search(query, subjectTypes, unlockedOnly = false)
+    override fun observeSearch(query: String, subjectTypes: List<String>, limit: Int): Flow<List<SubjectSearchRow>> =
+        search(query, subjectTypes, limit, unlockedOnly = false)
 
-    override fun observeUnlockedSearch(query: String, subjectTypes: List<String>): Flow<List<SubjectEntity>> =
-        search(query, subjectTypes, unlockedOnly = true)
+    override fun observeUnlockedSearch(
+        query: String,
+        subjectTypes: List<String>,
+        limit: Int
+    ): Flow<List<SubjectSearchRow>> = search(query, subjectTypes, limit, unlockedOnly = true)
 
-    private fun search(query: String, subjectTypes: List<String>, unlockedOnly: Boolean): Flow<List<SubjectEntity>> {
-        val unescaped = unescapeLike(query)
+    /** Mirrors the real query's ranking: whole word, then a word starting with [query] (or a synonym
+     *  match), then anywhere — each lowest level first — and its count of every match. */
+    private fun search(
+        query: String,
+        subjectTypes: List<String>,
+        limit: Int,
+        unlockedOnly: Boolean
+    ): Flow<List<SubjectSearchRow>> {
+        val unescaped = unescapeLike(query).lowercase()
         return combine(subjects, studyMaterials, unlockedSubjectIds) { map, materials, unlocked ->
             val synonymMatches = materials
                 .filter { material -> material.meaningSynonyms.any { it.contains(unescaped, ignoreCase = true) } }
                 .map { it.subjectId }
                 .toSet()
-            map.values
+            val matches = map.values
                 .filter { it.searchTarget.contains(unescaped, ignoreCase = true) || it.id in synonymMatches }
                 .filter { it.subjectType in subjectTypes && (!unlockedOnly || it.id in unlocked) }
-                .take(200)
+                .sortedWith(compareBy({ rank(it.searchTarget.lowercase(), unescaped) }, { it.level }, { it.id }))
+            matches.take(limit).map {
+                SubjectSearchRow(
+                    it.id, it.subjectType, it.characters, it.characterImageUrl, it.level, it.meanings, it.readings,
+                    totalCount = matches.size
+                )
+            }
+        }
+    }
+
+    private fun rank(target: String, query: String): Int {
+        val words = target.split(" ")
+        return when {
+            query in words || " $target ".contains(" $query ") -> 0
+            " $target".contains(" $query") || query !in target -> 1
+            else -> 2
         }
     }
 
@@ -262,22 +288,29 @@ class FakeContextSentenceDao(
     private val subjectDao: FakeSubjectDao,
     private val unlockedSubjectIds: Flow<Set<Long>> = flowOf(emptySet())
 ) : ContextSentenceDao {
-    override fun observeSearch(query: String): Flow<List<SentenceMatchRow>> = search(query, unlockedOnly = false)
+    override fun observeSearch(query: String, limit: Int): Flow<List<SentenceMatchRow>> =
+        search(query, limit, unlockedOnly = false)
 
-    override fun observeUnlockedSearch(query: String): Flow<List<SentenceMatchRow>> = search(query, unlockedOnly = true)
+    override fun observeUnlockedSearch(query: String, limit: Int): Flow<List<SentenceMatchRow>> =
+        search(query, limit, unlockedOnly = true)
 
     // The real query takes the lowercased query as-is (`instr`, no wildcards), so no unescaping here.
-    private fun search(query: String, unlockedOnly: Boolean): Flow<List<SentenceMatchRow>> =
+    private fun search(query: String, limit: Int, unlockedOnly: Boolean): Flow<List<SentenceMatchRow>> =
         combine(subjectDao.observeAll(), unlockedSubjectIds) { subjects, unlocked ->
-            subjects
+            val matches = subjects
                 .filter { !unlockedOnly || it.id in unlocked }
                 .sortedWith(compareBy({ it.level }, { it.id }))
                 .flatMap { subject ->
                     subject.contextSentences
                         .filter { it.ja.contains(query) || it.en.contains(query, ignoreCase = true) }
-                        .map { SentenceMatchRow(subject.id, subject.characters, subject.level, it.ja, it.en) }
+                        .map { subject to it }
                 }
-                .take(200)
+            matches.take(limit).map { (subject, sentence) ->
+                SentenceMatchRow(
+                    subject.id, subject.characters, subject.level, sentence.ja, sentence.en,
+                    totalCount = matches.size
+                )
+            }
         }
 }
 

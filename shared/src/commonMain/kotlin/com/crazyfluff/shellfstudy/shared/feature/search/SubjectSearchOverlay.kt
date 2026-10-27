@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -51,6 +52,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +75,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
@@ -79,7 +84,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import com.crazyfluff.shellfstudy.shared.data.model.SearchFilters
 import com.crazyfluff.shellfstudy.shared.data.model.SentenceSearchResult
@@ -105,6 +109,7 @@ object SearchOverlayTestTags {
     const val TAB_SUBJECTS = "search_tab_subjects"
     const val TAB_SENTENCES = "search_tab_sentences"
     const val SEARCH_PROGRESS = "search_progress"
+    const val LOADING_MORE = "search_loading_more"
 }
 
 /**
@@ -270,6 +275,7 @@ fun SubjectSearchOverlay(
                     SearchResults(
                         uiState = uiState,
                         onTabChange = actions.onTabChange,
+                        onLoadMore = actions.onLoadMore,
                         onOpenSubject = { subjectId ->
                             focusManager.clearFocus()
                             openSubjectDetail(subjectId)
@@ -286,6 +292,7 @@ fun SubjectSearchOverlay(
 private fun SearchResults(
     uiState: SearchUiState,
     onTabChange: (SearchTab) -> Unit,
+    onLoadMore: (SearchTab) -> Unit,
     onOpenSubject: (Long) -> Unit
 ) {
     SearchTabRow(uiState = uiState, onTabChange = onTabChange)
@@ -310,6 +317,8 @@ private fun SearchResults(
             isSearching = isSearching,
             showSearching = showSearching,
             noResultsText = "No matches found.",
+            searchKey = uiState.query.trim() to uiState.filters,
+            onLoadMore = { onLoadMore(SearchTab.SUBJECTS) },
             key = { it.subjectId }
         ) { subject -> SubjectResultRow(subject, onOpenSubject) }
         SearchTab.SENTENCES -> SearchResultList(
@@ -319,10 +328,14 @@ private fun SearchResults(
             isSearching = isSearching || uiState.sentenceTotalCount == null,
             showSearching = showSearching,
             noResultsText = "No example sentences match.",
+            searchKey = uiState.query.trim() to uiState.filters.unlockedOnly,
+            onLoadMore = { onLoadMore(SearchTab.SENTENCES) },
             key = null
         ) { sentence -> SentenceResultRow(sentence, uiState.query.trim(), onOpenSubject) }
     }
 }
+
+private const val LOADING_MORE_ITEM_KEY = "search_loading_more"
 
 /** How long a search runs before the progress bar shows — most finish sooner, and a bar that flashes on
  *  for a few frames on every keystroke reads as jank rather than progress. */
@@ -390,22 +403,26 @@ private fun SearchTabRow(uiState: SearchUiState, onTabChange: (SearchTab) -> Uni
         Tab(
             selected = uiState.tab == SearchTab.SUBJECTS,
             onClick = { onTabChange(SearchTab.SUBJECTS) },
-            text = { Text("Subjects (${uiState.totalMatchCount})") },
+            text = { Text("Subjects (${formatCount(uiState.totalMatchCount)})") },
             modifier = Modifier.testTag(SearchOverlayTestTags.TAB_SUBJECTS)
         )
         Tab(
             selected = uiState.tab == SearchTab.SENTENCES,
             onClick = { onTabChange(SearchTab.SENTENCES) },
-            text = { Text(uiState.sentenceTotalCount?.let { "Sentences ($it)" } ?: "Sentences") },
+            text = { Text(uiState.sentenceTotalCount?.let { "Sentences (${formatCount(it)})" } ?: "Sentences") },
             modifier = Modifier.testTag(SearchOverlayTestTags.TAB_SENTENCES)
         )
     }
 }
 
+/** How close to the end of the loaded results the list asks for the next page. */
+private const val LOAD_MORE_THRESHOLD = 10
+
 /** One tab's results — with none yet, a spinner while syncing or searching ([showSearching] is the
  *  delayed flag, so a quick search shows nothing rather than flashing) and "no matches" only once a
- *  search has finished; otherwise the list, with a footer when [totalCount] is more than the capped
- *  [items] shown. While a new search runs the previous results stay up, under the progress bar. */
+ *  search has finished; otherwise the list. While fewer than [totalCount] are loaded, a spinner row
+ *  ends the list and scrolling near it calls [onLoadMore]. While a new search runs the previous
+ *  results stay up, under the progress bar. The list starts back at the top for each new [searchKey]. */
 @Composable
 private fun <T> SearchResultList(
     items: List<T>,
@@ -414,6 +431,8 @@ private fun <T> SearchResultList(
     isSearching: Boolean,
     showSearching: Boolean,
     noResultsText: String,
+    searchKey: Any,
+    onLoadMore: () -> Unit,
     key: ((T) -> Any)?,
     row: @Composable (T) -> Unit
 ) {
@@ -445,25 +464,50 @@ private fun <T> SearchResultList(
             testTag = SearchOverlayTestTags.NO_RESULTS
         )
 
-        else -> {
-            Column(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(items, key = key) { item ->
-                        row(item)
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    }
-                }
-                if (totalCount > items.size) {
-                    Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
-                        Text(
-                            text = "Showing ${items.size} of $totalCount — refine your search.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp)
-                        )
-                    }
+        else -> PagedResultList(items, totalCount, searchKey, onLoadMore, key, row)
+    }
+}
+
+/** [SearchResultList]'s loaded results, with the loading row and the scroll trigger for the next page. */
+@Composable
+private fun <T> PagedResultList(
+    items: List<T>,
+    totalCount: Int,
+    searchKey: Any,
+    onLoadMore: () -> Unit,
+    key: ((T) -> Any)?,
+    row: @Composable (T) -> Unit
+) {
+    val listState = remember(searchKey) { LazyListState() }
+    val hasMore = items.size < totalCount
+    val currentOnLoadMore by rememberUpdatedState(onLoadMore)
+    // Restarted as each page lands, so a list still scrolled near its end asks again rather than
+    // waiting for the near-end condition to flip off and on.
+    LaunchedEffect(listState, hasMore, items.size) {
+        if (!hasMore) return@LaunchedEffect
+        snapshotFlow {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisible >= listState.layoutInfo.totalItemsCount - LOAD_MORE_THRESHOLD
+        }
+            .distinctUntilChanged()
+            .filter { it }
+            .collect { currentOnLoadMore() }
+    }
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        items(items, key = key) { item ->
+            row(item)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        }
+        if (hasMore) {
+            item(key = LOADING_MORE_ITEM_KEY) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .testTag(SearchOverlayTestTags.LOADING_MORE)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                 }
             }
         }
@@ -533,18 +577,6 @@ private fun SentenceResultRow(sentence: SentenceSearchResult, query: String, onC
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp)
         )
-    }
-}
-
-/** [text] with every case-insensitive occurrence of [query] in [style] — the same matching the
- *  sentence search itself does, so the span shown is the one that matched. */
-fun highlightMatches(text: String, query: String, style: SpanStyle): AnnotatedString = buildAnnotatedString {
-    append(text)
-    if (query.isEmpty()) return@buildAnnotatedString
-    var from = text.indexOf(query, ignoreCase = true)
-    while (from >= 0) {
-        addStyle(style, from, from + query.length)
-        from = text.indexOf(query, startIndex = from + query.length, ignoreCase = true)
     }
 }
 

@@ -15,6 +15,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.compose.ui.text.SpanStyle
@@ -23,6 +25,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.SearchFilters
 import com.crazyfluff.shellfstudy.shared.data.model.SentenceSearchResult
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchTab
+import com.crazyfluff.shellfstudy.shared.feature.search.formatCount
 import com.crazyfluff.shellfstudy.shared.feature.search.highlightMatches
 import com.google.common.truth.Truth.assertThat
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
@@ -494,5 +497,73 @@ class SubjectSearchOverlayTest {
         }
 
         composeTestRule.onAllNodesWithTag(SearchOverlayTestTags.NO_RESULTS).assertCountEquals(0)
+    }
+
+    private fun manyResults(count: Int) = List(count) { sampleResult.copy(subjectId = it.toLong()) }
+
+    @Test
+    fun scrollingNearTheEnd_asksForMore_whileMoreRemain() {
+        val loadMoreRequests = mutableListOf<SearchTab>()
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = "water", results = manyResults(12), totalMatchCount = 100),
+                actions = SearchActions.Inert.copy(onLoadMore = { loadMoreRequests += it }),
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(11)
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag(SearchOverlayTestTags.LOADING_MORE).assertExists()
+        assertThat(loadMoreRequests).contains(SearchTab.SUBJECTS)
+    }
+
+    @Test
+    fun allResultsLoaded_showsNoLoadingRow_andAsksForNothing() {
+        val loadMoreRequests = mutableListOf<SearchTab>()
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(query = "water", results = manyResults(12), totalMatchCount = 12),
+                actions = SearchActions.Inert.copy(onLoadMore = { loadMoreRequests += it }),
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(SearchOverlayTestTags.LOADING_MORE).assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("refine your search", substring = true).assertCountEquals(0)
+        assertThat(loadMoreRequests).isEmpty()
+    }
+
+    @Test
+    fun tabLabels_showTheTrueTotals_withThousandsSeparators() {
+        composeTestRule.setContent {
+            SubjectSearchOverlay(
+                active = true,
+                onActiveChange = {},
+                uiState = SearchUiState(
+                    query = "p",
+                    results = manyResults(3),
+                    totalMatchCount = 1804,
+                    sentenceTotalCount = 19500
+                ),
+                actions = SearchActions.Inert,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        composeTestRule.onNodeWithText("Subjects (1,804)").assertExists()
+        composeTestRule.onNodeWithText("Sentences (19,500)").assertExists()
+    }
+
+    @Test
+    fun formatCount_groupsThousands() {
+        assertThat(formatCount(0)).isEqualTo("0")
+        assertThat(formatCount(999)).isEqualTo("999")
+        assertThat(formatCount(1000)).isEqualTo("1,000")
+        assertThat(formatCount(1234567)).isEqualTo("1,234,567")
     }
 }

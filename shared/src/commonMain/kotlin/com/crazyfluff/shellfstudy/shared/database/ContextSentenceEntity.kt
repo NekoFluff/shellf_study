@@ -15,16 +15,16 @@ import kotlinx.coroutines.flow.Flow
  * of step, and [MIGRATION_13_14] backfills it with the same SQL. [englishLower] is stored already
  * folded so the query does no `lower()` per row; like the rest of search, `lower` only folds ASCII.
  *
- * The `(level, subjectId, position)` index is the query's `ORDER BY`, so `LIMIT` stops the scan once
- * it has enough matches instead of collecting and sorting every one.
+ * The `(level, subjectId, position)` index is the query's `ORDER BY`.
  *
  * Measured on the host against 9,000 subjects (6,500 vocabulary, 19,500 sentences), median of warm
- * runs: the previous query — `json_each` over `subjects.contextSentences` with `LIKE` — took 26-49 ms
- * whatever the query, since its `ORDER BY` had to find and sort every match. This table takes ~1 ms
- * for a common word ("water", "の") and 7 ms for a query matching nothing, which is the full scan.
- * `instr` rather than `LIKE '%…%'` is what brings that last case down from 19 ms: the query and
- * [englishLower] are both already lowercase, so a plain substring search is all it needs, and it has
- * no wildcards for a typed `%` or `_` to be mistaken for.
+ * runs: the previous query — `json_each` over `subjects.contextSentences` with `LIKE` — took 26-49 ms.
+ * This table takes 4-6 ms for a query matching few or no sentences and 15 ms for one matching every
+ * sentence ("の"). That last case is the true total: [SentenceMatchRow.totalCount] counts every match,
+ * so the scan can't stop at the page's `LIMIT` the way it could before it counted (~1 ms, under a
+ * count capped at 200). `instr` rather than `LIKE '%…%'` keeps the full scan cheap (19 ms → 7 ms
+ * measured): the query and [englishLower] are both already lowercase, so a plain substring search is
+ * all it needs, and it has no wildcards for a typed `%` or `_` to be mistaken for.
  */
 @Entity(
     tableName = "context_sentences",
@@ -40,13 +40,15 @@ data class ContextSentenceEntity(
     val englishLower: String
 )
 
-/** One context sentence matching a search — the Sentences tab's row. */
+/** One context sentence matching a search — the Sentences tab's row — plus how many sentences
+ *  matched in all, the same on every row since the query returns only a page of them. */
 data class SentenceMatchRow(
     val subjectId: Long,
     val characters: String?,
     val level: Int,
     val japanese: String,
-    val english: String
+    val english: String,
+    val totalCount: Int
 )
 
 @Dao
@@ -61,21 +63,21 @@ interface ContextSentenceDao {
     @Query(
         """
         SELECT context_sentences.subjectId, subjects.characters, context_sentences.level,
-            context_sentences.japanese, context_sentences.english
+            context_sentences.japanese, context_sentences.english, COUNT(*) OVER () AS totalCount
         FROM context_sentences JOIN subjects ON subjects.id = context_sentences.subjectId
         WHERE instr(context_sentences.japanese, :query) > 0
             OR instr(context_sentences.englishLower, :query) > 0
         ORDER BY context_sentences.level, context_sentences.subjectId, context_sentences.position
-        LIMIT 200
+        LIMIT :limit
         """
     )
-    fun observeSearch(query: String): Flow<List<SentenceMatchRow>>
+    fun observeSearch(query: String, limit: Int): Flow<List<SentenceMatchRow>>
 
     /** [observeSearch], kept to subjects with a visible assignment — the "Unlocked" filter. */
     @Query(
         """
         SELECT context_sentences.subjectId, subjects.characters, context_sentences.level,
-            context_sentences.japanese, context_sentences.english
+            context_sentences.japanese, context_sentences.english, COUNT(*) OVER () AS totalCount
         FROM context_sentences JOIN subjects ON subjects.id = context_sentences.subjectId
         WHERE (
                 instr(context_sentences.japanese, :query) > 0
@@ -86,10 +88,10 @@ interface ContextSentenceDao {
                 WHERE assignments.subjectId = context_sentences.subjectId AND assignments.hidden = 0
             )
         ORDER BY context_sentences.level, context_sentences.subjectId, context_sentences.position
-        LIMIT 200
+        LIMIT :limit
         """
     )
-    fun observeUnlockedSearch(query: String): Flow<List<SentenceMatchRow>>
+    fun observeUnlockedSearch(query: String, limit: Int): Flow<List<SentenceMatchRow>>
 }
 
 /** The rows [subject] contributes to `context_sentences`, as an `INSERT … SELECT` over its JSON — a

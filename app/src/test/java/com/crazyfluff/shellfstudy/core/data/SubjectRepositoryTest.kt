@@ -128,7 +128,7 @@ class SubjectRepositoryTest {
         repository.syncSubjects(force = true)
 
         repository.observeSearch("wat").test {
-            val results = awaitItem()
+            val results = awaitItem().items
             assertThat(results).hasSize(1)
             assertThat(results.first().characters).isEqualTo("水")
         }
@@ -154,10 +154,10 @@ class SubjectRepositoryTest {
         repository.syncSubjects(force = true)
 
         repository.observeSearch("uno").test {
-            assertThat(awaitItem().map { it.characters }).containsExactly("一")
+            assertThat(awaitItem().items.map { it.characters }).containsExactly("一")
         }
         repository.observeSearch("first").test {
-            assertThat(awaitItem()).isEmpty()
+            assertThat(awaitItem().items).isEmpty()
         }
     }
 
@@ -165,7 +165,7 @@ class SubjectRepositoryTest {
     fun `observeSearch finds a subject by the user's own synonym`() = runTest {
         server.enqueue(jsonResponse(SUBJECTS_JSON))
         repository.syncSubjects(force = true)
-        val water = repository.observeSearch("water").first().single()
+        val water = repository.observeSearch("water").first().items.single()
         repositories.studyMaterialDao.upsertAll(
             listOf(
                 StudyMaterialEntity(
@@ -178,7 +178,7 @@ class SubjectRepositoryTest {
         )
 
         repository.observeSearch("aqua").test {
-            assertThat(awaitItem().map { it.characters }).containsExactly("水")
+            assertThat(awaitItem().items.map { it.characters }).containsExactly("水")
         }
     }
 
@@ -188,7 +188,7 @@ class SubjectRepositoryTest {
         repository.syncSubjects(force = true)
 
         repository.observeSearch("水").test {
-            assertThat(awaitItem()).hasSize(1)
+            assertThat(awaitItem().items).hasSize(1)
         }
     }
 

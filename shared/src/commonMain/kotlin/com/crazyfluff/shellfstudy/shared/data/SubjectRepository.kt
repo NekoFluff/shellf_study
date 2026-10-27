@@ -2,6 +2,7 @@ package com.crazyfluff.shellfstudy.shared.data
 
 import com.crazyfluff.shellfstudy.shared.data.model.ContextSentence
 import com.crazyfluff.shellfstudy.shared.data.model.SearchFilters
+import com.crazyfluff.shellfstudy.shared.data.model.SearchPage
 import com.crazyfluff.shellfstudy.shared.data.model.SentenceSearchResult
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectDetail
 import com.crazyfluff.shellfstudy.shared.data.model.SubjectSummary
@@ -33,6 +34,9 @@ import kotlinx.coroutines.flow.map
 import kotlin.time.Duration.Companion.days
 
 private val SUBJECTS_STALENESS = 1.days
+
+/** How many search results a page holds — the search overlay asks for more as the list scrolls. */
+const val DEFAULT_SEARCH_LIMIT = 50
 
 /** Owns subjects and SRS systems — the full WaniKani content library. */
 class SubjectRepository(
@@ -145,38 +149,65 @@ class SubjectRepository(
             write = { srsSystemDao.upsertAll(it) }
         )
 
-    /** Only the "Unlocked" variant names `assignments` — see [SubjectDao.observeSearch] for why. */
-    fun observeSearch(query: String, filters: SearchFilters = SearchFilters()): Flow<List<SubjectSummary>> {
+    /** The first [limit] subjects matching [query], best match first, with how many matched in all.
+     *  Only the "Unlocked" variant names `assignments` — see [SubjectDao.observeSearch] for why. */
+    fun observeSearch(
+        query: String,
+        filters: SearchFilters = SearchFilters(),
+        limit: Int = DEFAULT_SEARCH_LIMIT
+    ): Flow<SearchPage<SubjectSummary>> {
         val pattern = query.toLikePattern()
         val types = filters.wkTypeStrings()
-        val entities = if (filters.unlockedOnly) {
-            subjectDao.observeUnlockedSearch(pattern, types)
+        val rows = if (filters.unlockedOnly) {
+            subjectDao.observeUnlockedSearch(pattern, types, limit)
         } else {
-            subjectDao.observeSearch(pattern, types)
+            subjectDao.observeSearch(pattern, types, limit)
         }
-        return entities.map { list -> list.map { it.toSubjectSummary() } }
+        return rows.map { list ->
+            SearchPage(
+                items = list.map {
+                    SubjectSummary(
+                        subjectId = it.id,
+                        subjectType = SubjectType.fromWkString(it.subjectType),
+                        characters = it.characters,
+                        characterImageUrl = it.characterImageUrl,
+                        level = it.level,
+                        meanings = it.meanings.map { meaning -> meaning.meaning },
+                        readings = it.readings.map { reading -> reading.reading }
+                    )
+                },
+                totalCount = list.firstOrNull()?.totalCount ?: 0
+            )
+        }
     }
 
-    /** Context sentences containing [query]. Only vocabulary has sentences, so the type filter doesn't
-     *  apply here — only [unlockedOnly] does. */
-    fun observeSentenceSearch(query: String, unlockedOnly: Boolean = false): Flow<List<SentenceSearchResult>> {
+    /** The first [limit] context sentences containing [query], with how many matched in all. Only
+     *  vocabulary has sentences, so the type filter doesn't apply here — only [unlockedOnly] does. */
+    fun observeSentenceSearch(
+        query: String,
+        unlockedOnly: Boolean = false,
+        limit: Int = DEFAULT_SEARCH_LIMIT
+    ): Flow<SearchPage<SentenceSearchResult>> {
         // Lowercased but not escaped: the sentence queries use `instr`, which has no wildcards.
         val lowered = query.lowercase()
         val rows = if (unlockedOnly) {
-            contextSentenceDao.observeUnlockedSearch(lowered)
+            contextSentenceDao.observeUnlockedSearch(lowered, limit)
         } else {
-            contextSentenceDao.observeSearch(lowered)
+            contextSentenceDao.observeSearch(lowered, limit)
         }
         return rows.map { list ->
-            list.map {
-                SentenceSearchResult(
-                    subjectId = it.subjectId,
-                    characters = it.characters,
-                    level = it.level,
-                    japanese = it.japanese,
-                    english = it.english
-                )
-            }
+            SearchPage(
+                items = list.map {
+                    SentenceSearchResult(
+                        subjectId = it.subjectId,
+                        characters = it.characters,
+                        level = it.level,
+                        japanese = it.japanese,
+                        english = it.english
+                    )
+                },
+                totalCount = list.firstOrNull()?.totalCount ?: 0
+            )
         }
     }
 

@@ -241,6 +241,13 @@ data class SearchFilters(
     val unlockedOnly: Boolean = false
 )
 
+/** The first [items] of a search's matches, and how many matched in all. */
+@Immutable
+data class SearchPage<T>(
+    val items: List<T> = emptyList(),
+    val totalCount: Int = 0
+)
+
 /** One context sentence matching a search, with the vocabulary word it illustrates. */
 @Immutable
 data class SentenceSearchResult(

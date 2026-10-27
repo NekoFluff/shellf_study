@@ -46,6 +46,19 @@ data class SubjectEntity(
     val primaryReadingKey: String = ""
 )
 
+/** One subject search result: what a result row shows, plus how many subjects matched in all — the
+ *  same on every row, since the query returns only the first [SubjectDao.observeSearch]'s `limit`. */
+data class SubjectSearchRow(
+    val id: Long,
+    val subjectType: String,
+    val characters: String?,
+    val characterImageUrl: String?,
+    val level: Int,
+    val meanings: List<MeaningData>,
+    val readings: List<ReadingData>,
+    val totalCount: Int
+)
+
 /** A subject's id, type and [SubjectEntity.primaryReadingKey] — the "phonetically similar" lookup's
  *  row, kept to the three columns it matches on rather than whole subjects. */
 data class SubjectReadingKeyRow(val id: Long, val subjectType: String, val primaryReadingKey: String)
@@ -73,26 +86,23 @@ interface SubjectDao {
      *  Room can't do that for you, and without it a query containing a literal `%`/`_` is
      *  interpreted as a wildcard instead of matching that literal character.
      *
-     * The leading wildcard makes this a full scan of the subject library, which was measured rather
-     * than assumed. Against this schema with 9,000 rows of realistic payloads (a 9.7 MB table):
-     * `EXPLAIN QUERY PLAN` reports `SCAN subjects`, and the selective case — a query matching one
-     * row near the end, so `LIMIT 200` never cuts the scan short — reads 2,257 pages through
-     * `PRAGMA stats`, the whole table, in 2-3 ms warm on the host.
+     * The leading wildcard makes this a full scan of the subject library: no index can narrow a
+     * substring search. Against this schema with 9,000 rows of realistic payloads (a 9.7 MB table) a
+     * scan reads 2,257 pages, the whole table. An index on `searchTarget` was tried and passed over:
+     * a covering index scan reads ~18x fewer pages, but only when selecting ids alone, and any
+     * `ORDER BY` other than the index's own gives that back. An FTS table was rejected as well: it
+     * matches tokens and prefixes where this search box matches any substring.
      *
-     * No index can narrow a substring search, and adding one cannot help this query at all: with an
-     * index on `searchTarget` present, the plan for this `SELECT *` is still `SCAN subjects`, since a
-     * row's other columns have to come from the table whatever the filter does. An index would
-     * therefore only add writes to every sync of the library.
-     *
-     * The shape that does use it was measured too and passed over. Selecting only ids plans as
-     * `SCAN subjects USING COVERING INDEX index_subjects_searchTarget` — 120 page reads, ~18x less
-     * I/O — and [observeByIds] would then fetch the at most 200 matches. But that returns the first
-     * 200 matches in index (alphabetical) order where today's returns the 200 lowest ids, and asking
-     * for `ORDER BY id` to match gives the order back by giving up the index (planned and measured:
-     * `SCAN subjects` again, 2,257 pages). With the search debounced to at most one query per 200 ms
-     * of typing (see `SearchViewModel.QUERY_DEBOUNCE_MILLIS`) on Room's own dispatcher, the saving is
-     * not worth a migration plus a reordering. An FTS table was rejected as well: it matches tokens
-     * and prefixes where this search box matches any substring.
+     * Results come best match first — the whole word or character typed (`水`, "fire"), then a word
+     * that starts with it ("pi" → "pillar"), then the rest, each lowest level first — and a match on
+     * one of the user's own synonyms ranks with the prefix matches. Ranking every match means the
+     * scan can't stop at [limit], and [SubjectSearchRow.totalCount] (`COUNT(*) OVER ()`) comes from
+     * that same pass, so the true total costs nothing more. Measured on the host against the same
+     * 9,000 rows, median of warm runs: 12 ms for "p" (1,800 matches) and "water", 10 ms for a query
+     * matching nothing — against 2-4 ms for the previous unranked `LIMIT 200`, which stopped early
+     * but showed the 200 lowest ids, in id order, under a count that was really just "200". The
+     * search is debounced (see `SearchViewModel.QUERY_DEBOUNCE_MILLIS`) and runs on Room's own
+     * dispatcher. Only the listed columns are read out, not the whole row with its mnemonics.
      *
      * The user's own meaning synonyms match too. They live in `study_materials` rather than in
      * `searchTarget`, because they change on their own sync and from this device's edits, and baking
@@ -109,7 +119,9 @@ interface SubjectDao {
      * overlay is open. [observeUnlockedSearch] is the variant that does. */
     @Query(
         """
-        SELECT * FROM subjects
+        SELECT id, subjectType, characters, characterImageUrl, level, meanings, readings,
+            COUNT(*) OVER () AS totalCount
+        FROM subjects
         WHERE (
                 searchTarget LIKE '%' || :query || '%' ESCAPE '\'
                 OR EXISTS (
@@ -119,17 +131,28 @@ interface SubjectDao {
                 )
             )
             AND subjectType IN (:subjectTypes)
-        LIMIT 200
+        ORDER BY
+            CASE
+                WHEN ' ' || searchTarget || ' ' LIKE '% ' || :query || ' %' ESCAPE '\' THEN 0
+                WHEN ' ' || searchTarget LIKE '% ' || :query || '%' ESCAPE '\' THEN 1
+                WHEN searchTarget NOT LIKE '%' || :query || '%' ESCAPE '\' THEN 1
+                ELSE 2
+            END,
+            level,
+            id
+        LIMIT :limit
         """
     )
-    fun observeSearch(query: String, subjectTypes: List<String>): Flow<List<SubjectEntity>>
+    fun observeSearch(query: String, subjectTypes: List<String>, limit: Int): Flow<List<SubjectSearchRow>>
 
     /** [observeSearch], kept to subjects with a visible assignment — the "Unlocked" filter. WaniKani
      *  only creates an assignment when its subject unlocks. The `EXISTS` is one lookup on the
      *  `subjectId` index per scanned row, like the synonym one. */
     @Query(
         """
-        SELECT * FROM subjects
+        SELECT id, subjectType, characters, characterImageUrl, level, meanings, readings,
+            COUNT(*) OVER () AS totalCount
+        FROM subjects
         WHERE (
                 searchTarget LIKE '%' || :query || '%' ESCAPE '\'
                 OR EXISTS (
@@ -142,10 +165,19 @@ interface SubjectDao {
             AND EXISTS (
                 SELECT 1 FROM assignments WHERE assignments.subjectId = subjects.id AND assignments.hidden = 0
             )
-        LIMIT 200
+        ORDER BY
+            CASE
+                WHEN ' ' || searchTarget || ' ' LIKE '% ' || :query || ' %' ESCAPE '\' THEN 0
+                WHEN ' ' || searchTarget LIKE '% ' || :query || '%' ESCAPE '\' THEN 1
+                WHEN searchTarget NOT LIKE '%' || :query || '%' ESCAPE '\' THEN 1
+                ELSE 2
+            END,
+            level,
+            id
+        LIMIT :limit
         """
     )
-    fun observeUnlockedSearch(query: String, subjectTypes: List<String>): Flow<List<SubjectEntity>>
+    fun observeUnlockedSearch(query: String, subjectTypes: List<String>, limit: Int): Flow<List<SubjectSearchRow>>
 
     /** Every subject whose primary reading is one of [readingKeys], lowest level first — the
      *  candidates for the "Phonetically similar" section. Which of them count as similar to a given

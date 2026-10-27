@@ -89,11 +89,61 @@ class SubjectSearchQueryTest {
     @Test
     fun `the search re-runs when a synonym is added`() = withDatabase { db ->
         seed(db, "fire")
-        db.subjectDao().observeSearch("blaze", ALL_TYPES).test {
+        db.subjectDao().observeSearch("blaze", ALL_TYPES, LIMIT).test {
             assertThat(awaitItem()).isEmpty()
             db.studyMaterialDao().upsertAll(listOf(material(subjectId = 1, "blaze")))
             assertThat(awaitItem().map { it.id }).containsExactly(1L)
         }
+    }
+
+    @Test
+    fun `whole words come first, then word prefixes, then anywhere, each lowest level first`() = withDatabase { db ->
+        db.subjectDao().upsertAll(
+            listOf(
+                subject(1, "help", level = 1), // "p" inside a word
+                subject(2, "pillar", level = 9), // a word starting with "p"
+                subject(3, "p", level = 30), // the whole word
+                subject(4, "pin", level = 2) // a word starting with "p", lower level
+            )
+        )
+
+        assertThat(db.search("p")).containsExactly(3L, 4L, 2L, 1L).inOrder()
+    }
+
+    @Test
+    fun `a synonym-only match ranks with the word-prefix matches`() = withDatabase { db ->
+        db.subjectDao().upsertAll(listOf(subject(1, "helper", level = 1), subject(2, "fire", level = 5)))
+        db.studyMaterialDao().upsertAll(listOf(material(subjectId = 2, "Helpful flame")))
+
+        // Tied at rank 1 for "help", lowest level first; for "elp" the synonym outranks a mid-word match.
+        assertThat(db.search("help")).containsExactly(1L, 2L).inOrder()
+        assertThat(db.search("elp")).containsExactly(2L, 1L).inOrder()
+    }
+
+    @Test
+    fun `every row carries the total match count, beyond the limit`() = withDatabase { db ->
+        seed(db, "water", "water", "water", "fire")
+
+        val rows = db.subjectDao().observeSearch("water", ALL_TYPES, limit = 2).first()
+        assertThat(rows.map { it.id }).containsExactly(1L, 2L).inOrder()
+        assertThat(rows.map { it.totalCount }).containsExactly(3, 3)
+    }
+
+    @Test
+    fun `sentence rows carry the total match count, beyond the limit`() = withDatabase { db ->
+        db.subjectDao().upsertAll(
+            listOf(
+                subject(
+                    1,
+                    "a",
+                    sentences = List(5) { ContextSentenceData(en = "Water $it.", ja = "水。") }
+                )
+            )
+        )
+
+        val rows = db.contextSentenceDao().observeSearch("water", limit = 2).first()
+        assertThat(rows.map { it.english }).containsExactly("Water 0.", "Water 1.").inOrder()
+        assertThat(rows.map { it.totalCount }).containsExactly(5, 5)
     }
 
     @Test
@@ -216,7 +266,7 @@ class SubjectSearchQueryTest {
 
     @Test
     fun `the sentence search re-runs when a subject is synced`() = withDatabase { db ->
-        db.contextSentenceDao().observeSearch("water").test {
+        db.contextSentenceDao().observeSearch("water", LIMIT).test {
             assertThat(awaitItem()).isEmpty()
             db.subjectDao().upsertAll(
                 listOf(subject(1, "a", sentences = listOf(ContextSentenceData(en = "Water.", ja = "水。"))))
@@ -232,9 +282,9 @@ class SubjectSearchQueryTest {
         unlockedOnly: Boolean = false
     ): List<Long> {
         val results = if (unlockedOnly) {
-            subjectDao().observeUnlockedSearch(query, types)
+            subjectDao().observeUnlockedSearch(query, types, LIMIT)
         } else {
-            subjectDao().observeSearch(query, types)
+            subjectDao().observeSearch(query, types, LIMIT)
         }
         return results.first().map { it.id }
     }
@@ -244,9 +294,9 @@ class SubjectSearchQueryTest {
         unlockedOnly: Boolean = false
     ): List<SentenceMatchRow> {
         val results = if (unlockedOnly) {
-            contextSentenceDao().observeUnlockedSearch(query)
+            contextSentenceDao().observeUnlockedSearch(query, LIMIT)
         } else {
-            contextSentenceDao().observeSearch(query)
+            contextSentenceDao().observeSearch(query, LIMIT)
         }
         return results.first()
     }
@@ -306,5 +356,6 @@ class SubjectSearchQueryTest {
 
     private companion object {
         val ALL_TYPES = listOf("radical", "kanji", "vocabulary", "kana_vocabulary")
+        const val LIMIT = 200
     }
 }

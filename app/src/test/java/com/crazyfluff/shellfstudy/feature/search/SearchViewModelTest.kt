@@ -90,14 +90,62 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `results are capped at 50 with the true match count reported separately`() = runTest(mainDispatcherRule.dispatcher) {
-        repeat(60) { index -> seedSubject(id = index.toLong(), characters = "水$index", meaning = "Water", reading = "みず") }
+    fun `the first page holds 50 results, with the true total`() = runTest(mainDispatcherRule.dispatcher) {
+        seedWaters(120)
         val viewModel = createViewModel()
 
         viewModel.onQueryChange("water")
         val state = settled(viewModel)
         assertThat(state.results).hasSize(50)
-        assertThat(state.totalMatchCount).isEqualTo(60)
+        assertThat(state.totalMatchCount).isEqualTo(120)
+    }
+
+    @Test
+    fun `loading more adds a page at a time, up to the total, without flagging a new search`() = runTest(mainDispatcherRule.dispatcher) {
+        seedWaters(120)
+        val viewModel = createViewModel()
+        viewModel.onQueryChange("water")
+        settled(viewModel)
+
+        viewModel.onLoadMore(SearchTab.SUBJECTS)
+        assertThat(viewModel.uiState.value.isSearchingSubjects).isFalse()
+        assertThat(settled(viewModel).results).hasSize(100)
+
+        viewModel.onLoadMore(SearchTab.SUBJECTS)
+        assertThat(settled(viewModel).results).hasSize(120)
+
+        viewModel.onLoadMore(SearchTab.SUBJECTS) // nothing left
+        assertThat(settled(viewModel).results).hasSize(120)
+    }
+
+    @Test
+    fun `a new query starts again at one page`() = runTest(mainDispatcherRule.dispatcher) {
+        seedWaters(120)
+        val viewModel = createViewModel()
+        viewModel.onQueryChange("water")
+        settled(viewModel)
+        viewModel.onLoadMore(SearchTab.SUBJECTS)
+        assertThat(settled(viewModel).results).hasSize(100)
+
+        viewModel.onQueryChange("wate")
+        assertThat(settled(viewModel).results).hasSize(50)
+    }
+
+    @Test
+    fun `sentences load more too`() = runTest(mainDispatcherRule.dispatcher) {
+        seedSubject(
+            id = 1, characters = "水", meaning = "Water", reading = "みず", type = "vocabulary",
+            sentences = List(70) { ContextSentenceData(en = "Water $it.", ja = "水。") }
+        )
+        val viewModel = createViewModel()
+        viewModel.onQueryChange("water")
+        viewModel.onTabChange(SearchTab.SENTENCES)
+        val first = settled(viewModel)
+        assertThat(first.sentenceResults).hasSize(50)
+        assertThat(first.sentenceTotalCount).isEqualTo(70)
+
+        viewModel.onLoadMore(SearchTab.SENTENCES)
+        assertThat(settled(viewModel).sentenceResults).hasSize(70)
     }
 
     @Test
@@ -212,6 +260,12 @@ class SearchViewModelTest {
         val cleared = settled(viewModel)
         assertThat(cleared.sentenceResults).isEmpty()
         assertThat(cleared.sentenceTotalCount).isNull()
+    }
+
+    private suspend fun seedWaters(count: Int) {
+        repeat(count) { index ->
+            seedSubject(id = index.toLong(), characters = "水$index", meaning = "Water", reading = "みず")
+        }
     }
 
     private suspend fun seedVocabWithSentences() {
