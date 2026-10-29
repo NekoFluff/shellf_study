@@ -1,8 +1,8 @@
 # history-sync
 
-The Cloudflare Worker + D1 backend behind the app's opt-in "Sync study history" setting. It stores the
-history WaniKani can't give back — study-time segments and study-streak days — keyed by WaniKani user
-id, so it follows a learner across devices. Records are opaque JSON to the server; the app owns their
+The Cloudflare Worker + D1 backend behind the app's opt-in "Sync across devices" setting. It stores the
+history WaniKani can't give back — study-time segments and study-streak days — and every change to a
+synced setting, keyed by WaniKani user id, so they follow a learner across devices. Records are opaque JSON to the server; the app owns their
 shape (`shared/.../data/historysync/HistoryRecords.kt`).
 
 | Route               | What it does                                                                 |

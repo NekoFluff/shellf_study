@@ -544,14 +544,14 @@ class SettingsViewModelTest {
     @Test
     fun `a failed delete shows its message`() = runTest(mainDispatcherRule.dispatcher) {
         val historySync = FakeHistorySyncSettings(isAvailable = true, enabled = true)
-        historySync.deleteResult.complete(ApiResult.Error("Couldn't delete synced history. Try again later."))
+        historySync.deleteResult.complete(ApiResult.Error("Couldn't delete synced data. Try again later."))
         val viewModel = createViewModel(historySync = historySync)
 
         viewModel.onDeleteSyncedHistoryRequested().join()
 
         val settled = viewModel.uiState.first { it.historySync.deletion !is SyncedHistoryDeletion.Idle }
         assertThat(settled.historySync.deletion)
-            .isEqualTo(SyncedHistoryDeletion.Failed("Couldn't delete synced history. Try again later."))
+            .isEqualTo(SyncedHistoryDeletion.Failed("Couldn't delete synced data. Try again later."))
     }
 }
 

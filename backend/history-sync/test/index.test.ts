@@ -155,6 +155,20 @@ describe("push and pull", () => {
     expect(body.records).toHaveLength(2);
   });
 
+  it("stores setting changes alongside history, one record per change", async () => {
+    const token = await tokenFor("user-a");
+    const change = (changedAtMs: number, value: number) => ({
+      type: "setting",
+      recordId: `daily-lesson-goal-${changedAtMs}`,
+      payload: { v: 1, name: "daily_lesson_goal", value, changedAtMs },
+    });
+    await call("POST", "/v1/history", { token, body: { records: [change(1000, 10), change(2000, 20)] } });
+
+    const body = await (await call("GET", "/v1/history", { token })).json<Page>();
+
+    expect(body.records.map((r) => r.recordId)).toEqual(["daily-lesson-goal-1000", "daily-lesson-goal-2000"]);
+  });
+
   it("pages through records and only returns what is new after the cursor", async () => {
     const token = await tokenFor("user-a");
     await call("POST", "/v1/history", { token, body: { records: ["a", "b", "c"].map((id) => segment(id)) } });
@@ -206,7 +220,7 @@ describe("push and pull", () => {
   });
 
   it.each([
-    ["an unknown type", { type: "settings", recordId: "x", payload: {} }],
+    ["an unknown type", { type: "preferences", recordId: "x", payload: {} }],
     ["a bad record id", { type: "study_segment", recordId: "../x", payload: {} }],
     ["a non-object payload", { type: "study_segment", recordId: "x", payload: [1] }],
     ["an oversized payload", { type: "study_segment", recordId: "x", payload: { pad: "x".repeat(3000) } }],

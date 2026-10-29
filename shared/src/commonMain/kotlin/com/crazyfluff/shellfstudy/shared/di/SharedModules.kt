@@ -16,6 +16,7 @@ import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncSettings
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStore
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncer
+import com.crazyfluff.shellfstudy.shared.data.historysync.SettingsSync
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
@@ -146,7 +147,7 @@ val repositoryModule = module {
         )
     }
 
-    single { SettingsRepository(get()) }
+    single { SettingsRepository(dataStore = get(), historySyncScheduler = get()) }
     single { TokenRepository(get(), get()) }
     single { OutboxRepository(outboxDao = get(), outboxSyncScheduler = get(), dataStore = get()) }
     single { DashboardCacheRepository(get()) }
@@ -195,6 +196,7 @@ val repositoryModule = module {
         )
     }
     single { HistorySyncStore(dataStore = get(), tokenCipher = get()) }
+    single { SettingsSync(dataStore = get(), settingsRepository = get(), json = get()) }
     single {
         HistorySyncer(
             api = HISTORY_SYNC_BASE_URL.takeIf { it.isNotBlank() }
@@ -204,6 +206,7 @@ val repositoryModule = module {
             localHistoryGuard = get(),
             studyTimeDao = get(),
             studyActivityDao = get(),
+            settingsSync = get(),
             scheduler = get(),
             json = get()
         )

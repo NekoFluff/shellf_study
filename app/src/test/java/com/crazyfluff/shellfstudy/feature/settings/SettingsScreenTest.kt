@@ -7,6 +7,9 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -653,7 +656,7 @@ class SettingsScreenTest {
                 historySync = HistorySyncUiState(
                     isAvailable = true,
                     enabled = true,
-                    deletion = SyncedHistoryDeletion.Failed("Couldn't delete synced history. Try again later.")
+                    deletion = SyncedHistoryDeletion.Failed("Couldn't delete synced data. Try again later.")
                 )
             )
         )
@@ -678,6 +681,30 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.ACCOUNT_ROW).assertDoesNotExist()
         composeTestRule.onNodeWithTag(SettingsScreenTestTags.LOG_OUT_ROW).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun privacyPolicyRow_opensThePolicy() {
+        val opened = mutableListOf<String>()
+        val uriHandler = object : UriHandler {
+            override fun openUri(uri: String) {
+                opened += uri
+            }
+        }
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalUriHandler provides uriHandler) {
+                SettingsScreen(
+                    uiState = SettingsUiState(),
+                    actions = RecordingSettingsActions(),
+                    onNotificationsEnabledChange = {},
+                    onBack = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.PRIVACY_POLICY_ROW).performScrollTo().performClick()
+
+        assertThat(opened).containsExactly("https://github.com/NekoFluff/shellf_study/blob/master/PRIVACY.md")
     }
 
     @Test

@@ -4,8 +4,13 @@
 	"main": "src/index.ts",
 	// Must not be newer than the bundled workerd runtime (see node_modules/workerd/package.json).
 	"compatibility_date": "2026-10-01",
+	// Only the Worker's own console output (errors, never request contents) is logged. Per-request
+	// invocation logs are off: they would record request details the privacy policy says aren't kept.
 	"observability": {
-		"enabled": true
+		"enabled": true,
+		"logs": {
+			"invocation_logs": false
+		}
 	},
 	"d1_databases": [
 		{

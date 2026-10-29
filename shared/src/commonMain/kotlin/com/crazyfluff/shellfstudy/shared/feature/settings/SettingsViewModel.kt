@@ -47,7 +47,7 @@ data class HistorySyncUiState(
     val deletion: SyncedHistoryDeletion = SyncedHistoryDeletion.Idle
 )
 
-/** The "delete synced history" action. */
+/** The "delete synced data" action. */
 sealed interface SyncedHistoryDeletion {
     data object Idle : SyncedHistoryDeletion
     data object InFlight : SyncedHistoryDeletion

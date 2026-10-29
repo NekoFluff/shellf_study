@@ -6,10 +6,12 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlin.time.Clock
 
 const val DEFAULT_DAILY_LESSON_GOAL = 15
 
@@ -86,7 +88,10 @@ data class NotificationSettings(
 )
 
 class SettingsRepository(
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    /** Told after each change to a synced setting, so it reaches the learner's other devices. */
+    private val historySyncScheduler: HistorySyncScheduler = HistorySyncScheduler.None,
+    private val clock: Clock = Clock.System
 ) {
     private val dailyLessonGoalKey = intPreferencesKey("daily_lesson_goal")
     private val dailyStudyMinutesGoalKey = intPreferencesKey("daily_study_minutes_goal")
@@ -118,6 +123,32 @@ class SettingsRepository(
     private val quietHoursEnabledKey = booleanPreferencesKey("notif_quiet_hours_enabled")
     private val quietHoursStartHourKey = intPreferencesKey("notif_quiet_hours_start_hour")
     private val quietHoursEndHourKey = intPreferencesKey("notif_quiet_hours_end_hour")
+
+    /**
+     * The settings that follow the learner across devices when sync is on: how they like to study,
+     * which they'd want the same everywhere. The rest stay per device on purpose. Theme, because an
+     * E-ink theme belongs to the e-reader, not the phone. Mute, MP3-only audio and the Japanese
+     * keyboard, because they answer to the device or the moment. Notifications, because each device
+     * schedules its own. Moving a setting between the two groups is a change to this list alone.
+     */
+    val syncedSettings: List<SyncedSetting> = listOf(
+        SyncedSetting.IntSetting(dailyLessonGoalKey, DAILY_LESSON_GOAL_RANGE),
+        SyncedSetting.IntSetting(dailyStudyMinutesGoalKey, DAILY_STUDY_MINUTES_GOAL_RANGE),
+        SyncedSetting.IntSetting(lessonBatchSizeKey, LESSON_BATCH_SIZE_RANGE),
+        SyncedSetting.EnumSetting(reviewPriorityKey, ReviewPriority.entries.map { it.name }.toSet()),
+        SyncedSetting.BooleanSetting(showPitchAccentKey),
+        SyncedSetting.BooleanSetting(autoplayPronunciationAudioKey),
+        SyncedSetting.BooleanSetting(showSubjectTypeLabelKey),
+        SyncedSetting.BooleanSetting(showTotalTimerKey),
+        SyncedSetting.BooleanSetting(showQuestionTimerKey),
+        SyncedSetting.BooleanSetting(showStrokeOrderKey),
+        SyncedSetting.BooleanSetting(closeEnoughAnswersEnabledKey),
+        SyncedSetting.BooleanSetting(showAnswerReadingPitchAccentKey),
+        SyncedSetting.BooleanSetting(hideContextSentenceTranslationsKey),
+        SyncedSetting.BooleanSetting(requireTapToRevealMeaningAnswerKey),
+        SyncedSetting.BooleanSetting(requireTapToRevealReadingAnswerKey)
+    )
+    private val syncedByKey = syncedSettings.associateBy { it.key }
 
     // dataStore is a single app-wide DataStore<Preferences> instance shared by every repository
     // that persists key-value state — ReviewSessionRepository, OutboxRepository, TokenRepository,
@@ -172,15 +203,15 @@ class SettingsRepository(
     }.distinctUntilChanged()
 
     suspend fun setDailyLessonGoal(goal: Int) {
-        dataStore.edit { it[dailyLessonGoalKey] = goal.coerceIn(DAILY_LESSON_GOAL_RANGE) }
+        setSynced(dailyLessonGoalKey, goal.coerceIn(DAILY_LESSON_GOAL_RANGE))
     }
 
     suspend fun setDailyStudyMinutesGoal(minutes: Int) {
-        dataStore.edit { it[dailyStudyMinutesGoalKey] = minutes.coerceIn(DAILY_STUDY_MINUTES_GOAL_RANGE) }
+        setSynced(dailyStudyMinutesGoalKey, minutes.coerceIn(DAILY_STUDY_MINUTES_GOAL_RANGE))
     }
 
     suspend fun setLessonBatchSize(size: Int) {
-        dataStore.edit { it[lessonBatchSizeKey] = size.coerceIn(LESSON_BATCH_SIZE_RANGE) }
+        setSynced(lessonBatchSizeKey, size.coerceIn(LESSON_BATCH_SIZE_RANGE))
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
@@ -188,11 +219,11 @@ class SettingsRepository(
     }
 
     suspend fun setShowPitchAccent(enabled: Boolean) {
-        dataStore.edit { it[showPitchAccentKey] = enabled }
+        setSynced(showPitchAccentKey, enabled)
     }
 
     suspend fun setAutoplayPronunciationAudio(enabled: Boolean) {
-        dataStore.edit { it[autoplayPronunciationAudioKey] = enabled }
+        setSynced(autoplayPronunciationAudioKey, enabled)
     }
 
     suspend fun setAudioMuted(muted: Boolean) {
@@ -210,19 +241,19 @@ class SettingsRepository(
     }
 
     suspend fun setShowSubjectTypeLabel(enabled: Boolean) {
-        dataStore.edit { it[showSubjectTypeLabelKey] = enabled }
+        setSynced(showSubjectTypeLabelKey, enabled)
     }
 
     suspend fun setShowTotalTimer(enabled: Boolean) {
-        dataStore.edit { it[showTotalTimerKey] = enabled }
+        setSynced(showTotalTimerKey, enabled)
     }
 
     suspend fun setShowQuestionTimer(enabled: Boolean) {
-        dataStore.edit { it[showQuestionTimerKey] = enabled }
+        setSynced(showQuestionTimerKey, enabled)
     }
 
     suspend fun setShowStrokeOrder(enabled: Boolean) {
-        dataStore.edit { it[showStrokeOrderKey] = enabled }
+        setSynced(showStrokeOrderKey, enabled)
     }
 
     suspend fun setUseJapaneseKeyboard(enabled: Boolean) {
@@ -230,27 +261,27 @@ class SettingsRepository(
     }
 
     suspend fun setCloseEnoughAnswersEnabled(enabled: Boolean) {
-        dataStore.edit { it[closeEnoughAnswersEnabledKey] = enabled }
+        setSynced(closeEnoughAnswersEnabledKey, enabled)
     }
 
     suspend fun setShowAnswerReadingPitchAccent(enabled: Boolean) {
-        dataStore.edit { it[showAnswerReadingPitchAccentKey] = enabled }
+        setSynced(showAnswerReadingPitchAccentKey, enabled)
     }
 
     suspend fun setHideContextSentenceTranslations(enabled: Boolean) {
-        dataStore.edit { it[hideContextSentenceTranslationsKey] = enabled }
+        setSynced(hideContextSentenceTranslationsKey, enabled)
     }
 
     suspend fun setRequireTapToRevealMeaningAnswer(enabled: Boolean) {
-        dataStore.edit { it[requireTapToRevealMeaningAnswerKey] = enabled }
+        setSynced(requireTapToRevealMeaningAnswerKey, enabled)
     }
 
     suspend fun setRequireTapToRevealReadingAnswer(enabled: Boolean) {
-        dataStore.edit { it[requireTapToRevealReadingAnswerKey] = enabled }
+        setSynced(requireTapToRevealReadingAnswerKey, enabled)
     }
 
     suspend fun setReviewPriority(priority: ReviewPriority) {
-        dataStore.edit { it[reviewPriorityKey] = priority.name }
+        setSynced(reviewPriorityKey, priority.name)
     }
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {
@@ -291,5 +322,15 @@ class SettingsRepository(
 
     suspend fun setQuietHoursEndHour(hour: Int) {
         dataStore.edit { it[quietHoursEndHourKey] = hour.coerceIn(0, 23) }
+    }
+
+    /** Writes a synced setting, recording when it changed so the next sync pass uploads it. */
+    private suspend fun <T> setSynced(key: Preferences.Key<T>, value: T) {
+        val setting = checkNotNull(syncedByKey[key]) { "${key.name} is not a synced setting" }
+        dataStore.edit {
+            it[key] = value
+            it.markSettingChanged(setting, clock.now().toEpochMilliseconds())
+        }
+        historySyncScheduler.requestSync()
     }
 }

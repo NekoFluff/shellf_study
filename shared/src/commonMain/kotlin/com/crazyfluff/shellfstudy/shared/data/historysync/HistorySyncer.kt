@@ -26,13 +26,15 @@ interface HistorySyncSettings {
     val enabled: Flow<Boolean>
     suspend fun setEnabled(enabled: Boolean)
 
-    /** Deletes this account's history from the backend and turns sync off. Local history stays. */
+    /** Deletes this account's history and settings from the backend and turns sync off. Nothing on
+     *  this device changes. */
     suspend fun deleteSyncedHistory(): ApiResult<Unit>
 }
 
 /**
- * Keeps this device's study history (study-time segments and study-streak days) in step with the
- * history-sync backend: uploads what the backend doesn't have yet, then pulls what other devices added.
+ * Keeps this device's study history (study-time segments and study-streak days) and synced settings
+ * (see [SettingsSync]) in step with the history-sync backend: uploads what the backend doesn't have
+ * yet, then pulls what other devices added.
  *
  * Both directions are idempotent, which is what makes cancelling a pass anywhere safe. The backend
  * stores a record once however often it is pushed, so a pass cancelled between the push and marking
@@ -50,6 +52,7 @@ class HistorySyncer(
     private val localHistoryGuard: LocalHistoryGuard,
     private val studyTimeDao: StudyTimeDao,
     private val studyActivityDao: StudyActivityDao,
+    private val settingsSync: SettingsSync,
     private val scheduler: HistorySyncScheduler,
     private val json: Json,
     private val clock: Clock = Clock.System
@@ -88,10 +91,11 @@ class HistorySyncer(
             // So that turning sync back on uploads everything again, rather than only what's new.
             studyTimeDao.markAllNotUploaded()
             studyActivityDao.markAllNotUploaded()
+            settingsSync.markAllPending()
         }
         when (result) {
             is ApiResult.Success -> result
-            is ApiResult.Error -> result.copy(message = "Couldn't delete synced history. Try again later.")
+            is ApiResult.Error -> result.copy(message = "Couldn't delete synced data. Try again later.")
         }
     }
 
@@ -153,7 +157,20 @@ class HistorySyncer(
                 markUploaded = { rows -> studyActivityDao.markUploaded(rows.map { it.date }) },
                 push = { api.push(token, it) }
             )
-        }.then { pull(api, token) }
+        }.then { pushSettings(api, token) }
+            .then { pull(api, token) }
+            // After the pull, so a device joining sync takes the account's settings rather than
+            // overwriting them with ones it changed before sync existed.
+            .then { if (settingsSync.adoptUntimedChanges()) pushSettings(api, token) else ApiResult.Success(Unit) }
+
+    private suspend fun pushSettings(api: HistorySyncApi, token: String): ApiResult<Unit> {
+        val records = settingsSync.pendingRecords()
+        if (records.isEmpty()) return ApiResult.Success(Unit)
+        return safeApiCall { api.push(token, records) }.then {
+            settingsSync.markUploaded(records)
+            ApiResult.Success(Unit)
+        }
+    }
 
     /** Uploads [notUploaded] rows a batch at a time, marking each batch once the backend has it. */
     private suspend fun <Row> pushAll(
@@ -185,17 +202,12 @@ class HistorySyncer(
             val days = page.records.mapNotNull { it.toActivityDayEntity() }
             if (segments.isNotEmpty()) studyTimeDao.insertFromRemote(segments)
             if (days.isNotEmpty()) studyActivityDao.insertFromRemote(days)
+            settingsSync.applyRemote(page.records)
             // Saved per page, so a pass that fails part-way resumes from here rather than the start.
             cursor = page.cursor
             store.setCursor(cursor)
             if (!page.hasMore) return ApiResult.Success(Unit)
         }
-    }
-
-    /** [next] on success; the error as it is otherwise. */
-    private inline fun <T, R> ApiResult<T>.then(next: (T) -> ApiResult<R>): ApiResult<R> = when (this) {
-        is ApiResult.Success -> next(data)
-        is ApiResult.Error -> this
     }
 
     companion object {
@@ -207,4 +219,10 @@ class HistorySyncer(
         private const val SESSION_RENEW_MARGIN_MS = 24 * 60 * 60 * 1000L
         private const val UNAUTHORIZED = 401
     }
+}
+
+/** [next] on success; the error as it is otherwise. */
+private inline fun <T, R> ApiResult<T>.then(next: (T) -> ApiResult<R>): ApiResult<R> = when (this) {
+    is ApiResult.Success -> next(data)
+    is ApiResult.Error -> this
 }

@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -108,6 +109,7 @@ object SettingsScreenTestTags {
     const val DELETE_SYNCED_HISTORY_PROGRESS = "settings_delete_synced_history_progress"
     const val DELETE_SYNCED_HISTORY_ERROR_TEXT = "settings_delete_synced_history_error_text"
     const val ACCOUNT_ROW = "settings_account_row"
+    const val PRIVACY_POLICY_ROW = "settings_privacy_policy_row"
     const val LOG_OUT_ROW = "settings_log_out_row"
     const val LOG_OUT_CONFIRM_BUTTON = "settings_log_out_confirm_button"
     const val APP_VERSION_TEXT = "settings_app_version_text"
@@ -675,16 +677,16 @@ private fun DataGroup(uiState: SettingsUiState, actions: SettingsActions) {
     }
 }
 
-/** Opt-in sync of the history WaniKani can't give back. Turning it on asks first, since it is the
- *  one setting that sends anything to a server other than WaniKani's. */
+/** Opt-in sync of the history WaniKani can't give back, and of the study settings. Turning it on asks
+ *  first, since it is the one setting that sends anything to a server other than WaniKani's. */
 @Composable
 private fun HistorySyncGroup(historySync: HistorySyncUiState, actions: SettingsActions) {
     var showEnableConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     ListGroup(title = "Sync") {
         SwitchRow(
-            title = "Sync study history",
-            subtitle = "Study time and streak, on every device signed in to this WaniKani account",
+            title = "Sync across devices",
+            subtitle = "Study time, streak and study settings, on every device signed in to this WaniKani account",
             checked = historySync.enabled,
             onCheckedChange = { on -> if (on) showEnableConfirm = true else actions.onHistorySyncEnabledChange(false) },
             testTag = SettingsScreenTestTags.HISTORY_SYNC_TOGGLE
@@ -694,11 +696,11 @@ private fun HistorySyncGroup(historySync: HistorySyncUiState, actions: SettingsA
 
     if (showEnableConfirm) {
         ConfirmationDialog(
-            title = "Sync study history?",
-            text = "Your study time and study days are uploaded to Shellf Study's sync server, stored " +
-                "under your WaniKani account ID, and downloaded on your other devices. Your API token " +
-                "is only used to confirm who you are and is never stored there. You can delete the " +
-                "synced copy at any time.",
+            title = "Sync across devices?",
+            text = "Your study time, study days and study settings are uploaded to Shellf Study's sync " +
+                "server, stored under your WaniKani account ID, and downloaded on your other devices. " +
+                "Theme, audio muting and notifications stay per device. Your API token is only used to " +
+                "confirm who you are and is never stored there. You can delete the synced copy at any time.",
             confirmLabel = "Turn on",
             onConfirm = {
                 showEnableConfirm = false
@@ -711,9 +713,9 @@ private fun HistorySyncGroup(historySync: HistorySyncUiState, actions: SettingsA
 
     if (showDeleteConfirm) {
         ConfirmationDialog(
-            title = "Delete synced history?",
-            text = "This deletes the copy on the sync server and turns sync off. The history on this " +
-                "device stays, and other devices keep what they've already downloaded.",
+            title = "Delete synced data?",
+            text = "This deletes your history and settings from the sync server and turns sync off. " +
+                "Nothing on this device changes, and other devices keep what they've already downloaded.",
             confirmLabel = "Delete",
             onConfirm = {
                 showDeleteConfirm = false
@@ -725,7 +727,7 @@ private fun HistorySyncGroup(historySync: HistorySyncUiState, actions: SettingsA
     }
 }
 
-/** "Delete synced history", replaced by a progress row while it runs, with the error under it if it failed. */
+/** "Delete synced data", replaced by a progress row while it runs, with the error under it if it failed. */
 @Composable
 private fun SyncedHistoryDeletionRows(deletion: SyncedHistoryDeletion, onDeleteClick: () -> Unit) {
     if (deletion == SyncedHistoryDeletion.InFlight) {
@@ -738,11 +740,11 @@ private fun SyncedHistoryDeletionRows(deletion: SyncedHistoryDeletion, onDeleteC
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-            Text("Deleting synced history…", style = MaterialTheme.typography.bodyLarge)
+            Text("Deleting synced data…", style = MaterialTheme.typography.bodyLarge)
         }
     } else {
         DestructiveRow(
-            title = "Delete synced history",
+            title = "Delete synced data",
             icon = Icons.Filled.Delete,
             onClick = onDeleteClick,
             testTag = SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ROW
@@ -799,6 +801,8 @@ private fun CreditsGroup() {
     }
 }
 
+internal const val PRIVACY_POLICY_URL = "https://github.com/NekoFluff/shellf_study/blob/master/PRIVACY.md"
+
 /** Who's signed in, and log out. The account row is only shown once a sync has told us the
  *  username; log out is always there. */
 @Composable
@@ -813,6 +817,13 @@ private fun AccountGroup(uiState: SettingsUiState, actions: SettingsActions) {
                 testTag = SettingsScreenTestTags.ACCOUNT_ROW
             )
         }
+        val uriHandler = LocalUriHandler.current
+        NavRow(
+            title = "Privacy policy",
+            subtitle = "What the app does with your data",
+            onClick = { uriHandler.openUri(PRIVACY_POLICY_URL) },
+            testTag = SettingsScreenTestTags.PRIVACY_POLICY_ROW
+        )
         DestructiveRow(
             title = "Log out",
             icon = Icons.AutoMirrored.Filled.Logout,

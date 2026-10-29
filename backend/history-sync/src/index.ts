@@ -1,6 +1,7 @@
 /**
  * Shellf Study history sync: stores the history WaniKani can't give back (study-time segments,
- * study-streak days) so it follows a learner across devices.
+ * study-streak days), plus changes to the app's synced settings, so they follow a learner across
+ * devices.
  *
  * Identity is the WaniKani user id, proven once by exchanging a WaniKani API token at /v1/auth for
  * a token signed here. The WaniKani token is used for that one request and never stored or logged.
@@ -19,7 +20,7 @@ export interface Env {
   WANIKANI_API_URL?: string;
 }
 
-const RECORD_TYPES = new Set(["study_segment", "activity_day"]);
+const RECORD_TYPES = new Set(["study_segment", "activity_day", "setting"]);
 const RECORD_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
 const WANIKANI_TOKEN_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
 const MAX_RECORDS_PER_PUSH = 500;

@@ -7,20 +7,28 @@ import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
 import com.crazyfluff.shellfstudy.fakes.FakeTokenCipher
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.LocalHistoryGuard
+import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.ThemeMode
+import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncOutcome
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStore
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncer
+import com.crazyfluff.shellfstudy.shared.data.historysync.SettingsSync
 import com.crazyfluff.shellfstudy.shared.database.studyactivity.StudyActivityDayEntity
 import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeSegmentEntity
 import com.crazyfluff.shellfstudy.shared.network.historysync.HistorySyncApi
 import com.crazyfluff.shellfstudy.shared.network.historysync.createHistorySyncHttpClient
 import com.crazyfluff.shellfstudy.shared.network.waniKaniJson
 import com.google.common.truth.Truth.assertThat
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import mockwebserver3.MockWebServer
@@ -29,6 +37,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 private const val USER_A = "user-a"
 private const val WK_TOKEN_A = "wk-token-a"
@@ -56,7 +66,12 @@ class HistorySyncerTest {
 
     /** One install: its own preferences file and history tables, syncing through [backend]. */
     private inner class Device(name: String) {
-        private val dataStore =
+        /** This device's clock, in epoch ms — settings sync orders changes by it. */
+        var nowMs = 1_000_000L
+        private val clock = object : Clock {
+            override fun now() = Instant.fromEpochMilliseconds(nowMs)
+        }
+        val dataStore =
             PreferenceDataStoreFactory.create(produceFile = { tempFolder.newFile("$name.preferences_pb") })
         val studyTimeDao = FakeStudyTimeDao()
         val studyActivityDao = FakeStudyActivityDao()
@@ -65,6 +80,8 @@ class HistorySyncerTest {
         val guard =
             LocalHistoryGuard(dataStore, studyActivityDao, studyTimeDao, onOwnerChanged = { store.clearAccountState() })
         var syncRequests = 0
+        val settings = SettingsRepository(dataStore, clock = clock)
+        val settingsSync = SettingsSync(dataStore, settings, waniKaniJson(), clock)
         val syncer = HistorySyncer(
             api = HistorySyncApi(createHistorySyncHttpClient(waniKaniJson()), server.url("/").toString().trimEnd('/')),
             store = store,
@@ -72,6 +89,7 @@ class HistorySyncerTest {
             localHistoryGuard = guard,
             studyTimeDao = studyTimeDao,
             studyActivityDao = studyActivityDao,
+            settingsSync = settingsSync,
             scheduler = HistorySyncScheduler { syncRequests++ },
             json = waniKaniJson()
         )
@@ -285,7 +303,7 @@ class HistorySyncerTest {
         val result = phone.syncer.deleteSyncedHistory()
 
         assertThat(result).isInstanceOf(ApiResult.Error::class.java)
-        assertThat((result as ApiResult.Error).message).isEqualTo("Couldn't delete synced history. Try again later.")
+        assertThat((result as ApiResult.Error).message).isEqualTo("Couldn't delete synced data. Try again later.")
         assertThat(phone.store.isEnabled()).isTrue()
     }
 
@@ -312,6 +330,7 @@ class HistorySyncerTest {
             localHistoryGuard = phone.guard,
             studyTimeDao = phone.studyTimeDao,
             studyActivityDao = phone.studyActivityDao,
+            settingsSync = phone.settingsSync,
             scheduler = HistorySyncScheduler.None,
             json = waniKaniJson()
         )
@@ -319,5 +338,137 @@ class HistorySyncerTest {
         assertThat(unavailable.isAvailable).isFalse()
         assertThat(unavailable.sync()).isEqualTo(HistorySyncOutcome.SKIPPED)
         assertThat(server.requestCount).isEqualTo(0)
+    }
+
+    // --- Settings ---
+
+    @Test
+    fun `a setting changed on one device reaches the other`() = runTest {
+        val phone = Device("phone").signedInWithSyncOn()
+        val tablet = Device("tablet").signedInWithSyncOn()
+
+        phone.settings.setDailyLessonGoal(25)
+        phone.settings.setReviewPriority(ReviewPriority.RANK_UP)
+        phone.syncer.sync()
+        tablet.syncer.sync()
+
+        val synced = tablet.settings.settings.first()
+        assertThat(synced.dailyLessonGoal).isEqualTo(25)
+        assertThat(synced.reviewPriority).isEqualTo(ReviewPriority.RANK_UP)
+    }
+
+    @Test
+    fun `the later change wins, whichever device uploads first`() = runTest {
+        val phone = Device("phone").signedInWithSyncOn()
+        val tablet = Device("tablet").signedInWithSyncOn()
+        // The phone changes the goal first but is offline; the tablet changes it later and syncs.
+        phone.nowMs = 1_000L
+        phone.settings.setDailyLessonGoal(10)
+        tablet.nowMs = 2_000L
+        tablet.settings.setDailyLessonGoal(20)
+        tablet.syncer.sync()
+
+        // The phone's older change arrives late.
+        phone.syncer.sync()
+        tablet.syncer.sync()
+
+        assertThat(phone.settings.settings.first().dailyLessonGoal).isEqualTo(20)
+        assertThat(tablet.settings.settings.first().dailyLessonGoal).isEqualTo(20)
+    }
+
+    @Test
+    fun `a device joining sync adopts the account's settings, and uploads only those the account lacks`() = runTest {
+        val phone = Device("phone").signedInWithSyncOn()
+        phone.settings.setDailyLessonGoal(25)
+        phone.syncer.sync()
+        // Settings the tablet changed before sync existed: values with no change time.
+        val tablet = Device("tablet")
+        tablet.dataStore.edit {
+            it[intPreferencesKey("daily_lesson_goal")] = 5
+            it[booleanPreferencesKey("show_stroke_order")] = false
+        }
+        tablet.signedInWithSyncOn()
+
+        tablet.syncer.sync()
+        phone.syncer.sync()
+
+        assertThat(tablet.settings.settings.first().dailyLessonGoal).isEqualTo(25)
+        assertThat(phone.settings.settings.first().showStrokeOrder).isFalse()
+        assertThat(phone.settings.settings.first().dailyLessonGoal).isEqualTo(25)
+    }
+
+    @Test
+    fun `per-device settings and untouched defaults are never uploaded`() = runTest {
+        val phone = Device("phone").signedInWithSyncOn()
+        phone.settings.setThemeMode(ThemeMode.EINK)
+        phone.settings.setAudioMuted(true)
+        phone.settings.setNotificationsEnabled(true)
+
+        phone.syncer.sync()
+
+        assertThat(backend.recordsFor(USER_A).filter { it.type == "setting" }).isEmpty()
+    }
+
+    @Test
+    fun `values this build can't accept are refused or clamped`() = runTest {
+        fun change(name: String, value: kotlinx.serialization.json.JsonPrimitive) = buildJsonObject {
+            put("v", 1); put("name", name); put("value", value); put("changedAtMs", 5_000L)
+        }
+        backend.seed(
+            USER_A, "setting", "review-priority-5000", change("review_priority", JsonPrimitive("FROM_THE_FUTURE"))
+        )
+        backend.seed(USER_A, "setting", "daily-lesson-goal-5000", change("daily_lesson_goal", JsonPrimitive(999)))
+        backend.seed(USER_A, "setting", "theme-mode-5000", change("theme_mode", JsonPrimitive("DARK")))
+        val phone = Device("phone").signedInWithSyncOn()
+
+        assertThat(phone.syncer.sync()).isEqualTo(HistorySyncOutcome.SUCCESS)
+
+        val settings = phone.settings.settings.first()
+        assertThat(settings.reviewPriority).isEqualTo(ReviewPriority.DEFAULT)
+        assertThat(settings.dailyLessonGoal).isEqualTo(99)
+        assertThat(settings.themeMode).isEqualTo(ThemeMode.SYSTEM)
+    }
+
+    @Test
+    fun `a change made while an upload is in flight stays pending`() = runTest {
+        val phone = Device("phone")
+        phone.settings.setDailyLessonGoal(10)
+        val inFlight = phone.settingsSync.pendingRecords()
+        phone.nowMs += 1
+        phone.settings.setDailyLessonGoal(11)
+
+        phone.settingsSync.markUploaded(inFlight)
+
+        assertThat(phone.settingsSync.pendingRecords().map { it.recordId }).containsExactly("daily-lesson-goal-1000001")
+    }
+
+    @Test
+    fun `uploading the same change twice stores it once`() = runTest {
+        val phone = Device("phone").signedInWithSyncOn()
+        phone.settings.setDailyLessonGoal(10)
+        val records = phone.settingsSync.pendingRecords()
+        phone.syncer.sync()
+
+        // As if the first upload's response was lost and the pass re-sent it.
+        phone.settingsSync.markAllPending()
+        phone.syncer.sync()
+
+        assertThat(backend.recordsFor(USER_A).filter { it.type == "setting" }.map { it.recordId })
+            .containsExactly(records.single().recordId)
+    }
+
+    @Test
+    fun `settings come back after the synced copy is deleted and sync is turned back on`() = runTest {
+        val phone = Device("phone").signedInWithSyncOn()
+        phone.settings.setDailyLessonGoal(25)
+        phone.syncer.sync()
+
+        phone.syncer.deleteSyncedHistory()
+        assertThat(backend.recordsFor(USER_A)).isEmpty()
+        phone.syncer.setEnabled(true)
+        phone.syncer.sync()
+
+        assertThat(backend.recordsFor(USER_A).filter { it.type == "setting" }).hasSize(1)
+        assertThat(phone.settings.settings.first().dailyLessonGoal).isEqualTo(25)
     }
 }

@@ -4,7 +4,7 @@
 
 A [WaniKani](https://www.wanikani.com/) client for Android and iOS. Modern, minimalistic, written with Kotlin Multiplatform + Compose Multiplatform. Written/generated primarily using Claude.
 
-> Shellf Study is an independent, unofficial client. It is not created, managed, affiliated with, or endorsed by Tofugu LLC. It requires your own WaniKani account and API token, and is subject to [WaniKani's Terms of Service](https://www.wanikani.com/terms).
+> Shellf Study is an independent, unofficial client. It is not created, managed, affiliated with, or endorsed by Tofugu LLC. It requires your own WaniKani account and API token, and is subject to [WaniKani's Terms of Service](https://www.wanikani.com/terms). See the [privacy policy](PRIVACY.md) for what the app does with your data.
 
 ## Stack
 
