@@ -97,6 +97,39 @@ class DashboardSyncStatusTest {
     }
 
     @Test
+    fun overflowIcon_carriesADot_whenSyncingHasAProblem() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = idleState(deviceSync = DeviceSyncState(true, true, HistorySyncStatus(lastPassFailed = true))),
+                callbacks = dashboardCallbacks()
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_PROBLEM_BADGE, useUnmergedTree = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun overflowIcon_hasNoDot_whenSyncingIsFine() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = idleState(
+                    lastSyncedAtMillis = System.currentTimeMillis(),
+                    deviceSync = DeviceSyncState(
+                        isAvailable = true,
+                        enabled = true,
+                        status = HistorySyncStatus(lastSyncedAtMs = System.currentTimeMillis())
+                    )
+                ),
+                callbacks = dashboardCallbacks()
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.OVERFLOW_PROBLEM_BADGE, useUnmergedTree = true)
+            .assertCountEquals(0)
+    }
+
+    @Test
     fun syncSheet_offersARetry_whenTheDeviceSyncFailed() {
         var retried = false
         composeTestRule.setContent {

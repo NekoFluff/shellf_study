@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -85,6 +87,7 @@ object DashboardScreenTestTags {
     const val LOADING_INDICATOR = "dashboard_loading_indicator"
     const val SYNC_PROGRESS_LINE = "dashboard_sync_progress_line"
     const val SYNC_STATUS_MENU_ITEM = "dashboard_sync_status_menu_item"
+    const val OVERFLOW_PROBLEM_BADGE = "dashboard_overflow_problem_badge"
     const val SYNC_SHEET = "dashboard_sync_sheet"
     const val SYNC_SHEET_WANIKANI_ROW = "dashboard_sync_sheet_wanikani_row"
     const val SYNC_SHEET_REFRESH_BUTTON = "dashboard_sync_sheet_refresh_button"
@@ -409,7 +412,17 @@ private fun DashboardTopBar(
                     onClick = { menuExpanded = true },
                     modifier = Modifier.testTag(DashboardScreenTestTags.OVERFLOW_MENU)
                 ) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                    // A dot when syncing has a problem: "Sync status" in this menu is where it says
+                    // what, and nothing else on the dashboard would show a failed cross-device sync.
+                    BadgedBox(
+                        badge = {
+                            if (uiState.syncIndicator == SyncIndicatorState.Problem) {
+                                Badge(modifier = Modifier.testTag(DashboardScreenTestTags.OVERFLOW_PROBLEM_BADGE))
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                    }
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
