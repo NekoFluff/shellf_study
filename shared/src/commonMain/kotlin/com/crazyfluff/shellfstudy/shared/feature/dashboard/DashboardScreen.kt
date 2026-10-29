@@ -84,7 +84,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 object DashboardScreenTestTags {
     const val LOADING_INDICATOR = "dashboard_loading_indicator"
     const val SYNC_PROGRESS_LINE = "dashboard_sync_progress_line"
-    const val SYNC_CHIP = "dashboard_sync_chip"
+    const val SYNC_STATUS_MENU_ITEM = "dashboard_sync_status_menu_item"
     const val SYNC_SHEET = "dashboard_sync_sheet"
     const val SYNC_SHEET_WANIKANI_ROW = "dashboard_sync_sheet_wanikani_row"
     const val SYNC_SHEET_REFRESH_BUTTON = "dashboard_sync_sheet_refresh_button"
@@ -327,6 +327,7 @@ fun DashboardScreen(
                     uiState = uiState,
                     callbacks = callbacks,
                     onSearch = { isSearchActive = true },
+                    onOpenSyncStatus = { showSyncStatus = true },
                     onAbandon = { abandonConfirm = it }
                 )
             }
@@ -346,7 +347,7 @@ fun DashboardScreen(
                     // Each card is one keyed item, so offscreen cards are never composed or measured.
                     contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp)
                 ) {
-                    dashboardItems(uiState, callbacks, { openLeaderboardEntry = it }) { showSyncStatus = true }
+                    dashboardItems(uiState, callbacks, onLeaderboardEntryClick = { openLeaderboardEntry = it })
                 }
                 SyncProgressLine(isSyncing = uiState.isSyncing, modifier = Modifier.align(Alignment.TopCenter))
             }
@@ -394,6 +395,7 @@ private fun DashboardTopBar(
     uiState: DashboardUiState,
     callbacks: DashboardCallbacks,
     onSearch: () -> Unit,
+    onOpenSyncStatus: () -> Unit,
     onAbandon: (AbandonConfirmKind) -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -451,6 +453,25 @@ private fun DashboardTopBar(
             modifier = Modifier.testTag(DashboardScreenTestTags.STUDY_TIME_MENU_ITEM)
         )
         DropdownMenuItem(
+            text = {
+                Column {
+                    Text("Sync status")
+                    Text(
+                        syncStatusLabel(uiState.syncIndicator),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (uiState.syncIndicator == SyncIndicatorState.Problem) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+            },
+            leadingIcon = { SyncStatusGlyph(uiState.syncIndicator) },
+            onClick = { menuExpanded = false; onOpenSyncStatus() },
+            modifier = Modifier.testTag(DashboardScreenTestTags.SYNC_STATUS_MENU_ITEM)
+        )
+        DropdownMenuItem(
             text = { Text("Settings") },
             leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
             onClick = { menuExpanded = false; callbacks.onOpenSettings() },
@@ -466,8 +487,7 @@ private fun DashboardTopBar(
 private fun LazyListScope.dashboardItems(
     uiState: DashboardUiState,
     callbacks: DashboardCallbacks,
-    onLeaderboardEntryClick: (FriendStats) -> Unit,
-    onOpenSyncStatus: () -> Unit
+    onLeaderboardEntryClick: (FriendStats) -> Unit
 ) {
     when (val contentState = uiState.contentState) {
         // Nothing cached yet to show while the very first fetch is in flight — the
@@ -519,7 +539,6 @@ private fun LazyListScope.dashboardItems(
                     },
                     style = MaterialTheme.typography.bodyLarge
                 )
-                SyncStatusChip(state = uiState.syncChip, onClick = onOpenSyncStatus)
             }
 
             item(key = "summaryCards") {

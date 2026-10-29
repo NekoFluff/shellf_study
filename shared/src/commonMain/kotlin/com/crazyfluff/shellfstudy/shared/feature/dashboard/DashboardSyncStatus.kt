@@ -10,10 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -37,9 +38,9 @@ import com.crazyfluff.shellfstudy.shared.util.rememberRelativeTime
 import kotlinx.coroutines.delay
 
 /*
- * How the dashboard reports syncing. Routine activity is a thin line under the top bar and a chip
- * under the greeting, neither of which moves the cards; banners are left for what needs attention.
- * The chip opens a sheet that says, for each thing that syncs, where it stands.
+ * How the dashboard reports syncing. Routine activity is a thin line under the top bar, which doesn't
+ * move the cards; banners are left for what needs attention. The overflow menu's "Sync status" says
+ * how it's going at a glance and opens a sheet that says, for each thing that syncs, where it stands.
  */
 
 /**
@@ -76,38 +77,33 @@ internal fun SyncProgressLine(isSyncing: Boolean, modifier: Modifier = Modifier)
     }
 }
 
+/**
+ * The overflow menu's "Sync status" icon, a cloud that says how syncing is going: crossed out and red
+ * on a problem, arrows while a pass runs (held a moment, as the progress line is), a check otherwise.
+ */
 @Composable
-internal fun SyncStatusChip(state: SyncChipState, onClick: () -> Unit) {
-    val showSyncing = rememberHeld(state == SyncChipState.Syncing)
-    val lastSyncedAtMillis = (state as? SyncChipState.Synced)?.lastSyncedAtMillis
-    val syncedAgo = rememberRelativeTime(lastSyncedAtMillis)
-    val label = when {
-        showSyncing -> "Syncing…"
-        state == SyncChipState.Problem -> "Sync issue"
-        lastSyncedAtMillis != null -> "Synced $syncedAgo"
-        else -> "Sync status"
+internal fun SyncStatusGlyph(state: SyncIndicatorState) {
+    val showSyncing = rememberHeld(state == SyncIndicatorState.Syncing)
+    when {
+        showSyncing -> Icon(Icons.Default.CloudSync, contentDescription = null)
+        state == SyncIndicatorState.Problem ->
+            Icon(Icons.Default.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+        else -> Icon(Icons.Default.CloudDone, contentDescription = null)
     }
-    AssistChip(
-        onClick = onClick,
-        label = { Text(label) },
-        leadingIcon = {
-            when {
-                showSyncing -> CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                state == SyncChipState.Problem -> Icon(
-                    Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(AssistChipDefaults.IconSize)
-                )
-                else -> Icon(
-                    Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(AssistChipDefaults.IconSize)
-                )
-            }
-        },
-        modifier = Modifier.testTag(DashboardScreenTestTags.SYNC_CHIP)
-    )
+}
+
+/** The overflow menu's line under "Sync status": "Synced 5 minutes ago", "Syncing…" or "Sync issue". */
+@Composable
+internal fun syncStatusLabel(state: SyncIndicatorState): String {
+    val showSyncing = rememberHeld(state == SyncIndicatorState.Syncing)
+    val lastSyncedAtMillis = (state as? SyncIndicatorState.Synced)?.lastSyncedAtMillis
+    val syncedAgo = rememberRelativeTime(lastSyncedAtMillis)
+    return when {
+        showSyncing -> "Syncing…"
+        state == SyncIndicatorState.Problem -> "Sync issue"
+        lastSyncedAtMillis != null -> "Synced $syncedAgo"
+        else -> "Not synced yet"
+    }
 }
 
 private enum class SyncTone { Busy, Ok, Problem, Neutral }

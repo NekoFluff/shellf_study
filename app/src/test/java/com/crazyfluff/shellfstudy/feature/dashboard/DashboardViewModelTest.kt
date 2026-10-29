@@ -39,7 +39,7 @@ import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
-import com.crazyfluff.shellfstudy.shared.feature.dashboard.SyncChipState
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.SyncIndicatorState
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStatus
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncSettings
 import com.crazyfluff.shellfstudy.fakes.buildTestStudyTimeRepository
@@ -512,18 +512,18 @@ class DashboardViewModelTest {
                     state = awaitItem()
                 }
                 assertThat(state.isSyncing).isFalse()
-                assertThat(state.syncChip).isInstanceOf(SyncChipState.Synced::class.java)
+                assertThat(state.syncIndicator).isInstanceOf(SyncIndicatorState.Synced::class.java)
 
                 // Other dashboard flows can emit in between, so wait for the state that carries the change.
                 historySync.statusState.value = HistorySyncStatus(isSyncing = true)
                 while (!state.deviceSync.status.isSyncing) state = awaitItem()
                 assertThat(state.isSyncing).isTrue()
-                assertThat(state.syncChip).isEqualTo(SyncChipState.Syncing)
+                assertThat(state.syncIndicator).isEqualTo(SyncIndicatorState.Syncing)
 
                 historySync.statusState.value = HistorySyncStatus(lastPassFailed = true)
                 while (!state.deviceSync.status.lastPassFailed) state = awaitItem()
                 assertThat(state.isSyncing).isFalse()
-                assertThat(state.syncChip).isEqualTo(SyncChipState.Problem)
+                assertThat(state.syncIndicator).isEqualTo(SyncIndicatorState.Problem)
                 cancelAndIgnoreRemainingEvents()
             }
         }

@@ -121,13 +121,13 @@ data class DashboardUiState(
     val isSyncing: Boolean
         get() = fetchState is DashboardFetch.InFlight || (deviceSync.enabled && deviceSync.status.isSyncing)
 
-    /** One word on how syncing is going, for the chip under the greeting; the sheet has the detail. */
-    val syncChip: SyncChipState
+    /** How syncing is going at a glance, for the overflow menu's "Sync status"; the sheet has the detail. */
+    val syncIndicator: SyncIndicatorState
         get() = when {
-            isSyncing -> SyncChipState.Syncing
+            isSyncing -> SyncIndicatorState.Syncing
             syncBlockedOnAuth || isShowingCachedData || (deviceSync.enabled && deviceSync.status.lastPassFailed) ->
-                SyncChipState.Problem
-            else -> SyncChipState.Synced(lastSyncedAtMillis)
+                SyncIndicatorState.Problem
+            else -> SyncIndicatorState.Synced(lastSyncedAtMillis)
         }
 
     val contentState: DashboardContentState
@@ -188,11 +188,11 @@ data class DeviceSyncState(
     val status: HistorySyncStatus = HistorySyncStatus()
 )
 
-sealed interface SyncChipState {
-    data object Syncing : SyncChipState
-    data object Problem : SyncChipState
+sealed interface SyncIndicatorState {
+    data object Syncing : SyncIndicatorState
+    data object Problem : SyncIndicatorState
     /** Nothing running and nothing wrong. [lastSyncedAtMillis] is the last WaniKani refresh. */
-    data class Synced(val lastSyncedAtMillis: Long?) : SyncChipState
+    data class Synced(val lastSyncedAtMillis: Long?) : SyncIndicatorState
 }
 
 sealed interface DashboardContentState {

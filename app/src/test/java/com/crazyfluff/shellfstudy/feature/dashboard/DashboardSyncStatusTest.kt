@@ -21,7 +21,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** The dashboard's sync reporting: the progress line, the sync-status chip and its sheet. */
+/** The dashboard's sync reporting: the progress line, the overflow menu's Sync status, and its sheet. */
 @RunWith(AndroidJUnit4::class)
 class DashboardSyncStatusTest {
 
@@ -50,7 +50,7 @@ class DashboardSyncStatusTest {
     }
 
     @Test
-    fun syncChip_saysWhenWaniKaniLastSynced_andOpensTheSheet() {
+    fun theSheetSaysWhereEachKindOfSyncStands() {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = idleState(lastSyncedAtMillis = System.currentTimeMillis() - 5 * 60_000),
@@ -58,10 +58,8 @@ class DashboardSyncStatusTest {
             )
         }
 
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_CHIP).assertTextEquals("Synced 5 minutes ago")
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_CHIP).performClick()
+        openSyncSheet()
 
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_SHEET).assertIsDisplayed()
         composeTestRule.onNodeWithText("Updated 5 minutes ago").assertIsDisplayed()
         composeTestRule.onNodeWithText("All sent to WaniKani").assertIsDisplayed()
         // No backend, no cross-device row.
@@ -69,7 +67,23 @@ class DashboardSyncStatusTest {
     }
 
     @Test
-    fun syncChip_flagsAProblem_whenTheDeviceSyncFailed() {
+    fun overflowMenu_saysWhenWaniKaniLastSynced_andOpensTheSheet() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = idleState(lastSyncedAtMillis = System.currentTimeMillis() - 5 * 60_000),
+                callbacks = dashboardCallbacks()
+            )
+        }
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithText("Synced 5 minutes ago").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_STATUS_MENU_ITEM).performClick()
+
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_SHEET).assertIsDisplayed()
+    }
+
+    @Test
+    fun overflowMenu_flagsAProblem_whenTheDeviceSyncFailed() {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = idleState(deviceSync = DeviceSyncState(true, true, HistorySyncStatus(lastPassFailed = true))),
@@ -77,7 +91,9 @@ class DashboardSyncStatusTest {
             )
         }
 
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_CHIP).assertTextEquals("Sync issue")
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+
+        composeTestRule.onNodeWithText("Sync issue").assertIsDisplayed()
     }
 
     @Test
@@ -90,7 +106,7 @@ class DashboardSyncStatusTest {
             )
         }
 
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_CHIP).performClick()
+        openSyncSheet()
         composeTestRule.onNodeWithText("Couldn't sync. Will try again").assertIsDisplayed()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_SHEET_DEVICES_RETRY_BUTTON).performClick()
 
@@ -107,7 +123,7 @@ class DashboardSyncStatusTest {
             )
         }
 
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_CHIP).performClick()
+        openSyncSheet()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_SHEET_DEVICES_SETTINGS_BUTTON).performClick()
 
         assertThat(openedSettings).isTrue()
@@ -123,11 +139,17 @@ class DashboardSyncStatusTest {
             )
         }
 
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_CHIP).performClick()
+        openSyncSheet()
         composeTestRule.onNodeWithText("3 waiting to send").assertIsDisplayed()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_SHEET_REFRESH_BUTTON).performClick()
 
         assertThat(refreshed).isTrue()
+    }
+
+    private fun openSyncSheet() {
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.OVERFLOW_MENU).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_STATUS_MENU_ITEM).performClick()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_SHEET).assertIsDisplayed()
     }
 
     /** A loaded dashboard with nothing in flight. */

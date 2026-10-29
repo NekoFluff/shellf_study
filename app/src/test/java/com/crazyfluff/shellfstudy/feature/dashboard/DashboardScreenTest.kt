@@ -83,7 +83,6 @@ class DashboardScreenTest {
         composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.PENDING_SYNC_BANNER).assertCountEquals(0)
         composeTestRule.onNodeWithText("Welcome back, durtle_fan!").assertIsDisplayed()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.LESSON_COUNT).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Syncing…").assertIsDisplayed()
     }
 
     @Test
