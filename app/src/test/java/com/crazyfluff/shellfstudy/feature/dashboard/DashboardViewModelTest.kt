@@ -35,6 +35,7 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
 import kotlin.time.Clock
 import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
 import com.crazyfluff.shellfstudy.shared.data.LocalHistoryGuard
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
 import com.crazyfluff.shellfstudy.fakes.buildTestStudyTimeRepository
 import com.crazyfluff.shellfstudy.fakes.emptyCollectionJson
 import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
@@ -145,6 +146,18 @@ class DashboardViewModelTest {
     /** Where the session clock's stretches land — see StudyTimeRepository.record. */
     private val studyTimeDao = FakeStudyTimeDao()
 
+    /** Each history sync request the dashboard makes, in order: "debounced" or "immediate". */
+    private val historySyncRequests = mutableListOf<String>()
+    private val historySyncScheduler = object : HistorySyncScheduler {
+        override fun requestSync() {
+            historySyncRequests += "debounced"
+        }
+
+        override fun requestImmediateSync() {
+            historySyncRequests += "immediate"
+        }
+    }
+
     private fun buildStudyTimeRepository() = buildTestStudyTimeRepository(
         studyTimeDao, dataStore, CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob()),
         mainDispatcherRule.dispatcher, settingsRepository
@@ -154,6 +167,14 @@ class DashboardViewModelTest {
      * [timeSource] backs the resume throttle. Left at [NoResumeThrottle], every resume is treated as
      * long after the last refresh, which is what the tests written before the throttle assume.
      */
+    private fun buildDashboardSyncCoordinator(dataStore: DataStore<Preferences>) = DashboardSyncCoordinator(
+        waniKaniRepository = repositories.waniKaniRepository,
+        syncOrchestrator = repositories.syncOrchestrator,
+        dashboardCacheRepository = dashboardCacheRepository,
+        localHistoryGuard = LocalHistoryGuard(dataStore, repositories.studyActivityDao, studyTimeDao),
+        historySyncScheduler = historySyncScheduler
+    )
+
     private fun createViewModel(timeSource: TimeSource = NoResumeThrottle): DashboardViewModel {
         val json = Json { ignoreUnknownKeys = true }
         val friendRepository = FriendRepository(dataStore, json, FakeTokenCipher())
@@ -185,12 +206,7 @@ class DashboardViewModelTest {
             notificationCoordinator = notificationCoordinator,
             accountDataCleaner = accountDataCleaner
         )
-        val dashboardSyncCoordinator = DashboardSyncCoordinator(
-            waniKaniRepository = repositories.waniKaniRepository,
-            syncOrchestrator = repositories.syncOrchestrator,
-            dashboardCacheRepository = dashboardCacheRepository,
-            localHistoryGuard = LocalHistoryGuard(dataStore, repositories.studyActivityDao, studyTimeDao)
-        )
+        val dashboardSyncCoordinator = buildDashboardSyncCoordinator(dataStore)
         val factory = viewModelFactory {
             initializer {
                 DashboardViewModel(
@@ -449,6 +465,29 @@ class DashboardViewModelTest {
         val pulled = generateSequence { server.takeRequest(0, TimeUnit.MILLISECONDS) }.toList()
         assertThat(pulled.count { it.target.orEmpty().startsWith("/subjects") }).isAtLeast(1)
     }
+
+    @Test
+    fun `a dashboard load asks for a history sync after the usual wait, and pull-to-refresh asks for one now`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+            val viewModel = createViewModel()
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                viewModel.onDashboardResumed()
+                while (state.fetchState is DashboardFetch.InFlight || state.lastSyncedAtMillis == null) {
+                    state = awaitItem()
+                }
+                assertThat(historySyncRequests).containsExactly("debounced")
+
+                val coldStartSyncedAt = state.lastSyncedAtMillis
+                viewModel.refresh()
+                while (state.lastSyncedAtMillis == coldStartSyncedAt) state = awaitItem()
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            assertThat(historySyncRequests).containsExactly("debounced", "immediate").inOrder()
+        }
 
     @Test
     fun `a resume with work in the outbox asks for it to be sent straight away`() = runTest(mainDispatcherRule.dispatcher) {

@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.data.historysync
 
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -27,10 +28,14 @@ internal class IosHistorySyncScheduler(
 
     private var pending: Job? = null
 
-    override fun requestSync() {
+    override fun requestSync() = schedule(initialDelay = HISTORY_SYNC_DEBOUNCE)
+
+    override fun requestImmediateSync() = schedule(initialDelay = Duration.ZERO)
+
+    private fun schedule(initialDelay: Duration) {
         pending?.cancel()
         pending = scope.launch {
-            delay(HISTORY_SYNC_DEBOUNCE)
+            delay(initialDelay)
             var attempt = 0
             while (syncer().sync() == HistorySyncOutcome.RETRY && attempt < RETRY_DELAYS.size) {
                 delay(RETRY_DELAYS[attempt])

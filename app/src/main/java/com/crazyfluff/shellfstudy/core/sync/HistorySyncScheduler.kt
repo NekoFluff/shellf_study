@@ -19,10 +19,14 @@ private val HISTORY_SYNC_DEBOUNCE = Duration.ofSeconds(10)
 class WorkManagerHistorySyncScheduler(
     private val context: Context
 ) : HistorySyncScheduler {
-    override fun requestSync() {
+    override fun requestSync() = enqueue(initialDelay = HISTORY_SYNC_DEBOUNCE)
+
+    override fun requestImmediateSync() = enqueue(initialDelay = Duration.ZERO)
+
+    private fun enqueue(initialDelay: Duration) {
         val request = OneTimeWorkRequestBuilder<HistorySyncWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .setInitialDelay(HISTORY_SYNC_DEBOUNCE)
+            .setInitialDelay(initialDelay)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, Duration.ofMinutes(1))
             .build()
         WorkManager.getInstance(context)

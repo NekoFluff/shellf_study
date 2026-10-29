@@ -217,11 +217,9 @@ val repositoryModule = module {
             syncOrchestrator = get(),
             dashboardCacheRepository = get(),
             localHistoryGuard = get(),
+            historySyncScheduler = get(),
             onUserFetched = { user ->
                 get<CoroutineScope>(APPLICATION_SCOPE).launch { get<OfflineAudioManager>().onUserRefreshed(user) }
-                // Runs after the guard has matched local history to this account, so it is the
-                // earliest point a pass can sync anything — and the dashboard-open trigger.
-                get<HistorySyncScheduler>().requestSync()
             }
         )
     }

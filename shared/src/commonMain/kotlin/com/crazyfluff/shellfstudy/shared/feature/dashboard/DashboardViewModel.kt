@@ -512,7 +512,7 @@ class DashboardViewModel(
         // next pass retries it.
         if (forceSync) dashboardSyncCoordinator.sync(force = true) else dashboardSyncCoordinator.syncForResume()
 
-        val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary()
+        val (userResult, summaryResult) = dashboardSyncCoordinator.fetchUserAndSummary(urgentHistorySync = forceSync)
         val hasContent = _dashboardData.value.username != null
 
         if (userResult is ApiResult.Error) {

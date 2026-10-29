@@ -1,5 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.data
 
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.model.DashboardSummary
 import com.crazyfluff.shellfstudy.shared.data.model.WaniKaniUser
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
@@ -15,6 +16,7 @@ class DashboardSyncCoordinator(
     private val syncOrchestrator: SyncOrchestrator,
     private val dashboardCacheRepository: DashboardCacheRepository,
     private val localHistoryGuard: LocalHistoryGuard,
+    private val historySyncScheduler: HistorySyncScheduler = HistorySyncScheduler.None,
     /** Told about every successfully fetched user — how the offline audio library learns the user's
      *  level. Must not block: it runs on the dashboard's critical path. */
     private val onUserFetched: (WaniKaniUser) -> Unit = {}
@@ -32,8 +34,14 @@ class DashboardSyncCoordinator(
      * between them, and together they are the last thing on the dashboard's critical path — its
      * fetchState only leaves `InFlight` once both have landed. Awaiting them one after the other made
      * a dashboard load cost two serialized round trips where one would do.
+     *
+     * A fetched user also asks for a history sync pass: by then the guard has matched local history to
+     * the account, the earliest point a pass can sync anything. [urgentHistorySync] skips the pass's
+     * quiet period, for pull-to-refresh, where the learner has just asked for fresh data.
      */
-    suspend fun fetchUserAndSummary(): Pair<ApiResult<WaniKaniUser>, ApiResult<DashboardSummary>> =
+    suspend fun fetchUserAndSummary(
+        urgentHistorySync: Boolean = false
+    ): Pair<ApiResult<WaniKaniUser>, ApiResult<DashboardSummary>> =
         coroutineScope {
             val userDeferred = async { waniKaniRepository.fetchUser() }
             val summaryDeferred = async { waniKaniRepository.fetchDashboardSummary() }
@@ -42,6 +50,11 @@ class DashboardSyncCoordinator(
             // session can start, so this is where local history gets matched to the account.
             if (user is ApiResult.Success) {
                 localHistoryGuard.claimFor(user.data.id)
+                if (urgentHistorySync) {
+                    historySyncScheduler.requestImmediateSync()
+                } else {
+                    historySyncScheduler.requestSync()
+                }
                 onUserFetched(user.data)
             }
             user to summaryDeferred.await()
