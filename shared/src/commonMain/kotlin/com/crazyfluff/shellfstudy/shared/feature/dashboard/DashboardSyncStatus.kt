@@ -9,12 +9,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.designsystem.components.AppModalBottomSheet
@@ -108,7 +109,11 @@ internal fun syncStatusLabel(state: SyncIndicatorState): String {
 
 private enum class SyncTone { Busy, Ok, Problem, Neutral }
 
-/** Where each kind of sync stands: WaniKani data, answers on their way to WaniKani, other devices. */
+/**
+ * Where each kind of sync stands, one row per direction: answers going up to WaniKani, updates coming
+ * down from it, and the learner's other devices. Answers come first: "is my progress saved?" is the
+ * question people open this with.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SyncStatusSheet(
@@ -132,8 +137,8 @@ internal fun SyncStatusSheet(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            WaniKaniRow(uiState, onRefresh)
             AnswersRow(uiState)
+            WaniKaniRow(uiState, onRefresh)
             if (uiState.deviceSync.isAvailable) {
                 DevicesRow(uiState.deviceSync, onRetryDeviceSync, onOpenSettings = { onDismiss(); onOpenSettings() })
             }
@@ -146,14 +151,15 @@ private fun WaniKaniRow(uiState: DashboardUiState, onRefresh: () -> Unit) {
     val refreshing = uiState.fetchState is DashboardFetch.InFlight
     val updatedAgo = rememberRelativeTime(uiState.lastSyncedAtMillis)
     val (tone, detail) = when {
-        refreshing -> SyncTone.Busy to "Updating…"
-        uiState.syncBlockedOnAuth -> SyncTone.Problem to "Paused: WaniKani rejected your API token"
-        uiState.isShowingCachedData -> SyncTone.Problem to "Couldn't reach WaniKani. Showing data from $updatedAgo"
-        uiState.lastSyncedAtMillis != null -> SyncTone.Ok to "Updated $updatedAgo"
-        else -> SyncTone.Neutral to "Not updated yet"
+        refreshing -> SyncTone.Busy to "Checking for updates…"
+        uiState.syncBlockedOnAuth -> SyncTone.Problem to "Paused. WaniKani rejected your API token"
+        uiState.isShowingCachedData -> SyncTone.Problem to "Couldn't connect. Showing data from $updatedAgo"
+        uiState.lastSyncedAtMillis != null -> SyncTone.Ok to "Up to date as of $updatedAgo"
+        else -> SyncTone.Neutral to "Not checked yet"
     }
     SyncSheetRow(
-        title = "WaniKani",
+        title = "Updates from WaniKani",
+        icon = Icons.Default.CloudDownload,
         detail = detail,
         tone = tone,
         testTag = DashboardScreenTestTags.SYNC_SHEET_WANIKANI_ROW
@@ -169,13 +175,15 @@ private fun WaniKaniRow(uiState: DashboardUiState, onRefresh: () -> Unit) {
 @Composable
 private fun AnswersRow(uiState: DashboardUiState) {
     val pending = uiState.pendingSyncCount
+    // Said in terms of what's safe: answers are saved on the phone first and sent from there.
     val (tone, detail) = when {
-        uiState.syncBlockedOnAuth -> SyncTone.Problem to "Can't send: WaniKani rejected your API token"
-        pending > 0 -> SyncTone.Neutral to "$pending waiting to send"
+        uiState.syncBlockedOnAuth -> SyncTone.Problem to "Saved on this phone. Sign in again to send them"
+        pending > 0 -> SyncTone.Neutral to "$pending saved on this phone, sent when you're online"
         else -> SyncTone.Ok to "All sent to WaniKani"
     }
     SyncSheetRow(
-        title = "Reviews & lessons",
+        title = "Your answers",
+        icon = Icons.Default.CloudUpload,
         detail = detail,
         tone = tone,
         testTag = DashboardScreenTestTags.SYNC_SHEET_ANSWERS_ROW
@@ -194,7 +202,8 @@ private fun DevicesRow(deviceSync: DeviceSyncState, onRetry: () -> Unit, onOpenS
         else -> SyncTone.Neutral to "Waiting for the first sync"
     }
     SyncSheetRow(
-        title = "Study time & settings across devices",
+        title = "Your other devices",
+        icon = Icons.Default.Devices,
         detail = detail,
         tone = tone,
         testTag = DashboardScreenTestTags.SYNC_SHEET_DEVICES_ROW
@@ -215,6 +224,7 @@ private fun DevicesRow(deviceSync: DeviceSyncState, onRetry: () -> Unit, onOpenS
 @Composable
 private fun SyncSheetRow(
     title: String,
+    icon: ImageVector,
     detail: String,
     tone: SyncTone,
     testTag: String,
@@ -225,12 +235,13 @@ private fun SyncSheetRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxWidth().testTag(testTag).padding(vertical = 8.dp)
     ) {
+        // The icon says which direction the row is about; its colour, like the text's, says how it's going.
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(24.dp)) {
             when (tone) {
                 SyncTone.Busy -> CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                SyncTone.Ok -> Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
-                SyncTone.Problem -> Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error)
-                SyncTone.Neutral -> Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                SyncTone.Ok -> Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
+                SyncTone.Problem -> Icon(icon, null, tint = MaterialTheme.colorScheme.error)
+                SyncTone.Neutral -> Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Column(modifier = Modifier.weight(1f)) {

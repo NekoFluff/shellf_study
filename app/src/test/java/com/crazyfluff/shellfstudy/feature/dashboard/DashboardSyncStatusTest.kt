@@ -60,7 +60,7 @@ class DashboardSyncStatusTest {
 
         openSyncSheet()
 
-        composeTestRule.onNodeWithText("Updated 5 minutes ago").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Up to date as of 5 minutes ago").assertIsDisplayed()
         composeTestRule.onNodeWithText("All sent to WaniKani").assertIsDisplayed()
         // No backend, no cross-device row.
         composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.SYNC_SHEET_DEVICES_ROW).assertCountEquals(0)
@@ -130,6 +130,21 @@ class DashboardSyncStatusTest {
     }
 
     @Test
+    fun syncSheet_saysAnswersAreSafe_whenTheTokenIsRejected() {
+        composeTestRule.setContent {
+            DashboardScreen(
+                uiState = idleState(pendingSyncCount = 2).copy(syncBlockedOnAuth = true),
+                callbacks = dashboardCallbacks()
+            )
+        }
+
+        openSyncSheet()
+
+        composeTestRule.onNodeWithText("Saved on this phone. Sign in again to send them").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Paused. WaniKani rejected your API token").assertIsDisplayed()
+    }
+
+    @Test
     fun syncSheet_offersARetry_whenTheDeviceSyncFailed() {
         var retried = false
         composeTestRule.setContent {
@@ -173,7 +188,7 @@ class DashboardSyncStatusTest {
         }
 
         openSyncSheet()
-        composeTestRule.onNodeWithText("3 waiting to send").assertIsDisplayed()
+        composeTestRule.onNodeWithText("3 saved on this phone, sent when you're online").assertIsDisplayed()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_SHEET_REFRESH_BUTTON).performClick()
 
         assertThat(refreshed).isTrue()
