@@ -1,6 +1,8 @@
 package com.crazyfluff.shellfstudy.shared.di
 
 import com.crazyfluff.shellfstudy.shared.data.IosOutboxSyncScheduler
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
+import com.crazyfluff.shellfstudy.shared.data.historysync.IosHistorySyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.IosPronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.audio.AudioDownloadScheduler
 import com.crazyfluff.shellfstudy.shared.data.audio.IosAudioDownloadScheduler
@@ -86,6 +88,9 @@ private val iosSyncModule = module {
     }}
     single<OutboxSyncScheduler> {
         IosOutboxSyncScheduler(get<CoroutineScope>(APPLICATION_SCOPE), get())
+    }
+    single<HistorySyncScheduler> {
+        IosHistorySyncScheduler(get<CoroutineScope>(APPLICATION_SCOPE), syncer = { get() })
     }
 }
 

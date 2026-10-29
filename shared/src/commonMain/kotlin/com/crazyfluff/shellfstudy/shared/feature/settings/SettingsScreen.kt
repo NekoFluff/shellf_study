@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.feature.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -99,6 +101,12 @@ object SettingsScreenTestTags {
     const val FULL_REFRESH_PROGRESS = "settings_full_refresh_progress"
     const val FULL_REFRESH_CONFIRM_BUTTON = "settings_full_refresh_confirm_button"
     const val FULL_REFRESH_ERROR_TEXT = "settings_full_refresh_error_text"
+    const val HISTORY_SYNC_TOGGLE = "settings_history_sync_toggle"
+    const val HISTORY_SYNC_CONFIRM_BUTTON = "settings_history_sync_confirm_button"
+    const val DELETE_SYNCED_HISTORY_ROW = "settings_delete_synced_history_row"
+    const val DELETE_SYNCED_HISTORY_CONFIRM_BUTTON = "settings_delete_synced_history_confirm_button"
+    const val DELETE_SYNCED_HISTORY_PROGRESS = "settings_delete_synced_history_progress"
+    const val DELETE_SYNCED_HISTORY_ERROR_TEXT = "settings_delete_synced_history_error_text"
     const val ACCOUNT_ROW = "settings_account_row"
     const val LOG_OUT_ROW = "settings_log_out_row"
     const val LOG_OUT_CONFIRM_BUTTON = "settings_log_out_confirm_button"
@@ -203,6 +211,7 @@ fun SettingsScreen(
             NotificationsGroup(uiState, actions, onNotificationsEnabledChange)
             FriendsGroup(onOpenLeaderboard)
             DataGroup(uiState, actions)
+            if (uiState.historySync.isAvailable) HistorySyncGroup(uiState.historySync, actions)
             AccountGroup(uiState, actions)
             CreditsGroup()
             AppFooter(appVersion)
@@ -662,6 +671,91 @@ private fun DataGroup(uiState: SettingsUiState, actions: SettingsActions) {
             },
             onDismiss = { showFullRefreshConfirm = false },
             confirmButtonTestTag = SettingsScreenTestTags.FULL_REFRESH_CONFIRM_BUTTON
+        )
+    }
+}
+
+/** Opt-in sync of the history WaniKani can't give back. Turning it on asks first, since it is the
+ *  one setting that sends anything to a server other than WaniKani's. */
+@Composable
+private fun HistorySyncGroup(historySync: HistorySyncUiState, actions: SettingsActions) {
+    var showEnableConfirm by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    ListGroup(title = "Sync") {
+        SwitchRow(
+            title = "Sync study history",
+            subtitle = "Study time and streak, on every device signed in to this WaniKani account",
+            checked = historySync.enabled,
+            onCheckedChange = { on -> if (on) showEnableConfirm = true else actions.onHistorySyncEnabledChange(false) },
+            testTag = SettingsScreenTestTags.HISTORY_SYNC_TOGGLE
+        )
+        SyncedHistoryDeletionRows(historySync.deletion, onDeleteClick = { showDeleteConfirm = true })
+    }
+
+    if (showEnableConfirm) {
+        ConfirmationDialog(
+            title = "Sync study history?",
+            text = "Your study time and study days are uploaded to Shellf Study's sync server, stored " +
+                "under your WaniKani account ID, and downloaded on your other devices. Your API token " +
+                "is only used to confirm who you are and is never stored there. You can delete the " +
+                "synced copy at any time.",
+            confirmLabel = "Turn on",
+            onConfirm = {
+                showEnableConfirm = false
+                actions.onHistorySyncEnabledChange(true)
+            },
+            onDismiss = { showEnableConfirm = false },
+            confirmButtonTestTag = SettingsScreenTestTags.HISTORY_SYNC_CONFIRM_BUTTON
+        )
+    }
+
+    if (showDeleteConfirm) {
+        ConfirmationDialog(
+            title = "Delete synced history?",
+            text = "This deletes the copy on the sync server and turns sync off. The history on this " +
+                "device stays, and other devices keep what they've already downloaded.",
+            confirmLabel = "Delete",
+            onConfirm = {
+                showDeleteConfirm = false
+                actions.onDeleteSyncedHistoryRequested()
+            },
+            onDismiss = { showDeleteConfirm = false },
+            confirmButtonTestTag = SettingsScreenTestTags.DELETE_SYNCED_HISTORY_CONFIRM_BUTTON
+        )
+    }
+}
+
+/** "Delete synced history", replaced by a progress row while it runs, with the error under it if it failed. */
+@Composable
+private fun SyncedHistoryDeletionRows(deletion: SyncedHistoryDeletion, onDeleteClick: () -> Unit) {
+    if (deletion == SyncedHistoryDeletion.InFlight) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_PROGRESS)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            Text("Deleting synced history…", style = MaterialTheme.typography.bodyLarge)
+        }
+    } else {
+        DestructiveRow(
+            title = "Delete synced history",
+            icon = Icons.Filled.Delete,
+            onClick = onDeleteClick,
+            testTag = SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ROW
+        )
+    }
+    if (deletion is SyncedHistoryDeletion.Failed) {
+        Text(
+            text = deletion.message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier
+                .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                .testTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ERROR_TEXT)
         )
     }
 }

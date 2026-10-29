@@ -9,6 +9,7 @@ import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncSettings
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler
@@ -28,7 +29,8 @@ data class SettingsUiState(
     /** Who's signed in, from the dashboard's last-known summary. Null before the first sync. */
     val account: AccountSummary? = null,
     /** Set once a log out from this screen has finished. The route then leaves for sign-in. */
-    val isLoggedOut: Boolean = false
+    val isLoggedOut: Boolean = false,
+    val historySync: HistorySyncUiState = HistorySyncUiState()
 ) {
     val isFullRefreshing: Boolean get() = fullRefresh == FullRefreshStatus.InFlight
     val fullRefreshError: String? get() = (fullRefresh as? FullRefreshStatus.Failed)?.message
@@ -36,6 +38,21 @@ data class SettingsUiState(
 
 /** The signed-in account, as the Account group shows it. */
 data class AccountSummary(val username: String, val level: Int)
+
+/** The Data group's history-sync rows. [isAvailable] is false until the backend is deployed, and
+ *  the rows are hidden while it is. */
+data class HistorySyncUiState(
+    val isAvailable: Boolean = false,
+    val enabled: Boolean = false,
+    val deletion: SyncedHistoryDeletion = SyncedHistoryDeletion.Idle
+)
+
+/** The "delete synced history" action. */
+sealed interface SyncedHistoryDeletion {
+    data object Idle : SyncedHistoryDeletion
+    data object InFlight : SyncedHistoryDeletion
+    data class Failed(val message: String) : SyncedHistoryDeletion
+}
 
 /** The settings screen's "re-download everything" action. */
 sealed interface FullRefreshStatus {
@@ -50,11 +67,17 @@ class SettingsViewModel(
     private val notificationScheduler: NotificationScheduler,
     private val syncOrchestrator: SyncOrchestrator,
     private val logoutCoordinator: LogoutCoordinator,
-    dashboardCacheRepository: DashboardCacheRepository
+    dashboardCacheRepository: DashboardCacheRepository,
+    private val historySync: HistorySyncSettings
 ) : ViewModel(), SettingsActions {
 
     private val fullRefresh = MutableStateFlow<FullRefreshStatus>(FullRefreshStatus.Idle)
     private val isLoggedOut = MutableStateFlow(false)
+    private val syncedHistoryDeletion = MutableStateFlow<SyncedHistoryDeletion>(SyncedHistoryDeletion.Idle)
+
+    private val historySyncState = combine(historySync.enabled, syncedHistoryDeletion) { enabled, deletion ->
+        HistorySyncUiState(isAvailable = historySync.isAvailable, enabled = enabled, deletion = deletion)
+    }
 
     private val account = dashboardCacheRepository.cachedSummary.map { summary ->
         summary?.let { AccountSummary(username = it.username, level = it.level) }
@@ -67,7 +90,8 @@ class SettingsViewModel(
         account,
         isLoggedOut,
         ::SettingsUiState
-    ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
+    ).combine(historySyncState) { state, historySync -> state.copy(historySync = historySync) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     override fun onDailyLessonGoalChange(goal: Int) {
         viewModelScope.launch { settingsRepository.setDailyLessonGoal(goal) }
@@ -211,6 +235,19 @@ class SettingsViewModel(
                 is ApiResult.Success -> FullRefreshStatus.Idle
                 is ApiResult.Error -> FullRefreshStatus.Failed(result.message)
             }
+        }
+    }
+
+    override fun onHistorySyncEnabledChange(enabled: Boolean) = viewModelScope.launch {
+        historySync.setEnabled(enabled)
+    }
+
+    /** Deletes the backend copy and turns sync off. The history on this device is untouched. */
+    override fun onDeleteSyncedHistoryRequested() = viewModelScope.launch {
+        syncedHistoryDeletion.value = SyncedHistoryDeletion.InFlight
+        syncedHistoryDeletion.value = when (val result = historySync.deleteSyncedHistory()) {
+            is ApiResult.Success -> SyncedHistoryDeletion.Idle
+            is ApiResult.Error -> SyncedHistoryDeletion.Failed(result.message)
         }
     }
 

@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -27,7 +28,8 @@ fun buildTestStudyTimeRepository(
     reviewStatisticDao: FakeReviewStatisticDao = FakeReviewStatisticDao(),
     assignmentDao: FakeAssignmentDao = FakeAssignmentDao(),
     clock: Clock = Clock.System,
-    minSegmentMs: Long = 0L
+    minSegmentMs: Long = 0L,
+    historySyncScheduler: HistorySyncScheduler = HistorySyncScheduler.None
 ) = StudyTimeRepository(
     studyTimeDao = dao,
     settingsRepository = settingsRepository,
@@ -38,5 +40,6 @@ fun buildTestStudyTimeRepository(
     defaultDispatcher = defaultDispatcher,
     clock = clock,
     minSegmentMs = minSegmentMs,
-    dayTicks = { flowOf(Unit) }
+    dayTicks = { flowOf(Unit) },
+    historySyncScheduler = historySyncScheduler
 )

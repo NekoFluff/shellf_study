@@ -85,6 +85,12 @@ interface SettingsActions {
 
     fun onFullRefreshRequested()
 
+    /** Returns its [Job] for the same reason as [onDailyReminderHourChange]. */
+    fun onHistorySyncEnabledChange(enabled: Boolean): Job
+
+    /** Returns its [Job] for the same reason as [onDailyReminderHourChange]. */
+    fun onDeleteSyncedHistoryRequested(): Job
+
     /** Returns its [Job] for the same reason as [onDailyReminderHourChange]: a test asserts the
      *  token is gone, which it can only observe after the logout coroutine finishes. */
     fun onLogOutRequested(): Job

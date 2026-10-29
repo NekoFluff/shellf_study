@@ -24,9 +24,15 @@ import kotlinx.coroutines.flow.first
 class LocalHistoryGuard(
     private val dataStore: DataStore<Preferences>,
     private val studyActivityDao: StudyActivityDao,
-    private val studyTimeDao: StudyTimeDao
+    private val studyTimeDao: StudyTimeDao,
+    /** Runs when another account's history is cleared — how history sync forgets that account's
+     *  cursor, token and opt-in. */
+    private val onOwnerChanged: suspend () -> Unit = {}
 ) {
     private val ownerKey = stringPreferencesKey("local_history_owner_user_id")
+
+    /** The WaniKani user id the local history belongs to, or null before any account was seen. */
+    suspend fun owner(): String? = dataStore.data.first()[ownerKey]
 
     /** Records [userId] as the owner, clearing the history first if another account made it. */
     suspend fun claimFor(userId: String) {
@@ -35,6 +41,7 @@ class LocalHistoryGuard(
         if (owner != null) {
             studyActivityDao.clearAll()
             studyTimeDao.clearAll()
+            onOwnerChanged()
         }
         dataStore.edit { it[ownerKey] = userId }
     }

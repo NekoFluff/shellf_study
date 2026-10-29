@@ -16,6 +16,7 @@ import com.crazyfluff.shellfstudy.shared.data.studytime.StudyKind
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeRepository
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeWindow
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -33,6 +34,7 @@ class StudyTimeRepositoryTest {
     val tempFolder = TemporaryFolder()
 
     private val dao = FakeStudyTimeDao()
+    private val historySyncRequested = CompletableDeferred<Int>()
     private lateinit var dataStore: DataStore<Preferences>
 
     /** Noon UTC, so "today" is the same date in any zone the test machine runs in within ±11h. */
@@ -50,7 +52,9 @@ class StudyTimeRepositoryTest {
         return buildTestStudyTimeRepository(
             dao, dataStore, backgroundScope, dispatcher,
             clock = fixedClock,
-            minSegmentMs = StudyTimeRepository.MIN_SEGMENT_MS
+            minSegmentMs = StudyTimeRepository.MIN_SEGMENT_MS,
+            // Records how many rows were stored when the sync was asked for.
+            historySyncScheduler = { historySyncRequested.complete(dao.all.size) }
         )
     }
 
@@ -72,6 +76,15 @@ class StudyTimeRepositoryTest {
         assertThat(stored.durationMs).isEqualTo(5 * MINUTE)
         assertThat(stored.level).isEqualTo(12)
         assertThat(stored.itemsAnswered).isEqualTo(20)
+    }
+
+    @Test
+    fun `record asks for a history sync once the stretch is stored`() = runTest {
+        val repository = createRepository()
+
+        repository.record(StudyKind.REVIEW, startMs, startMs + 5 * MINUTE, itemsCompleted = 20)
+
+        assertThat(historySyncRequested.await()).isEqualTo(1)
     }
 
     @Test

@@ -12,6 +12,10 @@ import com.crazyfluff.shellfstudy.shared.data.FriendStatsRepository
 import com.crazyfluff.shellfstudy.shared.data.LastSessionSummaryRepository
 import com.crazyfluff.shellfstudy.shared.data.LessonSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.LocalHistoryGuard
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncSettings
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStore
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncer
 import com.crazyfluff.shellfstudy.shared.data.LogoutCoordinator
 import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
 import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
@@ -48,6 +52,9 @@ import com.crazyfluff.shellfstudy.shared.lifecycle.AppForegroundTracker
 import com.crazyfluff.shellfstudy.shared.network.AuthTokenProvider
 import com.crazyfluff.shellfstudy.shared.network.WaniKaniApi
 import com.crazyfluff.shellfstudy.shared.network.createWaniKaniHttpClient
+import com.crazyfluff.shellfstudy.shared.network.historysync.HISTORY_SYNC_BASE_URL
+import com.crazyfluff.shellfstudy.shared.network.historysync.HistorySyncApi
+import com.crazyfluff.shellfstudy.shared.network.historysync.createHistorySyncHttpClient
 import com.crazyfluff.shellfstudy.shared.network.waniKaniJson
 import com.crazyfluff.shellfstudy.shared.notifications.DefaultNotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
@@ -150,7 +157,8 @@ val repositoryModule = module {
             dashboardCacheRepository = get(),
             reviewStatisticDao = get(),
             assignmentDao = get(),
-            applicationScope = get(APPLICATION_SCOPE)
+            applicationScope = get(APPLICATION_SCOPE),
+            historySyncScheduler = get()
         )
     }
     single {
@@ -174,10 +182,32 @@ val repositoryModule = module {
             tokenRepository = get(),
             syncScheduler = get(),
             notificationCoordinator = get(),
-            accountDataCleaner = get()
+            accountDataCleaner = get(),
+            clearHistorySyncSession = { get<HistorySyncStore>().clearSession() }
         )
     }
-    single { LocalHistoryGuard(dataStore = get(), studyActivityDao = get(), studyTimeDao = get()) }
+    single {
+        LocalHistoryGuard(
+            dataStore = get(),
+            studyActivityDao = get(),
+            studyTimeDao = get(),
+            onOwnerChanged = { get<HistorySyncStore>().clearAccountState() }
+        )
+    }
+    single { HistorySyncStore(dataStore = get(), tokenCipher = get()) }
+    single {
+        HistorySyncer(
+            api = HISTORY_SYNC_BASE_URL.takeIf { it.isNotBlank() }
+                ?.let { HistorySyncApi(createHistorySyncHttpClient(json = get()), it) },
+            store = get(),
+            tokenRepository = get(),
+            localHistoryGuard = get(),
+            studyTimeDao = get(),
+            studyActivityDao = get(),
+            scheduler = get(),
+            json = get()
+        )
+    } bind HistorySyncSettings::class
     single {
         DashboardSyncCoordinator(
             waniKaniRepository = get(),
@@ -186,6 +216,9 @@ val repositoryModule = module {
             localHistoryGuard = get(),
             onUserFetched = { user ->
                 get<CoroutineScope>(APPLICATION_SCOPE).launch { get<OfflineAudioManager>().onUserRefreshed(user) }
+                // Runs after the guard has matched local history to this account, so it is the
+                // earliest point a pass can sync anything — and the dashboard-open trigger.
+                get<HistorySyncScheduler>().requestSync()
             }
         )
     }
@@ -298,7 +331,7 @@ val viewModelModule = module {
     viewModel { ThemeViewModel(get()) }
     viewModel { StudyTimeViewModel(get(), get()) }
     viewModel { OfflineAudioViewModel(get()) }
-    viewModel { SettingsViewModel(get(), get(), get(), get(), get(), get()) }
+    viewModel { SettingsViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { AuthViewModel(get(), get(), get(), get(), get()) }
     viewModel { SplashViewModel(get(), get(), get()) }
 

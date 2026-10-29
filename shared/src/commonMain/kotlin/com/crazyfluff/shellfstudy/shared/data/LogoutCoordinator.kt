@@ -14,10 +14,14 @@ class LogoutCoordinator(
     private val tokenRepository: TokenRepository,
     private val syncScheduler: SyncScheduler,
     private val notificationCoordinator: NotificationCoordinator,
-    private val accountDataCleaner: AccountDataCleaner
+    private val accountDataCleaner: AccountDataCleaner,
+    /** Drops the history-sync backend token. The history and the opt-in stay, like the history
+     *  itself does (see [LocalHistoryGuard]); signing back in gets a fresh token. */
+    private val clearHistorySyncSession: suspend () -> Unit = {}
 ) {
     suspend fun logout(): AccountCleanupOutcome {
         tokenRepository.clearToken()
+        clearHistorySyncSession()
         syncScheduler.cancelPeriodicSync()
         notificationCoordinator.onLogout()
         return accountDataCleaner.clearAll()

@@ -38,6 +38,8 @@ app/                      Android application shell (thin wrapper)
   di/                     Android-only Koin modules (workers, notification channels)
   core/                   Android-only integrations (WorkManager workers, SVG interceptor)
 
+backend/history-sync/     Cloudflare Worker + D1 for opt-in study-history sync (TypeScript; see its README)
+
 iosApp/                   Xcode project
   iOSApp.swift            @main; calls IosEntryKt.doInitKoin()
   ContentView.swift        Hosts IosEntryKt.MainViewController() via UIViewControllerRepresentable

@@ -149,17 +149,35 @@ class FakeSyncStateDao : SyncStateDao {
 }
 
 class FakeStudyActivityDao : StudyActivityDao {
-    private val activeDays = MutableStateFlow<Set<String>>(emptySet())
+    /** Each active day, and whether it has been uploaded to history sync. */
+    private val days = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+
+    val uploadedDays: Set<String> get() = days.value.filterValues { it }.keys
 
     override suspend fun markActive(entity: StudyActivityDayEntity) {
-        activeDays.value = activeDays.value + entity.date
+        if (entity.date !in days.value) days.value = days.value + (entity.date to entity.uploaded)
     }
 
     override suspend fun clearAll() {
-        activeDays.value = emptySet()
+        days.value = emptyMap()
     }
 
-    override fun observeActiveDays(): Flow<List<String>> = activeDays.map { it.sortedDescending() }
+    override fun observeActiveDays(): Flow<List<String>> = days.map { it.keys.sortedDescending() }
+
+    override suspend fun getNotUploaded(limit: Int): List<StudyActivityDayEntity> =
+        days.value.filterValues { !it }.keys.sorted().take(limit).map { StudyActivityDayEntity(it, uploaded = false) }
+
+    override suspend fun markUploaded(dates: List<String>) {
+        days.value = days.value.mapValues { (date, uploaded) -> uploaded || date in dates }
+    }
+
+    override suspend fun markAllNotUploaded() {
+        days.value = days.value.mapValues { false }
+    }
+
+    override suspend fun insertFromRemote(entities: List<StudyActivityDayEntity>) {
+        entities.forEach { markActive(it) }
+    }
 }
 
 class FakeOutboxDao : OutboxDao {
@@ -235,6 +253,7 @@ class FakeStudyTimeDao : StudyTimeDao {
     val all: List<StudyTimeSegmentEntity> get() = segments.value
 
     override suspend fun insert(entity: StudyTimeSegmentEntity) {
+        check(segments.value.none { it.syncId == entity.syncId }) { "UNIQUE constraint failed: syncId" }
         segments.value = (segments.value + entity.copy(id = nextId++)).sortedBy { it.startedAtMs }
     }
 
@@ -242,5 +261,20 @@ class FakeStudyTimeDao : StudyTimeDao {
 
     override suspend fun clearAll() {
         segments.value = emptyList()
+    }
+
+    override suspend fun getNotUploaded(limit: Int): List<StudyTimeSegmentEntity> =
+        segments.value.filter { !it.uploaded }.sortedBy { it.id }.take(limit)
+
+    override suspend fun markUploaded(syncIds: List<String>) {
+        segments.value = segments.value.map { if (it.syncId in syncIds) it.copy(uploaded = true) else it }
+    }
+
+    override suspend fun markAllNotUploaded() {
+        segments.value = segments.value.map { it.copy(uploaded = false) }
+    }
+
+    override suspend fun insertFromRemote(entities: List<StudyTimeSegmentEntity>) {
+        entities.forEach { entity -> if (segments.value.none { it.syncId == entity.syncId }) insert(entity) }
     }
 }

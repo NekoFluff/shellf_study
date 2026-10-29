@@ -12,6 +12,7 @@ import io.ktor.client.engine.HttpClientEngine
 import org.junit.Test
 import okio.Path
 import com.crazyfluff.shellfstudy.shared.data.audio.AudioDownloadScheduler
+import com.crazyfluff.shellfstudy.shared.network.historysync.HistorySyncApi
 import org.junit.runner.RunWith
 import org.koin.dsl.module
 import org.koin.test.verify.verify
@@ -69,6 +70,9 @@ class AppModulesVerificationTest {
                 // class, so those would collide), and that resolution is exercised end-to-end in
                 // SessionControllerDiTest.
                 PersistedSessionStore::class,
+                // Built inline in HistorySyncer's registration rather than registered: it is null
+                // until HISTORY_SYNC_BASE_URL is set, and a Koin definition can't resolve to null.
+                HistorySyncApi::class,
             )
         )
     }

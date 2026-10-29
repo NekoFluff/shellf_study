@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.OutboxDrainer
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.sync.SyncOrchestrator
 
@@ -15,7 +16,8 @@ class SyncWorker(
     private val syncOrchestrator: SyncOrchestrator,
     private val outboxDrainer: OutboxDrainer,
     private val notificationCoordinator: NotificationCoordinator,
-    private val outboxSyncScheduler: OutboxSyncScheduler
+    private val outboxSyncScheduler: OutboxSyncScheduler,
+    private val historySyncScheduler: HistorySyncScheduler = HistorySyncScheduler.None
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -35,6 +37,8 @@ class SyncWorker(
             // A safety net for anything the per-mutation trigger didn't drain — confirmed online
             // at this point, so it's a cheap, correct place to also nudge the outbox.
             outboxSyncScheduler.requestSync()
+            // Pulls what the learner's other devices recorded, even on days this app isn't opened.
+            historySyncScheduler.requestSync()
             Result.success()
         }
         is ApiResult.Error -> Result.retry()

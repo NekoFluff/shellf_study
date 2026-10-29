@@ -24,6 +24,12 @@ import com.crazyfluff.shellfstudy.shared.data.OutboxRepository
 import com.crazyfluff.shellfstudy.shared.data.ReviewSessionRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
+import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncSettings
+import com.crazyfluff.shellfstudy.shared.feature.settings.SyncedHistoryDeletion
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.crazyfluff.shellfstudy.shared.feature.settings.AccountSummary
 import com.crazyfluff.shellfstudy.shared.session.LessonSessionController
 import com.crazyfluff.shellfstudy.shared.session.ReviewSessionController
@@ -66,7 +72,8 @@ class SettingsViewModelTest {
      * nothing reachable) is safe for every other test in this file.
      */
     private fun createViewModel(
-        syncOrchestrator: SyncOrchestrator = buildTestRepositories("http://localhost/", defaultDispatcher = mainDispatcherRule.dispatcher).syncOrchestrator
+        syncOrchestrator: SyncOrchestrator = buildTestRepositories("http://localhost/", defaultDispatcher = mainDispatcherRule.dispatcher).syncOrchestrator,
+        historySync: HistorySyncSettings = FakeHistorySyncSettings()
     ): SettingsViewModel {
         val scope = CoroutineScope(mainDispatcherRule.dispatcher + SupervisorJob())
         val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
@@ -85,7 +92,8 @@ class SettingsViewModelTest {
             notificationScheduler,
             syncOrchestrator,
             buildLogoutCoordinator(dataStore, scope),
-            dashboardCacheRepository
+            dashboardCacheRepository,
+            historySync
         )
     }
 
@@ -499,4 +507,72 @@ class SettingsViewModelTest {
         assertThat(syncScheduler.cancelCallCount).isEqualTo(1)
         assertThat(notificationCoordinator.onLogoutCallCount).isEqualTo(1)
     }
+
+    @Test
+    fun `history sync state follows availability and the toggle`() = runTest(mainDispatcherRule.dispatcher) {
+        val historySync = FakeHistorySyncSettings(isAvailable = true)
+        val viewModel = createViewModel(historySync = historySync)
+
+        viewModel.uiState.test {
+            val initial = awaitItem().historySync
+            assertThat(initial.isAvailable).isTrue()
+            assertThat(initial.enabled).isFalse()
+
+            viewModel.onHistorySyncEnabledChange(true).join()
+            assertThat(awaitItem().historySync.enabled).isTrue()
+        }
+    }
+
+    @Test
+    fun `deleting synced history shows progress, then goes back to idle`() = runTest(mainDispatcherRule.dispatcher) {
+        val historySync = FakeHistorySyncSettings(isAvailable = true, enabled = true)
+        val viewModel = createViewModel(historySync = historySync)
+
+        viewModel.uiState.test {
+            assertThat(awaitItem().historySync.deletion).isEqualTo(SyncedHistoryDeletion.Idle)
+
+            viewModel.onDeleteSyncedHistoryRequested()
+            assertThat(awaitItem().historySync.deletion).isEqualTo(SyncedHistoryDeletion.InFlight)
+
+            historySync.deleteResult.complete(ApiResult.Success(Unit))
+            val afterDelete = awaitItem().historySync
+            assertThat(afterDelete.deletion).isEqualTo(SyncedHistoryDeletion.Idle)
+            assertThat(afterDelete.enabled).isFalse()
+        }
+    }
+
+    @Test
+    fun `a failed delete shows its message`() = runTest(mainDispatcherRule.dispatcher) {
+        val historySync = FakeHistorySyncSettings(isAvailable = true, enabled = true)
+        historySync.deleteResult.complete(ApiResult.Error("Couldn't delete synced history. Try again later."))
+        val viewModel = createViewModel(historySync = historySync)
+
+        viewModel.onDeleteSyncedHistoryRequested().join()
+
+        val settled = viewModel.uiState.first { it.historySync.deletion !is SyncedHistoryDeletion.Idle }
+        assertThat(settled.historySync.deletion)
+            .isEqualTo(SyncedHistoryDeletion.Failed("Couldn't delete synced history. Try again later."))
+    }
+}
+
+/** A [HistorySyncSettings] whose delete waits on [deleteResult], so a test can see the in-flight state. */
+private class FakeHistorySyncSettings(
+    override val isAvailable: Boolean = false,
+    enabled: Boolean = false
+) : HistorySyncSettings {
+    private val enabledState = MutableStateFlow(enabled)
+    val deleteResult = CompletableDeferred<ApiResult<Unit>>()
+
+    override val enabled: Flow<Boolean> = enabledState
+
+    override suspend fun setEnabled(enabled: Boolean) {
+        enabledState.value = enabled
+    }
+
+    override suspend fun deleteSyncedHistory(): ApiResult<Unit> {
+        val result = deleteResult.await()
+        if (result is ApiResult.Success) enabledState.value = false
+        return result
+    }
+
 }

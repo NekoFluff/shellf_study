@@ -20,11 +20,13 @@ class LocalHistoryGuardTest {
 
     private val studyActivityDao = FakeStudyActivityDao()
     private val studyTimeDao = FakeStudyTimeDao()
+    private var ownerChanges = 0
     private val guard by lazy {
         LocalHistoryGuard(
             PreferenceDataStoreFactory.create(produceFile = { tempFolder.newFile("guard.preferences_pb") }),
             studyActivityDao,
-            studyTimeDao
+            studyTimeDao,
+            onOwnerChanged = { ownerChanges++ }
         )
     }
 
@@ -82,5 +84,26 @@ class LocalHistoryGuardTest {
         guard.claimFor("user-b")
 
         historyIsKept()
+    }
+
+    @Test
+    fun `owner is unknown until an account is seen, then that account`() = runTest {
+        assertThat(guard.owner()).isNull()
+
+        guard.claimFor("user-a")
+
+        assertThat(guard.owner()).isEqualTo("user-a")
+    }
+
+    @Test
+    fun `only a switch to another account counts as an owner change`() = runTest {
+        guard.claimFor("user-a")
+        guard.claimFor("user-a")
+        assertThat(ownerChanges).isEqualTo(0)
+
+        guard.claimFor("user-b")
+
+        assertThat(ownerChanges).isEqualTo(1)
+        assertThat(guard.owner()).isEqualTo("user-b")
     }
 }

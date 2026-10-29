@@ -1,0 +1,33 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "sync-shellf-study",
+	"main": "src/index.ts",
+	// Must not be newer than the bundled workerd runtime (see node_modules/workerd/package.json).
+	"compatibility_date": "2026-10-01",
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "shellf-history",
+			// From `npx wrangler d1 create shellf-history`. Local dev and tests use a local copy instead.
+			"database_id": "0140d449-497e-4529-8877-c5bc5e81cb31",
+			"migrations_dir": "migrations"
+		}
+	],
+	// Caps /v1/auth per client IP: each call costs a request to WaniKani, so an unauthenticated
+	// caller must not be able to turn this Worker into a WaniKani request amplifier.
+	"ratelimits": [
+		{
+			"name": "AUTH_LIMITER",
+			"namespace_id": "1001",
+			"simple": {
+				"limit": 10,
+				"period": 60
+			}
+		}
+	]
+	// JWT_SECRET is a secret, not a var: `npx wrangler secret put JWT_SECRET`. For `wrangler dev`,
+	// put it in an untracked .dev.vars file.
+}

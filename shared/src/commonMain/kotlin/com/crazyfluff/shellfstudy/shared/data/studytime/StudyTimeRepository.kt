@@ -3,6 +3,7 @@ package com.crazyfluff.shellfstudy.shared.data.studytime
 import com.crazyfluff.shellfstudy.shared.data.DashboardCacheRepository
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.dailyRolloverTicks
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
 import com.crazyfluff.shellfstudy.shared.database.AssignmentDao
 import com.crazyfluff.shellfstudy.shared.database.ReviewStatisticDao
 import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeDao
@@ -39,7 +40,9 @@ class StudyTimeRepository(
      *  ViewModel tests lower it, since their sessions last milliseconds of real time. */
     private val minSegmentMs: Long = MIN_SEGMENT_MS,
     /** Re-emits at local midnight so "today" rolls over without a write — see dailyRolloverTicks. */
-    private val dayTicks: () -> Flow<Any> = ::dailyRolloverTicks
+    private val dayTicks: () -> Flow<Any> = ::dailyRolloverTicks,
+    /** Told after each stored stretch, so it reaches the learner's other devices. */
+    private val historySyncScheduler: HistorySyncScheduler = HistorySyncScheduler.None
 ) {
     /**
      * Stores one stretch of session time. Fire-and-forget on [applicationScope], because the caller is
@@ -62,6 +65,7 @@ class StudyTimeRepository(
                     itemsAnswered = itemsCompleted.coerceAtLeast(0)
                 )
             )
+            historySyncScheduler.requestSync()
         }
     }
 

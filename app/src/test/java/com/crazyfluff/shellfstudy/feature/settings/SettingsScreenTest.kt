@@ -21,6 +21,8 @@ import kotlinx.coroutines.Job
 import com.crazyfluff.shellfstudy.shared.designsystem.AppVersion
 import com.crazyfluff.shellfstudy.shared.feature.settings.AccountSummary
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsActions
+import com.crazyfluff.shellfstudy.shared.feature.settings.HistorySyncUiState
+import com.crazyfluff.shellfstudy.shared.feature.settings.SyncedHistoryDeletion
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreen
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreenTestTags
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
@@ -576,6 +578,92 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun syncGroup_isHiddenUntilTheBackendIsAvailable() {
+        setContent(uiState = SettingsUiState(historySync = HistorySyncUiState(isAvailable = false)))
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.HISTORY_SYNC_TOGGLE).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ROW).assertDoesNotExist()
+    }
+
+    @Test
+    fun historySyncToggle_asksBeforeTurningOn() {
+        val actions = RecordingSettingsActions()
+        setContent(uiState = SettingsUiState(historySync = HistorySyncUiState(isAvailable = true)), actions = actions)
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.HISTORY_SYNC_TOGGLE).performScrollTo().performClick()
+        assertThat(actions.calls).doesNotContain("onHistorySyncEnabledChange")
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.HISTORY_SYNC_CONFIRM_BUTTON).performClick()
+        assertThat(actions.lastArgumentOf("onHistorySyncEnabledChange")).isEqualTo(true)
+    }
+
+    @Test
+    fun historySyncToggle_turnsOffWithoutAsking() {
+        val actions = RecordingSettingsActions()
+        setContent(
+            uiState = SettingsUiState(historySync = HistorySyncUiState(isAvailable = true, enabled = true)),
+            actions = actions
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.HISTORY_SYNC_TOGGLE)
+            .performScrollTo()
+            .assertIsOn()
+            .performClick()
+
+        assertThat(actions.lastArgumentOf("onHistorySyncEnabledChange")).isEqualTo(false)
+    }
+
+    @Test
+    fun deleteSyncedHistory_asksForConfirmationFirst() {
+        val actions = RecordingSettingsActions()
+        setContent(
+            uiState = SettingsUiState(historySync = HistorySyncUiState(isAvailable = true, enabled = true)),
+            actions = actions
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ROW).performScrollTo().performClick()
+        assertThat(actions.calls).doesNotContain("onDeleteSyncedHistoryRequested")
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_CONFIRM_BUTTON).performClick()
+        assertThat(actions.calls).contains("onDeleteSyncedHistoryRequested")
+    }
+
+    @Test
+    fun deleteSyncedHistory_showsProgressInsteadOfTheRowWhileDeleting() {
+        setContent(
+            uiState = SettingsUiState(
+                historySync = HistorySyncUiState(
+                    isAvailable = true,
+                    enabled = true,
+                    deletion = SyncedHistoryDeletion.InFlight
+                )
+            )
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_PROGRESS)
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ROW).assertDoesNotExist()
+    }
+
+    @Test
+    fun deleteSyncedHistory_showsTheErrorOnFailure() {
+        setContent(
+            uiState = SettingsUiState(
+                historySync = HistorySyncUiState(
+                    isAvailable = true,
+                    enabled = true,
+                    deletion = SyncedHistoryDeletion.Failed("Couldn't delete synced history. Try again later.")
+                )
+            )
+        )
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ERROR_TEXT)
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun accountRow_showsUsernameAndLevel() {
         setContent(uiState = SettingsUiState(account = AccountSummary(username = "koichi", level = 12)))
 
@@ -680,6 +768,14 @@ private class RecordingSettingsActions : SettingsActions {
     override fun onQuietHoursStartHourChange(hour: Int) = record("onQuietHoursStartHourChange", hour)
     override fun onQuietHoursEndHourChange(hour: Int) = record("onQuietHoursEndHourChange", hour)
     override fun onFullRefreshRequested() = record("onFullRefreshRequested")
+    override fun onHistorySyncEnabledChange(enabled: Boolean): Job {
+        record("onHistorySyncEnabledChange", enabled)
+        return Job()
+    }
+    override fun onDeleteSyncedHistoryRequested(): Job {
+        record("onDeleteSyncedHistoryRequested")
+        return Job()
+    }
     override fun onLogOutRequested(): Job {
         record("onLogOutRequested")
         return Job()

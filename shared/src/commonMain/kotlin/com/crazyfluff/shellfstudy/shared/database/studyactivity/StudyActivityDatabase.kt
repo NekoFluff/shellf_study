@@ -25,7 +25,7 @@ import kotlinx.coroutines.Dispatchers
  * two derived values — whether today had activity, and the current day streak — never anything
  * per-review.
  */
-@Database(entities = [StudyActivityDayEntity::class], version = 2, exportSchema = true)
+@Database(entities = [StudyActivityDayEntity::class], version = 3, exportSchema = true)
 @ConstructedBy(StudyActivityDatabaseConstructor::class)
 abstract class StudyActivityDatabase : RoomDatabase() {
     abstract fun studyActivityDao(): StudyActivityDao
@@ -51,9 +51,16 @@ val STUDY_ACTIVITY_MIGRATION_1_2: Migration = object : Migration(1, 2) {
     }
 }
 
+/** Marks every existing day not yet uploaded, so the first history sync backfills the whole streak. */
+val STUDY_ACTIVITY_MIGRATION_2_3: Migration = object : Migration(2, 3) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `study_activity_days` ADD COLUMN `uploaded` INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 fun buildStudyActivityDatabase(builder: RoomDatabase.Builder<StudyActivityDatabase>): StudyActivityDatabase =
     builder
         .setDriver(BundledSQLiteDriver())
         .setQueryCoroutineContext(Dispatchers.Default)
-        .addMigrations(STUDY_ACTIVITY_MIGRATION_1_2)
+        .addMigrations(STUDY_ACTIVITY_MIGRATION_1_2, STUDY_ACTIVITY_MIGRATION_2_3)
         .build()

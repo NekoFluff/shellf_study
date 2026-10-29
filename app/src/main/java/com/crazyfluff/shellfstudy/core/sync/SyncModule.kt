@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.core.sync
 
 import com.crazyfluff.shellfstudy.shared.data.OutboxSyncScheduler
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
 import com.crazyfluff.shellfstudy.shared.sync.SyncScheduler
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.bind
@@ -9,4 +10,5 @@ import org.koin.dsl.module
 val syncModule = module {
     single { WorkManagerSyncScheduler(androidContext()) } bind SyncScheduler::class
     single { WorkManagerOutboxSyncScheduler(androidContext()) } bind OutboxSyncScheduler::class
+    single { WorkManagerHistorySyncScheduler(androidContext()) } bind HistorySyncScheduler::class
 }
