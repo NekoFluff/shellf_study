@@ -212,8 +212,26 @@ class QuizQueueTest {
                 isPriority = { it == "A" || it == "B" }
             )
             assertEquals(setOf("A", "B"), queue.toList().map { it.item }.toSet())
-            assertEquals(listOf("C", "D"), queue.reserveList().map { it.item })
+            assertEquals(setOf("C", "D"), queue.reserveList().map { it.item }.toSet())
         }
+    }
+
+    @Test
+    fun build_withPriorityAndShuffle_shufflesTheReserve() {
+        val queue = QuizQueue<String>()
+        // A reserve that only ever came back in the caller's order would mean it was never shuffled.
+        val reserveOrders = (0 until 20).map {
+            queue.build(
+                priority(1) + ordinary(20),
+                typesFor = { listOf(QuestionType.MEANING) },
+                shuffle = true,
+                cap = 1,
+                isPriority = ::isP
+            )
+            assertEquals(priority(1), queue.toList().map { it.item })
+            queue.reserveList().map { it.item }
+        }
+        assertTrue(reserveOrders.any { it != ordinary(20) })
     }
 
     @Test

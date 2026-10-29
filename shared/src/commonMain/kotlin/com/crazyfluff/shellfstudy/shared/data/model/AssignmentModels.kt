@@ -35,10 +35,11 @@ data class ReviewForecast(
  *
  *  [DEFAULT] is the queue's own original selection path — a shuffle of the whole due list, so which
  *  items land in the batch is an arbitrary draw, exactly as every session behaved before this setting
- *  existed. [RANK_UP] makes selection deterministic instead, favoring the current level's not-yet-Guru
- *  radicals and kanji: the kanji move WaniKani's level-up bar (90% of a level's kanji at Guru+), and
- *  the radicals unlock those kanji. While any of them is unfinished, no other item enters the working
- *  set, so they're all worked through before the session moves on. */
+ *  existed. [RANK_UP] puts the current level's not-yet-Guru radicals and kanji first: the kanji move
+ *  WaniKani's level-up bar (90% of a level's kanji at Guru+), and the radicals unlock those kanji.
+ *  While any of them is unfinished, no other item enters the working set, so they're all worked
+ *  through before the session moves on. Within each group the draw is still shuffled, as in
+ *  [DEFAULT]. */
 enum class ReviewPriority(val label: String) {
     DEFAULT("Default"),
     RANK_UP("Rank up")

@@ -1863,9 +1863,9 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
             assertThat(inFlight).containsAtLeast(1012L, 1013L)
             // While a kanji is unfinished, no vocabulary enters the working set at all.
             assertThat(inFlight).containsExactly(1012L, 1013L)
-            // All the vocabulary waits in reserve, in due order.
+            // All the vocabulary waits in reserve, shuffled rather than in due order.
             assertThat(session.reserve.map { it.assignmentId }.distinct())
-                .containsExactlyElementsIn((1000L..1011L).toList()).inOrder()
+                .containsExactlyElementsIn((1000L..1011L).toList())
             assertThat(session.priorityAssignmentIds).containsExactly(1012L, 1013L)
 
             // And the session can actually draw them.

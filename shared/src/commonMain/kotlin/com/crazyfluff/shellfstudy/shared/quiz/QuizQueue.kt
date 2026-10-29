@@ -12,8 +12,10 @@ data class PendingQuestion<T>(val item: T, val type: QuestionType)
  * already bounds its own working set by batch size before ever building a queue.
  *
  * [reserve] is a FIFO: admission always takes from its head, so the order it was built with decides
- * which items get admitted next. Review's rank-up priority setting rides on that, via [build]'s
- * [isPriority] — see [admitNext] for the admission rule and the invariants it keeps.
+ * which items get admitted next. [build] shuffles that order (unless `shuffle` is false), so the
+ * reserve never feeds items in the caller's own order. Review's rank-up priority setting rides on
+ * that, via [build]'s [isPriority] — see [admitNext] for the admission rule and the invariants it
+ * keeps.
  */
 class QuizQueue<T> {
     private val inFlight = ArrayDeque<PendingQuestion<T>>()
@@ -47,10 +49,11 @@ class QuizQueue<T> {
      *
      * [isPriority] is Review's rank-up priority setting. Without it (every caller but Review),
      * [items] is shuffled as one pool and the first [cap] are admitted, so the *selection* is an
-     * arbitrary draw. With it, [items] is stably sorted priority-first instead and admitted by
-     * [admitNext]'s rule, so the working set holds only priority items until every one of them is
-     * finished. Within each group the caller's own order survives. Draw order inside [inFlight] is
-     * still shuffled either way.
+     * arbitrary draw. With it, [items] is shuffled and then stably sorted priority-first, and admitted
+     * by [admitNext]'s rule, so the working set holds only priority items until every one of them is
+     * finished; within each group the selection is still an arbitrary draw. Draw order inside
+     * [inFlight] is shuffled either way. With [shuffle] false, nothing is randomized and the caller's
+     * own order decides.
      */
     fun build(
         items: List<T>,
@@ -69,11 +72,13 @@ class QuizQueue<T> {
             inFlight.addAll(admittedItems.flatMap { item -> typesFor(item).map { PendingQuestion(item, it) } })
             reserve.addAll(heldItems.flatMap { item -> typesFor(item).map { PendingQuestion(item, it) } })
         } else {
-            // Sorted, NOT shuffled: which items get admitted (and the order the reserve feeds them in)
-            // is the whole point of the priority setting, so randomizing here would randomize the
-            // selection. Ties keep `items`' own order — sortedBy is stable. Everything starts in the
-            // reserve so the opening admission follows exactly the rule every later one does.
-            val sorted = items.sortedBy { if (isPriority(it)) 0 else 1 }
+            // Shuffled, THEN stably sorted priority-first: the sort alone decides which group is
+            // admitted first, and the shuffle decides the order within each group — otherwise the
+            // reserve would feed items in the caller's (due) order, and the same oldest items would
+            // always take the free slots. Everything starts in the reserve so the opening admission
+            // follows exactly the rule every later one does.
+            val order = if (shuffle) items.shuffled() else items
+            val sorted = order.sortedBy { if (isPriority(it)) 0 else 1 }
             reserve.addAll(sorted.flatMap { item -> typesFor(item).map { PendingQuestion(item, it) } })
             admitWhileRoom(cap ?: Int.MAX_VALUE, isPriority)
         }

@@ -14,11 +14,11 @@ import com.crazyfluff.shellfstudy.shared.network.SubjectType
  *  first. The kanji are what move the level-up bar (90% of a level's kanji at Guru+, per
  *  [LevelUpProgress]). The radicals gate those kanji: a kanji only unlocks once its radicals reach
  *  Guru. Together they're everything standing between the learner and the next level. Both are
- *  admitted as one group, keeping their relative due order, and nothing else enters the working set
- *  until they're all finished (see QuizQueue.admitNext).
+ *  admitted as one group, in random order, and nothing else enters the working set until they're
+ *  all finished (see QuizQueue.admitNext).
  *
  *  Everything else — vocabulary, other levels' items, and this level's radicals and kanji already
- *  past Guru — keeps its relative due order behind them. Already-passed items are dropped from the
+ *  past Guru — waits behind them, also in random order. Already-passed items are dropped from the
  *  priority group rather than merely deprioritized, so a session can't keep racing an item that has
  *  stopped gating anything.
  *
