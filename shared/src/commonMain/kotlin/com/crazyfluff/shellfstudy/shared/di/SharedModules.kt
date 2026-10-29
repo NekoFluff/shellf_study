@@ -365,7 +365,8 @@ val viewModelModule = module {
             dashboardSyncCoordinator = get(),
             lastSessionSummaryRepository = get(),
             appForegroundTracker = get(),
-            studyTimeRepository = get()
+            studyTimeRepository = get(),
+            historySync = get()
         )
     }
 

@@ -3,6 +3,8 @@ package com.crazyfluff.shellfstudy.shared.feature.dashboard
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncSettings
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStatus
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.AssignmentRepository
 import com.crazyfluff.shellfstudy.shared.data.AssignmentStatsRepository
@@ -99,7 +101,9 @@ data class DashboardUiState(
     val studyStreakDays: Int = 0,
     /** Drives the overflow menu's "Mute audio"/"Unmute audio" label — see
      *  [com.crazyfluff.shellfstudy.shared.data.AppSettings.audioMuted]. */
-    val isAudioMuted: Boolean = false
+    val isAudioMuted: Boolean = false,
+    /** Cross-device sync, for the sync-status chip and sheet. */
+    val deviceSync: DeviceSyncState = DeviceSyncState()
 ) {
     /** The last fetch failed but cached content is still on screen — see [DashboardFetch.Stale]. */
     val isShowingCachedData: Boolean
@@ -110,8 +114,20 @@ data class DashboardUiState(
             syncBlockedOnAuth -> DashboardBannerState.SyncBlockedOnAuth
             isShowingCachedData -> DashboardBannerState.Offline(lastSyncedAtMillis)
             pendingSyncCount > 0 -> DashboardBannerState.PendingSync(pendingSyncCount)
-            fetchState is DashboardFetch.InFlight -> DashboardBannerState.Refreshing
             else -> DashboardBannerState.None
+        }
+
+    /** Anything syncing right now — WaniKani data or cross-device history. Drives the progress line. */
+    val isSyncing: Boolean
+        get() = fetchState is DashboardFetch.InFlight || (deviceSync.enabled && deviceSync.status.isSyncing)
+
+    /** One word on how syncing is going, for the chip under the greeting; the sheet has the detail. */
+    val syncChip: SyncChipState
+        get() = when {
+            isSyncing -> SyncChipState.Syncing
+            syncBlockedOnAuth || isShowingCachedData || (deviceSync.enabled && deviceSync.status.lastPassFailed) ->
+                SyncChipState.Problem
+            else -> SyncChipState.Synced(lastSyncedAtMillis)
         }
 
     val contentState: DashboardContentState
@@ -154,12 +170,29 @@ sealed interface DashboardFetch {
     data class Failed(val message: String) : DashboardFetch
 }
 
+/**
+ * Only what needs the learner's attention gets a banner. Routine syncing doesn't: it shows as the
+ * progress line and the sync-status chip, which don't push the cards around every time a pass starts.
+ */
 sealed interface DashboardBannerState {
     data object None : DashboardBannerState
     data object SyncBlockedOnAuth : DashboardBannerState
     data class Offline(val lastSyncedAtMillis: Long?) : DashboardBannerState
     data class PendingSync(val count: Int) : DashboardBannerState
-    data object Refreshing : DashboardBannerState
+}
+
+/** Cross-device sync as the dashboard shows it. [isAvailable] is false until the backend exists. */
+data class DeviceSyncState(
+    val isAvailable: Boolean = false,
+    val enabled: Boolean = false,
+    val status: HistorySyncStatus = HistorySyncStatus()
+)
+
+sealed interface SyncChipState {
+    data object Syncing : SyncChipState
+    data object Problem : SyncChipState
+    /** Nothing running and nothing wrong. [lastSyncedAtMillis] is the last WaniKani refresh. */
+    data class Synced(val lastSyncedAtMillis: Long?) : SyncChipState
 }
 
 sealed interface DashboardContentState {
@@ -221,6 +254,7 @@ class DashboardViewModel(
     private val lastSessionSummaryRepository: LastSessionSummaryRepository,
     private val appForegroundTracker: AppForegroundTracker,
     private val studyTimeRepository: StudyTimeRepository,
+    private val historySync: HistorySyncSettings,
     private val timeSource: TimeSource = TimeSource.Monotonic
 ) : ViewModel() {
 
@@ -335,6 +369,11 @@ class DashboardViewModel(
         SecondaryCardsState(hasLastSessionSummary, reviewForecast, studyTime, studyStreakDays, isAudioMuted)
     }
 
+    private val deviceSyncState: Flow<DeviceSyncState> =
+        combine(historySync.enabled, historySync.status) { enabled, status ->
+            DeviceSyncState(isAvailable = historySync.isAvailable, enabled = enabled, status = status)
+        }
+
     val uiState: StateFlow<DashboardUiState> = combine(
         combine(_dashboardData, sessionSyncState, progressStatsState, levelDependentState, localDueCounts)
         { imperative, sessionSync, progress, levelDependent, localCounts ->
@@ -375,8 +414,9 @@ class DashboardViewModel(
         },
         leaderboardFlow,
         _leaderboardRefreshing,
-        secondaryCardsState
-    ) { dashboardState, leaderboard, leaderboardLoading, secondary ->
+        secondaryCardsState,
+        deviceSyncState
+    ) { dashboardState, leaderboard, leaderboardLoading, secondary, deviceSync ->
         dashboardState.copy(
             leaderboard = leaderboard,
             leaderboardLoading = leaderboardLoading,
@@ -384,7 +424,8 @@ class DashboardViewModel(
             reviewForecast = secondary.reviewForecast,
             studyTime = secondary.studyTime,
             studyStreakDays = secondary.studyStreakDays,
-            isAudioMuted = secondary.isAudioMuted
+            isAudioMuted = secondary.isAudioMuted,
+            deviceSync = deviceSync
         )
     }
         // Room's invalidation is table-level, so every write anywhere in the assignments, subjects,
@@ -477,6 +518,9 @@ class DashboardViewModel(
             }
         }
     }
+
+    /** The sync sheet's "Retry" for cross-device sync. */
+    fun retryDeviceSync() = historySync.requestSyncNow()
 
     fun refresh() {
         viewModelScope.launch { performForcedRefresh(forceSync = true, forceFriendStatsRefresh = true) }

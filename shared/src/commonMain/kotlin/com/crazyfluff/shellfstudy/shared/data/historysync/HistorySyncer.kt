@@ -10,6 +10,8 @@ import com.crazyfluff.shellfstudy.shared.database.studytime.StudyTimeDao
 import com.crazyfluff.shellfstudy.shared.network.historysync.HistoryRecordDto
 import com.crazyfluff.shellfstudy.shared.network.historysync.HistorySyncApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -18,13 +20,28 @@ import kotlin.time.Clock
 
 enum class HistorySyncOutcome { SUCCESS, SKIPPED, RETRY, AUTH_FAILURE }
 
+/**
+ * What the app shows about sync. [isSyncing] is true only while a pass is talking to the backend, not
+ * while one waits out its quiet period or for a connection. [lastPassFailed] is this process's view:
+ * it starts false on launch and is reset by the next pass.
+ */
+data class HistorySyncStatus(
+    val isSyncing: Boolean = false,
+    val lastSyncedAtMs: Long? = null,
+    val lastPassFailed: Boolean = false
+)
+
 /** What the settings screen needs from history sync — an interface so a screen test can fake it. */
 interface HistorySyncSettings {
     /** False until the backend is deployed — see
      *  [com.crazyfluff.shellfstudy.shared.network.historysync.HISTORY_SYNC_BASE_URL]. */
     val isAvailable: Boolean
     val enabled: Flow<Boolean>
+    val status: Flow<HistorySyncStatus>
     suspend fun setEnabled(enabled: Boolean)
+
+    /** Runs a pass now rather than after the usual quiet period — a "Retry" button. */
+    fun requestSyncNow()
 
     /** Deletes this account's history and settings from the backend and turns sync off. Nothing on
      *  this device changes. */
@@ -58,15 +75,23 @@ class HistorySyncer(
     private val clock: Clock = Clock.System
 ) : HistorySyncSettings {
     private val lock = Mutex()
+    private val passRunning = MutableStateFlow(false)
+    private val lastPassFailed = MutableStateFlow(false)
 
     override val isAvailable: Boolean get() = api != null
 
     override val enabled: Flow<Boolean> = store.enabled
 
+    override val status: Flow<HistorySyncStatus> =
+        combine(passRunning, store.lastSyncedAtMs, lastPassFailed, ::HistorySyncStatus)
+
     override suspend fun setEnabled(enabled: Boolean) {
         store.setEnabled(enabled)
+        lastPassFailed.value = false
         if (enabled) scheduler.requestSync()
     }
+
+    override fun requestSyncNow() = scheduler.requestImmediateSync()
 
     suspend fun sync(): HistorySyncOutcome = lock.withLock {
         val api = api ?: return@withLock HistorySyncOutcome.SKIPPED
@@ -74,9 +99,20 @@ class HistorySyncer(
         // Not matched to an account yet: the dashboard's first /user fetch does that.
         val owner = localHistoryGuard.owner() ?: return@withLock HistorySyncOutcome.SKIPPED
 
-        when (val result = withSession(api, owner) { token -> pushAndPull(api, token) }) {
-            is ApiResult.Success -> HistorySyncOutcome.SUCCESS
-            is ApiResult.Error -> if (result.isAuthError) HistorySyncOutcome.AUTH_FAILURE else HistorySyncOutcome.RETRY
+        passRunning.value = true
+        try {
+            val result = withSession(api, owner) { token -> pushAndPull(api, token) }
+            lastPassFailed.value = result is ApiResult.Error
+            when (result) {
+                is ApiResult.Success -> {
+                    store.setLastSyncedAt(clock.now().toEpochMilliseconds())
+                    HistorySyncOutcome.SUCCESS
+                }
+                is ApiResult.Error ->
+                    if (result.isAuthError) HistorySyncOutcome.AUTH_FAILURE else HistorySyncOutcome.RETRY
+            }
+        } finally {
+            passRunning.value = false
         }
     }
 
@@ -172,24 +208,6 @@ class HistorySyncer(
         }
     }
 
-    /** Uploads [notUploaded] rows a batch at a time, marking each batch once the backend has it. */
-    private suspend fun <Row> pushAll(
-        notUploaded: suspend (limit: Int) -> List<Row>,
-        toRecord: (Row) -> HistoryRecordDto,
-        markUploaded: suspend (List<Row>) -> Unit,
-        push: suspend (List<HistoryRecordDto>) -> Unit
-    ): ApiResult<Unit> {
-        var result: ApiResult<Unit> = ApiResult.Success(Unit)
-        var batch = notUploaded(PUSH_BATCH_SIZE)
-        while (batch.isNotEmpty() && result is ApiResult.Success) {
-            result = safeApiCall { push(batch.map(toRecord)) }
-            if (result is ApiResult.Success) {
-                markUploaded(batch)
-                batch = if (batch.size < PUSH_BATCH_SIZE) emptyList() else notUploaded(PUSH_BATCH_SIZE)
-            }
-        }
-        return result
-    }
 
     private suspend fun pull(api: HistorySyncApi, token: String): ApiResult<Unit> {
         var cursor = store.cursor()
@@ -225,4 +243,24 @@ class HistorySyncer(
 private inline fun <T, R> ApiResult<T>.then(next: (T) -> ApiResult<R>): ApiResult<R> = when (this) {
     is ApiResult.Success -> next(data)
     is ApiResult.Error -> this
+}
+
+/** Uploads [notUploaded] rows a batch at a time, marking each batch once the backend has it. */
+private suspend fun <Row> pushAll(
+    notUploaded: suspend (limit: Int) -> List<Row>,
+    toRecord: (Row) -> HistoryRecordDto,
+    markUploaded: suspend (List<Row>) -> Unit,
+    push: suspend (List<HistoryRecordDto>) -> Unit
+): ApiResult<Unit> {
+    val batchSize = HistorySyncer.PUSH_BATCH_SIZE
+    var result: ApiResult<Unit> = ApiResult.Success(Unit)
+    var batch = notUploaded(batchSize)
+    while (batch.isNotEmpty() && result is ApiResult.Success) {
+        result = safeApiCall { push(batch.map(toRecord)) }
+        if (result is ApiResult.Success) {
+            markUploaded(batch)
+            batch = if (batch.size < batchSize) emptyList() else notUploaded(batchSize)
+        }
+    }
+    return result
 }

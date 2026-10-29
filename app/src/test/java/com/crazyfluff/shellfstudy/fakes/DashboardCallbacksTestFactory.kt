@@ -17,6 +17,7 @@ import com.crazyfluff.shellfstudy.shared.feature.search.SearchActions
  */
 fun dashboardCallbacks(
     onRefresh: () -> Unit = {},
+    onRetryDeviceSync: () -> Unit = {},
     onStartReview: () -> Unit = {},
     onStartLesson: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
@@ -33,6 +34,7 @@ fun dashboardCallbacks(
     onReviewForecastColorModeChange: (ReviewForecastColorMode) -> Unit = {}
 ): DashboardCallbacks = DashboardCallbacks(
     onRefresh = onRefresh,
+    onRetryDeviceSync = onRetryDeviceSync,
     onStartReview = onStartReview,
     onStartLesson = onStartLesson,
     onOpenSettings = onOpenSettings,

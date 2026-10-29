@@ -35,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.crazyfluff.shellfstudy.shared.util.rememberRelativeTime
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStatus
 import com.crazyfluff.shellfstudy.shared.data.BACKLOG_THRESHOLD_RANGE
 import com.crazyfluff.shellfstudy.shared.data.DAILY_LESSON_GOAL_RANGE
 import com.crazyfluff.shellfstudy.shared.data.DAILY_STUDY_MINUTES_GOAL_RANGE
@@ -104,6 +106,7 @@ object SettingsScreenTestTags {
     const val FULL_REFRESH_ERROR_TEXT = "settings_full_refresh_error_text"
     const val HISTORY_SYNC_TOGGLE = "settings_history_sync_toggle"
     const val HISTORY_SYNC_CONFIRM_BUTTON = "settings_history_sync_confirm_button"
+    const val HISTORY_SYNC_STATUS = "settings_history_sync_status"
     const val DELETE_SYNCED_HISTORY_ROW = "settings_delete_synced_history_row"
     const val DELETE_SYNCED_HISTORY_CONFIRM_BUTTON = "settings_delete_synced_history_confirm_button"
     const val DELETE_SYNCED_HISTORY_PROGRESS = "settings_delete_synced_history_progress"
@@ -691,6 +694,7 @@ private fun HistorySyncGroup(historySync: HistorySyncUiState, actions: SettingsA
             onCheckedChange = { on -> if (on) showEnableConfirm = true else actions.onHistorySyncEnabledChange(false) },
             testTag = SettingsScreenTestTags.HISTORY_SYNC_TOGGLE
         )
+        if (historySync.enabled) HistorySyncStatusLine(historySync.status)
         SyncedHistoryDeletionRows(historySync.deletion, onDeleteClick = { showDeleteConfirm = true })
     }
 
@@ -725,6 +729,26 @@ private fun HistorySyncGroup(historySync: HistorySyncUiState, actions: SettingsA
             confirmButtonTestTag = SettingsScreenTestTags.DELETE_SYNCED_HISTORY_CONFIRM_BUTTON
         )
     }
+}
+
+/** Where sync stands, under its switch: running, last finished, or failing. */
+@Composable
+private fun HistorySyncStatusLine(status: HistorySyncStatus) {
+    val failed = status.lastPassFailed && !status.isSyncing
+    val syncedAgo = rememberRelativeTime(status.lastSyncedAtMs)
+    Text(
+        text = when {
+            status.isSyncing -> "Syncing…"
+            failed -> "Couldn't sync. Will try again"
+            status.lastSyncedAtMs != null -> "Last synced $syncedAgo"
+            else -> "Waiting for the first sync"
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+            .testTag(SettingsScreenTestTags.HISTORY_SYNC_STATUS)
+    )
 }
 
 /** "Delete synced data", replaced by a progress row while it runs, with the error under it if it failed. */

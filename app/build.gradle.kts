@@ -129,6 +129,8 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.sqlite.framework)
+    // Lets a test hand a composable its own lifecycle, to check what it does in the background.
+    testImplementation(libs.androidx.lifecycle.runtime.compose)
     testImplementation(libs.androidx.work.testing)
     testImplementation(platform(libs.koin.bom))
     testImplementation(libs.koin.test)

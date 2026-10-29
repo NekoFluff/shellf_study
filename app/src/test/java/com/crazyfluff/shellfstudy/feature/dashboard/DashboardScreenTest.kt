@@ -31,6 +31,7 @@ import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreen
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardScreenTestTags
 import com.crazyfluff.shellfstudy.shared.feature.dashboard.DashboardUiState
 import com.crazyfluff.shellfstudy.shared.feature.search.SearchOverlayTestTags
+import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -66,7 +67,7 @@ class DashboardScreenTest {
     }
 
     @Test
-    fun showsRefreshingBanner_andKeepsContentVisible_whenRefreshingWithCachedContent() {
+    fun showsAProgressLine_andNoBanner_whenRefreshingWithCachedContent() {
         composeTestRule.setContent {
             DashboardScreen(
                 uiState = DashboardUiState(
@@ -77,9 +78,12 @@ class DashboardScreenTest {
         }
 
         composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.LOADING_INDICATOR).assertCountEquals(0)
-        composeTestRule.onNodeWithTag(DashboardScreenTestTags.REFRESHING_BANNER).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(DashboardScreenTestTags.SYNC_PROGRESS_LINE).assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.OFFLINE_BANNER).assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag(DashboardScreenTestTags.PENDING_SYNC_BANNER).assertCountEquals(0)
         composeTestRule.onNodeWithText("Welcome back, durtle_fan!").assertIsDisplayed()
         composeTestRule.onNodeWithTag(DashboardScreenTestTags.LESSON_COUNT).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Syncing…").assertIsDisplayed()
     }
 
     @Test

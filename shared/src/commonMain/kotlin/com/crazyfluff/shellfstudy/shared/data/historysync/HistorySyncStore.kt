@@ -28,6 +28,7 @@ class HistorySyncStore(
     private val encryptedTokenKey = stringPreferencesKey("history_sync_encrypted_token")
     private val tokenUserIdKey = stringPreferencesKey("history_sync_token_user_id")
     private val tokenExpiresAtKey = longPreferencesKey("history_sync_token_expires_at_ms")
+    private val lastSyncedAtKey = longPreferencesKey("history_sync_last_synced_at_ms")
 
     val enabled: Flow<Boolean> = dataStore.data.map { it[enabledKey] ?: false }.distinctUntilChanged()
 
@@ -35,6 +36,13 @@ class HistorySyncStore(
 
     suspend fun setEnabled(enabled: Boolean) {
         dataStore.edit { it[enabledKey] = enabled }
+    }
+
+    /** When a pass last finished cleanly, or null if none has yet for this account. */
+    val lastSyncedAtMs: Flow<Long?> = dataStore.data.map { it[lastSyncedAtKey] }.distinctUntilChanged()
+
+    suspend fun setLastSyncedAt(atMs: Long) {
+        dataStore.edit { it[lastSyncedAtKey] = atMs }
     }
 
     suspend fun cursor(): Long = dataStore.data.first()[cursorKey] ?: 0L
@@ -81,6 +89,7 @@ class HistorySyncStore(
         dataStore.edit {
             it.remove(enabledKey)
             it.remove(cursorKey)
+            it.remove(lastSyncedAtKey)
             it.remove(encryptedTokenKey)
             it.remove(tokenUserIdKey)
             it.remove(tokenExpiresAtKey)

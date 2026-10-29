@@ -26,6 +26,7 @@ import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.ApiResult
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncSettings
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStatus
 import com.crazyfluff.shellfstudy.shared.feature.settings.SyncedHistoryDeletion
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
@@ -564,6 +565,9 @@ private class FakeHistorySyncSettings(
     val deleteResult = CompletableDeferred<ApiResult<Unit>>()
 
     override val enabled: Flow<Boolean> = enabledState
+    override val status: Flow<HistorySyncStatus> = MutableStateFlow(HistorySyncStatus())
+
+    override fun requestSyncNow() = Unit
 
     override suspend fun setEnabled(enabled: Boolean) {
         enabledState.value = enabled

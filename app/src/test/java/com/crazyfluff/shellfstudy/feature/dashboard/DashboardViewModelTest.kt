@@ -36,6 +36,12 @@ import kotlin.time.Clock
 import com.crazyfluff.shellfstudy.fakes.FakeStudyTimeDao
 import com.crazyfluff.shellfstudy.shared.data.LocalHistoryGuard
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
+import com.crazyfluff.shellfstudy.shared.data.ApiResult
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
+import com.crazyfluff.shellfstudy.shared.feature.dashboard.SyncChipState
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStatus
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncSettings
 import com.crazyfluff.shellfstudy.fakes.buildTestStudyTimeRepository
 import com.crazyfluff.shellfstudy.fakes.emptyCollectionJson
 import com.crazyfluff.shellfstudy.fakes.FakeSessionDao
@@ -146,6 +152,8 @@ class DashboardViewModelTest {
     /** Where the session clock's stretches land — see StudyTimeRepository.record. */
     private val studyTimeDao = FakeStudyTimeDao()
 
+    private val historySync = FakeDeviceSync()
+
     /** Each history sync request the dashboard makes, in order: "debounced" or "immediate". */
     private val historySyncRequests = mutableListOf<String>()
     private val historySyncScheduler = object : HistorySyncScheduler {
@@ -224,6 +232,7 @@ class DashboardViewModelTest {
                     lastSessionSummaryRepository = LastSessionSummaryRepository(dataStore, json),
                     appForegroundTracker = appForegroundTracker,
                     studyTimeRepository = buildStudyTimeRepository(),
+                    historySync = historySync,
                     timeSource = timeSource
                 )
             }
@@ -488,6 +497,45 @@ class DashboardViewModelTest {
 
             assertThat(historySyncRequests).containsExactly("debounced", "immediate").inOrder()
         }
+
+    @Test
+    fun `cross-device sync status reaches the dashboard, driving the progress line and the chip`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            dispatchByPath(jsonResponse(userJson()), jsonResponse(summaryJson()))
+            historySync.enabledState.value = true
+            val viewModel = createViewModel()
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                viewModel.onDashboardResumed()
+                while (state.fetchState is DashboardFetch.InFlight || state.lastSyncedAtMillis == null) {
+                    state = awaitItem()
+                }
+                assertThat(state.isSyncing).isFalse()
+                assertThat(state.syncChip).isInstanceOf(SyncChipState.Synced::class.java)
+
+                // Other dashboard flows can emit in between, so wait for the state that carries the change.
+                historySync.statusState.value = HistorySyncStatus(isSyncing = true)
+                while (!state.deviceSync.status.isSyncing) state = awaitItem()
+                assertThat(state.isSyncing).isTrue()
+                assertThat(state.syncChip).isEqualTo(SyncChipState.Syncing)
+
+                historySync.statusState.value = HistorySyncStatus(lastPassFailed = true)
+                while (!state.deviceSync.status.lastPassFailed) state = awaitItem()
+                assertThat(state.isSyncing).isFalse()
+                assertThat(state.syncChip).isEqualTo(SyncChipState.Problem)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `retrying the cross-device sync asks for a pass now`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = createViewModel()
+
+        viewModel.retryDeviceSync()
+
+        assertThat(historySync.syncNowRequests).isEqualTo(1)
+    }
 
     @Test
     fun `a resume with work in the outbox asks for it to be sent straight away`() = runTest(mainDispatcherRule.dispatcher) {
@@ -1279,4 +1327,25 @@ private object NoResumeThrottle : TimeSource {
     override fun markNow(): TimeMark = object : TimeMark {
         override fun elapsedNow(): Duration = Duration.INFINITE
     }
+}
+
+/** Cross-device sync as the dashboard sees it, with its state set directly by the test. */
+private class FakeDeviceSync : HistorySyncSettings {
+    val enabledState = MutableStateFlow(false)
+    val statusState = MutableStateFlow(HistorySyncStatus())
+    var syncNowRequests = 0
+
+    override val isAvailable = true
+    override val enabled: Flow<Boolean> = enabledState
+    override val status: Flow<HistorySyncStatus> = statusState
+
+    override suspend fun setEnabled(enabled: Boolean) {
+        enabledState.value = enabled
+    }
+
+    override fun requestSyncNow() {
+        syncNowRequests++
+    }
+
+    override suspend fun deleteSyncedHistory(): ApiResult<Unit> = ApiResult.Success(Unit)
 }

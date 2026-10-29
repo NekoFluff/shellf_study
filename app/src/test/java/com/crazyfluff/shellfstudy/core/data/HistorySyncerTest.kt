@@ -13,6 +13,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.data.TokenRepository
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncOutcome
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncScheduler
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStatus
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStore
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncer
 import com.crazyfluff.shellfstudy.shared.data.historysync.SettingsSync
@@ -338,6 +339,28 @@ class HistorySyncerTest {
         assertThat(unavailable.isAvailable).isFalse()
         assertThat(unavailable.sync()).isEqualTo(HistorySyncOutcome.SKIPPED)
         assertThat(server.requestCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a pass reports how it went in the status`() = runTest {
+        val phone = Device("phone").signedInWithSyncOn()
+        assertThat(phone.syncer.status.first()).isEqualTo(HistorySyncStatus())
+
+        phone.syncer.sync()
+        val synced = phone.syncer.status.first()
+        assertThat(synced.isSyncing).isFalse()
+        assertThat(synced.lastPassFailed).isFalse()
+        assertThat(synced.lastSyncedAtMs).isNotNull()
+
+        backend.failingPullIndexes += backend.pullCursors.size
+        phone.syncer.sync()
+        val failed = phone.syncer.status.first()
+        assertThat(failed.lastPassFailed).isTrue()
+        // The last good sync is still the one to report.
+        assertThat(failed.lastSyncedAtMs).isEqualTo(synced.lastSyncedAtMs)
+
+        phone.syncer.sync()
+        assertThat(phone.syncer.status.first().lastPassFailed).isFalse()
     }
 
     // --- Settings ---

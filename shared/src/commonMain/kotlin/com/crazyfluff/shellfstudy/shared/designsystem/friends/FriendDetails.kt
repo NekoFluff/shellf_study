@@ -45,7 +45,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.components.AppModalBottomS
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.LocalEinkTheme
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.einkBorder
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.srsStageColor
-import com.crazyfluff.shellfstudy.shared.util.formatRelativeTime
+import com.crazyfluff.shellfstudy.shared.util.rememberRelativeTime
 import kotlin.math.roundToInt
 
 /*
@@ -155,13 +155,14 @@ private fun SheetHeader(subject: FriendDetailsSubject) {
             // Name, then the level on its own line, then who they are on WaniKani and how fresh
             // the figures are.
             val stats = subject.stats
+            val updatedAgo = rememberRelativeTime(stats?.fetchedAtMillis)
             Text(
                 text = stats?.let(::levelLine) ?: "Stats not loaded yet",
                 style = MaterialTheme.typography.bodyMedium
             )
             val details = listOfNotNull(
                 stats?.username?.takeUnless { stats.isCurrentUser || it.isBlank() },
-                stats?.fetchedAtMillis?.let { "Updated ${formatRelativeTime(it)}" }
+                stats?.fetchedAtMillis?.let { "Updated $updatedAgo" }
             )
             if (details.isNotEmpty()) {
                 Text(

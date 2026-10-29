@@ -25,6 +25,7 @@ import com.crazyfluff.shellfstudy.shared.designsystem.AppVersion
 import com.crazyfluff.shellfstudy.shared.feature.settings.AccountSummary
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsActions
 import com.crazyfluff.shellfstudy.shared.feature.settings.HistorySyncUiState
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStatus
 import com.crazyfluff.shellfstudy.shared.feature.settings.SyncedHistoryDeletion
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreen
 import com.crazyfluff.shellfstudy.shared.feature.settings.SettingsScreenTestTags
@@ -581,109 +582,6 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun syncGroup_isHiddenUntilTheBackendIsAvailable() {
-        setContent(uiState = SettingsUiState(historySync = HistorySyncUiState(isAvailable = false)))
-
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.HISTORY_SYNC_TOGGLE).assertDoesNotExist()
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ROW).assertDoesNotExist()
-    }
-
-    @Test
-    fun historySyncToggle_asksBeforeTurningOn() {
-        val actions = RecordingSettingsActions()
-        setContent(uiState = SettingsUiState(historySync = HistorySyncUiState(isAvailable = true)), actions = actions)
-
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.HISTORY_SYNC_TOGGLE).performScrollTo().performClick()
-        assertThat(actions.calls).doesNotContain("onHistorySyncEnabledChange")
-
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.HISTORY_SYNC_CONFIRM_BUTTON).performClick()
-        assertThat(actions.lastArgumentOf("onHistorySyncEnabledChange")).isEqualTo(true)
-    }
-
-    @Test
-    fun historySyncToggle_turnsOffWithoutAsking() {
-        val actions = RecordingSettingsActions()
-        setContent(
-            uiState = SettingsUiState(historySync = HistorySyncUiState(isAvailable = true, enabled = true)),
-            actions = actions
-        )
-
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.HISTORY_SYNC_TOGGLE)
-            .performScrollTo()
-            .assertIsOn()
-            .performClick()
-
-        assertThat(actions.lastArgumentOf("onHistorySyncEnabledChange")).isEqualTo(false)
-    }
-
-    @Test
-    fun deleteSyncedHistory_asksForConfirmationFirst() {
-        val actions = RecordingSettingsActions()
-        setContent(
-            uiState = SettingsUiState(historySync = HistorySyncUiState(isAvailable = true, enabled = true)),
-            actions = actions
-        )
-
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ROW).performScrollTo().performClick()
-        assertThat(actions.calls).doesNotContain("onDeleteSyncedHistoryRequested")
-
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_CONFIRM_BUTTON).performClick()
-        assertThat(actions.calls).contains("onDeleteSyncedHistoryRequested")
-    }
-
-    @Test
-    fun deleteSyncedHistory_showsProgressInsteadOfTheRowWhileDeleting() {
-        setContent(
-            uiState = SettingsUiState(
-                historySync = HistorySyncUiState(
-                    isAvailable = true,
-                    enabled = true,
-                    deletion = SyncedHistoryDeletion.InFlight
-                )
-            )
-        )
-
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_PROGRESS)
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ROW).assertDoesNotExist()
-    }
-
-    @Test
-    fun deleteSyncedHistory_showsTheErrorOnFailure() {
-        setContent(
-            uiState = SettingsUiState(
-                historySync = HistorySyncUiState(
-                    isAvailable = true,
-                    enabled = true,
-                    deletion = SyncedHistoryDeletion.Failed("Couldn't delete synced data. Try again later.")
-                )
-            )
-        )
-
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.DELETE_SYNCED_HISTORY_ERROR_TEXT)
-            .performScrollTo()
-            .assertIsDisplayed()
-    }
-
-    @Test
-    fun accountRow_showsUsernameAndLevel() {
-        setContent(uiState = SettingsUiState(account = AccountSummary(username = "koichi", level = 12)))
-
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.ACCOUNT_ROW).performScrollTo()
-        composeTestRule.onNodeWithText("koichi").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Level 12", substring = true).assertIsDisplayed()
-    }
-
-    @Test
-    fun accountRow_isHiddenBeforeTheFirstSync_butLogOutIsStillOffered() {
-        setContent(uiState = SettingsUiState(account = null))
-
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.ACCOUNT_ROW).assertDoesNotExist()
-        composeTestRule.onNodeWithTag(SettingsScreenTestTags.LOG_OUT_ROW).performScrollTo().assertIsDisplayed()
-    }
-
-    @Test
     fun privacyPolicyRow_opensThePolicy() {
         val opened = mutableListOf<String>()
         val uriHandler = object : UriHandler {
@@ -749,7 +647,7 @@ class SettingsScreenTest {
 }
 
 /** A [SettingsActions] that records what it was asked to do — see the Lesson and Review tests. */
-private class RecordingSettingsActions : SettingsActions {
+internal class RecordingSettingsActions : SettingsActions {
     val calls = mutableListOf<String>()
     private val arguments = mutableListOf<Any?>()
 

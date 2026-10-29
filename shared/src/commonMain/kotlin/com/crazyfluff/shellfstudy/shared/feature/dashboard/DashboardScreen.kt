@@ -75,7 +75,7 @@ import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardMetric
 import com.crazyfluff.shellfstudy.shared.data.model.LeaderboardWindow
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastColorMode
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewForecastWindow
-import com.crazyfluff.shellfstudy.shared.util.formatRelativeTime
+import com.crazyfluff.shellfstudy.shared.util.rememberRelativeTime
 import com.crazyfluff.shellfstudy.shared.designsystem.theme.leaderboardUserColor
 import com.crazyfluff.shellfstudy.shared.designsystem.friends.FriendDetailsSubject
 import com.crazyfluff.shellfstudy.shared.designsystem.friends.FriendDetailsSheet
@@ -83,7 +83,15 @@ import com.crazyfluff.shellfstudy.shared.data.model.FriendStats
 
 object DashboardScreenTestTags {
     const val LOADING_INDICATOR = "dashboard_loading_indicator"
-    const val REFRESHING_BANNER = "dashboard_refreshing_banner"
+    const val SYNC_PROGRESS_LINE = "dashboard_sync_progress_line"
+    const val SYNC_CHIP = "dashboard_sync_chip"
+    const val SYNC_SHEET = "dashboard_sync_sheet"
+    const val SYNC_SHEET_WANIKANI_ROW = "dashboard_sync_sheet_wanikani_row"
+    const val SYNC_SHEET_REFRESH_BUTTON = "dashboard_sync_sheet_refresh_button"
+    const val SYNC_SHEET_ANSWERS_ROW = "dashboard_sync_sheet_answers_row"
+    const val SYNC_SHEET_DEVICES_ROW = "dashboard_sync_sheet_devices_row"
+    const val SYNC_SHEET_DEVICES_RETRY_BUTTON = "dashboard_sync_sheet_devices_retry_button"
+    const val SYNC_SHEET_DEVICES_SETTINGS_BUTTON = "dashboard_sync_sheet_devices_settings_button"
     const val OFFLINE_BANNER = "dashboard_offline_banner"
     const val SYNC_BLOCKED_BANNER = "dashboard_sync_blocked_banner"
     const val PENDING_SYNC_BANNER = "dashboard_pending_sync_banner"
@@ -114,6 +122,8 @@ object DashboardScreenTestTags {
  *  their ergonomics back from `dashboardCallbacks()` in the test fakes, where "silent" is the point. */
 data class DashboardCallbacks(
     val onRefresh: () -> Unit,
+    /** The sync sheet's "Retry" for cross-device sync. */
+    val onRetryDeviceSync: () -> Unit,
     val onStartReview: () -> Unit,
     val onStartLesson: () -> Unit,
     val onOpenSettings: () -> Unit,
@@ -275,6 +285,7 @@ private fun rememberDashboardCallbacks(
 ) {
     DashboardCallbacks(
         onRefresh = viewModel::refresh,
+        onRetryDeviceSync = viewModel::retryDeviceSync,
         onStartReview = onStartReview,
         onStartLesson = onStartLesson,
         onOpenSettings = onOpenSettings,
@@ -307,6 +318,7 @@ fun DashboardScreen(
     var isSearchActive by remember { mutableStateOf(false) }
     var abandonConfirm by remember { mutableStateOf<AbandonConfirmKind?>(null) }
     var openLeaderboardEntry by remember { mutableStateOf<FriendStats?>(null) }
+    var showSyncStatus by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -323,7 +335,7 @@ fun DashboardScreen(
                 // Hardcoded rather than bound to uiState.fetchState: the drag-follow arrow
                 // (state.distanceFraction) works regardless of that state and always snaps away on
                 // release, but wiring the real refresh state here would additionally re-pin it as a
-                // spinner for the whole refresh — the status banner below is that signal instead.
+                // spinner for the whole refresh — the sync progress line is that signal instead.
                 isRefreshing = false,
                 onRefresh = callbacks.onRefresh,
                 modifier = Modifier.fillMaxSize().padding(innerPadding)
@@ -334,8 +346,9 @@ fun DashboardScreen(
                     // Each card is one keyed item, so offscreen cards are never composed or measured.
                     contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp)
                 ) {
-                    dashboardItems(uiState, callbacks, onLeaderboardEntryClick = { openLeaderboardEntry = it })
+                    dashboardItems(uiState, callbacks, { openLeaderboardEntry = it }) { showSyncStatus = true }
                 }
+                SyncProgressLine(isSyncing = uiState.isSyncing, modifier = Modifier.align(Alignment.TopCenter))
             }
         }
 
@@ -348,6 +361,15 @@ fun DashboardScreen(
         )
         abandonConfirm?.let { kind ->
             AbandonSessionDialog(kind = kind, callbacks = callbacks, onDismiss = { abandonConfirm = null })
+        }
+        if (showSyncStatus) {
+            SyncStatusSheet(
+                uiState = uiState,
+                onRefresh = callbacks.onRefresh,
+                onRetryDeviceSync = callbacks.onRetryDeviceSync,
+                onOpenSettings = callbacks.onOpenSettings,
+                onDismiss = { showSyncStatus = false }
+            )
         }
         // Read-only here: renaming and removing friends is the Friends page's job.
         openLeaderboardEntry?.let { entry ->
@@ -444,7 +466,8 @@ private fun DashboardTopBar(
 private fun LazyListScope.dashboardItems(
     uiState: DashboardUiState,
     callbacks: DashboardCallbacks,
-    onLeaderboardEntryClick: (FriendStats) -> Unit
+    onLeaderboardEntryClick: (FriendStats) -> Unit,
+    onOpenSyncStatus: () -> Unit
 ) {
     when (val contentState = uiState.contentState) {
         // Nothing cached yet to show while the very first fetch is in flight — the
@@ -496,6 +519,7 @@ private fun LazyListScope.dashboardItems(
                     },
                     style = MaterialTheme.typography.bodyLarge
                 )
+                SyncStatusChip(state = uiState.syncChip, onClick = onOpenSyncStatus)
             }
 
             item(key = "summaryCards") {
@@ -725,13 +749,12 @@ private fun SummaryCard(
 }
 
 /**
- * Sits above the welcome message instead of blocking the screen: a slim "Refreshing…" bar while a
- * sync is in flight, an offline notice (with the age of the data on screen and a tap-to-retry)
- * when the last attempt failed but there's still content to show, or a note about queued
- * reviews/lessons waiting to sync in the background. Renders nothing the rest of the time, so it
- * takes up no space when the dashboard is idle and up to date. At most one banner shows at a time,
- * in priority order: sync-blocked-on-auth (needs the user to act) > offline (connectivity) >
- * pending-sync-count (informational, expected offline-first behavior) > refreshing.
+ * Sits above the welcome message instead of blocking the screen: an offline notice (with the age
+ * of the data on screen and a tap-to-retry) when the last attempt failed but there's still content
+ * to show, or a note about queued reviews/lessons waiting to sync in the background. Routine syncing
+ * gets no banner — it's the progress line and the sync chip, which don't push the cards around.
+ * Renders nothing the rest of the time. At most one banner shows at a time, in priority order:
+ * sync-blocked-on-auth (needs the user to act) > offline (connectivity) > pending-sync-count.
  */
 @Composable
 private fun DashboardStatusBanner(bannerState: DashboardBannerState, onRetry: () -> Unit) {
@@ -754,9 +777,10 @@ private fun DashboardStatusBanner(bannerState: DashboardBannerState, onRetry: ()
             testTag = DashboardScreenTestTags.OFFLINE_BANNER,
             onClick = onRetry
         ) {
+            val syncedAgo = rememberRelativeTime(bannerState.lastSyncedAtMillis)
             Text(
                 text = "You're offline — showing data from ${
-                    bannerState.lastSyncedAtMillis?.let(::formatRelativeTime) ?: "an earlier sync"
+                    if (bannerState.lastSyncedAtMillis != null) syncedAgo else "an earlier sync"
                 }. Tap to retry.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer
@@ -770,23 +794,6 @@ private fun DashboardStatusBanner(bannerState: DashboardBannerState, onRetry: ()
             val noun = if (bannerState.count == 1) "item" else "items"
             Text(
                 text = "${bannerState.count} $noun waiting to sync.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        DashboardBannerState.Refreshing -> BannerRow(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            testTag = DashboardScreenTestTags.REFRESHING_BANNER
-        ) {
-            CircularProgressIndicator(
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Refreshing…",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

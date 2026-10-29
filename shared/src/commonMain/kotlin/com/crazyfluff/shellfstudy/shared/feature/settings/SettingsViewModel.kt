@@ -10,6 +10,7 @@ import com.crazyfluff.shellfstudy.shared.data.NotificationSettings
 import com.crazyfluff.shellfstudy.shared.data.SettingsRepository
 import com.crazyfluff.shellfstudy.shared.data.ThemeMode
 import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncSettings
+import com.crazyfluff.shellfstudy.shared.data.historysync.HistorySyncStatus
 import com.crazyfluff.shellfstudy.shared.data.model.ReviewPriority
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationCoordinator
 import com.crazyfluff.shellfstudy.shared.notifications.NotificationScheduler
@@ -44,7 +45,8 @@ data class AccountSummary(val username: String, val level: Int)
 data class HistorySyncUiState(
     val isAvailable: Boolean = false,
     val enabled: Boolean = false,
-    val deletion: SyncedHistoryDeletion = SyncedHistoryDeletion.Idle
+    val deletion: SyncedHistoryDeletion = SyncedHistoryDeletion.Idle,
+    val status: HistorySyncStatus = HistorySyncStatus()
 )
 
 /** The "delete synced data" action. */
@@ -75,9 +77,15 @@ class SettingsViewModel(
     private val isLoggedOut = MutableStateFlow(false)
     private val syncedHistoryDeletion = MutableStateFlow<SyncedHistoryDeletion>(SyncedHistoryDeletion.Idle)
 
-    private val historySyncState = combine(historySync.enabled, syncedHistoryDeletion) { enabled, deletion ->
-        HistorySyncUiState(isAvailable = historySync.isAvailable, enabled = enabled, deletion = deletion)
-    }
+    private val historySyncState =
+        combine(historySync.enabled, syncedHistoryDeletion, historySync.status) { enabled, deletion, status ->
+            HistorySyncUiState(
+                isAvailable = historySync.isAvailable,
+                enabled = enabled,
+                deletion = deletion,
+                status = status
+            )
+        }
 
     private val account = dashboardCacheRepository.cachedSummary.map { summary ->
         summary?.let { AccountSummary(username = it.username, level = it.level) }

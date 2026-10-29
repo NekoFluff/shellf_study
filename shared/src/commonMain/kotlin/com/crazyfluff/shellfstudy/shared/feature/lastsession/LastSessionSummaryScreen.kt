@@ -25,7 +25,7 @@ import com.crazyfluff.shellfstudy.shared.data.LastSessionKind
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteContent
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.SessionCompleteTestTags
 import com.crazyfluff.shellfstudy.shared.designsystem.quiz.toSessionSummaryDisplay
-import com.crazyfluff.shellfstudy.shared.util.formatRelativeTime
+import com.crazyfluff.shellfstudy.shared.util.rememberRelativeTime
 
 object LastSessionSummaryScreenTestTags {
     const val LOADING_INDICATOR = "last_session_summary_loading_indicator"
@@ -89,12 +89,13 @@ fun LastSessionSummaryScreen(
 
                 is LastSessionSummaryUiState.Loaded -> {
                     val summary = state.summary
+                    val completedAgo = rememberRelativeTime(summary.completedAtMillis)
                     SessionCompleteContent(
                         title = when (summary.kind) {
                             LastSessionKind.LESSON -> "Last lesson session"
                             LastSessionKind.REVIEW -> "Last review session"
                         },
-                        subtitle = "Completed ${formatRelativeTime(summary.completedAtMillis)}.",
+                        subtitle = "Completed $completedAgo.",
                         summary = summary.toSessionSummaryDisplay(),
                         onDone = onBack,
                         onSubjectClick = openSubjectDetail,
