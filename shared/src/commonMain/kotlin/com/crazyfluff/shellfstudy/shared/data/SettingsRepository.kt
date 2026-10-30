@@ -127,7 +127,8 @@ class SettingsRepository(
     /**
      * The settings that follow the learner across devices when sync is on: how they like to study,
      * which they'd want the same everywhere. The rest stay per device on purpose. Theme, because an
-     * E-ink theme belongs to the e-reader, not the phone. Mute, MP3-only audio and the Japanese
+     * E-ink theme belongs to the e-reader, not the phone. The item-type label on the quiz
+     * screen, which each device keeps to itself. Mute, MP3-only audio and the Japanese
      * keyboard, because they answer to the device or the moment. Notifications, because each device
      * schedules its own. Moving a setting between the two groups is a change to this list alone.
      */
@@ -138,7 +139,6 @@ class SettingsRepository(
         SyncedSetting.EnumSetting(reviewPriorityKey, ReviewPriority.entries.map { it.name }.toSet()),
         SyncedSetting.BooleanSetting(showPitchAccentKey),
         SyncedSetting.BooleanSetting(autoplayPronunciationAudioKey),
-        SyncedSetting.BooleanSetting(showSubjectTypeLabelKey),
         SyncedSetting.BooleanSetting(showTotalTimerKey),
         SyncedSetting.BooleanSetting(showQuestionTimerKey),
         SyncedSetting.BooleanSetting(showStrokeOrderKey),
@@ -241,7 +241,7 @@ class SettingsRepository(
     }
 
     suspend fun setShowSubjectTypeLabel(enabled: Boolean) {
-        setSynced(showSubjectTypeLabelKey, enabled)
+        dataStore.edit { it[showSubjectTypeLabelKey] = enabled }
     }
 
     suspend fun setShowTotalTimer(enabled: Boolean) {

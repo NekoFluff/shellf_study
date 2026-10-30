@@ -300,8 +300,10 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
             modifier = Modifier.testTag(testTags.characters)
         )
         if (display.showSubjectTypeLabel) {
+            // Read as WaniKani's prompt reads: "Kanji Reading", "Vocabulary Meaning".
+            val asked = questionType.label.replaceFirstChar { it.uppercase() }
             Text(
-                text = subjectTypeLabel(item.subjectType),
+                text = "${subjectTypeLabel(item.subjectType)} $asked",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.testTag(testTags.subjectTypeLabel)

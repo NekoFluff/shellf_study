@@ -343,7 +343,7 @@ private fun QuizScreenGroup(uiState: SettingsUiState, actions: SettingsActions) 
     ListGroup(title = "Quiz screen") {
         SwitchRow(
             title = "Show item type",
-            subtitle = "Radical, Kanji or Vocabulary under the word",
+            subtitle = "Kanji Reading, Vocabulary Meaning and so on, under the word",
             checked = uiState.app.showSubjectTypeLabel,
             onCheckedChange = actions::onShowSubjectTypeLabelChange,
             testTag = SettingsScreenTestTags.SHOW_SUBJECT_TYPE_LABEL_TOGGLE

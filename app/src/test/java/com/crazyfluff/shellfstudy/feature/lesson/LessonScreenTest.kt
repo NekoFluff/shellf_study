@@ -1245,7 +1245,7 @@ class LessonScreenTest {
         )
 
         composeTestRule.onNodeWithTag(LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Radical").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Radical Meaning").assertIsDisplayed()
     }
 
     @Test

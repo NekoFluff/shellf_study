@@ -271,7 +271,20 @@ class ReviewScreenTest {
         )
 
         composeTestRule.onNodeWithTag(ReviewScreenTestTags.SUBJECT_TYPE_LABEL).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Kanji").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Kanji Meaning").assertIsDisplayed()
+    }
+
+    @Test
+    fun subjectTypeLabel_saysTheQuestionIsAReading() {
+        setScreen(
+            activeState(
+                questionType = QuestionType.READING,
+                totalCount = 1, remainingCount = 1,
+            ),
+            displaySettings = DisplaySettings(showSubjectTypeLabel = true),
+        )
+
+        composeTestRule.onNodeWithText("Kanji Reading").assertIsDisplayed()
     }
 
     @Test

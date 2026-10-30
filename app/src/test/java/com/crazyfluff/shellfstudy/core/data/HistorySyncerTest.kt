@@ -425,6 +425,7 @@ class HistorySyncerTest {
         val phone = Device("phone").signedInWithSyncOn()
         phone.settings.setThemeMode(ThemeMode.EINK)
         phone.settings.setAudioMuted(true)
+        phone.settings.setShowSubjectTypeLabel(true)
         phone.settings.setNotificationsEnabled(true)
 
         phone.syncer.sync()
