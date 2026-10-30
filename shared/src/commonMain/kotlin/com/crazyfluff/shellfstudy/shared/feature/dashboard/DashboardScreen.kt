@@ -348,7 +348,7 @@ fun DashboardScreen(
                     modifier = Modifier.fillMaxSize(),
                     // The insets belong to the scrollable content rather than clipping the viewport.
                     // Each card is one keyed item, so offscreen cards are never composed or measured.
-                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp)
+                    contentPadding = PaddingValues(start = 24.dp, top = 16.dp, end = 24.dp, bottom = 24.dp)
                 ) {
                     dashboardItems(uiState, callbacks, onLeaderboardEntryClick = { openLeaderboardEntry = it })
                 }
