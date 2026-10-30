@@ -79,6 +79,7 @@ object ReviewScreenTestTags {
     const val DETAILS_TOGGLE = "review_details_toggle"
     const val TYPE_MISMATCH_TEXT = "review_type_mismatch_text"
     const val SUBJECT_TYPE_LABEL = "review_subject_type_label"
+    const val RANK_CHANGE_CHIP = "review_rank_change_chip"
     const val TOTAL_TIMER_TEXT = "review_total_timer_text"
     const val QUESTION_TIMER_TEXT = "review_question_timer_text"
 }
@@ -316,6 +317,7 @@ private fun ColumnScope.ReviewActivePhase(
             totalTimerText = ReviewScreenTestTags.TOTAL_TIMER_TEXT,
             characters = ReviewScreenTestTags.CHARACTERS,
             subjectTypeLabel = ReviewScreenTestTags.SUBJECT_TYPE_LABEL,
+            rankChangeChip = ReviewScreenTestTags.RANK_CHANGE_CHIP,
             answerField = ReviewScreenTestTags.ANSWER_FIELD,
             typeMismatchText = ReviewScreenTestTags.TYPE_MISMATCH_TEXT,
             dontKnowButton = ReviewScreenTestTags.DONT_KNOW_BUTTON,

@@ -12,6 +12,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.unit.dp
+import com.crazyfluff.shellfstudy.shared.data.model.SrsStage
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -285,6 +288,22 @@ class ReviewScreenTest {
         )
 
         composeTestRule.onNodeWithText("Kanji Reading").assertIsDisplayed()
+    }
+
+    @Test
+    fun rankChangeChip_sitsClearOfTheSubjectTypeLabel() {
+        setScreen(
+            activeState(
+                totalCount = 1, remainingCount = 1,
+                feedback = AnswerFeedback(isCorrect = true, correctAnswer = "water"),
+                rankChange = RankChange(from = SrsStage.APPRENTICE_1, to = SrsStage.APPRENTICE_2)
+            ),
+            displaySettings = DisplaySettings(showSubjectTypeLabel = true),
+        )
+
+        val label = composeTestRule.onNodeWithTag(ReviewScreenTestTags.SUBJECT_TYPE_LABEL).getUnclippedBoundsInRoot()
+        val chip = composeTestRule.onNodeWithTag(ReviewScreenTestTags.RANK_CHANGE_CHIP).getUnclippedBoundsInRoot()
+        assertThat(chip.top - label.bottom).isAtLeast(16.dp)
     }
 
     @Test

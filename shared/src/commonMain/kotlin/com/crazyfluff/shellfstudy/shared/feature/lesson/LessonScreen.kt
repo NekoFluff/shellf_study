@@ -157,6 +157,7 @@ object LessonScreenTestTags {
     const val ANSWER_DETAIL_TEXT = "lesson_answer_detail_text"
     const val REVEAL_BUTTON = "lesson_reveal_button"
     const val QUIZ_SUBJECT_TYPE_LABEL = "lesson_quiz_subject_type_label"
+    const val QUIZ_RANK_CHANGE_CHIP = "lesson_quiz_rank_change_chip"
     const val UNDO_BUTTON = "lesson_undo_button"
     const val CONTINUE_BUTTON = "lesson_continue_button"
     const val SESSION_COMPLETE = "lesson_session_complete"
@@ -433,6 +434,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LessonQuizPhase(
             totalTimerText = LessonScreenTestTags.TOTAL_TIMER_TEXT,
             characters = LessonScreenTestTags.QUIZ_CHARACTERS,
             subjectTypeLabel = LessonScreenTestTags.QUIZ_SUBJECT_TYPE_LABEL,
+            rankChangeChip = LessonScreenTestTags.QUIZ_RANK_CHANGE_CHIP,
             answerField = LessonScreenTestTags.ANSWER_FIELD,
             typeMismatchText = LessonScreenTestTags.TYPE_MISMATCH_TEXT,
             dontKnowButton = LessonScreenTestTags.DONT_KNOW_BUTTON,

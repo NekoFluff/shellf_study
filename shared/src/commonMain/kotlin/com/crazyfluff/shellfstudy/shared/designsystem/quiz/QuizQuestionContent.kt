@@ -73,6 +73,7 @@ data class QuizQuestionTestTags(
     val totalTimerText: String,
     val characters: String,
     val subjectTypeLabel: String,
+    val rankChangeChip: String,
     val answerField: String,
     val typeMismatchText: String,
     val dontKnowButton: String,
@@ -352,8 +353,15 @@ private fun <T : QuizDisplayItem> ColumnScope.QuizPrompt(
         ) {
             val rankChange = question.grade?.rankChange
             if (rankChange != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                RankChangeChip(rankChange)
+                // Padding, not a Spacer: AnimatedVisibility stacks its children like a Box, so a
+                // Spacer before the chip would sit under it. Further from the item-type label than
+                // from the glyph, since text right above the chip otherwise reads as part of it.
+                RankChangeChip(
+                    rankChange,
+                    modifier = Modifier
+                        .padding(top = if (display.showSubjectTypeLabel) 16.dp else 8.dp)
+                        .testTag(testTags.rankChangeChip)
+                )
             }
         }
     }
