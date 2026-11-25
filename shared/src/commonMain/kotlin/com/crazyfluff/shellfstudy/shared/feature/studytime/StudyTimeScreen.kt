@@ -168,9 +168,6 @@ private fun StudyTimeContent(
         report.lifetime?.let { lifetime ->
             item(key = "lifetime") { LifetimeCard(lifetime) }
         }
-        if (!report.heatmap.isEmpty) {
-            item(key = "heatmap") { HeatmapCard(report.heatmap) }
-        }
     }
 }
 

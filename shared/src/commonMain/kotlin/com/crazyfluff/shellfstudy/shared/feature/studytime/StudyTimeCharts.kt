@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crazyfluff.shellfstudy.shared.data.studytime.LevelStudyTime
-import com.crazyfluff.shellfstudy.shared.data.studytime.StudyHeatmap
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeBucket
 import kotlinx.datetime.DayOfWeek
 
@@ -207,58 +206,6 @@ fun ChartLegendItem(color: Color, label: String, dashed: Boolean = false) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-    }
-}
-
-/** Weekday rows × hour columns, deeper colour for more time. */
-@Composable
-fun StudyHeatmapGrid(heatmap: StudyHeatmap, modifier: Modifier = Modifier) {
-    val accent = reviewTimeColor()
-    val empty = emptyCellColor()
-    val labelStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
-    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val rowHeight = 14.dp
-    val maxMs = heatmap.maxMs.coerceAtLeast(1L)
-
-    Column(modifier = modifier) {
-        Row {
-            Column(modifier = Modifier.width(28.dp)) {
-                DayOfWeek.entries.forEach { day ->
-                    Box(modifier = Modifier.height(rowHeight + 2.dp), contentAlignment = Alignment.CenterStart) {
-                        Text(text = day.shortLabel(), style = labelStyle, color = labelColor)
-                    }
-                }
-            }
-            Canvas(modifier = Modifier.weight(1f).height((rowHeight + 2.dp) * DayOfWeek.entries.size)) {
-                val cellGap = 2.dp.toPx()
-                val cellWidth = (size.width - cellGap * (StudyHeatmap.HOURS - 1)) / StudyHeatmap.HOURS
-                val cellHeight = rowHeight.toPx()
-                val radius = CornerRadius(2.dp.toPx())
-                DayOfWeek.entries.forEachIndexed { row, day ->
-                    for (hour in 0 until StudyHeatmap.HOURS) {
-                        val ms = heatmap.at(day, hour)
-                        // A square root keeps a single long session from washing every other cell
-                        // out to near-blank.
-                        val intensity = kotlin.math.sqrt(ms.toFloat() / maxMs)
-                        val color = if (ms == 0L) empty else accent.copy(alpha = 0.15f + 0.85f * intensity)
-                        drawRoundRect(
-                            color = color,
-                            topLeft = Offset(hour * (cellWidth + cellGap), row * (cellHeight + cellGap)),
-                            size = Size(cellWidth, cellHeight),
-                            cornerRadius = radius
-                        )
-                    }
-                }
-            }
-        }
-        Row(
-            modifier = Modifier.padding(start = 28.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            listOf("12am", "6am", "12pm", "6pm", "11pm").forEach { label ->
-                Text(text = label, style = labelStyle, color = labelColor)
-            }
-        }
     }
 }
 

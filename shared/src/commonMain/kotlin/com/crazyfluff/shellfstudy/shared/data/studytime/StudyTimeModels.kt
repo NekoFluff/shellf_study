@@ -92,55 +92,6 @@ data class StudyPace(
 
 data class LevelStudyTime(val level: Int, val split: StudyTimeSplit, val activeDays: Int)
 
-/** Study time per weekday × hour of day, Monday first. */
-data class StudyHeatmap(val cellsMs: List<Long>) {
-    fun at(dayOfWeek: DayOfWeek, hour: Int): Long = cellsMs[index(dayOfWeek, hour)]
-
-    val maxMs: Long get() = cellsMs.maxOrNull() ?: 0L
-
-    val isEmpty: Boolean get() = maxMs == 0L
-
-    /** When in the day most study time falls, or null with no data. */
-    val peakPartOfDay: PartOfDay?
-        get() = if (isEmpty) {
-            null
-        } else {
-            PartOfDay.entries.maxBy { part -> part.hours.sumOf { hour -> hourTotalMs(hour) } }
-        }
-
-    /** Whether weekdays or weekends get more time per day, or null with no data. Per day, since
-     *  there are five weekdays to two weekend days. */
-    val prefersWeekends: Boolean?
-        get() {
-            if (isEmpty) return null
-            val weekend = setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
-            fun perDay(days: List<DayOfWeek>) = days.sumOf { day -> (0 until HOURS).sumOf { at(day, it) } } / days.size
-            val (weekendDays, weekdays) = DayOfWeek.entries.partition { it in weekend }
-            return perDay(weekendDays) > perDay(weekdays)
-        }
-
-    private fun hourTotalMs(hour: Int) = DayOfWeek.entries.sumOf { at(it, hour) }
-
-    companion object {
-        const val HOURS = 24
-
-        fun index(dayOfWeek: DayOfWeek, hour: Int) = (dayOfWeek.isoDayNumber - 1) * HOURS + hour
-    }
-}
-
-private const val MORNING_STARTS_AT = 5
-private const val AFTERNOON_STARTS_AT = 12
-private const val EVENING_STARTS_AT = 17
-private const val NIGHT_STARTS_AT = 21
-
-/** [phrase] completes "You study most …". */
-enum class PartOfDay(val phrase: String, val hours: List<Int>) {
-    MORNING("in the mornings", (MORNING_STARTS_AT until AFTERNOON_STARTS_AT).toList()),
-    AFTERNOON("in the afternoons", (AFTERNOON_STARTS_AT until EVENING_STARTS_AT).toList()),
-    EVENING("in the evenings", (EVENING_STARTS_AT until NIGHT_STARTS_AT).toList()),
-    NIGHT("late at night", (NIGHT_STARTS_AT until StudyHeatmap.HOURS).toList() + (0 until MORNING_STARTS_AT).toList())
-}
-
 /** What the dashboard card and the screen's hero both show. */
 data class StudyTimeOverview(
     val today: StudyTimeSplit,
@@ -162,7 +113,6 @@ data class StudyTimeReport(
     /** Highest level first. */
     val levels: List<LevelStudyTime>,
     val currentLevel: Int?,
-    val heatmap: StudyHeatmap,
     /** The whole WaniKani history priced at the learner's pace; null before there is any. */
     val lifetime: LifetimeEstimate? = null
 )

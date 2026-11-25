@@ -124,7 +124,7 @@ class StudyTimeScreenTest {
     }
 
     @Test
-    fun showsPaceTimePerLevelAndWhenYouStudy() {
+    fun showsPaceAndTimePerLevelButNoLongerWhenYouStudy() {
         setContent(loaded(someStudy))
 
         scrollTo(StudyTimeTestTags.PACE_REVIEW)
@@ -137,9 +137,21 @@ class StudyTimeScreenTest {
             .assertContentDescriptionEquals("Level 7: 25m, Level 8: 35m")
         // Level 8's 35m plus level 7's 25m.
         composeTestRule.onNodeWithTag(StudyTimeTestTags.LEVELS_TOTAL).assertTextEquals("Total recorded time: 1h")
-        scrollTo(StudyTimeTestTags.HEATMAP_CAPTION)
-        composeTestRule.onNodeWithTag(StudyTimeTestTags.HEATMAP_CAPTION)
-            .assertTextEquals("You study most in the evenings, and more on weekends.")
+        composeTestRule.onNodeWithText("When you study").assertDoesNotExist()
+    }
+
+    @Test
+    fun historyCardShowsTimePerReviewAndPerLesson() {
+        setContent(loaded(someStudy))
+
+        scrollTo(StudyTimeTestTags.SELECTED_BAR_REVIEWS)
+        // The last 7 days: 45 minutes over 270 review items, 15 minutes over 5 lessons.
+        composeTestRule.onNode(
+            hasText("10.0s per review") and hasAnyAncestor(hasTestTag(StudyTimeTestTags.SELECTED_BAR_REVIEWS))
+        ).assertIsDisplayed()
+        composeTestRule.onNode(
+            hasText("3m per lesson") and hasAnyAncestor(hasTestTag(StudyTimeTestTags.SELECTED_BAR_LESSONS))
+        ).assertIsDisplayed()
     }
 
     @Test

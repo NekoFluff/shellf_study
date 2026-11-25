@@ -18,7 +18,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.crazyfluff.shellfstudy.shared.data.studytime.LevelStudyTime
 import com.crazyfluff.shellfstudy.shared.data.studytime.LifetimeEstimate
-import com.crazyfluff.shellfstudy.shared.data.studytime.StudyHeatmap
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyPace
 import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeAggregator
 import kotlin.math.abs
@@ -144,25 +143,4 @@ private fun LifetimeRow(
             )
         }
     }
-}
-
-@Composable
-internal fun HeatmapCard(heatmap: StudyHeatmap) {
-    SectionCard(title = "When you study", subtitle = "Last ${StudyTimeAggregator.HEATMAP_DAYS} days") {
-        heatmapCaption(heatmap)?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.testTag(StudyTimeTestTags.HEATMAP_CAPTION)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-        StudyHeatmapGrid(heatmap = heatmap, modifier = Modifier.fillMaxWidth())
-    }
-}
-
-internal fun heatmapCaption(heatmap: StudyHeatmap): String? {
-    val part = heatmap.peakPartOfDay ?: return null
-    val days = if (heatmap.prefersWeekends == true) "weekends" else "weekdays"
-    return "You study most ${part.phrase}, and more on $days."
 }

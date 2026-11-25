@@ -96,9 +96,9 @@ internal val windowLabel: (StudyTimeWindow) -> String = { window ->
 }
 
 private fun StudyTimeWindow.previousPeriodLabel(): String = when (this) {
-    StudyTimeWindow.WEEK -> "the 7 days before"
-    StudyTimeWindow.MONTH -> "the 30 days before"
-    StudyTimeWindow.YEAR -> "the year before"
+    StudyTimeWindow.WEEK -> "the previous 7 days"
+    StudyTimeWindow.MONTH -> "the previous 30 days"
+    StudyTimeWindow.YEAR -> "the previous 52 weeks"
 }
 
 @Composable
@@ -183,6 +183,7 @@ private fun BarDetailPanel(title: String, split: StudyTimeSplit, items: StudyIte
                 label = "Reviews",
                 ms = split.reviewMs,
                 count = countLabel(items.reviews, "review"),
+                pace = paceLabel(split.reviewMs, items.reviews, "review"),
                 modifier = Modifier.weight(1f).testTag(StudyTimeTestTags.SELECTED_BAR_REVIEWS)
             )
             BarDetailColumn(
@@ -190,15 +191,23 @@ private fun BarDetailPanel(title: String, split: StudyTimeSplit, items: StudyIte
                 label = "Lessons",
                 ms = split.lessonMs,
                 count = countLabel(items.lessons, "lesson"),
+                pace = paceLabel(split.lessonMs, items.lessons, "lesson"),
                 modifier = Modifier.weight(1f).testTag(StudyTimeTestTags.SELECTED_BAR_LESSONS)
             )
         }
     }
 }
 
-/** A swatch and label over the time and item count. */
+/** A swatch and label over the time, the item count and, when there were any, the time per item. */
 @Composable
-private fun BarDetailColumn(color: Color, label: String, ms: Long, count: String, modifier: Modifier = Modifier) {
+private fun BarDetailColumn(
+    color: Color,
+    label: String,
+    ms: Long,
+    count: String,
+    pace: String?,
+    modifier: Modifier = Modifier
+) {
     Column(modifier = modifier) {
         ChartLegendItem(color, label)
         Spacer(modifier = Modifier.height(2.dp))
@@ -208,6 +217,13 @@ private fun BarDetailColumn(color: Color, label: String, ms: Long, count: String
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        if (pace != null) {
+            Text(
+                text = pace,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -219,6 +235,10 @@ private fun bucketDate(bucket: StudyTimeBucket, isDaily: Boolean): String = if (
 
 private fun countLabel(count: Int, noun: String): String =
     "${formatCount(count.toLong())} $noun${if (count == 1) "" else "s"}"
+
+/** "12.4s per review" — the time divided by the items finished in it; null when none were. */
+internal fun paceLabel(ms: Long, count: Int, noun: String): String? =
+    if (count <= 0) null else "${formatPace(ms / count)} per $noun"
 
 @Composable
 internal fun PeriodStatsCard(stats: StudyTimePeriodStats, window: StudyTimeWindow) {
@@ -250,15 +270,22 @@ internal fun PeriodStatsCard(stats: StudyTimePeriodStats, window: StudyTimeWindo
         }
         stats.changeFraction?.let { change ->
             Spacer(modifier = Modifier.height(12.dp))
-            val percent = (abs(change) * 100).roundToInt()
-            val arrow = if (change >= 0) "▲" else "▼"
             Text(
-                text = "$arrow $percent% ${if (change >= 0) "more" else "less"} than ${window.previousPeriodLabel()}",
+                text = periodChangeText(change, stats.previousTotalMs, window),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(StudyTimeTestTags.PERIOD_CHANGE)
             )
         }
     }
+}
+
+/** "▼ 23% less study time than the previous 7 days (6h 12m)": the period's total against the same
+ *  span just before it, naming the metric and giving the earlier total so the percentage has a base. */
+internal fun periodChangeText(change: Double, previousTotalMs: Long, window: StudyTimeWindow): String {
+    val percent = (abs(change) * 100).roundToInt()
+    val direction = if (change >= 0) "▲ $percent% more" else "▼ $percent% less"
+    return "$direction study time than ${window.previousPeriodLabel()} (${formatStudyDuration(previousTotalMs)})"
 }
 
 @Composable

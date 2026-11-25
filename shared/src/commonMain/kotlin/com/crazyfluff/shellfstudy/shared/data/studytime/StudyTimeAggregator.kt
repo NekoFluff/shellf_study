@@ -1,7 +1,6 @@
 package com.crazyfluff.shellfstudy.shared.data.studytime
 
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
@@ -13,7 +12,6 @@ import kotlin.time.Instant
 internal data class StudySlice(
     val kind: StudyKind,
     val date: LocalDate,
-    val dayOfWeek: DayOfWeek,
     val hour: Int,
     val ms: Long,
     val level: Int?
@@ -23,17 +21,13 @@ internal data class StudySlice(
  * Turns raw [StudySegment]s into everything the study-time views show. Pure, so the whole feature's
  * arithmetic is tested in commonTest.
  *
- * Every day-based figure comes from [slice], which cuts segments at local hour boundaries. Days, the
- * hour heatmap and per-level days therefore always agree, and a session running past midnight counts
- * toward both days instead of all landing on the day it started.
+ * Every day-based figure comes from [slice], which cuts segments at local hour boundaries. Days and
+ * per-level days therefore always agree, and a session running past midnight counts toward both days
+ * instead of all landing on the day it started.
  */
 object StudyTimeAggregator {
     /** Days of history the pace figures look at, compared against the same span before it. */
     const val PACE_SPAN_DAYS = 14
-
-    /** Days of history the heatmap covers — long enough to show a routine, short enough to follow it
-     *  when it changes. */
-    const val HEATMAP_DAYS = 90
 
     /** Fallback pace before any history exists. A review item is usually two questions (meaning and
      *  reading), with time to read the answer and any notes after a miss; a lesson item includes
@@ -61,8 +55,7 @@ object StudyTimeAggregator {
             buckets = buckets(daily, today, window, dailyItems(segments, zone)),
             stats = periodStats(daily, segments, today, zone, window),
             levels = levelTotals(slices),
-            currentLevel = currentLevel,
-            heatmap = heatmap(slices, today)
+            currentLevel = currentLevel
         )
     }
 
@@ -100,7 +93,7 @@ object StudyTimeAggregator {
                 val intoHourMs = local.minute * 60_000L + local.second * 1_000L + local.nanosecond / 1_000_000
                 val nextMs = minOf(cursorMs + MS_PER_HOUR - intoHourMs, endMs)
                 val date = local.date
-                add(StudySlice(segment.kind, date, date.dayOfWeek, local.hour, nextMs - cursorMs, segment.level))
+                add(StudySlice(segment.kind, date, local.hour, nextMs - cursorMs, segment.level))
                 cursorMs = nextMs
             }
         }
@@ -208,15 +201,6 @@ object StudyTimeAggregator {
             }
             .sortedByDescending { it.level }
 
-    internal fun heatmap(slices: List<StudySlice>, today: LocalDate): StudyHeatmap {
-        val since = today.minus(HEATMAP_DAYS - 1, DateTimeUnit.DAY)
-        val cells = LongArray(7 * StudyHeatmap.HOURS)
-        for (slice in slices) {
-            if (slice.date < since || slice.date > today) continue
-            cells[StudyHeatmap.index(slice.dayOfWeek, slice.hour)] += slice.ms
-        }
-        return StudyHeatmap(cells.toList())
-    }
 
 }
 

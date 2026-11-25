@@ -15,7 +15,7 @@ import kotlin.uuid.Uuid
 /**
  * One stretch of active lesson or review time: from a session clock starting (or resuming) to it
  * pausing, freezing at a checkpoint, or finishing. Only the raw stretch is stored — no local date —
- * so every read-side view (days, weeks, the hour heatmap) is derived from the same instants in the
+ * so every read-side view (days, weeks, levels) is derived from the same instants in the
  * current time zone and a stretch across midnight splits cleanly instead of landing on one day.
  */
 @OptIn(ExperimentalUuidApi::class)

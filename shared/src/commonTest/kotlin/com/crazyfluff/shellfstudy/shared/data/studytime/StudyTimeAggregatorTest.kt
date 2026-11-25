@@ -1,6 +1,5 @@
 package com.crazyfluff.shellfstudy.shared.data.studytime
 
-import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.FixedOffsetTimeZone
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -231,43 +230,6 @@ class StudyTimeAggregatorTest {
         assertEquals(2, levels[0].activeDays)
     }
 
-    // --- heatmap ---
-
-    @Test
-    fun heatmap_placesTimeByWeekdayAndHourWithinTheLastNinetyDays() {
-        val heatmap = StudyTimeAggregator.heatmap(
-            StudyTimeAggregator.slice(
-                listOf(
-                    segment("2026-09-24T19:00:00Z", 30), // Thursday evening
-                    segment("2026-01-01T19:00:00Z", 30) // too old
-                ),
-                utc
-            ),
-            today
-        )
-
-        assertEquals(30 * MINUTE, heatmap.at(DayOfWeek.THURSDAY, 19))
-        assertEquals(30 * MINUTE, heatmap.cellsMs.sum())
-    }
-
-    @Test
-    fun heatmap_namesThePeakPartOfDayAndWhetherWeekendsWin() {
-        val heatmap = StudyTimeAggregator.heatmap(
-            StudyTimeAggregator.slice(
-                listOf(
-                    segment("2026-09-19T07:00:00Z", 60), // Saturday morning
-                    segment("2026-09-24T19:00:00Z", 20) // Thursday evening
-                ),
-                utc
-            ),
-            today
-        )
-
-        assertEquals(PartOfDay.MORNING, heatmap.peakPartOfDay)
-        assertEquals(true, heatmap.prefersWeekends)
-        assertNull(StudyHeatmap(List(7 * StudyHeatmap.HOURS) { 0L }).peakPartOfDay)
-    }
-
     // --- report ---
 
     @Test
@@ -278,7 +240,6 @@ class StudyTimeAggregatorTest {
 
         assertFalse(report.overview.hasAnyData)
         assertEquals(30, report.buckets.size)
-        assertTrue(report.heatmap.isEmpty)
         assertTrue(report.levels.isEmpty())
         assertEquals(0f, report.overview.goalFraction)
     }
@@ -358,7 +319,7 @@ class StudyTimeAggregatorTest {
         )
 
         assertEquals(30 * MINUTE, report.stats.total.totalMs)
-        assertEquals(30 * MINUTE, report.heatmap.cellsMs.sum())
+        assertEquals(30 * MINUTE, report.buckets.sumOf { it.split.totalMs })
     }
 
     private companion object {
