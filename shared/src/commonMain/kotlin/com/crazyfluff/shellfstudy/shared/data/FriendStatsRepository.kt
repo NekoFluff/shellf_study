@@ -284,7 +284,7 @@ class FriendStatsRepository(
             burnedTimestamps = burnedTimestamps,
             learnedTimestamps = startedTimestamps,
             totalCorrect = totalCorrect,
-            totalAttempts = totalAttempts.toFloat(),
+            totalAttempts = totalAttempts,
             sortedProgressions = sortedProgressions,
             nowMillis = nowMillis
         )

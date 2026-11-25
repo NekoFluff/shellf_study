@@ -142,7 +142,7 @@ object JankStatsTracker {
             // whose `state` is populated by JankStats' own constructor — asking for it first yields a
             // non-null Holder with a null `state`, which silently disabled every state tag (the frames
             // logged fine, they just all said `no-state`).
-            stateHolder = PerformanceMetricsState.getHolderForHierarchy(decorView)?.state
+            stateHolder = PerformanceMetricsState.getHolderForHierarchy(decorView).state
             startSyncCollection()
             Log.i(TAG, "tracking started (stateHolder=${stateHolder != null})")
         }.onFailure { Log.w(TAG, "could not start JankStats: ${it.message}") }

@@ -10,7 +10,7 @@ actual fun rememberJankStateReporter(): (Map<String, String>) -> Unit = {
 }
 
 @Composable
-actual fun rememberCompositionRecorder(): (String, Long) -> Unit = { _, _ ->
+actual fun rememberCompositionRecorder(): (name: String, nanos: Long) -> Unit = { _, _ ->
     // No harness on iOS; see the expect declaration.
 }
 

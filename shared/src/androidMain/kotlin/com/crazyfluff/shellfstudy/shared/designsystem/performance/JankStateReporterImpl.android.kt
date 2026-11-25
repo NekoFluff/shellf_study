@@ -10,7 +10,7 @@ actual fun rememberJankStateReporter(): (Map<String, String>) -> Unit =
     remember { { tags: Map<String, String> -> JankStatsTracker.setState(tags) } }
 
 @Composable
-actual fun rememberCompositionRecorder(): (String, Long) -> Unit =
+actual fun rememberCompositionRecorder(): (name: String, nanos: Long) -> Unit =
     remember { { name: String, nanos: Long -> JankStatsTracker.recordComposition(name, nanos) } }
 
 @Composable

@@ -1,6 +1,7 @@
 package com.crazyfluff.shellfstudy.shared.data.model
 
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
@@ -40,7 +41,7 @@ fun formatHourOfDay(instant: Instant): String {
  *  rolling bucketing), so [formatHourOfDay] alone can't identify which one it is; a short date can. */
 fun formatBucketDate(instant: Instant): String {
     val local = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-    return "${local.monthNumber}/${local.dayOfMonth}"
+    return "${local.month.number}/${local.day}"
 }
 
 /** "at 3 PM" for an hourly bucket, "by 3/15, 3 PM" for anything wider (the date disambiguates which

@@ -1,7 +1,11 @@
+// Coil marks its Ktor fetcher and SVG parser hook experimental; both are what this loader is for.
+@file:OptIn(ExperimentalCoilApi::class)
+
 package com.crazyfluff.shellfstudy.shared.designsystem.subjectdetail
 
 import coil3.ImageLoader
 import coil3.PlatformContext
+import coil3.annotation.ExperimentalCoilApi
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.svg.Svg
 import coil3.svg.SvgDecoder
