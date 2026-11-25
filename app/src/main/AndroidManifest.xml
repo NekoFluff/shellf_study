@@ -22,10 +22,17 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ShellfStudy">
+        <!-- singleTask: the app is one Activity, and there must only ever be one of it. Under the
+             default "standard" mode, a task started by a notification tap (whose intent isn't
+             MAIN/LAUNCHER) gets a fresh MainActivity stacked on it by every later launcher tap.
+             Each hidden copy keeps its review/lesson ViewModel alive, and since the session clock
+             follows the process-wide foreground state, every copy logged study time at once and
+             saved its own stale session over the live one. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTask"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.ShellfStudy"
             android:windowSoftInputMode="adjustResize">
