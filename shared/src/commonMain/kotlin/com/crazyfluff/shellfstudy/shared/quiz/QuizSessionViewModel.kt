@@ -6,15 +6,19 @@ import com.crazyfluff.shellfstudy.shared.data.PronunciationAudioPlayer
 import com.crazyfluff.shellfstudy.shared.data.AppSettings
 import com.crazyfluff.shellfstudy.shared.data.UserSynonymsStore
 import com.crazyfluff.shellfstudy.shared.data.model.QuizDisplayItem
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyKind
+import com.crazyfluff.shellfstudy.shared.data.studytime.StudyTimeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.concurrent.Volatile
 
 /**
  * The half of a quiz session that is the same for lessons and reviews: keeping the current question's
- * state up to date, answering it, revealing a gated answer, and stopping the clock when the screen
- * goes away.
+ * state up to date, answering it, revealing a gated answer, and running the session clock that
+ * study time is recorded from.
  *
  * It works on the [QuizQuestionState] both features embed in their quiz phase. The two features'
  * *policies* differ (a lesson submission is sent when the item is done, a review's waits for Continue;
@@ -32,8 +36,70 @@ abstract class QuizSessionViewModel<
     S : QuizSessionState<S, T>,
     > : ViewModel() {
 
-    /** The session's clock — paused by [onCleared]. */
-    protected abstract val sessionTiming: QuizSessionTiming
+    /** Where each stretch of [sessionTiming] is recorded, as [studyKind] time. */
+    protected abstract val studyTimeRepository: StudyTimeRepository
+    protected abstract val studyKind: StudyKind
+
+    /** Items finished while the current [sessionTiming] stretch runs, recorded with it as pace data.
+     *  Items rather than answers, so pace times a due-review count directly. */
+    protected var stretchItemsCompleted = 0
+
+    /**
+     * The session clock: active time only, not wall-clock time since the session began. It runs exactly
+     * while the app is in the foreground and the screen [isStudying] — [driveSessionClock] enforces
+     * that on every state change — and [onCleared] stops it when the screen goes away. Each stretch it
+     * runs is recorded as study time, and every stop is followed by [onSessionClockPaused].
+     *
+     * Subclasses seed [QuizSessionTiming.elapsedMs] when resuming a saved session, before showing it.
+     */
+    protected val sessionTiming = QuizSessionTiming(
+        onResume = { now -> updateQuizTiming { it.copy(sessionActiveSegmentStartMs = now) } },
+        onPause = { elapsedMs ->
+            updateQuizTiming { it.copy(sessionActiveElapsedMs = elapsedMs, sessionActiveSegmentStartMs = null) }
+            onSessionClockPaused()
+        },
+        onSegmentEnded = { startMs, endMs ->
+            studyTimeRepository.record(studyKind, startMs, endMs, stretchItemsCompleted)
+            stretchItemsCompleted = 0
+        }
+    )
+
+    /** Whether [state] is the learner studying — a question or a flashcard on screen — rather than
+     *  loading, choosing, reading a summary or deciding at a checkpoint. Only then does the clock run. */
+    protected abstract fun isStudying(state: S): Boolean
+
+    /** Saves the session after the clock stopped, so a resume picks up the time just folded in. Runs on
+     *  the main thread, possibly from [onCleared], where viewModelScope is already cancelled. */
+    protected abstract fun onSessionClockPaused()
+
+    /**
+     * Runs [sessionTiming] while [isForeground] and [isStudying] both hold. Called from each subclass's
+     * `init`, once its state and collaborators are assigned.
+     *
+     * Derived rather than started and stopped at each transition, so the clock can't be left running by
+     * a path that forgot to stop it — a queue that finishes loading while the app is in the background,
+     * or an empty "no reviews" screen — and a screen that isn't studying can't be restarted by the app
+     * returning to the foreground.
+     */
+    protected fun driveSessionClock(isForeground: StateFlow<Boolean>) {
+        this.isForeground = isForeground
+        viewModelScope.launch {
+            // Not distinctUntilChanged: resume and pause are no-ops when already in that state, and
+            // checking on every change also corrects a clock started ahead of a state that never came.
+            combine(isForeground, _uiState) { foreground, state -> foreground && isStudying(state) }
+                .collect { running -> if (running) sessionTiming.resume() else sessionTiming.pause() }
+        }
+    }
+
+    private var isForeground: StateFlow<Boolean>? = null
+
+    /** Starts the clock just before a studying state is shown, so that state already carries the
+     *  running stretch instead of the start arriving as a second update (and the timer showing frozen
+     *  for a frame). Only a head start: [driveSessionClock] would start it anyway. Does nothing while
+     *  the app is in the background. */
+    protected fun startSessionClock() {
+        if (isForeground?.value == true) sessionTiming.resume()
+    }
 
     /** Stopped by [onCleared], so leaving mid-question does not keep playing an answer's audio. */
     protected abstract val pronunciationAudioPlayer: PronunciationAudioPlayer
@@ -207,11 +273,8 @@ abstract class QuizSessionViewModel<
     }
 
     /**
-     * Pauses the session's clock and stops any audio still playing.
-     *
-     * Only [sessionTiming] is paused, matching what both ViewModels did: the question clock's
-     * accumulated segments are frozen into the persisted snapshot at each grade, so leaving
-     * mid-question has nothing left to stop there.
+     * Stops the session clock — its collector went with viewModelScope — and any audio still playing.
+     * The question clock needs no stop: it is frozen into the saved session at each grade.
      */
     override fun onCleared() {
         super.onCleared()

@@ -45,6 +45,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
@@ -1552,6 +1553,77 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
 
         // Before backgrounding nothing was finished; the item belongs to the stretch after it.
         assertThat(studyTimeDao.all.map { it.itemsAnswered }).containsExactly(0, 1).inOrder()
+    }
+
+    @Test
+    fun `a queue that finishes loading while the app is in the background does not start the clock`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression: the clock used to start whenever the queue was built, and the foreground tracker
+        // only reacts to transitions, so leaving during a slow load counted all the time away.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        appForegroundTracker.onStop(FakeLifecycleOwner)
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            val shown = awaitUntil { it.phase is ReviewUiState.Phase.Active }
+            assertThat(shown.question!!.timing.sessionActiveSegmentStartMs).isNull()
+            testScheduler.advanceUntilIdle()
+            assertThat(studyTimeDao.all).isEmpty()
+
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+            awaitUntil { it.question?.timing?.sessionActiveSegmentStartMs != null }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an empty due queue records no study time`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(emptyCollectionJson()), jsonResponse(emptyCollectionJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitUntil { it.phase is ReviewUiState.Phase.NoReviewsAvailable }
+            cancelAndIgnoreRemainingEvents()
+        }
+        appForegroundTracker.onStop(FakeLifecycleOwner)
+        clear(viewModel)
+        // A stretch would be written behind a DataStore read; yield so one would have landed.
+        repeat(20) { yield() }
+        testScheduler.advanceUntilIdle()
+
+        assertThat(studyTimeDao.all).isEmpty()
+    }
+
+    @Test
+    fun `leaving the screen submits a correct answer that hasn't been continued past yet`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression: the answer waited in the saved session for a resume, so abandoning that session
+        // from the dashboard dropped it without ever telling WaniKani.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitUntil { it.phase is ReviewUiState.Phase.Active }
+            viewModel.onAnswerInputChange("Mouth")
+            viewModel.submitAnswer()
+            awaitUntil { it.question?.feedback?.isCorrect == true }
+            cancelAndIgnoreRemainingEvents()
+        }
+        clear(viewModel)
+        // Both writes are queued behind the grade's own save; yielding lets them land.
+        repeat(20) {
+            if (repositories.outboxDao.allReviewSubmissions().isEmpty() ||
+                reviewSessionRepository.load()?.pendingSubmissionAssignmentId != null
+            ) yield()
+        }
+
+        assertThat(repositories.outboxDao.allReviewSubmissions().map { it.assignmentId }).containsExactly(101L)
+        assertThat(reviewSessionRepository.load()?.pendingSubmissionAssignmentId).isNull()
+    }
+
+    /** What Android does when the screen is left: ViewModel.clear() → onCleared(). */
+    private fun clear(viewModel: ReviewViewModel) {
+        androidx.lifecycle.ViewModel::class.java.getDeclaredMethod("onCleared")
+            .apply { isAccessible = true }
+            .invoke(viewModel)
     }
 
     @Test

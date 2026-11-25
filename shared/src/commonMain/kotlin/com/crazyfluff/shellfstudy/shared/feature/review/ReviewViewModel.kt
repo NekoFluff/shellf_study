@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
 data class ReviewUiState(
@@ -139,7 +140,7 @@ class ReviewViewModel(
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope,
     private val syncOrchestrator: SyncOrchestrator,
-    private val studyTimeRepository: StudyTimeRepository,
+    override val studyTimeRepository: StudyTimeRepository,
     override val userSynonymsStore: UserSynonymsStore
 ) : QuizSessionViewModel<ReviewItem, ReviewUiState>(), ReviewActions {
 
@@ -155,28 +156,15 @@ class ReviewViewModel(
      *  snapshot taken for persisting can never be changed underneath the write. */
     private var session = ReviewSession()
 
-    // Tracks only the time the session was actively being viewed — see QuizSessionTiming. A
-    // completed/abandoned/empty-queue session is handled structurally by sessionController.persist()
-    // itself (a no-op once the session isn't ACTIVE), not by a flag check here — see
-    // QuizSessionController. Runs on applicationScope rather than viewModelScope so this flush
-    // actually executes when triggered from onCleared() (viewModelScope is cancelled just before
-    // onCleared() runs, so a viewModelScope.launch here would silently never execute).
-    override val sessionTiming = QuizSessionTiming(
-        onResume = { now -> updateQuizTiming { it.copy(sessionActiveSegmentStartMs = now) } },
-        onPause = { newElapsed ->
-            updateQuizTiming { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
-            applicationScope.launch { persistCurrentState() }
-        },
-        onSegmentEnded = { startMs, endMs ->
-            studyTimeRepository.record(StudyKind.REVIEW, startMs, endMs, segmentItemsCompleted)
-            segmentItemsCompleted = 0
-        }
-    )
+    override val studyKind = StudyKind.REVIEW
 
-    /** Review items finished during the running [sessionTiming] segment, recorded with it as pace
-     *  data. Items rather than answers, so pace times a due-review count directly — a kanji or
-     *  vocabulary item is two questions. */
-    private var segmentItemsCompleted = 0
+    override fun isStudying(state: ReviewUiState): Boolean = state.phase is ReviewUiState.Phase.Active
+
+    /** On applicationScope, because this also runs from onCleared. A completed or abandoned session
+     *  isn't saved again: sessionController.persist() is a no-op once the session isn't active. */
+    override fun onSessionClockPaused() {
+        applicationScope.launch { persistCurrentState() }
+    }
 
     // Same idea as sessionTiming, but for the current question — pauses on backgrounding just like
     // the session timer, instead of counting straight through time spent away (see restart()/
@@ -199,6 +187,8 @@ class ReviewViewModel(
 
     init {
         trackUserSynonyms()
+        // Before loading: a resumed session starts the clock as soon as it is shown.
+        driveSessionClock(appForegroundTracker.isForeground)
         loadOrResume()
         viewModelScope.launch {
             // Only kept warm for the ViewModel's own use (see latestSettings): the display flags it
@@ -240,13 +230,6 @@ class ReviewViewModel(
                         question.copy(grade = grade.copy(answerHint = current.copy(pitchAccents = pitchAccents)))
                     }
                 }
-        }
-        // The initial value is handled by loadOrResume/sessionTiming.resume() below instead — see
-        // QuizSessionTiming.wireForegroundTracking's doc comment. Resuming is gated to an active
-        // question, so returning to the app on the completion or loading screen doesn't restart the
-        // clock after it was frozen, which would log that time as study time.
-        sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker) {
-            _uiState.value.phase is ReviewUiState.Phase.Active
         }
         questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
     }
@@ -325,19 +308,15 @@ class ReviewViewModel(
             return
         }
         session = ReviewSession(quiz, persisted.pendingSubmissionAssignmentId)
-        // Restores the session's accumulated active time rather than restarting the clock — this is
-        // deliberately *not* wall-clock time since the session began; time spent away (backgrounded,
-        // or navigated off and back) must not count. sessionTiming.resume() then starts a fresh
-        // viewing segment on top of that restored base, so the clock resumes right where it left off.
+        // The clock picks up where it left off: time spent away never counted.
         sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
-        sessionTiming.resume()
+        startSessionClock()
         sessionController.begin()
         advanceToNextQuestion()
     }
 
     private suspend fun buildQueue(items: List<ReviewItem>) {
         sessionTiming.elapsedMs = 0L
-        sessionTiming.resume()
 
         // Progress is created as items are graded rather than seeded for every item: seeding a queue
         // of a few hundred due reviews would serialize every entry into the persisted snapshot after
@@ -372,6 +351,7 @@ class ReviewViewModel(
             // draining to empty after real progress is a genuine completion).
             _uiState.update { it.copy(phase = ReviewUiState.Phase.NoReviewsAvailable) }
         } else {
+            startSessionClock()
             sessionController.begin()
             persistCurrentState()
             advanceToNextQuestion()
@@ -432,7 +412,7 @@ class ReviewViewModel(
             cap = MAX_IN_FLIGHT_REVIEW_ITEMS
         )
         val graded = quiz.lastGraded ?: return
-        if (graded.completedItem) segmentItemsCompleted++
+        if (graded.completedItem) stretchItemsCompleted++
         val grade = if (graded.completedItem) quiz.progress.getValue(item.assignmentId).toReviewGrade() else null
         // Only recorded as pending here — actually submitting to WaniKani (and bumping the local SRS
         // stage) waits for commitPendingSubmission, so the user can still undo a correct answer
@@ -479,7 +459,7 @@ class ReviewViewModel(
         viewModelScope.launch {
             val undoesCompletedItem = session.quiz.lastGraded?.completedItem == true
             val undone = session.quiz.undoLastGrade() ?: return@launch
-            if (undoesCompletedItem) segmentItemsCompleted = (segmentItemsCompleted - 1).coerceAtLeast(0)
+            if (undoesCompletedItem) stretchItemsCompleted = (stretchItemsCompleted - 1).coerceAtLeast(0)
             // Retracting a correct answer retracts the submission it made pending.
             session = ReviewSession(
                 quiz = undone,
@@ -529,15 +509,15 @@ class ReviewViewModel(
         }
     }
 
+    override fun toggleAudioMuted() {
+        viewModelScope.launch { settingsRepository.toggleAudioMuted() }
+    }
+
     /** Discards progress on not-yet-submitted items and exits — a clean slate next time. A
      *  correct-but-not-yet-continued answer is committed first rather than discarded with the
      *  rest — the user already saw "Correct!" feedback for it, so it reads as finished to them,
      *  matching what the abandon confirmation dialog's copy promises ("this won't affect items
      *  you've already submitted"). */
-    override fun toggleAudioMuted() {
-        viewModelScope.launch { settingsRepository.toggleAudioMuted() }
-    }
-
     override fun abandonSession() {
         viewModelScope.launch {
             commitPendingSubmission()
@@ -575,10 +555,8 @@ class ReviewViewModel(
         commitPendingSubmission()
         val next = session.quiz.current
         if (next == null) {
-            // Stops the clock before the summary is built, so time spent reading the completion
-            // screen counts toward neither the summary nor study time. LessonViewModel's
-            // finishSession() freezes the same way.
-            sessionTiming.freeze()
+            // The Complete phase below stops the clock (see isStudying), so reading the summary
+            // counts toward neither it nor study time.
             sessionController.complete()
             outboxRepository.requestSyncNow()
             val summary = sessionSummary()
@@ -641,6 +619,21 @@ class ReviewViewModel(
      *  [advanceToNextQuestion]) is what commits it, keeping the answer undoable up to that point.
      *  No-ops if nothing is pending — e.g. the last-graded answer was incorrect, or this was already
      *  committed. */
+    /** Leaving the screen is an implicit Continue, as a resume already treats it: undo only works on
+     *  the live session, and an answer left pending in the saved session would be lost if the session
+     *  were then abandoned from the dashboard. UNDISPATCHED, so the pending id is cleared before the
+     *  clock's own pause in super.onCleared() saves the session; saved again here because the clock
+     *  may not have been running (left while in the background). */
+    override fun onCleared() {
+        if (session.pendingSubmissionAssignmentId != null) {
+            applicationScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                commitPendingSubmission()
+                persistCurrentState()
+            }
+        }
+        super.onCleared()
+    }
+
     private suspend fun commitPendingSubmission() {
         val assignmentId = session.pendingSubmissionAssignmentId ?: return
         val progress = session.quiz.progress[assignmentId] ?: return

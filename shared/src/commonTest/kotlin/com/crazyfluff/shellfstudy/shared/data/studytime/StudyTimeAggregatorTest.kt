@@ -308,6 +308,59 @@ class StudyTimeAggregatorTest {
         assertEquals(mapOf(7 to 30 * MINUTE, 8 to 30 * MINUTE), overview.levelTotalsMs)
     }
 
+    // --- overlapping stretches ---
+
+    @Test
+    fun overview_countsIdenticalOverlappingStretchesOnce() {
+        // Three timers on the same screen time: one real, two from stacked copies of the app.
+        val overview = StudyTimeAggregator.overview(
+            listOf(
+                segment("2026-09-24T08:00:00Z", 10, items = 8),
+                segment("2026-09-24T08:00:00Z", 10),
+                segment("2026-09-24T08:00:00Z", 10)
+            ),
+            today, utc, 30 * MINUTE
+        )
+
+        assertEquals(split(reviewMinutes = 10), overview.today)
+    }
+
+    @Test
+    fun overview_countsOnlyTheUncoveredPartOfAPartlyOverlappingStretch() {
+        val overview = StudyTimeAggregator.overview(
+            listOf(
+                segment("2026-09-24T08:00:00Z", 20, StudyKind.REVIEW),
+                segment("2026-09-24T08:15:00Z", 10, StudyKind.LESSON),
+                segment("2026-09-24T08:05:00Z", 5, StudyKind.REVIEW)
+            ),
+            today, utc, 30 * MINUTE
+        )
+
+        // 08:00–08:20 review, then the lesson's 08:20–08:25; the 08:05 stretch adds nothing.
+        assertEquals(split(lessonMinutes = 5, reviewMinutes = 20), overview.today)
+    }
+
+    @Test
+    fun withoutOverlaps_keepsItemCountsOfTrimmedStretches() {
+        val trimmed = StudyTimeAggregator.withoutOverlaps(
+            listOf(segment("2026-09-24T08:00:00Z", 20), segment("2026-09-24T08:05:00Z", 5, items = 4))
+        )
+
+        assertEquals(listOf(20 * MINUTE, 0L), trimmed.map { it.durationMs })
+        assertEquals(4, trimmed.sumOf { it.itemsCompleted })
+    }
+
+    @Test
+    fun report_doesNotDoubleCountOverlapsInPeriodTotals() {
+        val report = StudyTimeAggregator.report(
+            listOf(segment("2026-09-24T08:00:00Z", 30), segment("2026-09-24T08:00:00Z", 30)),
+            today, utc, StudyTimeWindow.WEEK, 30 * MINUTE, currentLevel = null
+        )
+
+        assertEquals(30 * MINUTE, report.stats.total.totalMs)
+        assertEquals(30 * MINUTE, report.heatmap.cellsMs.sum())
+    }
+
     private companion object {
         const val MINUTE = 60_000L
     }

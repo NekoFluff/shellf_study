@@ -8,16 +8,12 @@ import kotlin.time.Clock
 
 /**
  * Tracks the wall-clock time a session (or a single question) is actively being viewed, accumulating
- * time only while a segment is running — the plumbing shared by ReviewViewModel/LessonViewModel for
- * the same resume/pause/current-elapsed operations both mirror into their uiState, plus the
- * app-foreground-tracker collector that drives resume/pause automatically.
+ * time only while a segment is running. The session clock is driven by
+ * [QuizSessionViewModel.driveSessionClock]; the per-question clock by [restart]/[freeze] at each
+ * question and [wireForegroundTracking] in between.
  *
- * [onResume]/[onPause] stay owned by each ViewModel since they differ — Review always re-persists on
- * pause unless the session is complete, Lesson also gates on which phase it's currently in — this
- * only owns the tracker plumbing underneath, not that per-VM decision.
- *
- * Mirrors the sessionActiveElapsedMs / sessionActiveSegmentStartMs fields in the session UiStates so
- * the timer composable can read them.
+ * The owner mirrors [elapsedMs]/[segmentStartMs] into its [QuizTimingUiState] so the timer composable
+ * can read them.
  */
 class QuizSessionTiming(
     private val onResume: (segmentStartMs: Long) -> Unit,
@@ -83,23 +79,13 @@ class QuizSessionTiming(
         return elapsedMs
     }
 
-    /** Starts a collector that resumes/pauses the segment on every foreground/background
-     *  transition after the first — the initial value is left to the caller's own load/resume
-     *  flow, so a ViewModel created while already foregrounded doesn't publish a redundant extra
-     *  uiState emission for it.
-     *
-     *  [shouldTime] gates the *resume* half only: a lesson session parks its clock while it shows a
-     *  batch checkpoint (the learner is deciding whether to continue, not studying), so returning to
-     *  the app on that screen must not silently restart the session clock — pausing is always allowed,
-     *  since folding away a running segment is never wrong. */
-    fun wireForegroundTracking(
-        scope: CoroutineScope,
-        appForegroundTracker: AppForegroundTracker,
-        shouldTime: () -> Boolean = { true }
-    ) {
+    /** Pauses on every move to the background and resumes on every return after the first — the
+     *  initial value is left to the owner's own [restart], so a ViewModel created in the foreground
+     *  doesn't publish a redundant extra uiState emission for it. */
+    fun wireForegroundTracking(scope: CoroutineScope, appForegroundTracker: AppForegroundTracker) {
         scope.launch {
             appForegroundTracker.isForeground.drop(1).collect { isForeground ->
-                if (isForeground && shouldTime()) resume() else pause()
+                if (isForeground) resume() else pause()
             }
         }
     }

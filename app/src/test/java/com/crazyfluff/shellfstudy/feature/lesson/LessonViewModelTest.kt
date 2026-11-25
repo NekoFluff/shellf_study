@@ -1156,6 +1156,38 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
     }
 
     @Test
+    fun `backgrounding while reading study cards saves the time spent on the current card`() = runTest(mainDispatcherRule.dispatcher) {
+        // Regression: only a card change saved the study phase, so time on the current card was lost
+        // from the session total if the app was then killed.
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state.phase is LessonUiState.Phase.Loading) state = awaitItem()
+            viewModel.startSelectedLessons()
+            assertThat(awaitItem().phase).isInstanceOf(LessonUiState.Phase.Study::class.java)
+            yield() // lets entering the study phase finish its own save first
+            Thread.sleep(20)
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            yield()
+            cancelAndIgnoreRemainingEvents()
+        }
+        testScheduler.advanceUntilIdle()
+
+        val recorded = studyTimeDao.all.single()
+        assertThat(recorded.durationMs).isAtLeast(20L)
+        // The save is queued behind the one entering the study phase made; yielding lets it land.
+        var savedMs = lessonSessionRepository.load()!!.sessionActiveElapsedMs
+        repeat(20) {
+            if (savedMs == recorded.durationMs) return@repeat
+            yield()
+            savedMs = lessonSessionRepository.load()!!.sessionActiveElapsedMs
+        }
+        assertThat(savedMs).isEqualTo(recorded.durationMs)
+    }
+
+    @Test
     fun `picking lessons on the select screen is not recorded as study time`() = runTest(mainDispatcherRule.dispatcher) {
         dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
         val viewModel = createViewModel()

@@ -52,6 +52,7 @@ object StudyTimeAggregator {
         goalMs: Long,
         currentLevel: Int?
     ): StudyTimeReport {
+        val segments = withoutOverlaps(segments)
         val slices = slice(segments, zone)
         val daily = dailyTotals(slices)
         return StudyTimeReport(
@@ -65,8 +66,28 @@ object StudyTimeAggregator {
         )
     }
 
-    fun overview(segments: List<StudySegment>, today: LocalDate, zone: TimeZone, goalMs: Long): StudyTimeOverview =
-        overview(segments, slice(segments, zone), today, zone, goalMs)
+    fun overview(segments: List<StudySegment>, today: LocalDate, zone: TimeZone, goalMs: Long): StudyTimeOverview {
+        val segments = withoutOverlaps(segments)
+        return overview(segments, slice(segments, zone), today, zone, goalMs)
+    }
+
+    /**
+     * Nobody studies two things at once, so time that stretches share is counted once: each stretch
+     * keeps only the part no earlier one already covers. Overlaps come from two devices left on a quiz
+     * at the same time, or from a quiz screen that should have been gone still timing (stacked Android
+     * activities did this). A trimmed stretch keeps its item count, which belongs to the work, not the
+     * clock.
+     */
+    internal fun withoutOverlaps(segments: List<StudySegment>): List<StudySegment> {
+        var coveredUntilMs = Long.MIN_VALUE
+        return segments.sortedBy { it.startedAtMs }.map { segment ->
+            val endMs = segment.startedAtMs + segment.durationMs
+            val startMs = segment.startedAtMs.coerceAtLeast(coveredUntilMs).coerceAtMost(endMs)
+            coveredUntilMs = maxOf(coveredUntilMs, endMs)
+            if (startMs == segment.startedAtMs) segment
+            else segment.copy(startedAtMs = startMs, durationMs = endMs - startMs)
+        }
+    }
 
     internal fun slice(segments: List<StudySegment>, zone: TimeZone): List<StudySlice> = buildList {
         for (segment in segments) {

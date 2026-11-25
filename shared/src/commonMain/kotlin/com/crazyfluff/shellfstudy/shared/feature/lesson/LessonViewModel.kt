@@ -214,7 +214,7 @@ class LessonViewModel(
     private val appForegroundTracker: AppForegroundTracker,
     private val applicationScope: CoroutineScope,
     private val syncOrchestrator: SyncOrchestrator,
-    private val studyTimeRepository: StudyTimeRepository,
+    override val studyTimeRepository: StudyTimeRepository,
     override val userSynonymsStore: UserSynonymsStore
 ) : QuizSessionViewModel<LessonItem, LessonUiState>(), LessonActions {
 
@@ -236,38 +236,25 @@ class LessonViewModel(
      *  [LessonUiState.pitchAccentsBySubjectId] — see the collector in init. */
     private val pitchAccentItems = MutableStateFlow<List<LessonItem>>(emptyList())
 
-    // Tracks only the time the session was actively being worked through — see QuizSessionTiming.
-    // Pause skips re-persisting outside the QUIZ phase — currentPersistSnapshot() always writes
-    // phase = QUIZ, and in STUDY phase the correct snapshot is already kept current by
-    // persistStudySnapshot on every card change; overwriting it here with a queue-less QUIZ record
-    // would make resumeQuizPhase() misread it as "session complete". The foreground tracker calls
-    // resume() unconditionally on app-foreground, so a segment can be running even while in STUDY
-    // phase — without this guard, a Home press in STUDY phase would write the corrupt snapshot.
-    // Writing the timing fields onto a non-Quiz phase is additionally impossible by construction now —
-    // updateQuizTiming() silently no-ops when phase isn't Quiz, since Phase.Study has no such
-    // properties to write into. A completed/abandoned/empty-queue session is handled structurally
-    // by sessionController.persist() itself (a no-op once the session isn't ACTIVE), not by a flag
-    // check here — see QuizSessionController. Runs on applicationScope rather than viewModelScope so
-    // this flush actually executes when triggered from onCleared() (viewModelScope is cancelled just
-    // before onCleared() runs, so a viewModelScope.launch here would silently never execute).
-    override val sessionTiming = QuizSessionTiming(
-        onResume = { now -> updateQuizTiming { it.copy(sessionActiveSegmentStartMs = now) } },
-        onPause = pause@{ newElapsed ->
-            updateQuizTiming { it.copy(sessionActiveElapsedMs = newElapsed, sessionActiveSegmentStartMs = null) }
-            if (_uiState.value.phase !is LessonUiState.Phase.Quiz) return@pause
-            applicationScope.launch { persistCurrentState() }
-        },
-        onSegmentEnded = { startMs, endMs ->
-            studyTimeRepository.record(StudyKind.LESSON, startMs, endMs, segmentItemsCompleted)
-            segmentItemsCompleted = 0
-        }
-    )
+    override val studyKind = StudyKind.LESSON
 
-    /** Lesson items that finished their lesson quiz during the running [sessionTiming] segment,
-     *  recorded with it as pace data. Study-phase time has none, so lesson pace spreads reading the
-     *  explanations across the items learned. An undo can't retract one: only incorrect answers are
-     *  undoable here, and those never finish an item. */
-    private var segmentItemsCompleted = 0
+    /** Flashcards or a quiz question. Not a batch checkpoint, the summary, or anything before a session
+     *  is committed to, so none of that time lands in the session total or in study time. */
+    override fun isStudying(state: LessonUiState): Boolean = when (state.phase) {
+        is LessonUiState.Phase.Study, is LessonUiState.Phase.Quiz -> true
+        else -> false
+    }
+
+    /** Saves the phase being left mid-way, on applicationScope because this also runs from onCleared.
+     *  A checkpoint saved itself on the way in, and a completed or abandoned session isn't saved again:
+     *  sessionController.persist() is a no-op once the session isn't active. */
+    override fun onSessionClockPaused() {
+        when (val phase = _uiState.value.phase) {
+            is LessonUiState.Phase.Study -> applicationScope.launch { persistStudySnapshot(phase.studyIndex) }
+            is LessonUiState.Phase.Quiz -> applicationScope.launch { persistCurrentState() }
+            else -> Unit
+        }
+    }
 
     // Same idea as sessionTiming, but for the current question — pauses on backgrounding just like
     // the session timer, instead of counting straight through time spent away (see restart()/
@@ -288,6 +275,8 @@ class LessonViewModel(
 
     init {
         trackUserSynonyms()
+        // Before loading: a resumed session starts the clock as soon as it is shown.
+        driveSessionClock(appForegroundTracker.isForeground)
         loadOrResume()
         viewModelScope.launch {
             // Only kept warm for the ViewModel's own use (see latestSettings): the display flags it
@@ -356,20 +345,7 @@ class LessonViewModel(
                     }
                 }
         }
-        // The initial value is handled by beginBatchQuiz/resumeQuizPhase/sessionTiming.resume() below
-        // instead — see QuizSessionTiming.wireForegroundTracking's doc comment. The gate keeps a batch
-        // checkpoint (or the summary) from restarting the session clock just because the learner came
-        // back to the app while reading it.
-        sessionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker) { isSessionBeingWorked() }
         questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
-    }
-
-    /** Whether the learner is actually working through material right now — Study flashcards or a quiz
-     *  question. False at a batch checkpoint, on the summary, and everywhere before a session is
-     *  committed to, so none of that time lands in the session total. */
-    private fun isSessionBeingWorked(): Boolean = when (_uiState.value.phase) {
-        is LessonUiState.Phase.Study, is LessonUiState.Phase.Quiz -> true
-        else -> false
     }
 
     /** Explicit fresh fetch — bound to the error screen's retry action, so it always discards any
@@ -401,10 +377,12 @@ class LessonViewModel(
         }
     }
 
-    /** Drops every in-memory trace of a session — the plan included, so a fresh fetch can't resume or
-     *  re-persist the session it replaced. */
+    /** Drops every in-memory trace of a session — the plan and its clock total included, so a fresh
+     *  fetch can't resume or re-persist the session it replaced, and the next session's clock starts
+     *  from zero. */
     private fun clearSessionState() {
         session = LessonSession()
+        sessionTiming.elapsedMs = 0L
         pitchAccentItems.value = emptyList()
     }
 
@@ -459,6 +437,7 @@ class LessonViewModel(
         session = session.copy(quiz = restoredQuiz(persisted, withQueue = false) ?: QuizSession())
         sessionTiming.elapsedMs = persisted.sessionActiveElapsedMs
         sessionController.begin()
+        startSessionClock()
         _uiState.update {
             it.copy(
                 phase = LessonUiState.Phase.Study(
@@ -470,7 +449,6 @@ class LessonViewModel(
                 )
             )
         }
-        sessionTiming.resume()
     }
 
     private suspend fun resumeQuizPhase(persisted: PersistedLessonSession) {
@@ -495,11 +473,6 @@ class LessonViewModel(
             .distinct()
             .mapNotNull { session.itemsById[it] }
 
-        // Restores the session's accumulated active time rather than restarting the clock — this is
-        // deliberately *not* wall-clock time since the session began; time spent away (backgrounded, at
-        // a checkpoint, or navigated off and back) must not count. sessionTiming.resume() below then
-        // starts a fresh viewing segment on top of that restored base, so the clock resumes right where
-        // it left off.
         val questionStartedAt = questionTiming.restart()
         // LessonSessionRepository.load() — reached here via sessionController.load() — guarantees a
         // non-empty quiz queue for a QUIZ-phase snapshot (see its resumability check), but this is
@@ -514,6 +487,7 @@ class LessonViewModel(
             return
         }
         sessionController.begin()
+        startSessionClock()
         _uiState.update {
             it.copy(
                 phase = LessonUiState.Phase.Quiz(
@@ -533,7 +507,6 @@ class LessonViewModel(
                 )
             )
         }
-        sessionTiming.resume()
     }
 
     /** Resumes a session parked at a batch checkpoint. An index at or past the end of the plan means
@@ -733,7 +706,7 @@ class LessonViewModel(
         // drives the related-subjects collector in init{} off the same items-in-play stream.
         pitchAccentItems.value = items
         session = session.copy(batchIndex = index)
-        sessionTiming.resume()
+        startSessionClock()
         _uiState.update {
             it.copy(
                 phase = LessonUiState.Phase.Study(
@@ -829,9 +802,9 @@ class LessonViewModel(
             return
         }
 
-        // Not restarted: the session clock spans the whole session, study passes included. Only the
-        // per-question clock starts fresh here.
-        sessionTiming.resume()
+        // The session clock spans the whole session, study passes included, so it is normally running
+        // already. Only the per-question clock starts fresh here.
+        startSessionClock()
         val questionStartedAt = questionTiming.restart()
         _uiState.update {
             it.copy(
@@ -935,7 +908,7 @@ class LessonViewModel(
         // is marked started only the first time, which both the rank-change chip and the outbox
         // enqueue below agree on.
         val isNewlyStarted = graded.completedItem && item.assignmentId !in session.startedAssignmentIds
-        if (isNewlyStarted) segmentItemsCompleted++
+        if (isNewlyStarted) stretchItemsCompleted++
         session = session.copy(
             quiz = quiz,
             startedAssignmentIds = if (isNewlyStarted) session.startedAssignmentIds + item.assignmentId else session.startedAssignmentIds
@@ -1009,10 +982,9 @@ class LessonViewModel(
             // The session is over: complete now, exactly as a single-batch session always did — the
             // Continue tap that follows only has to render the summary.
             isSessionOverAfterCurrentPass(queueIsEmpty) -> sessionController.complete(alongside = outboxWork)
-            // A batch just ended (or the session's last batch, with misses left to offer): record the
-            // checkpoint, so a crash on the feedback screen resumes at the checkpoint instead of
-            // re-asking questions that were already answered.
-            queueIsEmpty -> sessionController.persist(snapshot, alongside = outboxWork)
+            // Otherwise save where the session stands. At the end of a batch (or the session's last
+            // batch, with misses left to offer) the snapshot is already the checkpoint, so a crash on
+            // the feedback screen resumes there instead of re-asking answered questions.
             else -> sessionController.persist(snapshot, alongside = outboxWork)
         }
     }
@@ -1078,7 +1050,6 @@ class LessonViewModel(
     /** Ends the session and shows its summary — terminal: the persisted snapshot is cleared before the
      *  summary renders, so nothing can save a session the learner has already finished. */
     private suspend fun finishSession() {
-        sessionTiming.freeze()
         sessionController.complete()
         outboxRepository.requestSyncNow()
         val summary = sessionSummary()
@@ -1096,14 +1067,11 @@ class LessonViewModel(
 
     /** Shows the checkpoint at the end of a pass over batch [nextBatchIndex] - 1.
      *
-     *  Stops the session clock first: deciding whether to continue isn't studying, and letting the
-     *  interstitial bill the session clock would inflate both its total and its per-item average.
+     *  The clock stops at a checkpoint (see isStudying): deciding whether to continue isn't studying.
      *  When there's no next batch and nothing missed, this is the same "session is over" case
      *  [commitGradeDurably] already completed at grading time — covered here for the paths that reach a
      *  checkpoint without grading a last answer. */
     private suspend fun enterCheckpoint(nextBatchIndex: Int) {
-        sessionTiming.freeze()
-
         val completedBatchIndex = nextBatchIndex - 1
         val completedProgress = session.batches.getOrNull(completedBatchIndex).orEmpty()
             .mapNotNull { session.quiz.progress[it] }
