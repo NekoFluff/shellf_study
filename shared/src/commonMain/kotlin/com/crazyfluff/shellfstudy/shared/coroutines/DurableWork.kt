@@ -41,4 +41,9 @@ class SerialDurableWork(private val scope: CoroutineScope) {
         }
         job.join()
     }
+
+    /** Waits for every write registered so far to finish — for a read that must see them. */
+    suspend fun awaitQueued() {
+        registerMutex.withLock { previous }?.join()
+    }
 }

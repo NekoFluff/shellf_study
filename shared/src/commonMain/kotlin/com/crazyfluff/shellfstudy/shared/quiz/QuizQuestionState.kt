@@ -34,20 +34,16 @@ data class QuizQuestionState<T : QuizDisplayItem>(
      *  figure the slowest-answers summary records, rather than one that ticks on through feedback. */
     fun graded(grade: QuizGrade, elapsedMs: Long): QuizQuestionState<T> = copy(
         grade = grade,
-        timing = timing.copy(questionElapsedMs = elapsedMs, questionActiveSegmentStartMs = null)
+        timing = timing.copy(questionElapsedMs = elapsedMs)
     )
 
     /** This question, asked again after an undo: no grade, an empty field, and its clock restarted at
-     *  [startedAtMs] so the retry doesn't inherit the time spent before it. */
-    fun retried(startedAtMs: Long): QuizQuestionState<T> = copy(
+     *  session time [startedAtSessionMs] so the retry doesn't inherit the time spent before it. */
+    fun retried(startedAtSessionMs: Long): QuizQuestionState<T> = copy(
         grade = null,
         answerInput = "",
         undoCounter = undoCounter + 1,
-        timing = timing.copy(
-            questionActiveElapsedMs = 0L,
-            questionActiveSegmentStartMs = startedAtMs,
-            questionElapsedMs = null
-        )
+        timing = timing.copy(questionStartedAtSessionMs = startedAtSessionMs, questionElapsedMs = null)
     )
 }
 

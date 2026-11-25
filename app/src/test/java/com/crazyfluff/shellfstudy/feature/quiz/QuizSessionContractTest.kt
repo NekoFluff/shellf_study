@@ -620,29 +620,27 @@ abstract class QuizSessionContractTest<STATE : Any> {
     }
 
     /**
-     * The per-question timer pauses and resumes exactly like the session one — a regression guard: it
-     * used to be plain wall-clock (now minus a stored "question shown at") with no connection to the
-     * foreground tracker, so backgrounding mid-question inflated both the live display and the
+     * The per-question timer pauses and resumes exactly like the session one, because it is read off
+     * the session clock: time spent in the background counts toward neither the live display nor the
      * elapsedMs recorded for "slowest answers".
      */
     protected fun backgroundingPausesThePerQuestionTimer() = quizSession(radicalQueue) {
-        assertThat(questionOnScreen.timing.questionActiveSegmentStartMs).isNotNull()
+        val startedAt = questionOnScreen.timing.questionStartedAtSessionMs
 
         appForegroundTracker.onStop(FakeLifecycleOwner)
         val paused = awaitQuestion()
-        assertThat(paused.timing.questionActiveSegmentStartMs).isNull()
-        val elapsedWhilePaused = paused.timing.questionActiveElapsedMs
+        val elapsedWhilePaused = paused.timing.sessionActiveElapsedMs - startedAt
+        Thread.sleep(TIME_AWAY_MS)
 
         appForegroundTracker.onStart(FakeLifecycleOwner)
         val resumed = awaitQuestion()
-        assertThat(resumed.timing.questionActiveSegmentStartMs).isNotNull()
-        assertThat(resumed.timing.questionActiveElapsedMs).isEqualTo(elapsedWhilePaused)
+        assertThat(resumed.timing.questionStartedAtSessionMs).isEqualTo(startedAt)
 
-        // Grading now must record an elapsedMs built on that same paused-and-resumed total, not a
-        // fresh wall-clock read from when the question first appeared.
         type(resumed.answers.first())
         submit()
-        assertThat(awaitGraded().timing.questionElapsedMs).isAtLeast(elapsedWhilePaused)
+        val answeredInMs = awaitGraded().timing.questionElapsedMs!!
+        assertThat(answeredInMs).isAtLeast(elapsedWhilePaused)
+        assertThat(answeredInMs).isLessThan(elapsedWhilePaused + TIME_AWAY_MS)
     }
 
     /**
@@ -745,5 +743,9 @@ abstract class QuizSessionContractTest<STATE : Any> {
     private companion object {
         /** The pronunciation the kanji in the audio-carrying fixtures carries. */
         const val KANJI_AUDIO_URL = "https://api.wanikani.com/audio/mizu.mp3"
+
+        /** Real time spent "in the background" by the timer tests — long enough that counting it
+         *  would show, against a test that otherwise answers within milliseconds. */
+        const val TIME_AWAY_MS = 300L
     }
 }

@@ -41,7 +41,9 @@ abstract class QuizSessionViewModel<
     protected abstract val studyKind: StudyKind
 
     /** Items finished while the current [sessionTiming] stretch runs, recorded with it as pace data.
-     *  Items rather than answers, so pace times a due-review count directly. */
+     *  Items rather than answers, so pace times a due-review count directly. Negative after undoing an
+     *  item an earlier stretch already recorded: that debt carries into the next stretch, so redoing
+     *  the item doesn't count it twice. */
     protected var stretchItemsCompleted = 0
 
     /**
@@ -59,10 +61,17 @@ abstract class QuizSessionViewModel<
             onSessionClockPaused()
         },
         onSegmentEnded = { startMs, endMs ->
-            studyTimeRepository.record(studyKind, startMs, endMs, stretchItemsCompleted)
-            stretchItemsCompleted = 0
+            studyTimeRepository.record(studyKind, startMs, endMs, stretchItemsCompleted.coerceAtLeast(0))
+            stretchItemsCompleted = stretchItemsCompleted.coerceAtMost(0)
         }
     )
+
+    /** The session clock's reading now, which a question records as its start. */
+    protected fun sessionClockMs(): Long = sessionTiming.currentElapsedMs()
+
+    /** Time spent on the question on screen so far — the session clock since it was shown. */
+    protected fun questionElapsedMs(): Long =
+        (sessionClockMs() - (question?.timing?.questionStartedAtSessionMs ?: 0L)).coerceAtLeast(0L)
 
     /** Whether [state] is the learner studying — a question or a flashcard on screen — rather than
      *  loading, choosing, reading a summary or deciding at a checkpoint. Only then does the clock run. */

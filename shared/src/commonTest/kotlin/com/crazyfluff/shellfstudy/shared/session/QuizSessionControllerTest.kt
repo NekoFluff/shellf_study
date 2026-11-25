@@ -1,10 +1,15 @@
 package com.crazyfluff.shellfstudy.shared.session
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 private class FakeStore : PersistedSessionStore<String> {
@@ -34,6 +39,34 @@ private class FakeStore : PersistedSessionStore<String> {
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class QuizSessionControllerTest {
+
+    @Test
+    fun loadWaitsForASaveAlreadyQueued() = runTest {
+        // A screen re-entered right after leaving must not read the session one save behind: the
+        // leaving screen's last save may still be writing when the new one loads.
+        val writeGate = CompletableDeferred<Unit>()
+        var stored: String? = "older"
+        val store = object : PersistedSessionStore<String> {
+            override val hasActiveSession = MutableStateFlow(true)
+            override suspend fun save(session: String) {
+                writeGate.await()
+                stored = session
+            }
+            override suspend fun load(): String? = stored
+            override suspend fun clear() { stored = null }
+        }
+        val controller = QuizSessionController(backgroundScope, store)
+        controller.begin()
+
+        launch { controller.persist("latest") }
+        runCurrent()
+        val loaded = async { controller.load() }
+        runCurrent()
+        assertFalse(loaded.isCompleted)
+
+        writeGate.complete(Unit)
+        assertEquals("latest", loaded.await())
+    }
 
     @Test
     fun persistBeforeBeginIsANoOp() = runTest {

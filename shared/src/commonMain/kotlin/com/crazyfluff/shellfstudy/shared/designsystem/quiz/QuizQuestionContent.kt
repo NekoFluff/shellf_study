@@ -205,11 +205,12 @@ private fun <T : QuizDisplayItem> QuizProgressHeader(
                         modifier = Modifier.testTag(testTags.questionTimerText)
                     )
                 } else {
-                    // Pause-aware like the total-session timer below, so backgrounding mid-question
-                    // freezes this instead of counting straight through the time spent away.
+                    // The session clock since the question was shown, so it pauses exactly when the
+                    // total timer below does.
+                    val timing = question.timing
                     PausableElapsedTimeText(
-                        baseElapsedMs = question.timing.questionActiveElapsedMs,
-                        segmentStartMs = question.timing.questionActiveSegmentStartMs,
+                        baseElapsedMs = timing.sessionActiveElapsedMs - timing.questionStartedAtSessionMs,
+                        segmentStartMs = timing.sessionActiveSegmentStartMs,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.testTag(testTags.questionTimerText)
                     )

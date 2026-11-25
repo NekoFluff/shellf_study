@@ -44,7 +44,12 @@ open class QuizSessionController<T : Any>(
     private val _state = MutableStateFlow(SessionLifecycleState.IDLE)
     val hasActiveSession: Flow<Boolean> = store.hasActiveSession
 
-    suspend fun load(): T? = store.load()
+    /** Waits for saves already queued, so a screen re-entered right after leaving reads the session
+     *  as the screen it replaced last saved it, not one save behind. */
+    suspend fun load(): T? {
+        writeQueue.awaitQueued()
+        return store.load()
+    }
 
     /** Call once a fresh or resumed session is actually committed to. Idempotent. */
     fun begin() {

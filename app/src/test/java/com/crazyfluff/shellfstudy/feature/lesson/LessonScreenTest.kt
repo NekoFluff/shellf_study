@@ -1046,7 +1046,7 @@ class LessonScreenTest {
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
-                timing = QuizTimingUiState(questionActiveSegmentStartMs = System.currentTimeMillis()),
+                timing = QuizTimingUiState(sessionActiveSegmentStartMs = System.currentTimeMillis()),
             ),
             displaySettings = DisplaySettings(showQuestionTimer = true),
         )
@@ -1060,7 +1060,7 @@ class LessonScreenTest {
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
-                timing = QuizTimingUiState(questionActiveSegmentStartMs = System.currentTimeMillis()),
+                timing = QuizTimingUiState(sessionActiveSegmentStartMs = System.currentTimeMillis()),
             ),
             displaySettings = DisplaySettings(showQuestionTimer = false),
         )
@@ -1070,14 +1070,14 @@ class LessonScreenTest {
 
     @Test
     fun quizPhase_questionTimer_freezesAtAnsweredElapsedTime_onceFeedbackIsShown() {
-        // questionActiveSegmentStartMs is a full minute in the past — if the timer were still
+        // The session's stretch began a full minute ago — if the question timer were still
         // live-ticking from it, it would show "1:00". The frozen questionElapsedMs must win instead.
         setScreen(
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
                 timing = QuizTimingUiState(
-                    questionActiveSegmentStartMs = System.currentTimeMillis() - 60_000,
+                    sessionActiveSegmentStartMs = System.currentTimeMillis() - 60_000,
                     questionElapsedMs = 5_000L
                 ),
                 feedback = AnswerFeedback(isCorrect = true, correctAnswer = "Mouth")
@@ -1090,13 +1090,13 @@ class LessonScreenTest {
 
     @Test
     fun quizPhase_questionTimer_freezesWhilePaused_notTickingWithoutAnActiveSegment() {
-        // questionActiveSegmentStartMs is null (as if the app were backgrounded mid-question) — the
-        // timer must show the frozen base, not restart from "0:00" or keep ticking through the gap.
+        // No running stretch (as if the app were backgrounded mid-question), 65s into the session on a
+        // question shown at 60s — the timer must show the frozen 5s, not restart or keep ticking.
         setScreen(
             quizState(
                 currentItem = radicalItem, currentQuestionType = QuestionType.MEANING,
                 totalQuizCount = 1, remainingQuizCount = 1,
-                timing = QuizTimingUiState(questionActiveElapsedMs = 5_000L, questionActiveSegmentStartMs = null),
+                timing = QuizTimingUiState(sessionActiveElapsedMs = 65_000L, questionStartedAtSessionMs = 60_000L),
             ),
             displaySettings = DisplaySettings(showQuestionTimer = true),
         )

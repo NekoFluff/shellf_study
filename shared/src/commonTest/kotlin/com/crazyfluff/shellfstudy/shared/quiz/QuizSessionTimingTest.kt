@@ -4,8 +4,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** [QuizSessionTiming.onSegmentEnded] is the one hook study-time tracking records through, so every
- *  way a segment can end must report it exactly once, and every way it can't must stay silent. */
+/** [QuizSessionTiming.onSegmentEnded] is the one hook study-time tracking records through, so a
+ *  stretch must be reported exactly once when it ends, and nothing when none was running. */
 class QuizSessionTimingTest {
     private var now = 1_000L
     private val ended = mutableListOf<Pair<Long, Long>>()
@@ -27,18 +27,8 @@ class QuizSessionTimingTest {
     }
 
     @Test
-    fun freeze_reportsTheSegmentItEnded() {
-        timing.resume()
-        now = 2_500L
-        timing.freeze()
-
-        assertEquals(listOf(1_000L to 2_500L), ended)
-    }
-
-    @Test
-    fun pauseOrFreezeWithNothingRunning_reportsNothing() {
+    fun pauseWithNothingRunning_reportsNothing() {
         timing.pause()
-        timing.freeze()
 
         assertTrue(ended.isEmpty())
     }
@@ -52,15 +42,6 @@ class QuizSessionTimingTest {
         timing.pause()
 
         assertEquals(1, ended.size)
-    }
-
-    @Test
-    fun restart_discardsRatherThanEndsTheRunningSegment() {
-        timing.resume()
-        now = 5_000L
-        timing.restart()
-
-        assertTrue(ended.isEmpty())
     }
 
     @Test

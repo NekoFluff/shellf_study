@@ -62,6 +62,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
 data class LessonUiState(
@@ -245,25 +246,20 @@ class LessonViewModel(
         else -> false
     }
 
-    /** Saves the phase being left mid-way, on applicationScope because this also runs from onCleared.
-     *  A checkpoint saved itself on the way in, and a completed or abandoned session isn't saved again:
-     *  sessionController.persist() is a no-op once the session isn't active. */
+    /** Saves the phase being left mid-way: on applicationScope because this also runs from onCleared,
+     *  and UNDISPATCHED so the snapshot is taken and queued right here on the main thread — before a
+     *  re-entered screen can load it. A checkpoint saved itself on the way in, and a completed or
+     *  abandoned session isn't saved again: persist() is a no-op once it isn't active. */
     override fun onSessionClockPaused() {
         when (val phase = _uiState.value.phase) {
-            is LessonUiState.Phase.Study -> applicationScope.launch { persistStudySnapshot(phase.studyIndex) }
-            is LessonUiState.Phase.Quiz -> applicationScope.launch { persistCurrentState() }
+            is LessonUiState.Phase.Study ->
+                applicationScope.launch(start = CoroutineStart.UNDISPATCHED) { persistStudySnapshot(phase.studyIndex) }
+            is LessonUiState.Phase.Quiz ->
+                applicationScope.launch(start = CoroutineStart.UNDISPATCHED) { persistCurrentState() }
             else -> Unit
         }
     }
 
-    // Same idea as sessionTiming, but for the current question — pauses on backgrounding just like
-    // the session timer, instead of counting straight through time spent away (see restart()/
-    // freeze(), used when a new question is shown / the current one is graded, versus resume()/
-    // pause(), used only by wireForegroundTracking below for background/foreground transitions).
-    private val questionTiming = QuizSessionTiming(
-        onResume = { now -> updateQuizTiming { it.copy(questionActiveSegmentStartMs = now) } },
-        onPause = { newElapsed -> updateQuizTiming { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }
-    )
 
     // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
     // flags as a plain field instead of calling `settingsRepository.settings.first()` — see
@@ -345,7 +341,6 @@ class LessonViewModel(
                     }
                 }
         }
-        questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
     }
 
     /** Explicit fresh fetch — bound to the error screen's retry action, so it always discards any
@@ -473,7 +468,7 @@ class LessonViewModel(
             .distinct()
             .mapNotNull { session.itemsById[it] }
 
-        val questionStartedAt = questionTiming.restart()
+        val questionStartedAt = sessionClockMs()
         // LessonSessionRepository.load() — reached here via sessionController.load() — guarantees a
         // non-empty quiz queue for a QUIZ-phase snapshot (see its resumability check), but this is
         // reached from init/loadOrResume(), so a violated invariant here (a future repository bug, a
@@ -497,7 +492,7 @@ class LessonViewModel(
                         timing = QuizTimingUiState(
                             sessionActiveElapsedMs = sessionTiming.elapsedMs,
                             sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                            questionActiveSegmentStartMs = questionStartedAt
+                            questionStartedAtSessionMs = questionStartedAt
                         )
                     ),
                     batchIndex = session.batchIndex,
@@ -805,7 +800,7 @@ class LessonViewModel(
         // The session clock spans the whole session, study passes included, so it is normally running
         // already. Only the per-question clock starts fresh here.
         startSessionClock()
-        val questionStartedAt = questionTiming.restart()
+        val questionStartedAt = sessionClockMs()
         _uiState.update {
             it.copy(
                 phase = LessonUiState.Phase.Quiz(
@@ -815,7 +810,7 @@ class LessonViewModel(
                         timing = QuizTimingUiState(
                             sessionActiveElapsedMs = sessionTiming.elapsedMs,
                             sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                            questionActiveSegmentStartMs = questionStartedAt
+                            questionStartedAtSessionMs = questionStartedAt
                         )
                     ),
                     batchIndex = session.batchIndex,
@@ -878,7 +873,7 @@ class LessonViewModel(
             persistCurrentState()
             // Restarts this question's clock so the retry's timing doesn't inherit time spent
             // before the undo.
-            val questionStartedAt = questionTiming.restart()
+            val questionStartedAt = sessionClockMs()
 
             // Back to asking the same question: the grade and its hint go as a whole. undoCounter
             // changes even though the item and type don't; it is what the answer field's
@@ -901,7 +896,7 @@ class LessonViewModel(
         matchedAnswer: String?,
         isGiveUp: Boolean
     ) {
-        val questionElapsedMs = questionTiming.freeze()
+        val questionElapsedMs = questionElapsedMs()
         val quiz = session.quiz.grade(isCorrect = isCorrect, elapsedMs = questionElapsedMs)
         val graded = quiz.lastGraded ?: return
         // An item's lesson is done once every question type it has is answered correctly — and it
@@ -1105,7 +1100,7 @@ class LessonViewModel(
     private suspend fun advanceQuiz() {
         val next = session.quiz.current
         if (next != null) {
-            val questionStartedAt = questionTiming.restart()
+            val questionStartedAt = sessionClockMs()
             // A new question, whole: nothing about the last one — its grade, hint, typed answer or
             // refused-script count — carries over. Only the session clock does.
             updateQuizPhase { quiz ->
@@ -1116,8 +1111,7 @@ class LessonViewModel(
                         type = next.type,
                         sequence = quiz.question.sequence + 1,
                         timing = quiz.question.timing.copy(
-                            questionActiveElapsedMs = 0L,
-                            questionActiveSegmentStartMs = questionStartedAt,
+                            questionStartedAtSessionMs = questionStartedAt,
                             questionElapsedMs = null
                         )
                     )

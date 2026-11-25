@@ -404,7 +404,6 @@ class LessonViewModelTest : QuizSessionContractTest<LessonUiState>() {
 
             val quiz = quizState.phase as LessonUiState.Phase.Quiz
             assertThat(quiz.question.timing.sessionActiveSegmentStartMs).isNotNull()
-            assertThat(quiz.question.timing.questionActiveSegmentStartMs).isNotNull()
         }
     }
 

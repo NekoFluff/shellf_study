@@ -160,20 +160,13 @@ class ReviewViewModel(
 
     override fun isStudying(state: ReviewUiState): Boolean = state.phase is ReviewUiState.Phase.Active
 
-    /** On applicationScope, because this also runs from onCleared. A completed or abandoned session
-     *  isn't saved again: sessionController.persist() is a no-op once the session isn't active. */
+    /** On applicationScope, because this also runs from onCleared, and UNDISPATCHED so the snapshot is
+     *  taken and queued right here on the main thread — before a re-entered screen can load it. A
+     *  completed or abandoned session isn't saved again: persist() is a no-op once it isn't active. */
     override fun onSessionClockPaused() {
-        applicationScope.launch { persistCurrentState() }
+        applicationScope.launch(start = CoroutineStart.UNDISPATCHED) { persistCurrentState() }
     }
 
-    // Same idea as sessionTiming, but for the current question — pauses on backgrounding just like
-    // the session timer, instead of counting straight through time spent away (see restart()/
-    // freeze(), used when a new question is shown / the current one is graded, versus resume()/
-    // pause(), used only by wireForegroundTracking below for background/foreground transitions).
-    private val questionTiming = QuizSessionTiming(
-        onResume = { now -> updateQuizTiming { it.copy(questionActiveSegmentStartMs = now) } },
-        onPause = { newElapsed -> updateQuizTiming { it.copy(questionActiveElapsedMs = newElapsed, questionActiveSegmentStartMs = null) } }
-    )
 
     // Mirrors the settings collector below so gradeAnswer can read the autoplay/mp3-restriction
     // flags as a plain field instead of calling `settingsRepository.settings.first()` — starting a
@@ -231,7 +224,6 @@ class ReviewViewModel(
                     }
                 }
         }
-        questionTiming.wireForegroundTracking(viewModelScope, appForegroundTracker)
     }
 
     /** Resumes a persisted in-progress session if one exists, otherwise fetches a fresh queue. */
@@ -402,7 +394,7 @@ class ReviewViewModel(
         // reading each have their own setting (requiresTapToRevealAnswer), so this can gate one
         // question type and not the other.
         val revealedNow = isCorrect || isGiveUp || !requiresTapToRevealAnswer(latestSettings, type)
-        val questionElapsedMs = questionTiming.freeze()
+        val questionElapsedMs = questionElapsedMs()
         val quiz = session.quiz.grade(
             isCorrect = isCorrect,
             elapsedMs = questionElapsedMs,
@@ -459,7 +451,7 @@ class ReviewViewModel(
         viewModelScope.launch {
             val undoesCompletedItem = session.quiz.lastGraded?.completedItem == true
             val undone = session.quiz.undoLastGrade() ?: return@launch
-            if (undoesCompletedItem) stretchItemsCompleted = (stretchItemsCompleted - 1).coerceAtLeast(0)
+            if (undoesCompletedItem) stretchItemsCompleted--
             // Retracting a correct answer retracts the submission it made pending.
             session = ReviewSession(
                 quiz = undone,
@@ -468,7 +460,7 @@ class ReviewViewModel(
             persistCurrentState()
             // Restarts this question's clock so the retry's timing doesn't inherit time spent
             // before the undo.
-            val questionStartedAt = questionTiming.restart()
+            val questionStartedAt = sessionClockMs()
 
             // Back to asking the same question: the grade — its feedback, rank change and hint — goes
             // as a whole. undoCounter changes even though the item and type don't; it is what the
@@ -566,7 +558,7 @@ class ReviewViewModel(
             _uiState.update { it.copy(phase = summary.toCompletePhase()) }
             return
         }
-        val questionStartedAt = questionTiming.restart()
+        val questionStartedAt = sessionClockMs()
         // The new question owns neither the previous one's hint — a stale word's patterns must not
         // leak into this question's caption.
         pitchAccentHintKey.value = null
@@ -581,7 +573,7 @@ class ReviewViewModel(
                         timing = QuizTimingUiState(
                             sessionActiveElapsedMs = sessionTiming.elapsedMs,
                             sessionActiveSegmentStartMs = sessionTiming.segmentStartMs,
-                            questionActiveSegmentStartMs = questionStartedAt
+                            questionStartedAtSessionMs = questionStartedAt
                         )
                     ),
                     totalCount = session.quiz.totalQuestions,

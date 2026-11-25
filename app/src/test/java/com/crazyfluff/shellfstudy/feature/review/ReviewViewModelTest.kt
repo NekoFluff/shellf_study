@@ -1223,7 +1223,6 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
             var state = awaitItem()
             while ((state.phase is ReviewUiState.Phase.Loading)) state = awaitItem()
             assertThat(state.question!!.timing.sessionActiveSegmentStartMs).isNotNull()
-            assertThat(state.question!!.timing.questionActiveSegmentStartMs).isNotNull()
 
             // Miss the first question drawn (whichever type it is), then work through both question
             // types until the session completes.
@@ -1645,6 +1644,41 @@ class ReviewViewModelTest : QuizSessionContractTest<ReviewUiState>() {
         testScheduler.advanceUntilIdle()
 
         assertThat(studyTimeDao.all.single().itemsAnswered).isEqualTo(0)
+    }
+
+    @Test
+    fun `undoing an item an earlier stretch recorded does not count it twice when redone`() = runTest(mainDispatcherRule.dispatcher) {
+        dispatch(jsonResponse(radicalAssignmentsJson()), jsonResponse(radicalSubjectsJson()))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            awaitUntil { it.phase is ReviewUiState.Phase.Active }
+            viewModel.onAnswerInputChange("Mouth")
+            viewModel.submitAnswer()
+            awaitUntil { it.question?.feedback?.isCorrect == true }
+            // The stretch ends with the item counted...
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            awaitUntil { it.question?.timing?.sessionActiveSegmentStartMs == null }
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+            awaitUntil { it.question?.timing?.sessionActiveSegmentStartMs != null }
+            // ...then the answer is undone, in yet another stretch given again, finishing the same item
+            // a second time.
+            viewModel.undoLastAnswer()
+            awaitUntil { it.question?.feedback == null }
+            appForegroundTracker.onStop(FakeLifecycleOwner)
+            awaitUntil { it.question?.timing?.sessionActiveSegmentStartMs == null }
+            appForegroundTracker.onStart(FakeLifecycleOwner)
+            awaitUntil { it.question?.timing?.sessionActiveSegmentStartMs != null }
+            viewModel.onAnswerInputChange("Mouth")
+            viewModel.submitAnswer()
+            awaitUntil { it.question?.feedback?.isCorrect == true }
+            viewModel.onContinue()
+            awaitUntil { it.phase is ReviewUiState.Phase.Complete }
+            cancelAndIgnoreRemainingEvents()
+        }
+        testScheduler.advanceUntilIdle()
+
+        assertThat(studyTimeDao.all.sumOf { it.itemsAnswered }).isEqualTo(1)
     }
 
     @Test
